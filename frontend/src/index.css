@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand Colors */
+  --color-brand: #315C84;
+  --color-brand-light: #EBF1F6;
+  /* Very soft blue for hover states */
+
+  /* Layout Colors */
+  --color-background: #F8FAFC;
+  /* Slate 50 - Softer than pure white for the main page */
+  --color-surface: #FFFFFF;
+  /* Pure white for cards, topbar, sidebar */
+
+  /* Text Colors */
+  --color-text-main: #0F172A;
+  /* Slate 900 - Primary text */
+  --color-text-muted: #64748B;
+  /* Slate 500 - Secondary text */
+
+  /* Status Colors (Tweaked for light mode contrast) */
+  --color-green: #10B981;
+  --color-amber: #F59E0B;
+  --color-red: #EF4444;
+
+  /* Borders & Shadows */
+  --color-border: #E2E8F0;
+  /* Slate 200 */
+
+  /* Typography */
+  --font-display: 'Poppins', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* Base Styles */
+@layer base {
+  body {
+    @apply bg-background text-text-main font-body min-h-screen overflow-x-hidden antialiased;
+  }
+}
