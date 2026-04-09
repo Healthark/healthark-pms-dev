@@ -15,3 +15,4 @@ class TokenResponse(BaseModel):
     full_name: str
     role: str
     org_id: int
+    features: list[str]

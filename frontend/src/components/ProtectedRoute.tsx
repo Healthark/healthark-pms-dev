@@ -1,15 +1,36 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
-export const ProtectedRoute = () => {
-  // We check if the token exists in localStorage
-  // Later, we'll improve this to verify if the token is expired
-  const token = localStorage.getItem("token");
+interface ProtectedRouteProps {
+  /**
+   * When provided, the route additionally checks that the current user's
+   * organization has this feature enabled. Unauthenticated users are always
+   * redirected to /login regardless of this prop.
+   */
+  requiredFeature?: string;
+}
 
-  if (!token) {
-    // No token? Redirect to login while saving the attempted location
-    return <Navigate to="/login" replace />;
+/**
+ * Two-stage guard:
+ *   Stage 1 — Authentication: No valid session → /login
+ *   Stage 2 — Authorization:  Feature not enabled for this org → /unauthorized
+ *
+ * We preserve `location` in state so Login.tsx can redirect back after
+ * successful authentication (the "intended destination" pattern).
+ */
+export function ProtectedRoute({
+  requiredFeature,
+}: Readonly<ProtectedRouteProps>) {
+  const { isAuthenticated, hasFeature } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If token exists, render the child routes (Dashboard, etc.)
+  if (requiredFeature && !hasFeature(requiredFeature)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
   return <Outlet />;
-};
+}

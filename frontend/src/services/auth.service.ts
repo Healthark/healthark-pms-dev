@@ -1,6 +1,9 @@
 import apiClient from "./api.client";
 
-// Matching your TokenResponse schema from the backend
+/**
+ * Mirrors the backend's TokenResponse schema exactly.
+ * `features` is the authoritative list of modules this org has licensed.
+ */
 export interface AuthResponse {
   access_token: string;
   token_type: string;
@@ -8,11 +11,12 @@ export interface AuthResponse {
   full_name: string;
   role: string;
   org_id: number;
+  features: string[]; // e.g. ["dashboard", "goals", "project_reviews", "mentoring"]
 }
 
 export const authService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    // FastAPI OAuth2 expects form-data, not JSON for the /login endpoint
+    // FastAPI's OAuth2PasswordRequestForm requires form-data, not JSON
     const formData = new URLSearchParams();
     formData.append("username", email);
     formData.append("password", password);
@@ -24,10 +28,11 @@ export const authService = {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       },
     );
+
     return response.data;
   },
 
-  logout: () => {
+  logout: (): void => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
   },

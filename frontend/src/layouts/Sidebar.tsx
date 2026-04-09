@@ -10,6 +10,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -20,9 +21,13 @@ interface NavItemData {
   readonly path: string;
   readonly label: string;
   readonly icon: LucideIcon;
+  /** Feature key checked against the org's enabled_features array.
+   *  Omit for items that are always visible (Profile, Support). */
+  readonly feature?: string;
+  /** If set, the item is additionally hidden unless the user has one of these roles. */
+  readonly requiredRole?: readonly string[];
 }
 
-// 1. Updated NavItem to accept the new isCollapsed prop
 const NavItem = ({
   item,
   isCollapsed,
@@ -35,7 +40,7 @@ const NavItem = ({
   return (
     <NavLink
       to={item.path}
-      title={isCollapsed ? item.label : undefined} // Shows a native tooltip when collapsed
+      title={isCollapsed ? item.label : undefined}
       className={({ isActive }) =>
         `w-full flex items-center rounded-lg transition-all duration-200 ${
           isCollapsed ? "justify-center py-3 px-0" : "px-4 py-2.5 gap-3"
@@ -53,7 +58,6 @@ const NavItem = ({
               isActive ? "text-brand" : "text-text-muted"
             }`}
           />
-          {/* Only render the text if NOT collapsed */}
           {!isCollapsed && (
             <span className="text-[14px] whitespace-nowrap overflow-hidden">
               {item.label}
@@ -65,60 +69,94 @@ const NavItem = ({
   );
 };
 
+// ---------------------------------------------------------------------------
+// Nav manifest — add `feature` to gate an item behind org feature flags,
+// add `requiredRole` to further restrict by user role.
+// ---------------------------------------------------------------------------
+const MAIN_NAV: NavItemData[] = [
+  {
+    id: "dashboard",
+    path: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    feature: "dashboard",
+  },
+  {
+    id: "project-reviews",
+    path: "/project-reviews",
+    label: "Project Reviews",
+    icon: Briefcase,
+    feature: "project_reviews",
+  },
+  {
+    id: "yearly-goals",
+    path: "/yearly-goals",
+    label: "Yearly Goals",
+    icon: Target,
+    feature: "goals",
+  },
+  {
+    id: "my-mentees",
+    path: "/my-mentees",
+    label: "My Mentees",
+    icon: Users,
+    feature: "mentoring",
+  },
+  {
+    id: "practitioners",
+    path: "/practitioners",
+    label: "Practitioners Reviews",
+    icon: FileText,
+    feature: "project_reviews",
+  },
+  {
+    id: "admin",
+    path: "/admin",
+    label: "Admin Panel",
+    icon: Settings,
+    feature: "admin",
+    requiredRole: ["Admin"],
+  },
+];
+
+// Profile and Support are always visible — no feature flag needed.
+const BOTTOM_NAV: NavItemData[] = [
+  { id: "profile", path: "/profile", label: "Profile", icon: User },
+  { id: "support", path: "/support", label: "Support", icon: HelpCircle },
+];
+
 export function Sidebar() {
-  // 2. Add state to track if the sidebar is open or closed
   const [isCollapsed, setIsCollapsed] = useState(false);
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, hasFeature, user } = useAuth();
 
   const handleLogout = (): void => {
     logout();
     navigate("/login", { replace: true });
   };
-  const mainNav: NavItemData[] = [
-    {
-      id: "dashboard",
-      path: "/dashboard",
-      label: "Dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      id: "project-reviews",
-      path: "/project-reviews",
-      label: "Project Reviews",
-      icon: Briefcase,
-    },
-    {
-      id: "yearly-goals",
-      path: "/yearly-goals",
-      label: "Yearly Goals",
-      icon: Target,
-    },
-    { id: "my-mentees", path: "/my-mentees", label: "My Mentees", icon: Users },
-    {
-      id: "practitioners",
-      path: "/practitioners",
-      label: "Practitioners Reviews",
-      icon: FileText,
-    },
-  ];
 
-  const bottomNav: NavItemData[] = [
-    { id: "profile", path: "/profile", label: "Profile", icon: User },
-    { id: "support", path: "/support", label: "Support", icon: HelpCircle },
-  ];
+  /** Returns true if the item should be rendered for the current user. */
+  const isVisible = (item: NavItemData): boolean => {
+    if (item.feature && !hasFeature(item.feature)) return false;
+    if (item.requiredRole && !item.requiredRole.includes(user?.role ?? "")) {
+      return false;
+    }
+    return true;
+  };
+
+  const visibleMainNav = MAIN_NAV.filter(isVisible);
 
   return (
-    // 3. Dynamic width and relative positioning on the main wrapper
     <aside
       className={`${
         isCollapsed ? "w-[80px]" : "w-[260px]"
       } h-screen shrink-0 bg-surface border-r border-border flex flex-col transition-all duration-300 relative`}
     >
-      {/* 4. The Floating Toggle Button */}
+      {/* Floating collapse toggle */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="absolute -right-3.5 top-6 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-text-muted hover:text-brand shadow-sm z-50 transition-colors"
+        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {isCollapsed ? (
           <ChevronRight className="h-4 w-4" />
@@ -127,7 +165,7 @@ export function Sidebar() {
         )}
       </button>
 
-      {/* 5. Dynamic Logo Area */}
+      {/* Logo — big when expanded, small icon when collapsed */}
       <div
         className={`h-16 flex items-center border-b border-border transition-all duration-300 ${
           isCollapsed ? "justify-center px-0" : "px-6"
@@ -135,7 +173,7 @@ export function Sidebar() {
       >
         {isCollapsed ? (
           <img
-            src="/healtharklogo-small.png" // Make sure to add this file to your public/ folder
+            src="/healtharklogo-small.png"
             alt="Healthark"
             className="h-8 w-8 object-contain shrink-0"
           />
@@ -153,20 +191,22 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-6 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
-        {mainNav.map((item) => (
+      {/* Main navigation */}
+      <nav
+        aria-label="Main menu"
+        className="flex-1 px-3 py-6 flex flex-col gap-1 overflow-y-auto overflow-x-hidden"
+      >
+        {visibleMainNav.map((item) => (
           <NavItem key={item.id} item={item} isCollapsed={isCollapsed} />
         ))}
       </nav>
 
-      {/* Bottom Navigation */}
+      {/* Bottom navigation + logout */}
       <div className="p-3 border-t border-border flex flex-col gap-1 overflow-x-hidden">
-        {bottomNav.map((item) => (
+        {BOTTOM_NAV.map((item) => (
           <NavItem key={item.id} item={item} isCollapsed={isCollapsed} />
         ))}
 
-        {/* Updated Logout Button */}
         <button
           onClick={handleLogout}
           title={isCollapsed ? "Logout" : undefined}

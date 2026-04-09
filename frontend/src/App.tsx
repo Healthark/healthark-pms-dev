@@ -1,32 +1,24 @@
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Outlet,
-  useLocation,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Sidebar } from "./layouts/Sidebar";
 import { Topbar } from "./layouts/Topbar";
-
-// Pages
+import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { YearlyGoals } from "./pages/YearlyGoals";
-import { Login } from "./pages/Login";
-// Components
-import { ProtectedRoute } from "./components/ProtectedRoute"; // <-- Import the bouncer
+import Unauthorized from "./pages/Unauthorized";
 
-function RootLayout() {
-  const location = useLocation();
-  const currentPath = location.pathname.replace("/", "") || "dashboard";
-
+/**
+ * The AppShell wraps all authenticated pages with the chrome layout.
+ * Defined inline here to keep the route tree readable without an extra file.
+ */
+function AppShell() {
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <Topbar currentPage={currentPath} />
-        <main className="flex-1 overflow-y-auto p-8">
-          <Outlet />
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <Topbar />
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+          {/* Nested <Outlet /> from each ProtectedRoute renders here */}
         </main>
       </div>
     </div>
@@ -37,19 +29,33 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC ROUTE */}
+        {/* Public routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/unauthorized" element={<Unauthorized />} />
 
-        {/* PROTECTED ROUTES: Nested under the ProtectedRoute bouncer */}
+        {/* Protected shell — Stage 1: must be authenticated */}
         <Route element={<ProtectedRoute />}>
-          <Route element={<RootLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/yearly-goals" element={<YearlyGoals />} />
+          <Route element={<AppShell />}>
+            {/* Always-visible — every authenticated user gets a dashboard */}
+            <Route element={<ProtectedRoute requiredFeature="dashboard" />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+            </Route>
+
+            {/* Feature-gated routes — org must have the feature enabled */}
+            <Route element={<ProtectedRoute requiredFeature="goals" />}>
+              <Route path="/goals" element={<YearlyGoals />} />
+            </Route>
+
+            {/*
+              Future routes follow the same pattern:
+              <Route element={<ProtectedRoute requiredFeature="project_reviews" />}>
+                <Route path="/reviews" element={<ProjectReviews />} />
+              </Route>
+            */}
           </Route>
         </Route>
 
-        {/* CATCH-ALL: Redirect unknown paths to dashboard (which will then bounce to login if needed) */}
+        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
