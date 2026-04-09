@@ -4,21 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routes import auth_routes
 from app.api.routes import goal_routes
+from app.api.routes import admin_routes
 
-# Initialize the FastAPI application
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     description="Multi-Tenant Performance Management API"
 )
 
-# --- SECURITY: CORS (Cross-Origin Resource Sharing) ---
-# Architect Note: Because your React frontend will run on a different port 
-# (like localhost:5173), browsers will block it from talking to this API (localhost:8000) 
-# unless we explicitly allow it here.
 origins = [
     "http://localhost",
-    "http://localhost:5173", # Vite React default port
+    "http://localhost:5173",
     "http://localhost:3000",
 ]
 
@@ -26,14 +22,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Allow GET, POST, PUT, DELETE
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- ROUTER REGISTRATION ---
-# We attach our Auth router under the /api/v1/auth prefix
-app.include_router(auth_routes.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Authentication"])
-app.include_router(goal_routes.router, prefix=f"{settings.API_V1_STR}/goals", tags=["Goals"])
+app.include_router(auth_routes.router,  prefix=f"{settings.API_V1_STR}/auth",  tags=["Authentication"])
+app.include_router(goal_routes.router,  prefix=f"{settings.API_V1_STR}/goals", tags=["Goals"])
+app.include_router(admin_routes.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])
 
 @app.get("/")
 def root():
