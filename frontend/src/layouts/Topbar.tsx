@@ -1,18 +1,18 @@
-import { Bell } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Bell, CalendarDays } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import {
+  notificationService,
+  type TopbarSummary,
+} from "../services/notification.service";
+import { NotificationDropdown } from "../components/layout/NotificationDropdown";
 
-/**
- * Derives a readable page title from the current URL pathname so that
- * AppShell never needs to pass a `currentPage` prop.
- * "/project-reviews" → "Project Reviews"
- * "/yearly-goals"    → "Yearly Goals"
- */
 function usePageTitle(): string {
   const { pathname } = useLocation();
   return (
     pathname
-      .slice(1) // strip leading "/"
+      .slice(1)
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ") || "Dashboard"
@@ -22,6 +22,35 @@ function usePageTitle(): string {
 export function Topbar() {
   const title = usePageTitle();
   const { user } = useAuth();
+
+  const [summary, setSummary] = useState<TopbarSummary | null>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
+
+  // Fetch once on mount — lightweight, single round-trip
+  useEffect(() => {
+    notificationService
+      .getSummary()
+      .then(setSummary)
+      .catch(() => {
+        // Silently fail — Topbar stays functional without notification data
+      });
+  }, []);
+
+  const handleBellClick = useCallback(() => {
+    if (anchorRect) {
+      // Second click closes the dropdown
+      setAnchorRect(null);
+      return;
+    }
+    if (bellRef.current) {
+      setAnchorRect(bellRef.current.getBoundingClientRect());
+    }
+  }, [anchorRect]);
+
+  const handleClose = useCallback(() => setAnchorRect(null), []);
+
+  const hasNotifications = (summary?.notifications.length ?? 0) > 0;
 
   const initials = user?.full_name
     ? user.full_name
@@ -34,17 +63,42 @@ export function Topbar() {
 
   return (
     <header className="h-16 bg-surface border-b border-border flex items-center justify-between px-8 shrink-0">
-      <h2 className="font-display font-medium text-lg text-text-main">
-        {title}
-      </h2>
+      {/* Left — page title + active cycle badge */}
+      <div className="flex items-center gap-3">
+        <h2 className="font-display font-medium text-lg text-text-main">
+          {title}
+        </h2>
+        {summary?.active_cycle && (
+          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
+            <CalendarDays className="h-3 w-3" aria-hidden="true" />
+            {summary.active_cycle}
+          </span>
+        )}
+      </div>
 
+      {/* Right — bell + avatar */}
       <div className="flex items-center gap-4">
         <button
-          className="p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-slate-50 relative"
-          aria-label="Notifications"
+          ref={bellRef}
+          type="button"
+          onClick={handleBellClick}
+          className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-slate-50"
+          aria-label={
+            hasNotifications
+              ? `Notifications (${summary!.notifications.length} new)`
+              : "Notifications"
+          }
+          aria-expanded={anchorRect !== null}
+          aria-haspopup="dialog"
         >
           <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-surface" />
+          {/* Red dot — only shown when there are real notifications */}
+          {hasNotifications && (
+            <span
+              className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-surface"
+              aria-hidden="true"
+            />
+          )}
         </button>
 
         <div
@@ -55,6 +109,15 @@ export function Topbar() {
           {initials}
         </div>
       </div>
+
+      {/* Notification dropdown — Portal so it escapes the header's layout */}
+      {anchorRect && summary && (
+        <NotificationDropdown
+          notifications={summary.notifications}
+          anchorRect={anchorRect}
+          onClose={handleClose}
+        />
+      )}
     </header>
   );
 }
