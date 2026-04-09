@@ -4,18 +4,20 @@ import {
   Route,
   Outlet,
   useLocation,
+  Navigate,
 } from "react-router-dom";
 import { Sidebar } from "./layouts/Sidebar";
 import { Topbar } from "./layouts/Topbar";
 
-// Import our new pages
+// Pages
 import { Dashboard } from "./pages/Dashboard";
 import { YearlyGoals } from "./pages/YearlyGoals";
+import { Login } from "./pages/Login";
+// Components
+import { ProtectedRoute } from "./components/ProtectedRoute"; // <-- Import the bouncer
 
-// 1. Define the persistent Layout wrapper
 function RootLayout() {
   const location = useLocation();
-  // We extract the current path to pass to the Topbar for the title
   const currentPath = location.pathname.replace("/", "") || "dashboard";
 
   return (
@@ -24,7 +26,6 @@ function RootLayout() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Topbar currentPage={currentPath} />
         <main className="flex-1 overflow-y-auto p-8">
-          {/* This Outlet is where our pages (Dashboard, YearlyGoals) will be injected */}
           <Outlet />
         </main>
       </div>
@@ -32,18 +33,24 @@ function RootLayout() {
   );
 }
 
-// 2. Define the Routing Logic
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Everything inside this Route inherits the RootLayout */}
-        <Route element={<RootLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/yearly-goals" element={<YearlyGoals />} />
-          {/* Add more routes here later as we build them */}
+        {/* PUBLIC ROUTE */}
+        <Route path="/login" element={<Login />} />
+
+        {/* PROTECTED ROUTES: Nested under the ProtectedRoute bouncer */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<RootLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/yearly-goals" element={<YearlyGoals />} />
+          </Route>
         </Route>
+
+        {/* CATCH-ALL: Redirect unknown paths to dashboard (which will then bounce to login if needed) */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );

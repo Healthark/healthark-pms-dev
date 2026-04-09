@@ -12,7 +12,8 @@ import {
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 interface NavItemData {
   readonly id: string;
@@ -67,7 +68,13 @@ const NavItem = ({
 export function Sidebar() {
   // 2. Add state to track if the sidebar is open or closed
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
+  const handleLogout = (): void => {
+    logout();
+    navigate("/login", { replace: true });
+  };
   const mainNav: NavItemData[] = [
     {
       id: "dashboard",
@@ -161,6 +168,7 @@ export function Sidebar() {
 
         {/* Updated Logout Button */}
         <button
+          onClick={handleLogout}
           title={isCollapsed ? "Logout" : undefined}
           className={`w-full flex items-center rounded-lg text-red-600 hover:bg-red-50 font-medium transition-colors mt-2 ${
             isCollapsed ? "justify-center py-3 px-0" : "px-4 py-2.5 gap-3"
