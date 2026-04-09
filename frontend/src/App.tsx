@@ -12,6 +12,7 @@ import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { YearlyGoals } from "./pages/YearlyGoals";
 import AdminPanel from "./pages/AdminPanel";
+import { Profile } from "./pages/Profile";
 import Unauthorized from "./pages/Unauthorized";
 
 /**
@@ -54,6 +55,9 @@ export default function App() {
             <Route element={<ProtectedRoute requiredFeature="admin" />}>
               <Route path="/admin" element={<AdminPanel />} />
             </Route>
+
+            {/* Profile — always visible, no feature gate */}
+            <Route path="/profile" element={<Profile />} />
 
             {/*
               Future routes:

@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.models.user_models import User
 from app.models.organization_models import Organization
 from app.schemas.auth_schemas import TokenResponse
+from app.schemas.user_schemas import UserProfileResponse
 from app.api.dependencies import CurrentUser
 
 router = APIRouter()
@@ -22,12 +23,6 @@ def login(
     request: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DbSession,
 ):
-    """
-    Authenticate a user and return a JWT alongside their organization's
-    enabled feature flags. The features list is the single source of truth
-    for all frontend routing and sidebar rendering decisions.
-    """
-    # 1. Credential validation — intentionally generic error to prevent user enumeration
     user = db.query(User).filter(User.email == request.username).first()
 
     if not user or not verify_password(request.password, user.password_hash):
@@ -43,12 +38,9 @@ def login(
             detail="This account has been deactivated.",
         )
 
-    # 2. Resolve the organization's enabled features.
-    # We guard with `or []` so a misconfigured org row never crashes login.
     org = db.query(Organization).filter(Organization.id == user.org_id).first()
     features: list[str] = (org.enabled_features or []) if org else []
 
-    # 3. Mint the JWT — payload carries only non-sensitive identity data
     token_payload = {
         "sub": user.email,
         "user_id": user.id,
@@ -71,17 +63,20 @@ def login(
     }
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserProfileResponse)
 def get_my_profile(current_user: CurrentUser):
     """
-    Returns the authenticated user's profile. The CurrentUser dependency
-    handles all JWT validation and soft-delete checks before this runs.
+    Returns the full profile of the authenticated user.
+    Used by the Profile page — richer than the JWT payload alone.
     """
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "role": current_user.role,
-        "department": current_user.department.name if current_user.department else None,
-        "designation": current_user.designation.name if current_user.designation else None,
-    }
+    return UserProfileResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        employee_code=current_user.employee_code,
+        phone=current_user.phone,
+        role=current_user.role,
+        department=current_user.department.name if current_user.department else None,
+        designation=current_user.designation.name if current_user.designation else None,
+        mentor_name=current_user.mentor.full_name if current_user.mentor else None,
+    )
