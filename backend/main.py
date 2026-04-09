@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.api.routes import auth_routes
 from app.api.routes import goal_routes
 from app.api.routes import admin_routes
+from app.api.routes import dashboard_routes
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -28,7 +29,8 @@ app.add_middleware(
 
 app.include_router(auth_routes.router,  prefix=f"{settings.API_V1_STR}/auth",  tags=["Authentication"])
 app.include_router(goal_routes.router,  prefix=f"{settings.API_V1_STR}/goals", tags=["Goals"])
-app.include_router(admin_routes.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])
+app.include_router(admin_routes.router,     prefix=f"{settings.API_V1_STR}/admin",     tags=["Admin"])
+app.include_router(dashboard_routes.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["Dashboard"])
 
 @app.get("/")
 def root():
