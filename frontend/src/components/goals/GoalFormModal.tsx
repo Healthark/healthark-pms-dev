@@ -32,6 +32,7 @@ interface FormState {
   status: GoalStatus;
   start_date: string;
   due_date: string;
+  progress_notes: string;
 }
 
 const EMPTY: FormState = {
@@ -40,9 +41,9 @@ const EMPTY: FormState = {
   status: "pending",
   start_date: "",
   due_date: "",
+  progress_notes: "",
 };
 
-/** Converts a backend ISO datetime string to the "YYYY-MM-DD" value required by <input type="date"> */
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
   return iso.slice(0, 10);
@@ -62,6 +63,8 @@ export function GoalFormModal({
   error,
 }: GoalFormModalProps) {
   const isEditing = editingGoal !== null;
+  const isApproved = editingGoal?.approval_status === "approved";
+
   const [form, setForm] = useState<FormState>(EMPTY);
 
   useEffect(() => {
@@ -72,6 +75,7 @@ export function GoalFormModal({
         status: editingGoal.status,
         start_date: toDateInput(editingGoal.start_date),
         due_date: toDateInput(editingGoal.due_date),
+        progress_notes: editingGoal.progress_notes ?? "",
       });
     } else {
       setForm(EMPTY);
@@ -91,6 +95,7 @@ export function GoalFormModal({
         status: form.status,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
+        progress_notes: form.progress_notes || null,
       } satisfies GoalUpdatePayload);
     } else {
       await onSave({
@@ -120,10 +125,15 @@ export function GoalFormModal({
           >
             {isEditing ? "Edit Goal" : "Add New Goal"}
           </h2>
+          {isApproved && (
+            <p className="mt-0.5 text-xs text-text-muted">
+              This goal is approved — you can update progress and add notes.
+            </p>
+          )}
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-4">
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
               {error}
@@ -159,11 +169,11 @@ export function GoalFormModal({
             />
           </div>
 
-          {/* Status — shown on edit only (new goals always start as pending) */}
+          {/* Status — editing only */}
           {isEditing && (
             <div>
               <label htmlFor="goal-status" className={LABEL_CLS}>
-                Status
+                Progress Status
               </label>
               <select
                 id="goal-status"
@@ -207,6 +217,30 @@ export function GoalFormModal({
               />
             </div>
           </div>
+
+          {/* Progress notes — only shown when editing an approved goal */}
+          {isEditing && isApproved && (
+            <div className="rounded-lg border border-brand/20 bg-brand-light/30 p-4 space-y-2">
+              <label
+                htmlFor="goal-notes"
+                className="block text-xs font-semibold text-brand"
+              >
+                Progress Notes
+              </label>
+              <p className="text-xs text-text-muted">
+                Log completed steps, links, or proof of work. Visible to your
+                mentor.
+              </p>
+              <textarea
+                id="goal-notes"
+                rows={4}
+                className={`${INPUT_CLS} resize-none`}
+                value={form.progress_notes}
+                onChange={(e) => set("progress_notes", e.target.value)}
+                placeholder='e.g. "Completed module 3 on April 9th. Certificate attached in Drive."'
+              />
+            </div>
+          )}
         </div>
 
         {/* Footer */}

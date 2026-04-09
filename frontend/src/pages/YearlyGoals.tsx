@@ -3,6 +3,7 @@ import { Plus, Target } from "lucide-react";
 import {
   goalService,
   type Goal,
+  type GoalStatus,
   type GoalCreatePayload,
   type GoalUpdatePayload,
 } from "../services/goal.service";
@@ -10,6 +11,34 @@ import { useAuth } from "../hooks/useAuth";
 import { getErrorMessage } from "../utils/errors";
 import { GoalGroup } from "../components/goals/GoalGroup";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
+import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const MANAGER_ROLES = ["Admin", "Manager", "Principal"] as const;
+
+const GROUP_CONFIG = [
+  { status: "pending" as const, label: "Pending", dotClass: "bg-amber-400" },
+  {
+    status: "in_progress" as const,
+    label: "In Progress",
+    dotClass: "bg-blue-400",
+  },
+  {
+    status: "completed" as const,
+    label: "Completed",
+    dotClass: "bg-green-400",
+  },
+  {
+    status: "cancelled" as const,
+    label: "Cancelled",
+    dotClass: "bg-slate-400",
+  },
+] as const;
+
+type ActiveTab = "my" | "team";
 
 // ---------------------------------------------------------------------------
 // Stat pill
@@ -75,7 +104,7 @@ function GoalSkeleton() {
             {[1, 2].map((c) => (
               <div
                 key={c}
-                className="h-28 rounded-lg border border-border bg-surface p-4"
+                className="h-32 rounded-lg border border-border bg-surface p-4"
               >
                 <div className="h-3 w-3/4 rounded bg-slate-100 mb-2" />
                 <div className="h-2.5 w-full rounded bg-slate-100" />
@@ -93,28 +122,13 @@ function GoalSkeleton() {
 // Page
 // ---------------------------------------------------------------------------
 
-const GROUP_CONFIG = [
-  { status: "pending" as const, label: "Pending", dotClass: "bg-amber-400" },
-  {
-    status: "in_progress" as const,
-    label: "In Progress",
-    dotClass: "bg-blue-400",
-  },
-  {
-    status: "completed" as const,
-    label: "Completed",
-    dotClass: "bg-green-400",
-  },
-  {
-    status: "cancelled" as const,
-    label: "Cancelled",
-    dotClass: "bg-slate-400",
-  },
-] as const;
-
 export function YearlyGoals() {
   const { user } = useAuth();
+  const isManager = MANAGER_ROLES.includes(
+    user?.role as (typeof MANAGER_ROLES)[number],
+  );
 
+  const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -125,10 +139,9 @@ export function YearlyGoals() {
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await goalService.getMyGoals();
-      setGoals(data);
+      setGoals(await goalService.getMyGoals());
     } catch {
-      // Goals list stays empty — user sees the empty state
+      /* stays empty */
     } finally {
       setIsLoading(false);
     }
@@ -138,13 +151,14 @@ export function YearlyGoals() {
     void loadGoals();
   }, [loadGoals]);
 
+  // Modal helpers
   const openAdd = () => {
     setEditingGoal(null);
     setModalError("");
     setShowModal(true);
   };
-  const openEdit = (goal: Goal) => {
-    setEditingGoal(goal);
+  const openEdit = (g: Goal) => {
+    setEditingGoal(g);
     setModalError("");
     setShowModal(true);
   };
@@ -154,6 +168,7 @@ export function YearlyGoals() {
     setModalError("");
   };
 
+  // Save (create or update)
   const handleSave = async (payload: GoalCreatePayload | GoalUpdatePayload) => {
     setIsSaving(true);
     setModalError("");
@@ -180,9 +195,37 @@ export function YearlyGoals() {
     }
   };
 
-  // Stats
-  const countByStatus = (status: Goal["status"]) =>
-    goals.filter((g) => g.status === status).length;
+  // Submit for review
+  const handleSubmit = async (goal: Goal) => {
+    try {
+      const updated = await goalService.submitGoal(goal.id);
+      setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+    } catch {
+      // Goal stays in draft — user can retry
+    }
+  };
+
+  // Quick progress cycling (approved goals only)
+  const handleProgressUpdate = async (goal: Goal, newStatus: GoalStatus) => {
+    try {
+      const updated = await goalService.updateGoal(goal.id, {
+        status: newStatus,
+      });
+      setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+    } catch {
+      // Status stays unchanged — user can retry
+    }
+  };
+
+  const countByStatus = (s: Goal["status"]) =>
+    goals.filter((g) => g.status === s).length;
+
+  const tabCls = (tab: ActiveTab) =>
+    `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+      activeTab === tab
+        ? "border-brand text-brand"
+        : "border-transparent text-text-muted hover:text-text-main"
+    }`;
 
   return (
     <div className="space-y-6">
@@ -196,60 +239,96 @@ export function YearlyGoals() {
             Define, track, and complete your annual objectives.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openAdd}
-          className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add Goal
-        </button>
+        {activeTab === "my" && (
+          <button
+            type="button"
+            onClick={openAdd}
+            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add Goal
+          </button>
+        )}
       </div>
 
-      {/* Stats */}
-      {!isLoading && goals.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <StatPill
-            label="Total"
-            count={goals.length}
-            colorClass="text-text-main"
-          />
-          <StatPill
-            label="Pending"
-            count={countByStatus("pending")}
-            colorClass="text-amber-600"
-          />
-          <StatPill
-            label="In Progress"
-            count={countByStatus("in_progress")}
-            colorClass="text-blue-600"
-          />
-          <StatPill
-            label="Completed"
-            count={countByStatus("completed")}
-            colorClass="text-green-600"
-          />
+      {/* Tab container */}
+      <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+        {/* Tab bar */}
+        <div className="flex border-b border-border px-2">
+          <button
+            type="button"
+            className={tabCls("my")}
+            onClick={() => setActiveTab("my")}
+          >
+            My Goals
+          </button>
+          {isManager && (
+            <button
+              type="button"
+              className={tabCls("team")}
+              onClick={() => setActiveTab("team")}
+            >
+              Team Goals
+            </button>
+          )}
         </div>
-      )}
 
-      {/* Content */}
-      {isLoading ? (
-        <GoalSkeleton />
-      ) : goals.length === 0 ? (
-        <EmptyState onAdd={openAdd} />
-      ) : (
-        <div className="space-y-8">
-          {GROUP_CONFIG.map(({ status, label, dotClass }) => (
-            <GoalGroup
-              key={status}
-              title={label}
-              dotClass={dotClass}
-              goals={goals.filter((g) => g.status === status)}
-              onEdit={openEdit}
-            />
-          ))}
+        <div className="p-5">
+          {/* ── My Goals tab ── */}
+          {activeTab === "my" && (
+            <div className="space-y-5">
+              {/* Stats */}
+              {!isLoading && goals.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <StatPill
+                    label="Total"
+                    count={goals.length}
+                    colorClass="text-text-main"
+                  />
+                  <StatPill
+                    label="Pending"
+                    count={countByStatus("pending")}
+                    colorClass="text-amber-600"
+                  />
+                  <StatPill
+                    label="In Progress"
+                    count={countByStatus("in_progress")}
+                    colorClass="text-blue-600"
+                  />
+                  <StatPill
+                    label="Completed"
+                    count={countByStatus("completed")}
+                    colorClass="text-green-600"
+                  />
+                </div>
+              )}
+
+              {isLoading ? (
+                <GoalSkeleton />
+              ) : goals.length === 0 ? (
+                <EmptyState onAdd={openAdd} />
+              ) : (
+                <div className="space-y-8">
+                  {GROUP_CONFIG.map(({ status, label, dotClass }) => (
+                    <GoalGroup
+                      key={status}
+                      title={label}
+                      dotClass={dotClass}
+                      goals={goals.filter((g) => g.status === status)}
+                      onEdit={openEdit}
+                      onSubmit={handleSubmit}
+                      onProgressUpdate={handleProgressUpdate}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Team Goals tab ── */}
+          {activeTab === "team" && isManager && <TeamGoalsTab />}
         </div>
-      )}
+      </div>
 
       {/* Modal */}
       <GoalFormModal

@@ -1,4 +1,4 @@
-import type { Goal } from "../../services/goal.service";
+import type { Goal, GoalStatus } from "../../services/goal.service";
 import { GoalCard } from "./GoalCard";
 
 interface GoalGroupProps {
@@ -6,14 +6,22 @@ interface GoalGroupProps {
   readonly dotClass: string;
   readonly goals: Goal[];
   readonly onEdit: (goal: Goal) => void;
+  readonly onSubmit: (goal: Goal) => void;
+  readonly onProgressUpdate: (goal: Goal, newStatus: GoalStatus) => void;
 }
 
-export function GoalGroup({ title, dotClass, goals, onEdit }: GoalGroupProps) {
+export function GoalGroup({
+  title,
+  dotClass,
+  goals,
+  onEdit,
+  onSubmit,
+  onProgressUpdate,
+}: GoalGroupProps) {
   if (goals.length === 0) return null;
 
   return (
     <section aria-labelledby={`group-${title}`}>
-      {/* Group header */}
       <div className="mb-3 flex items-center gap-2">
         <span
           className={`h-2.5 w-2.5 rounded-full ${dotClass}`}
@@ -29,11 +37,15 @@ export function GoalGroup({ title, dotClass, goals, onEdit }: GoalGroupProps) {
           {goals.length}
         </span>
       </div>
-
-      {/* Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {goals.map((goal) => (
-          <GoalCard key={goal.id} goal={goal} onEdit={onEdit} />
+          <GoalCard
+            key={goal.id}
+            goal={goal}
+            onEdit={onEdit}
+            onSubmit={onSubmit}
+            onProgressUpdate={onProgressUpdate}
+          />
         ))}
       </div>
     </section>

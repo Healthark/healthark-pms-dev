@@ -1,40 +1,55 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
-from app.models.goal_models import GoalStatus
+from app.models.goal_models import GoalStatus, ApprovalStatus
 
-# 1. The Base Schema (Shared properties)
+
 class GoalBase(BaseModel):
-    title: str = Field(..., description="The main objective of the goal")
+    title:       str            = Field(..., description="The main objective of the goal")
     description: Optional[str] = None
-    status: GoalStatus = GoalStatus.PENDING
-    start_date: Optional[datetime] = None
-    due_date: Optional[datetime] = None
+    status:      GoalStatus     = GoalStatus.PENDING
+    start_date:  Optional[datetime] = None
+    due_date:    Optional[datetime] = None
 
-# 2. What the React Frontend sends us when CREATING a goal
+
 class GoalCreate(GoalBase):
-    # The employee this goal belongs to
-    user_id: int
-    # Optional: If a manager assigned it
+    user_id:    int
     manager_id: Optional[int] = None
+    # approval_status intentionally omitted — backend always initialises to DRAFT
 
-# 3. What the React Frontend sends us when UPDATING a goal (Everything is optional)
+
 class GoalUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[GoalStatus] = None
-    start_date: Optional[datetime] = None
-    due_date: Optional[datetime] = None
+    title:          Optional[str]        = None
+    description:    Optional[str]        = None
+    status:         Optional[GoalStatus] = None
+    start_date:     Optional[datetime]   = None
+    due_date:       Optional[datetime]   = None
+    progress_notes: Optional[str]        = None
 
-# 4. What we send BACK to the React Frontend
+
+class GoalApprovalUpdate(BaseModel):
+    """
+    Payload for the manager approval endpoint.
+    Only APPROVED and CHANGES_REQUESTED are valid targets — the route
+    enforces this; the schema accepts the full enum for clarity.
+    """
+    approval_status: ApprovalStatus
+    feedback:        Optional[str] = None
+
+
 class GoalResponse(GoalBase):
-    id: int
-    org_id: int
-    user_id: int
-    manager_id: Optional[int] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    id:              int
+    org_id:          int
+    user_id:         int
+    manager_id:      Optional[int] = None
+    approval_status: str
+    manager_feedback: Optional[str] = None
+    created_at:      datetime
+    updated_at:      Optional[datetime] = None
 
-    # Architect Note: This is crucial! It tells Pydantic to read data 
-    # directly from the SQLAlchemy database objects instead of just standard dictionaries.
     model_config = ConfigDict(from_attributes=True)
+
+
+class TeamGoalResponse(GoalResponse):
+    """Extended response for the manager's Team Goals view."""
+    owner_name: str
