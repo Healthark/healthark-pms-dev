@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.models.user_models import User
 from app.models.organization_models import Organization
 from app.schemas.auth_schemas import TokenResponse
-from app.schemas.user_schemas import UserProfileResponse
+from app.schemas.user_schemas import UserProfile as UserProfileResponse
 from app.api.dependencies import CurrentUser
 
 router = APIRouter()

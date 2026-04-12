@@ -1,20 +1,48 @@
+"""
+User Schemas — Self-Service Endpoints for Authenticated Users.
+
+These schemas power the Profile page and password change flow.
+They are NOT admin schemas — these are what regular users see about themselves.
+"""
+
 from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import datetime
 
 
-class UserProfileResponse(BaseModel):
-    """Returned by GET /auth/me — the complete profile of the authenticated user."""
+# ── Password Change ──────────────────────────────────────────────────
+
+class PasswordChangeRequest(BaseModel):
+    """Payload from the PasswordChangeCard component."""
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+# ── Profile Response ─────────────────────────────────────────────────
+
+class UserProfile(BaseModel):
+    """
+    Rich profile payload for the Profile page.
+
+    Contains everything the ProfileInfoCard needs to render:
+    identity fields, HR-controlled metadata (department, designation,
+    mentor), and the org name for context. All of this is read-only
+    on the frontend — only password and avatar are user-editable.
+    """
     id: int
-    email: str
-    full_name: str
+    org_id: int
+    org_name: str
+
     employee_code: str
+    full_name: str
+    email: str
     phone: Optional[str] = None
     role: str
+    avatar_url: Optional[str] = None
+
+    # HR-controlled fields — displayed as read-only text
     department: Optional[str] = None
     designation: Optional[str] = None
     mentor_name: Optional[str] = None
 
-
-class PasswordChangeRequest(BaseModel):
-    current_password: str
-    new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
+    created_at: datetime
