@@ -1,6 +1,38 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+"""
+SystemSettings Model — The Organization's Control Panel.
+
+This table stores one row per organization, acting as a per-tenant configuration
+singleton. The active_cycle_name drives what period is displayed in the Topbar,
+and the submission flags gate whether employees can submit goals or self-reviews.
+
+Design Decision: One row per org (enforced by a unique composite index on org_id)
+rather than a key-value store. This avoids the "settings sprawl" anti-pattern and
+keeps the schema explicit, queryable, and type-safe.
+"""
+
+from enum import Enum as PyEnum
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Date, DateTime, ForeignKey, Index
+)
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
+
+
+class CycleType(str, PyEnum):
+    """
+    Determines the cadence of the active performance cycle.
+
+    - ANNUAL:      Full fiscal year   (e.g. "FY26")
+    - HALF_YEARLY: Two halves         (e.g. "H1 FY26", "H2 FY26")
+    - QUARTERLY:   Four quarters      (e.g. "Q1 FY26")
+
+    This enum is stored as a plain string in SQLite/Postgres via .value extraction
+    on write, keeping the column portable and human-readable in raw queries.
+    """
+    ANNUAL = "annual"
+    HALF_YEARLY = "half_yearly"
+    QUARTERLY = "quarterly"
 
 
 class SystemSettings(Base):
@@ -8,15 +40,42 @@ class SystemSettings(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # One settings row per organization — enforced at the DB level
+    # ── Multi-Tenancy (Golden Rule) ──────────────────────────────────
+    # Every org gets exactly ONE settings row. The unique index below
+    # enforces this at the database level, not just in application code.
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
-    # e.g. "H1 FY26" — the active cycle all new reviews/goals are tagged to
-    active_cycle = Column(String, nullable=True)
+    # ── Active Cycle Configuration ───────────────────────────────────
+    # The human-readable label displayed in the Topbar and stamped onto
+    # reviews/goals created during this period.
+    active_cycle_name = Column(String, nullable=False)  # e.g. "H1 FY26"
 
+    # The machine-readable cadence — used by the frontend to gate features.
+    # For example, Annual Review forms are only accessible when
+    # cycle_type == "annual" or the org explicitly opens reviews.
+    cycle_type = Column(String, nullable=False, default=CycleType.ANNUAL.value)
+
+    # Optional date boundaries for reporting and deadline enforcement.
+    cycle_start_date = Column(Date, nullable=True)
+    cycle_end_date = Column(Date, nullable=True)
+
+    # ── Submission Gates ─────────────────────────────────────────────
+    # HR flips these flags to open/close submission windows org-wide.
+    # This is simpler and more auditable than date-based auto-gating.
+    goals_submission_open = Column(Boolean, default=False)
+    reviews_submission_open = Column(Boolean, default=False)
+
+    # ── Audit Trail ──────────────────────────────────────────────────
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # ── Constraints ──────────────────────────────────────────────────
     __table_args__ = (
-        UniqueConstraint("org_id", name="uix_system_settings_org"),
+        # Singleton per org — prevents accidental duplicate settings rows.
+        Index("ix_system_settings_org_id", "org_id", unique=True),
     )
+
+    # ── Relationships ────────────────────────────────────────────────
+    organization = relationship("Organization")
+    updated_by = relationship("User", foreign_keys=[updated_by_id])

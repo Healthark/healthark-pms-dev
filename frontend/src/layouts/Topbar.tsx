@@ -2,12 +2,17 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell, CalendarDays } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useSystemSettings } from "../hooks/useSystemSettings";
 import {
   notificationService,
   type TopbarSummary,
 } from "../services/notification.service";
 import { NotificationDropdown } from "../components/layout/NotificationDropdown";
 
+/**
+ * Derives a human-readable page title from the current URL path.
+ * e.g. "/yearly-goals" → "Yearly Goals", "/" → "Dashboard"
+ */
 function usePageTitle(): string {
   const { pathname } = useLocation();
   return (
@@ -23,11 +28,18 @@ export function Topbar() {
   const title = usePageTitle();
   const { user } = useAuth();
 
+  // ── Active Cycle — from the dedicated SystemSettings context ──────
+  // This is the single source of truth for the cycle badge. When an Admin
+  // updates the cycle in the Settings page, refreshSettings() fires and
+  // the Topbar updates instantly without a full page reload.
+  const { settings, isLoading: settingsLoading } = useSystemSettings();
+
+  // ── Notifications — from the lightweight summary endpoint ─────────
   const [summary, setSummary] = useState<TopbarSummary | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
 
-  // Fetch once on mount — lightweight, single round-trip
+  // Fetch notification summary once on mount — single round-trip
   useEffect(() => {
     notificationService
       .getSummary()
@@ -68,12 +80,18 @@ export function Topbar() {
         <h2 className="font-display font-medium text-lg text-text-main">
           {title}
         </h2>
-        {summary?.active_cycle && (
+
+        {/* Active Cycle Badge — driven by SystemSettings context */}
+        {settingsLoading ? (
+          <span className="hidden sm:inline-flex items-center rounded-full border border-border bg-gray-50 px-2.5 py-0.5 text-xs text-text-muted animate-pulse">
+            Loading...
+          </span>
+        ) : settings?.active_cycle_name ? (
           <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
             <CalendarDays className="h-3 w-3" aria-hidden="true" />
-            {summary.active_cycle}
+            {settings.active_cycle_name}
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* Right — bell + avatar */}
@@ -85,7 +103,7 @@ export function Topbar() {
           className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-slate-50"
           aria-label={
             hasNotifications
-              ? `Notifications (${summary!.notifications.length} new)`
+              ? `Notifications (${summary?.notifications.length} new)`
               : "Notifications"
           }
           aria-expanded={anchorRect !== null}

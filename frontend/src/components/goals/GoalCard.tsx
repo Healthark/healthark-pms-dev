@@ -31,10 +31,10 @@ function formatDate(dateStr: string | null): string {
 function ProgressButton({
   goal,
   onProgressUpdate,
-}: {
+}: Readonly<{
   goal: Goal;
   onProgressUpdate: (goal: Goal, newStatus: GoalStatus) => void;
-}) {
+}>) {
   if (goal.status === "pending") {
     return (
       <button

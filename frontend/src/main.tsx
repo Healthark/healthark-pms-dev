@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { AuthProvider } from "./contexts/AuthProvider";
+import { SystemSettingsProvider } from "./contexts/SystemSettingsProvider";
 import App from "./App";
 import "./index.css";
 
@@ -15,7 +16,9 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     <AuthProvider>
-      <App />
+      <SystemSettingsProvider>
+        <App />
+      </SystemSettingsProvider>
     </AuthProvider>
   </StrictMode>,
 );

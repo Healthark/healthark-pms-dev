@@ -8,6 +8,7 @@ from app.api.routes import admin_routes
 from app.api.routes import dashboard_routes
 from app.api.routes import notification_routes
 from app.api.routes import user_routes
+from app.api.routes import system_settings_routes
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -35,7 +36,7 @@ app.include_router(admin_routes.router,     prefix=f"{settings.API_V1_STR}/admin
 app.include_router(dashboard_routes.router,      prefix=f"{settings.API_V1_STR}/dashboard",      tags=["Dashboard"])
 app.include_router(notification_routes.router,   prefix=f"{settings.API_V1_STR}/notifications",  tags=["Notifications"])
 app.include_router(user_routes.router,           prefix=f"{settings.API_V1_STR}/users",           tags=["Users"])
-
+app.include_router(system_settings_routes.router, prefix=f"{settings.API_V1_STR}/settings", tags=["System Settings"],)
 @app.get("/")
 def root():
     return {"message": "Welcome to the Healthark PMS API. Visit /docs for the Swagger UI."}

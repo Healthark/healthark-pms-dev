@@ -2,6 +2,7 @@ from app.core.database import SessionLocal
 from app.models.organization_models import Organization
 from app.models.reference_models import Department, Designation
 from app.models.user_models import User
+from app.models.system_settings_models import SystemSettings, CycleType
 from app.core.security import get_password_hash
 
 
@@ -84,11 +85,21 @@ def seed_database():
         # 3. USERS                                                            #
         # ------------------------------------------------------------------ #
 
-        if db.query(User).filter(User.org_id == org.id).count() == 0:
-            dept_marketing            = db.query(Department).filter_by(name="Marketing").first()
-            desig_director            = db.query(Designation).filter_by(name="Director").first()
-            desig_manager             = db.query(Designation).filter_by(name="Manager").first()
-            desig_junior_data_analyst = db.query(Designation).filter_by(name="Junior Data Analyst").first()
+        # We need references to admin_user and mentor later (for settings + mentee link),
+        # so we always resolve them — whether freshly created or already existing.
+        admin_user = db.query(User).filter(
+            User.org_id == org.id, User.email == "admin@healthark.com"
+        ).first()
+
+        mentor = db.query(User).filter(
+            User.org_id == org.id, User.email == "david@healthark.com"
+        ).first()
+
+        if not admin_user:
+            # Resolve FK references for user creation
+            dept_marketing            = db.query(Department).filter_by(org_id=org.id, name="Marketing").first()
+            desig_director            = db.query(Designation).filter_by(org_id=org.id, name="Director").first()
+            desig_junior_data_analyst = db.query(Designation).filter_by(org_id=org.id, name="Junior Data Analyst").first()
 
             # -- Admin (Story 1.3 testing: has 'admin' feature + Admin role) --
             admin_user = User(
@@ -166,6 +177,45 @@ def seed_database():
             print("  [+] Created Partner Org user: alice@partnerorg.com")
         else:
             print("  [~] Partner Org users already exist, skipping...")
+
+        # ------------------------------------------------------------------ #
+        # 5. SYSTEM SETTINGS (Active Cycle per Organization)                 #
+        # ------------------------------------------------------------------ #
+
+        # --- Healthark Settings ---
+        if not db.query(SystemSettings).filter(SystemSettings.org_id == org.id).first():
+            healthark_settings = SystemSettings(
+                org_id=org.id,
+                active_cycle_name="FY26",
+                cycle_type=CycleType.ANNUAL.value,
+                goals_submission_open=True,
+                reviews_submission_open=False,
+                updated_by_id=admin_user.id,
+            )
+            db.add(healthark_settings)
+            db.commit()
+            print("  [+] Created System Settings for Healthark (FY26, goals open)")
+        else:
+            print("  [~] Healthark system settings already exist, skipping...")
+
+        # --- Partner Org Settings ---
+        if not db.query(SystemSettings).filter(SystemSettings.org_id == partner_org.id).first():
+            partner_settings = SystemSettings(
+                org_id=partner_org.id,
+                active_cycle_name="FY26",
+                cycle_type=CycleType.ANNUAL.value,
+                goals_submission_open=True,
+                reviews_submission_open=False,
+            )
+            db.add(partner_settings)
+            db.commit()
+            print("  [+] Created System Settings for Partner Org (FY26, goals open)")
+        else:
+            print("  [~] Partner Org system settings already exist, skipping...")
+
+        # ------------------------------------------------------------------ #
+        # DONE                                                                #
+        # ------------------------------------------------------------------ #
 
         print("\nDatabase seeding completed successfully!")
         print("\n--- Test Accounts ---")

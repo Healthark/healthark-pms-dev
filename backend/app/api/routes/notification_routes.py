@@ -1,68 +1,119 @@
+"""
+Notification Routes — The Topbar's Data Feed.
+
+Endpoint:
+    GET /api/v1/notifications/summary  →  Any authenticated user
+
+This endpoint is intentionally lightweight — it runs a handful of COUNT
+queries against existing tables (goals, users, system_settings) and returns
+a flat payload. No dedicated notifications table exists yet.
+
+When a dedicated notifications table is built later (Epic 5), this route
+simply switches from computing to reading — the response schema stays
+identical, so the frontend needs zero changes.
+
+Security Layers Applied:
+    Layer 1 — Authentication:   CurrentUser dependency (JWT validation)
+    Layer 2 — Tenant Isolation: All queries filter by current_user.org_id
+    Layer 3 — Role Awareness:   Manager-only notifications gated by role check
+    Layer 4 — Ownership:        Goal counts scoped to current_user.id
+"""
+
+from sqlalchemy import func
 from fastapi import APIRouter
 
 from app.api.dependencies import DbSession, CurrentUser
-from app.models.goal_models import Goal, GoalStatus
 from app.models.system_settings_models import SystemSettings
-from app.schemas.notification_schemas import NotificationItem, TopbarSummaryResponse
+from app.models.goal_models import Goal, GoalStatus, ApprovalStatus
+from app.models.user_models import User
+from app.schemas.notification_schemas import NotificationItem, TopbarSummary
 
 router = APIRouter()
 
 
-@router.get("/summary", response_model=TopbarSummaryResponse)
-def get_topbar_summary(db: DbSession, current_user: CurrentUser):
+@router.get("/summary", response_model=TopbarSummary)
+def get_topbar_summary(
+    db: DbSession,
+    current_user: CurrentUser,
+):
     """
-    Lightweight endpoint called once on Topbar mount.
-    Returns the active cycle (for the badge) and any actionable alerts
-    (for the notification bell) — no Admin role required, any authenticated
-    user calls this on every page.
+    Return the active cycle name and a list of computed notifications
+    for the currently authenticated user.
     """
-
-    # --- Active cycle ---
+    # ── Active Cycle ─────────────────────────────────────────────────
     settings = db.query(SystemSettings).filter(
         SystemSettings.org_id == current_user.org_id
     ).first()
-    active_cycle = settings.active_cycle if settings else None
 
-    # --- Notifications ---
-    # Each check appends to this list. Adding a new alert type in the future
-    # means adding one block here — no schema changes needed.
+    active_cycle = settings.active_cycle_name if settings else None
+
+    # ── Computed Notifications ───────────────────────────────────────
     notifications: list[NotificationItem] = []
 
-    pending_count = db.query(Goal).filter(
+    # 1. Goals still in "Pending" progress status (employee hasn't started)
+    pending_count: int = db.query(func.count(Goal.id)).filter(
         Goal.org_id == current_user.org_id,
         Goal.user_id == current_user.id,
         Goal.status == GoalStatus.PENDING.value,
-    ).count()
+    ).scalar() or 0
 
     if pending_count > 0:
         notifications.append(NotificationItem(
-            type="pending_goals",
-            message=(
-                f"You have {pending_count} pending "
-                f"{'goal' if pending_count == 1 else 'goals'} to work on."
-            ),
+            type="goals_pending",
+            message=f"You have {pending_count} goal(s) that haven't been started yet.",
             count=pending_count,
             severity="warning",
         ))
 
-    in_progress_count = db.query(Goal).filter(
+    # 2. Goals sent back by manager with "Changes Requested"
+    changes_count: int = db.query(func.count(Goal.id)).filter(
         Goal.org_id == current_user.org_id,
         Goal.user_id == current_user.id,
-        Goal.status == GoalStatus.IN_PROGRESS.value,
-    ).count()
+        Goal.approval_status == ApprovalStatus.CHANGES_REQUESTED.value,
+    ).scalar() or 0
 
-    if in_progress_count > 0:
+    if changes_count > 0:
         notifications.append(NotificationItem(
-            type="in_progress_goals",
-            message=(
-                f"You have {in_progress_count} goal"
-                f"{'s' if in_progress_count > 1 else ''} in progress."
-            ),
-            count=in_progress_count,
+            type="goals_changes_requested",
+            message=f"{changes_count} goal(s) need revisions — check manager feedback.",
+            count=changes_count,
+            severity="blocking",
+        ))
+
+    # 3. Goals in "Draft" that haven't been submitted for approval yet
+    draft_count: int = db.query(func.count(Goal.id)).filter(
+        Goal.org_id == current_user.org_id,
+        Goal.user_id == current_user.id,
+        Goal.approval_status == ApprovalStatus.DRAFT.value,
+    ).scalar() or 0
+
+    if draft_count > 0:
+        notifications.append(NotificationItem(
+            type="goals_draft",
+            message=f"{draft_count} goal(s) are still in draft — submit for approval.",
+            count=draft_count,
             severity="info",
         ))
 
-    return TopbarSummaryResponse(
+    # ── Manager-Only Notifications ───────────────────────────────────
+    if current_user.role in ("Admin", "Manager", "Principal"):
+
+        # 4. Team goals awaiting this manager's approval
+        awaiting_count: int = db.query(func.count(Goal.id)).filter(
+            Goal.org_id == current_user.org_id,
+            Goal.manager_id == current_user.id,
+            Goal.approval_status == ApprovalStatus.SUBMITTED.value,
+        ).scalar() or 0
+
+        if awaiting_count > 0:
+            notifications.append(NotificationItem(
+                type="goals_pending_approval",
+                message=f"{awaiting_count} goal(s) from your team await your approval.",
+                count=awaiting_count,
+                severity="warning",
+            ))
+
+    return TopbarSummary(
         active_cycle=active_cycle,
         notifications=notifications,
     )
