@@ -1,78 +1,127 @@
+"""
+Admin Routes — The HR Administrator's Control Panel.
+
+Endpoints:
+    GET    /api/v1/admin/users              → List all org users
+    POST   /api/v1/admin/users              → Create a new user
+    PATCH  /api/v1/admin/users/{user_id}    → Update user details
+    DELETE /api/v1/admin/users/{user_id}    → Soft-delete (deactivate) a user
+    GET    /api/v1/admin/departments         → List departments (for dropdowns)
+    GET    /api/v1/admin/designations        → List designations (for dropdowns)
+    GET    /api/v1/admin/settings            → Get simplified active cycle info
+    PATCH  /api/v1/admin/settings            → Update active cycle
+
+Security Layers Applied (ALL endpoints):
+    Layer 1 — Authentication:   CurrentUser dependency (JWT validation)
+    Layer 2 — Tenant Isolation: Every query filters by current_user.org_id
+    Layer 3 — Role Authorization: Every endpoint requires role == "Admin"
+    Layer 4 — Ownership:        Not applicable (Admin operates on all org data)
+"""
+
 from typing import List
 from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
+from app.core.security import get_password_hash
 from app.models.user_models import User
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings
 from app.schemas.admin_schemas import (
-    UserCreate, UserUpdate, UserResponse,
-    DepartmentBrief, DesignationBrief,
-    SystemSettingsResponse, SystemSettingsUpdate,
+    DepartmentBrief,
+    DesignationBrief,
+    UserResponse,
+    UserCreate,
+    UserUpdate,
+    AdminSettingsResponse,
+    AdminSettingsUpdate,
 )
-from app.core.security import get_password_hash
 
 router = APIRouter()
 
 
+# ── Reusable Admin Guard ─────────────────────────────────────────────
+
 def _require_admin(current_user: User) -> None:
-    """
-    Shared role guard for every route in this file.
-    Raises 403 immediately if the caller is not an Admin.
-    Keeps individual routes clean — no repeated if-blocks.
-    """
+    """Raise 403 if the caller is not an Admin. Used by every endpoint."""
     if current_user.role != "Admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required.",
+            detail="Only administrators can access this resource.",
         )
 
 
-# ---------------------------------------------------------------------------
-# Users
-# ---------------------------------------------------------------------------
+# =====================================================================
+# USER MANAGEMENT
+# =====================================================================
 
 @router.get("/users", response_model=List[UserResponse])
-def list_users(db: DbSession, current_user: CurrentUser):
+def list_users(
+    db: DbSession,
+    current_user: CurrentUser,
+):
     """
-    Returns ALL users in the org (including deactivated) so the admin
-    can see the full roster and re-activate or audit past accounts.
+    Return every user in the organization (including deactivated ones).
+
+    Uses joinedload to eagerly fetch department + designation in ONE query,
+    avoiding the N+1 problem when the table renders 50+ rows.
     """
     _require_admin(current_user)
-    return (
+
+    users = (
         db.query(User)
+        .options(
+            joinedload(User.department),
+            joinedload(User.designation),
+        )
         .filter(User.org_id == current_user.org_id)
         .order_by(User.created_at.desc())
         .all()
     )
 
+    return users
+
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user_in: UserCreate, db: DbSession, current_user: CurrentUser):
+def create_user(
+    user_in: UserCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Create a new user in the organization.
+
+    The email is checked for uniqueness within the org (not globally)
+    because the composite index ix_users_org_email enforces this.
+    """
     _require_admin(current_user)
 
-    # Duplicate email check within the tenant
-    if db.query(User).filter(
+    # Check for duplicate email within this org
+    existing = db.query(User).filter(
         User.org_id == current_user.org_id,
         User.email == user_in.email,
-    ).first():
+    ).first()
+
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A user with this email already exists in your organization.",
+            detail=f"A user with email '{user_in.email}' already exists in this organization.",
         )
 
-    # Duplicate employee code check within the tenant
-    if db.query(User).filter(
+    # Check for duplicate employee code within this org
+    existing_code = db.query(User).filter(
         User.org_id == current_user.org_id,
         User.employee_code == user_in.employee_code,
-    ).first():
+    ).first()
+
+    if existing_code:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A user with this employee code already exists in your organization.",
+            detail=f"Employee code '{user_in.employee_code}' is already in use.",
         )
 
     new_user = User(
-        org_id=current_user.org_id,  # Tenant isolation — never from request body
+        org_id=current_user.org_id,  # Forced from JWT — never trusted from body
         employee_code=user_in.employee_code,
         full_name=user_in.full_name,
         email=user_in.email,
@@ -83,10 +132,13 @@ def create_user(user_in: UserCreate, db: DbSession, current_user: CurrentUser):
         mentor_id=user_in.mentor_id,
         password_hash=get_password_hash(user_in.password),
     )
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return new_user
+
+    # Eagerly load relationships for the response
+    return _load_user_with_relations(db, new_user.id)
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
@@ -96,6 +148,12 @@ def update_user(
     db: DbSession,
     current_user: CurrentUser,
 ):
+    """
+    Update a user's details (name, role, department, mentor, etc.).
+
+    Email is intentionally NOT updatable — the frontend makes the field
+    read-only during edit mode to prevent orphaned JWT tokens.
+    """
     _require_admin(current_user)
 
     user = db.query(User).filter(
@@ -104,115 +162,210 @@ def update_user(
     ).first()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
 
-    for field, value in user_in.model_dump(exclude_unset=True).items():
+    # If employee_code is changing, check for duplicates
+    update_data = user_in.model_dump(exclude_unset=True)
+
+    if "employee_code" in update_data and update_data["employee_code"] != user.employee_code:
+        existing_code = db.query(User).filter(
+            User.org_id == current_user.org_id,
+            User.employee_code == update_data["employee_code"],
+            User.id != user_id,
+        ).first()
+
+        if existing_code:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Employee code '{update_data['employee_code']}' is already in use.",
+            )
+
+    for field, value in update_data.items():
         setattr(user, field, value)
 
     db.commit()
-    db.refresh(user)
-    return user
+
+    # Return with eagerly loaded relationships
+    return _load_user_with_relations(db, user.id)
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deactivate_user(user_id: int, db: DbSession, current_user: CurrentUser):
+def deactivate_user(
+    user_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
     """
-    Soft delete only — sets is_deleted = True.
-    Hard deletes are never performed per architecture standards.
+    Soft-delete a user (set is_deleted = True).
+
+    Hard deletes are NEVER used — this preserves audit trails and
+    historical review/goal data. The user's JWT will still work until
+    it expires, but the CurrentUser dependency checks is_deleted on
+    every request, so they are blocked immediately.
     """
     _require_admin(current_user)
 
-    # Prevent admins from accidentally locking themselves out
-    if user_id == current_user.id:
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.org_id == current_user.org_id,
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    # Guard: Admin should not deactivate themselves
+    if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own account.",
         )
 
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.org_id == current_user.org_id,
-    ).first()
-
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-
     user.is_deleted = True
     db.commit()
 
+    return None  # 204 No Content — no body
 
-# ---------------------------------------------------------------------------
-# Reference Data — for Add/Edit User form dropdowns
-# ---------------------------------------------------------------------------
+
+# =====================================================================
+# REFERENCE DATA (for dropdown menus)
+# =====================================================================
 
 @router.get("/departments", response_model=List[DepartmentBrief])
-def list_departments(db: DbSession, current_user: CurrentUser):
+def list_departments(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Return all active departments for the org (powers the <select> dropdown)."""
     _require_admin(current_user)
+
     return (
         db.query(Department)
         .filter(
             Department.org_id == current_user.org_id,
-            Department.is_active == True,
+            Department.is_active == True,  # noqa: E712
         )
+        .order_by(Department.name)
         .all()
     )
 
 
 @router.get("/designations", response_model=List[DesignationBrief])
-def list_designations(db: DbSession, current_user: CurrentUser):
+def list_designations(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Return all active designations for the org, sorted by hierarchy level."""
     _require_admin(current_user)
+
     return (
         db.query(Designation)
         .filter(
             Designation.org_id == current_user.org_id,
-            Designation.is_active == True,
+            Designation.is_active == True,  # noqa: E712
         )
         .order_by(Designation.level)
         .all()
     )
 
 
-# ---------------------------------------------------------------------------
-# System Settings
-# ---------------------------------------------------------------------------
+# =====================================================================
+# ADMIN SETTINGS (Simplified Active Cycle View)
+# =====================================================================
 
-@router.get("/settings", response_model=SystemSettingsResponse)
-def get_settings(db: DbSession, current_user: CurrentUser):
-    _require_admin(current_user)
-    settings = db.query(SystemSettings).filter(
-        SystemSettings.org_id == current_user.org_id
-    ).first()
-
-    # Auto-provision a blank settings row on first access — no manual seeding needed
-    if not settings:
-        settings = SystemSettings(org_id=current_user.org_id)
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-
-    return settings
-
-
-@router.patch("/settings", response_model=SystemSettingsResponse)
-def update_settings(
-    settings_in: SystemSettingsUpdate,
+@router.get("/settings", response_model=AdminSettingsResponse)
+def get_admin_settings(
     db: DbSession,
     current_user: CurrentUser,
 ):
+    """
+    Return the active cycle for the Admin Panel's SystemSettingsTab.
+
+    This is a simplified view of the same SystemSettings table used by
+    the /api/v1/settings/ endpoints. The frontend field name 'active_cycle'
+    maps to the database column 'active_cycle_name'.
+    """
     _require_admin(current_user)
+
     settings = db.query(SystemSettings).filter(
-        SystemSettings.org_id == current_user.org_id
+        SystemSettings.org_id == current_user.org_id,
     ).first()
 
     if not settings:
-        settings = SystemSettings(
-            org_id=current_user.org_id,
-            active_cycle=settings_in.active_cycle,
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="System settings have not been configured.",
         )
-        db.add(settings)
-    else:
-        settings.active_cycle = settings_in.active_cycle
+
+    return AdminSettingsResponse(
+        id=settings.id,
+        org_id=settings.org_id,
+        active_cycle=settings.active_cycle_name,
+        updated_at=settings.updated_at,
+    )
+
+
+@router.patch("/settings", response_model=AdminSettingsResponse)
+def update_admin_settings(
+    settings_in: AdminSettingsUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Update the active cycle from the Admin Panel.
+
+    Maps the frontend's 'active_cycle' field back to the database's
+    'active_cycle_name' column transparently.
+    """
+    _require_admin(current_user)
+
+    settings = db.query(SystemSettings).filter(
+        SystemSettings.org_id == current_user.org_id,
+    ).first()
+
+    if not settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="System settings have not been configured.",
+        )
+
+    # Map frontend field → database column
+    settings.active_cycle_name = settings_in.active_cycle
+    settings.updated_by_id = current_user.id
 
     db.commit()
     db.refresh(settings)
-    return settings
+
+    return AdminSettingsResponse(
+        id=settings.id,
+        org_id=settings.org_id,
+        active_cycle=settings.active_cycle_name,
+        updated_at=settings.updated_at,
+    )
+
+
+# =====================================================================
+# INTERNAL HELPERS
+# =====================================================================
+
+def _load_user_with_relations(db: DbSession, user_id: int) -> User:
+    """
+    Re-query a user with eagerly loaded relationships.
+
+    Called after create/update to ensure the response includes nested
+    department and designation objects, not just their IDs.
+    """
+    return (
+        db.query(User)
+        .options(
+            joinedload(User.department),
+            joinedload(User.designation),
+        )
+        .filter(User.id == user_id)
+        .first()
+    )

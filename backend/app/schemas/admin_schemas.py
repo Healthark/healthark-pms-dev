@@ -1,54 +1,45 @@
-from pydantic import BaseModel, ConfigDict, Field
+"""
+Admin Schemas — The Admin Panel's API Contract.
+
+These schemas mirror the TypeScript interfaces in admin.service.ts exactly.
+Key mapping note: The frontend uses `active_cycle` while the database stores
+`active_cycle_name`. The AdminSettingsResponse schema handles this translation
+via a computed field so neither side needs to change.
+"""
+
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 
 
-# ---------------------------------------------------------------------------
-# Reference Schemas (used as nested objects inside UserResponse)
-# ---------------------------------------------------------------------------
+# ── Reference Data (Dropdowns) ───────────────────────────────────────
 
 class DepartmentBrief(BaseModel):
+    """Lightweight department payload for <select> dropdowns."""
     id: int
     name: str
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class DesignationBrief(BaseModel):
+    """Lightweight designation payload for <select> dropdowns."""
     id: int
     name: str
     level: int
+
     model_config = ConfigDict(from_attributes=True)
 
 
-# ---------------------------------------------------------------------------
-# User Schemas
-# ---------------------------------------------------------------------------
-
-class UserCreate(BaseModel):
-    employee_code: str
-    full_name: str
-    email: str
-    phone: Optional[str] = None
-    role: str = Field(..., description="One of: Admin, Manager, Principal, Staff")
-    department_id: Optional[int] = None
-    designation_id: Optional[int] = None
-    mentor_id: Optional[int] = None
-    # Admin sets a temporary password on creation; changed by user via Profile later
-    password: str = Field(..., min_length=8, description="Minimum 8 characters")
-
-
-class UserUpdate(BaseModel):
-    # Every field is optional — only sent fields are written to the DB
-    full_name: Optional[str] = None
-    phone: Optional[str] = None
-    role: Optional[str] = None
-    employee_code: Optional[str] = None
-    department_id: Optional[int] = None
-    designation_id: Optional[int] = None
-    mentor_id: Optional[int] = None
-
+# ── User Schemas ─────────────────────────────────────────────────────
 
 class UserResponse(BaseModel):
+    """
+    Full user record returned to the Admin table.
+
+    Includes nested department/designation objects so the table can
+    display human-readable names without a second lookup.
+    """
     id: int
     org_id: int
     employee_code: str
@@ -62,24 +53,53 @@ class UserResponse(BaseModel):
     is_deleted: bool
     created_at: datetime
 
-    # Nested objects resolved from SQLAlchemy relationships
+    # Nested objects — populated from SQLAlchemy relationships
     department: Optional[DepartmentBrief] = None
     designation: Optional[DesignationBrief] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# ---------------------------------------------------------------------------
-# System Settings Schemas
-# ---------------------------------------------------------------------------
+class UserCreate(BaseModel):
+    """Payload from the 'Add New User' modal."""
+    employee_code: str = Field(..., min_length=1, max_length=20)
+    full_name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=5, max_length=100)
+    phone: Optional[str] = None
+    role: str = Field(..., pattern=r"^(Admin|Manager|Principal|Staff)$")
+    department_id: Optional[int] = None
+    designation_id: Optional[int] = None
+    mentor_id: Optional[int] = None
+    password: str = Field(..., min_length=8, max_length=128)
 
-class SystemSettingsResponse(BaseModel):
+
+class UserUpdate(BaseModel):
+    """Payload from the 'Edit User' modal — all fields optional (PATCH semantics)."""
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    phone: Optional[str] = None
+    role: Optional[str] = Field(default=None, pattern=r"^(Admin|Manager|Principal|Staff)$")
+    employee_code: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    department_id: Optional[int] = None
+    designation_id: Optional[int] = None
+    mentor_id: Optional[int] = None
+
+
+# ── Admin Settings (Simplified View) ─────────────────────────────────
+
+class AdminSettingsResponse(BaseModel):
+    """
+    Simplified settings payload for the Admin Panel's SystemSettingsTab.
+
+    The frontend expects 'active_cycle', not 'active_cycle_name'.
+    We handle this translation in the route, not in the schema,
+    to keep the schema a clean mirror of the TypeScript interface.
+    """
     id: int
     org_id: int
     active_cycle: Optional[str] = None
     updated_at: Optional[datetime] = None
-    model_config = ConfigDict(from_attributes=True)
 
 
-class SystemSettingsUpdate(BaseModel):
-    active_cycle: str = Field(..., description='e.g. "H1 FY26"')
+class AdminSettingsUpdate(BaseModel):
+    """Payload from the SystemSettingsTab save button."""
+    active_cycle: str = Field(..., min_length=1, max_length=50)
