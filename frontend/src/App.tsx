@@ -15,6 +15,7 @@ import AdminPanel from "./pages/AdminPanel";
 import { Profile } from "./pages/Profile";
 import Unauthorized from "./pages/Unauthorized";
 import { AnnualReviews } from "./pages/AnnualReviews";
+import { ProjectReviews } from "./pages/ProjectReviews";
 
 /**
  * AppShell renders the persistent chrome (Sidebar + Topbar) around all
@@ -59,18 +60,18 @@ export default function App() {
               <Route path="/annual-reviews" element={<AnnualReviews />} />
             </Route>
 
-            <Route element={<ProtectedRoute requiredFeature="admin" />}>
+            <Route element={<ProtectedRoute requiredFeature="admin" requiredRole={["Admin"]}/>}>
               <Route path="/admin" element={<AdminPanel />} />
             </Route>
 
             {/* Profile — always visible, no feature gate */}
             <Route path="/profile" element={<Profile />} />
-
+            <Route element={<ProtectedRoute requiredFeature="project_reviews" />}>
+              <Route path="/project-reviews" element={<ProjectReviews />} />
+            </Route>
             {/*
               Future routes:
-              <Route element={<ProtectedRoute requiredFeature="project_reviews" />}>
-                <Route path="/project-reviews" element={<ProjectReviews />} />
-              </Route>
+
               <Route element={<ProtectedRoute requiredFeature="mentoring" />}>
                 <Route path="/my-mentees" element={<MyMentees />} />
               </Route>

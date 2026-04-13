@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Users, Settings } from "lucide-react";
+import { UserPlus, Users, Settings, FolderOpen } from "lucide-react";
 
 import {
   adminService,
@@ -13,10 +13,13 @@ import {
 import { getErrorMessage } from "../utils/errors";
 import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
+import { ProjectsTab } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
 import { DeactivateModal } from "../components/admin/DeactivateModal";
+import { useSystemSettings } from "../hooks/useSystemSettings";
 
-type ActiveTab = "users" | "settings";
+
+type ActiveTab = "users" | "projects" | "settings";
 
 export default function AdminPanel() {
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -39,6 +42,7 @@ export default function AdminPanel() {
   const [cycleInput, setCycleInput] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
 
+  const { refreshSettings } = useSystemSettings();
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -141,6 +145,7 @@ export default function AdminPanel() {
       setSettings(updated);
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
+      await refreshSettings();
     } catch {
       // no-op — button re-enables
     } finally {
@@ -166,7 +171,7 @@ export default function AdminPanel() {
             Admin Panel
           </h1>
           <p className="mt-0.5 text-sm text-text-muted">
-            Manage users and system configuration for your organization.
+            Manage users, projects, and system configuration for your organization.
           </p>
         </div>
         {activeTab === "users" && (
@@ -194,6 +199,14 @@ export default function AdminPanel() {
           </button>
           <button
             type="button"
+            className={tabCls("projects")}
+            onClick={() => setActiveTab("projects")}
+          >
+            <FolderOpen className="h-4 w-4" aria-hidden="true" />
+            Projects
+          </button>
+          <button
+            type="button"
             className={tabCls("settings")}
             onClick={() => setActiveTab("settings")}
           >
@@ -212,6 +225,8 @@ export default function AdminPanel() {
             onDeactivate={setDeactivateTarget}
           />
         )}
+
+        {activeTab === "projects" && <ProjectsTab />}
 
         {activeTab === "settings" && (
           <SystemSettingsTab

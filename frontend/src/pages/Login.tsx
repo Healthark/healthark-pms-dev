@@ -64,8 +64,10 @@ export function Login() {
       login(data);
     } catch (err: unknown) {
       const message = isApiError(err)
-        ? (err.response?.data?.detail ?? "An unexpected error occurred.")
-        : "Connection to server failed. Please try again.";
+        ? (typeof err.response?.data?.detail === "string"
+    ? err.response.data.detail
+    : "Please fill in all required fields.")
+: "Connection to server failed. Please try again.";
 
       setError(message);
     } finally {

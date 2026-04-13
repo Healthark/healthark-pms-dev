@@ -43,7 +43,7 @@ def seed_database():
             partner_org = Organization(
                 name="Partner Org",
                 domain="partnerorg.com",
-                enabled_features=["dashboard", "goals"],  # No reviews, mentoring, or admin
+                enabled_features=["dashboard", "project_reviews", "admin"],  # No reviews, mentoring, or admin
             )
             db.add(partner_org)
             db.commit()

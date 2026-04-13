@@ -8,20 +8,27 @@ interface ProtectedRouteProps {
    * redirected to /login regardless of this prop.
    */
   requiredFeature?: string;
+  /**
+   * When provided, the route additionally checks that the current user's
+   * role is included in this array. If not, they are redirected to /unauthorized.
+   */
+  requiredRole?: string[];
 }
 
 /**
- * Two-stage guard:
+ * Three-stage guard:
  *   Stage 1 — Authentication: No valid session → /login
- *   Stage 2 — Authorization:  Feature not enabled for this org → /unauthorized
+ *   Stage 2 — Feature Gate:   Feature not enabled for this org → /unauthorized
+ *   Stage 3 — Role Gate:      User role not in allowed list → /unauthorized
  *
  * We preserve `location` in state so Login.tsx can redirect back after
  * successful authentication (the "intended destination" pattern).
  */
 export function ProtectedRoute({
   requiredFeature,
+  requiredRole,
 }: Readonly<ProtectedRouteProps>) {
-  const { isAuthenticated, hasFeature } = useAuth();
+  const { isAuthenticated, hasFeature, user } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
@@ -29,6 +36,10 @@ export function ProtectedRoute({
   }
 
   if (requiredFeature && !hasFeature(requiredFeature)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  if (requiredRole && !requiredRole.includes(user?.role ?? "")) {
     return <Navigate to="/unauthorized" replace />;
   }
 
