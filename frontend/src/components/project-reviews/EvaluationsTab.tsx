@@ -1,9 +1,11 @@
 /**
- * EvaluationsTab.tsx — Primary/Secondary Evaluator's Pending Reviews.
+ * EvaluationsTab.tsx — Primary + Secondary Evaluator's Pending Reviews.
  *
- * Shows cards for each submitted review the current user needs to evaluate.
- * Primary evaluators see a full side-by-side form (8 competencies + performance group + impact).
- * Secondary evaluators see a simple impact statement form.
+ * Two sections:
+ *   1. Primary evaluations — full side-by-side 8-competency form
+ *   2. Secondary evaluations — simple impact statement form
+ *
+ * Cards are color-coded so the user can instantly tell which type they are.
  *
  * Placement: src/components/project-reviews/EvaluationsTab.tsx
  */
@@ -106,7 +108,6 @@ function PrimaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Primar
       aria-labelledby="primary-eval-title"
     >
       <div className="w-full max-w-3xl rounded-xl bg-surface shadow-xl max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <div>
             <h2 id="primary-eval-title" className="font-display text-base font-semibold text-text-main">
@@ -121,13 +122,11 @@ function PrimaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Primar
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
           )}
 
-          {/* Performance Group */}
           <div>
             <label htmlFor="perf-group" className="block text-xs font-semibold text-text-main mb-1">
               Performance Group *
@@ -145,7 +144,6 @@ function PrimaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Primar
             </select>
           </div>
 
-          {/* 8 Competency side-by-side */}
           {COMPETENCIES.map((comp, idx) => {
             const selfKey = `self_desc_${comp.key}` as keyof ProjectReviewResponse;
             const selfValue = (review[selfKey] as string | null) ?? "—";
@@ -158,12 +156,10 @@ function PrimaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Primar
                   </p>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
-                  {/* Employee's self-description */}
                   <div className="p-4">
                     <p className="text-xs font-medium text-text-muted mb-1">Employee's Self-Assessment</p>
                     <p className="text-sm text-text-main whitespace-pre-wrap">{selfValue}</p>
                   </div>
-                  {/* Evaluator's comment */}
                   <div className="p-4">
                     <label
                       htmlFor={`eval-${comp.key}`}
@@ -185,7 +181,6 @@ function PrimaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Primar
             );
           })}
 
-          {/* Impact Statement */}
           <div>
             <label htmlFor="impact" className="block text-xs font-semibold text-text-main mb-1">
               Overall Impact Statement *
@@ -204,7 +199,6 @@ function PrimaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Primar
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-3 border-t border-border px-6 py-4 shrink-0">
           <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">
             Cancel
@@ -302,34 +296,53 @@ function SecondaryEvalModal({ review, onSubmit, onClose, isSaving, error }: Seco
 
 function EvalCard({
   review,
+  evalType,
   onEvaluate,
 }: {
   readonly review: ProjectReviewResponse;
-  readonly onEvaluate: (review: ProjectReviewResponse) => void;
+  readonly evalType: "Primary" | "Secondary";
+  readonly onEvaluate: (review: ProjectReviewResponse, type: "Primary" | "Secondary") => void;
 }) {
+  const isPrimary = evalType === "Primary";
+
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 shadow-sm flex flex-col gap-3">
+    <div className={`rounded-lg border bg-surface p-4 shadow-sm flex flex-col gap-3 ${
+      isPrimary ? "border-brand/30" : "border-border"
+    }`}>
+      <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${
+        isPrimary
+          ? "bg-brand-light text-brand"
+          : "bg-slate-100 text-slate-600"
+      }`}>
+        {evalType} Evaluator
+      </span>
+
       <div className="flex items-center gap-2">
         <UserCircle className="h-5 w-5 text-text-muted shrink-0" aria-hidden="true" />
         <p className="font-medium text-text-main">{review.employee_name}</p>
       </div>
+
       <div className="flex items-center gap-2 text-xs text-text-muted">
         <Briefcase className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         {review.project_name}
         <span className="font-mono">({review.project_code})</span>
       </div>
+
       <div className="flex items-center gap-2">
         <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
           Submitted
         </span>
         <span className="text-xs text-text-muted">Cycle: {review.cycle}</span>
       </div>
+
       <button
         type="button"
-        onClick={() => onEvaluate(review)}
-        className="mt-auto rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+        onClick={() => onEvaluate(review, evalType)}
+        className={`mt-auto rounded-lg px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity ${
+          isPrimary ? "bg-brand" : "bg-slate-600"
+        }`}
       >
-        Evaluate
+        {isPrimary ? "Evaluate (Full Review)" : "Write Impact Statement"}
       </button>
     </div>
   );
@@ -338,8 +351,10 @@ function EvalCard({
 // ── Tab Component ───────────────────────────────────────────────────
 
 export function EvaluationsTab() {
-  const [reviews, setReviews] = useState<ProjectReviewResponse[]>([]);
+  const [primaryReviews, setPrimaryReviews] = useState<ProjectReviewResponse[]>([]);
+  const [secondaryReviews, setSecondaryReviews] = useState<ProjectReviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
   const [evalTarget, setEvalTarget] = useState<ProjectReviewResponse | null>(null);
   const [evalMode, setEvalMode] = useState<"primary" | "secondary" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -348,8 +363,12 @@ export function EvaluationsTab() {
   const loadReviews = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await projectReviewService.getPendingEvaluations();
-      setReviews(data);
+      const [primaryData, secondaryData] = await Promise.all([
+        projectReviewService.getPendingEvaluations(),
+        projectReviewService.getPendingSecondaryEvaluations(),
+      ]);
+      setPrimaryReviews(primaryData);
+      setSecondaryReviews(secondaryData);
     } catch {
       // stays empty
     } finally {
@@ -361,12 +380,9 @@ export function EvaluationsTab() {
     void loadReviews();
   }, [loadReviews]);
 
-  const openEval = (review: ProjectReviewResponse) => {
+  const openEval = (review: ProjectReviewResponse, type: "Primary" | "Secondary") => {
     setEvalTarget(review);
-    // The getPendingEvaluations endpoint only returns reviews for Primary evaluators
-    // For now, always open Primary modal. Secondary evaluation can be triggered
-    // from a different entry point if needed.
-    setEvalMode("primary");
+    setEvalMode(type === "Primary" ? "primary" : "secondary");
     setModalError("");
   };
 
@@ -381,7 +397,7 @@ export function EvaluationsTab() {
     setModalError("");
     try {
       await projectReviewService.submitPrimaryEval(reviewId, payload);
-      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      setPrimaryReviews((prev) => prev.filter((r) => r.id !== reviewId));
       closeModal();
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
@@ -395,7 +411,7 @@ export function EvaluationsTab() {
     setModalError("");
     try {
       await projectReviewService.submitSecondaryPeerEval(reviewId, payload);
-      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      setSecondaryReviews((prev) => prev.filter((r) => r.id !== reviewId));
       closeModal();
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
@@ -412,7 +428,9 @@ export function EvaluationsTab() {
     );
   }
 
-  if (reviews.length === 0) {
+  const totalPending = primaryReviews.length + secondaryReviews.length;
+
+  if (totalPending === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
         <ClipboardList className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
@@ -427,18 +445,47 @@ export function EvaluationsTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <p className="text-sm text-text-muted">
-        {reviews.length} review(s) awaiting your evaluation.
+        {totalPending} evaluation(s) awaiting your input.
       </p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {reviews.map((r) => (
-          <EvalCard key={r.id} review={r} onEvaluate={openEval} />
-        ))}
-      </div>
+      {primaryReviews.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
+            Primary Evaluations ({primaryReviews.length})
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {primaryReviews.map((r) => (
+              <EvalCard
+                key={`primary-${r.id}`}
+                review={r}
+                evalType="Primary"
+                onEvaluate={openEval}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Primary Modal */}
+      {secondaryReviews.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
+            Secondary Evaluations ({secondaryReviews.length})
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {secondaryReviews.map((r) => (
+              <EvalCard
+                key={`secondary-${r.id}`}
+                review={r}
+                evalType="Secondary"
+                onEvaluate={openEval}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {evalTarget && evalMode === "primary" && (
         <PrimaryEvalModal
           review={evalTarget}
@@ -449,7 +496,6 @@ export function EvaluationsTab() {
         />
       )}
 
-      {/* Secondary Modal */}
       {evalTarget && evalMode === "secondary" && (
         <SecondaryEvalModal
           review={evalTarget}

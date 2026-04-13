@@ -208,4 +208,11 @@ export const projectReviewService = {
     );
     return res.data;
   },
+  /** List submitted reviews pending the current user's secondary evaluation. */
+  getPendingSecondaryEvaluations: async (): Promise<ProjectReviewResponse[]> => {
+    const res = await apiClient.get<ProjectReviewResponse[]>(
+      "/project-reviews/secondary-evaluations",
+    );
+    return res.data;
+  },
 };

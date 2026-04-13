@@ -64,11 +64,11 @@ export default function App() {
               <Route path="/admin" element={<AdminPanel />} />
             </Route>
 
-            {/* Profile — always visible, no feature gate */}
-            <Route path="/profile" element={<Profile />} />
             <Route element={<ProtectedRoute requiredFeature="project_reviews" />}>
               <Route path="/project-reviews" element={<ProjectReviews />} />
             </Route>
+            {/* Profile — always visible, no feature gate */}
+            <Route path="/profile" element={<Profile />} />
             {/*
               Future routes:
 

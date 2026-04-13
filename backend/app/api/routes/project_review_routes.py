@@ -298,74 +298,6 @@ def save_draft(
     return _build_review_response(review, db)
 
 
-@router.get("/{review_id}", response_model=ProjectReviewResponse)
-def get_review(
-    review_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """
-    Get a single review with visibility rules applied.
-
-    - Employee: sees own self-review + evaluator feedback (only after Primary submits)
-    - Primary/Secondary: sees the self-review + submitted evaluators
-    - Peer: sees only their own evaluation (NOT the self-review)
-    - Admin: sees everything
-    """
-    review = db.query(ProjectReview).filter(
-        ProjectReview.id == review_id,
-        ProjectReview.org_id == current_user.org_id,
-    ).first()
-
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Review not found.",
-        )
-
-    is_admin = current_user.role == "Admin"
-    is_owner = review.user_id == current_user.id
-
-    # Check if caller is an evaluator on this review
-    caller_eval = db.query(ProjectReviewEvaluator).filter(
-        ProjectReviewEvaluator.project_review_id == review.id,
-        ProjectReviewEvaluator.evaluator_id == current_user.id,
-    ).first()
-
-    is_evaluator = caller_eval is not None
-
-    if not (is_owner or is_evaluator or is_admin):
-        # Check if assigned to same project at all
-        assignment = db.query(ProjectAssignment).filter(
-            ProjectAssignment.project_id == review.project_id,
-            ProjectAssignment.user_id == current_user.id,
-            ProjectAssignment.org_id == current_user.org_id,
-        ).first()
-        if not assignment:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have access to this review.",
-            )
-
-    resp = _build_review_response(
-        review, db,
-        include_evaluators=True,
-        caller_id=current_user.id,
-        is_admin=is_admin,
-    )
-
-    # Employee visibility: only show evaluators after Primary submits
-    if is_owner and not is_admin:
-        primary_submitted = any(
-            e.evaluator_type == "Primary" and e.status == EvaluatorStatus.SUBMITTED.value
-            for e in review.evaluators
-        )
-        if not primary_submitted:
-            resp.evaluators = []
-
-    return resp
-
-
 # =====================================================================
 # PRIMARY EVALUATOR
 # =====================================================================
@@ -424,6 +356,56 @@ def get_pending_evaluations(
 
     return pending
 
+@router.get("/secondary-evaluations", response_model=List[ProjectReviewResponse])
+def get_pending_secondary_evaluations(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    List submitted reviews where the current user is a Secondary evaluator
+    and hasn't submitted their evaluation yet.
+    """
+    cycle = _get_active_cycle(db, current_user.org_id)
+
+    secondary_assignments = (
+        db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.user_id == current_user.id,
+            ProjectAssignment.evaluator_type == "Secondary",
+        )
+        .all()
+    )
+
+    if not secondary_assignments:
+        return []
+
+    project_ids = [a.project_id for a in secondary_assignments]
+
+    reviews = (
+        db.query(ProjectReview)
+        .filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.project_id.in_(project_ids),
+            ProjectReview.cycle == cycle,
+            ProjectReview.status == ProjectReviewStatus.SUBMITTED.value,
+            ProjectReview.user_id != current_user.id,
+        )
+        .order_by(ProjectReview.created_at.desc())
+        .all()
+    )
+
+    pending = []
+    for r in reviews:
+        existing_eval = db.query(ProjectReviewEvaluator).filter(
+            ProjectReviewEvaluator.project_review_id == r.id,
+            ProjectReviewEvaluator.evaluator_id == current_user.id,
+            ProjectReviewEvaluator.status == EvaluatorStatus.SUBMITTED.value,
+        ).first()
+        if not existing_eval:
+            pending.append(_build_review_response(r, db))
+
+    return pending
 
 @router.post("/{review_id}/primary-eval", response_model=EvaluatorResponse, status_code=status.HTTP_201_CREATED)
 def submit_primary_evaluation(
@@ -613,3 +595,72 @@ def get_all_reviews(
     )
 
     return [_build_review_response(r, db, is_admin=True) for r in reviews]
+
+
+@router.get("/{review_id}", response_model=ProjectReviewResponse)
+def get_review(
+    review_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Get a single review with visibility rules applied.
+
+    - Employee: sees own self-review + evaluator feedback (only after Primary submits)
+    - Primary/Secondary: sees the self-review + submitted evaluators
+    - Peer: sees only their own evaluation (NOT the self-review)
+    - Admin: sees everything
+    """
+    review = db.query(ProjectReview).filter(
+        ProjectReview.id == review_id,
+        ProjectReview.org_id == current_user.org_id,
+    ).first()
+
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found.",
+        )
+
+    is_admin = current_user.role == "Admin"
+    is_owner = review.user_id == current_user.id
+
+    # Check if caller is an evaluator on this review
+    caller_eval = db.query(ProjectReviewEvaluator).filter(
+        ProjectReviewEvaluator.project_review_id == review.id,
+        ProjectReviewEvaluator.evaluator_id == current_user.id,
+    ).first()
+
+    is_evaluator = caller_eval is not None
+
+    if not (is_owner or is_evaluator or is_admin):
+        # Check if assigned to same project at all
+        assignment = db.query(ProjectAssignment).filter(
+            ProjectAssignment.project_id == review.project_id,
+            ProjectAssignment.user_id == current_user.id,
+            ProjectAssignment.org_id == current_user.org_id,
+        ).first()
+        if not assignment:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this review.",
+            )
+
+    resp = _build_review_response(
+        review, db,
+        include_evaluators=True,
+        caller_id=current_user.id,
+        is_admin=is_admin,
+    )
+
+    # Employee visibility: only show evaluators after Primary submits
+    if is_owner and not is_admin:
+        primary_submitted = any(
+            e.evaluator_type == "Primary" and e.status == EvaluatorStatus.SUBMITTED.value
+            for e in review.evaluators
+        )
+        if not primary_submitted:
+            resp.evaluators = []
+
+    return resp
+
