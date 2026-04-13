@@ -1,4 +1,4 @@
-import type { Goal, GoalStatus } from "../../services/goal.service";
+import type { Goal, GoalStatus, Criterion } from "../../services/goal.service";
 import { GoalCard } from "./GoalCard";
 
 interface GoalGroupProps {
@@ -8,6 +8,7 @@ interface GoalGroupProps {
   readonly onEdit: (goal: Goal) => void;
   readonly onSubmit: (goal: Goal) => void;
   readonly onProgressUpdate: (goal: Goal, newStatus: GoalStatus) => void;
+  readonly onCriterionUpdate: (goalId: number, updated: Criterion) => void;
 }
 
 export function GoalGroup({
@@ -17,6 +18,7 @@ export function GoalGroup({
   onEdit,
   onSubmit,
   onProgressUpdate,
+  onCriterionUpdate,
 }: GoalGroupProps) {
   if (goals.length === 0) return null;
 
@@ -45,6 +47,7 @@ export function GoalGroup({
             onEdit={onEdit}
             onSubmit={onSubmit}
             onProgressUpdate={onProgressUpdate}
+            onCriterionUpdate={onCriterionUpdate}
           />
         ))}
       </div>

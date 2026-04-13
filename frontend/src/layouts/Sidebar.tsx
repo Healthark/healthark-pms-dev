@@ -96,6 +96,13 @@ const MAIN_NAV: NavItemData[] = [
     feature: "goals",
   },
   {
+    id: "annual-reviews",
+    path: "/annual-reviews",
+    label: "Annual Reviews",
+    icon: FileText,
+    feature: "annual_reviews",
+  },
+  {
     id: "my-mentees",
     path: "/my-mentees",
     label: "My Mentees",

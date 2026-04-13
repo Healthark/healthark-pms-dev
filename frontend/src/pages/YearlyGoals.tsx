@@ -1,3 +1,16 @@
+/**
+ * YearlyGoals.tsx — Updated for Story 3.1 + 3.3.
+ *
+ * Changes:
+ *   - Added handleCriterionUpdate to update a single criterion inside
+ *     a goal's criteria array without refetching all goals
+ *   - Passes onCriterionUpdate through GoalGroup → GoalCard → CriteriaChecklist
+ *   - Progress_percent recomputed automatically by Pydantic on the next
+ *     full refresh, but we also compute it client-side for instant feedback
+ *
+ * Placement: src/pages/YearlyGoals.tsx
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Target } from "lucide-react";
 import {
@@ -6,6 +19,7 @@ import {
   type GoalStatus,
   type GoalCreatePayload,
   type GoalUpdatePayload,
+  type Criterion,
 } from "../services/goal.service";
 import { useAuth } from "../hooks/useAuth";
 import { getErrorMessage } from "../utils/errors";
@@ -39,6 +53,21 @@ const GROUP_CONFIG = [
 ] as const;
 
 type ActiveTab = "my" | "team";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Client-side progress recomputation after a criterion toggle.
+ * Mirrors the backend's computed_field logic so the UI updates instantly
+ * without waiting for a full goal refetch.
+ */
+function recomputeProgress(criteria: Criterion[]): number {
+  if (criteria.length === 0) return 0;
+  const completed = criteria.filter((c) => c.is_completed).length;
+  return Math.round((completed / criteria.length) * 100);
+}
 
 // ---------------------------------------------------------------------------
 // Stat pill
@@ -217,6 +246,30 @@ export function YearlyGoals() {
     }
   };
 
+  /**
+   * Criterion update handler — replaces the updated criterion inside
+   * the parent goal's criteria array and recomputes progress_percent
+   * client-side for instant visual feedback.
+   */
+  const handleCriterionUpdate = useCallback(
+    (goalId: number, updated: Criterion) => {
+      setGoals((prev) =>
+        prev.map((g) => {
+          if (g.id !== goalId) return g;
+          const newCriteria = g.criteria.map((c) =>
+            c.id === updated.id ? updated : c,
+          );
+          return {
+            ...g,
+            criteria: newCriteria,
+            progress_percent: recomputeProgress(newCriteria),
+          };
+        }),
+      );
+    },
+    [],
+  );
+
   const countByStatus = (s: Goal["status"]) =>
     goals.filter((g) => g.status === s).length;
 
@@ -318,6 +371,7 @@ export function YearlyGoals() {
                       onEdit={openEdit}
                       onSubmit={handleSubmit}
                       onProgressUpdate={handleProgressUpdate}
+                      onCriterionUpdate={handleCriterionUpdate}
                     />
                   ))}
                 </div>

@@ -1,4 +1,16 @@
+/**
+ * goal.service.ts — Updated for Story 3.1 (Criteria) and 3.3 (Progress).
+ *
+ * Changes:
+ *   - Added Criterion, CriterionCreatePayload, CriterionUpdatePayload types
+ *   - Goal interface now includes criteria[] and progress_percent
+ *   - GoalCreatePayload now accepts optional criteria[] array
+ *   - New API calls: addCriterion, updateCriterion, deleteCriterion
+ */
+
 import apiClient from "./api.client";
+
+// ── Enums ───────────────────────────────────────────────────────────
 
 export type GoalStatus = "pending" | "in_progress" | "completed" | "cancelled";
 export type ApprovalStatus =
@@ -6,6 +18,35 @@ export type ApprovalStatus =
   | "submitted"
   | "approved"
   | "changes_requested";
+
+// ── Criterion Types ─────────────────────────────────────────────────
+
+export interface Criterion {
+  id: number;
+  goal_id: number;
+  title: string;
+  sort_order: number;
+  is_completed: boolean;
+  completed_at: string | null;
+  proof_comments: string | null;
+  proof_attachment_count: number;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface CriterionCreatePayload {
+  title: string;
+  sort_order?: number;
+}
+
+export interface CriterionUpdatePayload {
+  title?: string;
+  sort_order?: number;
+  is_completed?: boolean;
+  proof_comments?: string | null;
+}
+
+// ── Goal Types ──────────────────────────────────────────────────────
 
 export interface Goal {
   id: number;
@@ -22,6 +63,8 @@ export interface Goal {
   due_date: string | null;
   created_at: string;
   updated_at: string | null;
+  criteria: Criterion[];
+  progress_percent: number;
 }
 
 /** Extended type for the manager's Team Goals view */
@@ -37,6 +80,7 @@ export interface GoalCreatePayload {
   due_date?: string | null;
   user_id: number;
   manager_id?: number | null;
+  criteria?: CriterionCreatePayload[];
 }
 
 export interface GoalUpdatePayload {
@@ -53,8 +97,10 @@ export interface GoalApprovalPayload {
   feedback?: string | null;
 }
 
+// ── Service ─────────────────────────────────────────────────────────
+
 export const goalService = {
-  // Employee
+  // ── Employee — Goals ────────────────────────────────────────────
   getMyGoals: async (): Promise<Goal[]> => {
     const res = await apiClient.get<Goal[]>("/goals");
     return res.data;
@@ -78,7 +124,34 @@ export const goalService = {
     return res.data;
   },
 
-  // Manager
+  // ── Employee — Criteria ─────────────────────────────────────────
+  addCriterion: async (
+    goalId: number,
+    payload: CriterionCreatePayload,
+  ): Promise<Criterion> => {
+    const res = await apiClient.post<Criterion>(
+      `/goals/${goalId}/criteria`,
+      payload,
+    );
+    return res.data;
+  },
+
+  updateCriterion: async (
+    criterionId: number,
+    payload: CriterionUpdatePayload,
+  ): Promise<Criterion> => {
+    const res = await apiClient.patch<Criterion>(
+      `/goals/criteria/${criterionId}`,
+      payload,
+    );
+    return res.data;
+  },
+
+  deleteCriterion: async (criterionId: number): Promise<void> => {
+    await apiClient.delete(`/goals/criteria/${criterionId}`);
+  },
+
+  // ── Manager ─────────────────────────────────────────────────────
   getTeamGoals: async (): Promise<TeamGoal[]> => {
     const res = await apiClient.get<TeamGoal[]>("/goals/team");
     return res.data;

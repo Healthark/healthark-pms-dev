@@ -51,3 +51,12 @@ class Goal(Base):
 
     owner   = relationship("User", foreign_keys=[user_id], backref="goals")
     manager = relationship("User", foreign_keys=[manager_id])
+
+    # Add this relationship inside the Goal class, after the existing relationships:
+    criteria = relationship(
+        "GoalCriterion",
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by="GoalCriterion.sort_order",
+        lazy="joined",  # Eagerly load criteria with every goal query
+    )

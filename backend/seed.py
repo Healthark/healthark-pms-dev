@@ -25,6 +25,7 @@ def seed_database():
                     "dashboard",
                     "goals",
                     "project_reviews",
+                    "annual_reviews",
                     "mentoring",
                     "admin",
                 ],

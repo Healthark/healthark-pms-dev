@@ -14,6 +14,7 @@ import { YearlyGoals } from "./pages/YearlyGoals";
 import AdminPanel from "./pages/AdminPanel";
 import { Profile } from "./pages/Profile";
 import Unauthorized from "./pages/Unauthorized";
+import { AnnualReviews } from "./pages/AnnualReviews";
 
 /**
  * AppShell renders the persistent chrome (Sidebar + Topbar) around all
@@ -50,6 +51,12 @@ export default function App() {
 
             <Route element={<ProtectedRoute requiredFeature="goals" />}>
               <Route path="/yearly-goals" element={<YearlyGoals />} />
+            </Route>
+
+            <Route
+              element={<ProtectedRoute requiredFeature="annual_reviews" />}
+            >
+              <Route path="/annual-reviews" element={<AnnualReviews />} />
             </Route>
 
             <Route element={<ProtectedRoute requiredFeature="admin" />}>

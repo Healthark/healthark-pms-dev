@@ -1,3 +1,15 @@
+/**
+ * GoalCard.tsx — Updated for Story 3.1 + 3.3.
+ *
+ * Changes:
+ *   - Renders CriteriaChecklist when goal has criteria
+ *   - New onCriterionUpdate prop to propagate criterion mutations
+ *     back up to YearlyGoals page state
+ *   - Progress percentage shown in badges when criteria exist
+ *
+ * Placement: src/components/goals/GoalCard.tsx
+ */
+
 import {
   CalendarDays,
   Pencil,
@@ -7,15 +19,17 @@ import {
   CheckCircle2,
   FileText,
 } from "lucide-react";
-import type { Goal, GoalStatus } from "../../services/goal.service";
+import type { Goal, GoalStatus, Criterion } from "../../services/goal.service";
 import { GoalStatusBadge } from "./GoalStatusBadge";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
+import { CriteriaChecklist } from "./CriteriaChecklist";
 
 interface GoalCardProps {
   readonly goal: Goal;
   readonly onEdit: (goal: Goal) => void;
   readonly onSubmit: (goal: Goal) => void;
   readonly onProgressUpdate: (goal: Goal, newStatus: GoalStatus) => void;
+  readonly onCriterionUpdate: (goalId: number, updated: Criterion) => void;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -59,7 +73,7 @@ function ProgressButton({
       </button>
     );
   }
-  return null; // Completed — no further action
+  return null;
 }
 
 export function GoalCard({
@@ -67,6 +81,7 @@ export function GoalCard({
   onEdit,
   onSubmit,
   onProgressUpdate,
+  onCriterionUpdate,
 }: GoalCardProps) {
   const isSubmitted = goal.approval_status === "submitted";
   const isApproved = goal.approval_status === "approved";
@@ -77,6 +92,11 @@ export function GoalCard({
     goal.approval_status === "changes_requested";
   const canEdit = !isSubmitted && !isCancelled;
   const canProgress = isApproved && !isCancelled && !isCompleted;
+  const hasCriteria = goal.criteria.length > 0;
+
+  const handleCriterionUpdate = (updated: Criterion) => {
+    onCriterionUpdate(goal.id, updated);
+  };
 
   return (
     <div
@@ -124,8 +144,18 @@ export function GoalCard({
           </div>
         )}
 
-      {/* Progress notes preview — only shown on approved goals with notes */}
-      {isApproved && goal.progress_notes && (
+      {/* ── Criteria Checklist (Story 3.1 + 3.3) ──────────────────── */}
+      {hasCriteria && (
+        <CriteriaChecklist
+          criteria={goal.criteria}
+          approvalStatus={goal.approval_status}
+          progressPercent={goal.progress_percent}
+          onCriterionUpdate={handleCriterionUpdate}
+        />
+      )}
+
+      {/* Progress notes preview — only shown on approved goals with notes and no criteria */}
+      {isApproved && goal.progress_notes && !hasCriteria && (
         <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-border px-3 py-2">
           <FileText
             className="h-4 w-4 text-text-muted mt-0.5 shrink-0"

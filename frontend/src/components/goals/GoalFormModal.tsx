@@ -1,10 +1,25 @@
+/**
+ * GoalFormModal.tsx — Updated for Story 3.1 (Criteria Breakdown).
+ *
+ * Changes:
+ *   - Added dynamic criteria array with "+ Add Key Result" button
+ *   - Criteria are sent inside GoalCreatePayload on new goal creation
+ *   - Edit mode shows existing criteria as read-only preview (editing
+ *     individual criteria happens in the GoalCard's CriteriaChecklist)
+ *   - Criteria can be removed before submission via the X button
+ *
+ * Placement: src/components/goals/GoalFormModal.tsx
+ */
+
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { Plus, X } from "lucide-react";
 import type {
   Goal,
   GoalCreatePayload,
   GoalUpdatePayload,
   GoalStatus,
+  CriterionCreatePayload,
 } from "../../services/goal.service";
 
 const STATUSES: { value: GoalStatus; label: string }[] = [
@@ -35,6 +50,12 @@ interface FormState {
   progress_notes: string;
 }
 
+interface CriterionDraft {
+  /** Temporary client-side ID for React keys */
+  tempId: string;
+  title: string;
+}
+
 const EMPTY: FormState = {
   title: "",
   description: "",
@@ -47,6 +68,12 @@ const EMPTY: FormState = {
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
   return iso.slice(0, 10);
+}
+
+let nextTempId = 0;
+function createTempId(): string {
+  nextTempId += 1;
+  return `temp_${nextTempId}`;
 }
 
 const INPUT_CLS =
@@ -66,6 +93,7 @@ export function GoalFormModal({
   const isApproved = editingGoal?.approval_status === "approved";
 
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [criteria, setCriteria] = useState<CriterionDraft[]>([]);
 
   useEffect(() => {
     if (editingGoal) {
@@ -77,8 +105,12 @@ export function GoalFormModal({
         due_date: toDateInput(editingGoal.due_date),
         progress_notes: editingGoal.progress_notes ?? "",
       });
+      // Don't populate criteria drafts for edit mode — criteria are
+      // managed in-place via the CriteriaChecklist on the GoalCard
+      setCriteria([]);
     } else {
       setForm(EMPTY);
+      setCriteria([]);
     }
   }, [editingGoal, isOpen]);
 
@@ -86,6 +118,24 @@ export function GoalFormModal({
 
   const set = (field: keyof FormState, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  // ── Criteria Handlers ─────────────────────────────────────────────
+
+  const addCriterion = () => {
+    setCriteria((prev) => [...prev, { tempId: createTempId(), title: "" }]);
+  };
+
+  const updateCriterion = (tempId: string, title: string) => {
+    setCriteria((prev) =>
+      prev.map((c) => (c.tempId === tempId ? { ...c, title } : c)),
+    );
+  };
+
+  const removeCriterion = (tempId: string) => {
+    setCriteria((prev) => prev.filter((c) => c.tempId !== tempId));
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
     if (isEditing) {
@@ -98,6 +148,11 @@ export function GoalFormModal({
         progress_notes: form.progress_notes || null,
       } satisfies GoalUpdatePayload);
     } else {
+      // Build criteria array — filter out empty titles
+      const validCriteria: CriterionCreatePayload[] = criteria
+        .filter((c) => c.title.trim().length > 0)
+        .map((c, idx) => ({ title: c.title.trim(), sort_order: idx }));
+
       await onSave({
         title: form.title,
         description: form.description || null,
@@ -105,6 +160,7 @@ export function GoalFormModal({
         start_date: form.start_date || null,
         due_date: form.due_date || null,
         user_id: userId,
+        criteria: validCriteria.length > 0 ? validCriteria : undefined,
       } satisfies GoalCreatePayload);
     }
   };
@@ -143,7 +199,7 @@ export function GoalFormModal({
           {/* Title */}
           <div>
             <label htmlFor="goal-title" className={LABEL_CLS}>
-              Title *
+              Objective (Title) *
             </label>
             <input
               id="goal-title"
@@ -168,6 +224,91 @@ export function GoalFormModal({
               placeholder="What does success look like?"
             />
           </div>
+
+          {/* ── Key Results (Create mode only) ─────────────────────── */}
+          {!isEditing && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className={LABEL_CLS}>Key Results (Criteria)</label>
+                <button
+                  type="button"
+                  onClick={addCriterion}
+                  className="flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add Key Result
+                </button>
+              </div>
+
+              {criteria.length === 0 ? (
+                <p className="text-xs text-text-muted italic">
+                  No key results added yet. Click "Add Key Result" to break this
+                  goal into measurable criteria.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {criteria.map((c, idx) => (
+                    <div key={c.tempId} className="flex items-center gap-2">
+                      <span className="text-xs text-text-muted font-medium w-5 shrink-0 text-right">
+                        {idx + 1}.
+                      </span>
+                      <input
+                        className={INPUT_CLS}
+                        value={c.title}
+                        onChange={(e) =>
+                          updateCriterion(c.tempId, e.target.value)
+                        }
+                        placeholder={`Key result ${idx + 1}`}
+                        aria-label={`Key result ${idx + 1}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCriterion(c.tempId)}
+                        className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label={`Remove key result ${idx + 1}`}
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Existing criteria preview (Edit mode) */}
+          {isEditing && editingGoal.criteria.length > 0 && (
+            <div className="space-y-2">
+              <p className={LABEL_CLS}>
+                Key Results (
+                {editingGoal.criteria.filter((c) => c.is_completed).length}/
+                {editingGoal.criteria.length} complete)
+              </p>
+              <div className="rounded-lg border border-border bg-slate-50 p-3 space-y-1.5">
+                {editingGoal.criteria.map((c) => (
+                  <div key={c.id} className="flex items-center gap-2 text-sm">
+                    <span
+                      className={`shrink-0 ${c.is_completed ? "text-green-600" : "text-text-muted"}`}
+                    >
+                      {c.is_completed ? "✓" : "○"}
+                    </span>
+                    <span
+                      className={
+                        c.is_completed
+                          ? "line-through text-text-muted"
+                          : "text-text-main"
+                      }
+                    >
+                      {c.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-text-muted">
+                Manage criteria from the goal card directly.
+              </p>
+            </div>
+          )}
 
           {/* Status — editing only */}
           {isEditing && (
