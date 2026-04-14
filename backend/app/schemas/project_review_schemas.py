@@ -126,6 +126,7 @@ class MyProjectCard(BaseModel):
     assignment_role: Optional[str] = None
     department_name: Optional[str] = None
     review_status: Optional[str] = None  # null = no review yet, "pending", "reviewed"
+    pm_name: Optional[str] = None
     cycle: Optional[str] = None
 
 

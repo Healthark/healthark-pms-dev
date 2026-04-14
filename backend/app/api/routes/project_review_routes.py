@@ -143,6 +143,12 @@ def get_my_projects(
             ProjectReview.cycle == cycle,
         ).first()
 
+        pm_assignment = db.query(ProjectAssignment).filter(
+            ProjectAssignment.project_id == a.project_id,
+            ProjectAssignment.evaluator_type == "Primary",
+        ).first()
+        pm_user = db.query(User).filter(User.id == pm_assignment.user_id).first() if pm_assignment else None
+
         cards.append(MyProjectCard(
             review_id=review.id if review else None,
             project_id=project.id,
@@ -154,6 +160,7 @@ def get_my_projects(
             assignment_role=a.assignment_role,
             department_name=dept.name if dept else None,
             review_status=review.status if review else "pending",
+            pm_name=pm_user.full_name if pm_user else None,
             cycle=cycle,
         ))
 

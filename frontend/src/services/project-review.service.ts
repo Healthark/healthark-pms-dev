@@ -70,6 +70,7 @@ export interface MyProjectCard {
   assignment_role: string | null;
   department_name: string | null;
   review_status: string | null; // "pending" | "reviewed" | null
+  pm_name: string | null;
   cycle: string | null;
 }
 
@@ -131,6 +132,12 @@ export const projectReviewService = {
 
   /** Get a single review (after PM has evaluated). */
   getReview: async (reviewId: number): Promise<ProjectReviewResponse> => {
+    const res = await apiClient.get<ProjectReviewResponse>(`/project-reviews/${reviewId}`);
+    return res.data;
+  },
+
+  /** Alias for getReview to match component expectations. */
+  getReviewDetails: async (reviewId: number): Promise<ProjectReviewResponse> => {
     const res = await apiClient.get<ProjectReviewResponse>(`/project-reviews/${reviewId}`);
     return res.data;
   },
