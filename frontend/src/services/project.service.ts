@@ -1,11 +1,12 @@
 /**
- * project.service.ts — Admin/HR Project Management API.
+ * project.service.ts — Admin/HR Project Management API (Revised).
  *
- * Covers:
- *   Project CRUD:     list, create, getDetail, update, delete
- *   Assignment CRUD:  add, update, remove members
- *
- * All calls go through the shared apiClient singleton.
+ * Changes:
+ *   - Removed allocated_hours
+ *   - expected_end_date instead of end_date
+ *   - Added reports_to_id/reports_to_name on Project
+ *   - Added department_id/department_name on Assignment
+ *   - Evaluator types: Primary | Secondary | null (no Peer)
  */
 
 import apiClient from "./api.client";
@@ -18,7 +19,9 @@ export interface AssignmentResponse {
   user_id: number;
   user_name: string;
   assignment_role: string | null;
-  evaluator_type: string | null; // "Primary" | "Secondary" | "Peer" | null
+  department_id: number | null;
+  department_name: string | null;
+  evaluator_type: string | null; // "Primary" | "Secondary" | null
   assigned_date: string | null;
   created_at: string;
 }
@@ -26,12 +29,14 @@ export interface AssignmentResponse {
 export interface AssignmentCreatePayload {
   user_id: number;
   assignment_role?: string | null;
+  department_id?: number | null;
   evaluator_type?: string | null;
   assigned_date?: string | null;
 }
 
 export interface AssignmentUpdatePayload {
   assignment_role?: string | null;
+  department_id?: number | null;
   evaluator_type?: string | null;
   assigned_date?: string | null;
 }
@@ -43,8 +48,9 @@ export interface ProjectResponse {
   name: string;
   description: string | null;
   start_date: string | null;
-  end_date: string | null;
-  allocated_hours: string | null;
+  expected_end_date: string | null;
+  reports_to_id: number | null;
+  reports_to_name: string | null;
   is_deleted: boolean;
   created_at: string;
   updated_at: string | null;
@@ -60,8 +66,8 @@ export interface ProjectCreatePayload {
   name: string;
   description?: string | null;
   start_date?: string | null;
-  end_date?: string | null;
-  allocated_hours?: string | null;
+  expected_end_date?: string | null;
+  reports_to_id?: number | null;
   assignments?: AssignmentCreatePayload[];
 }
 
@@ -70,22 +76,19 @@ export interface ProjectUpdatePayload {
   name?: string;
   description?: string | null;
   start_date?: string | null;
-  end_date?: string | null;
-  allocated_hours?: string | null;
+  expected_end_date?: string | null;
+  reports_to_id?: number | null;
 }
 
 // ── Service ─────────────────────────────────────────────────────────
 
 export const projectService = {
-  // ── Project CRUD ────────────────────────────────────────────────
   listProjects: async (): Promise<ProjectResponse[]> => {
     const res = await apiClient.get<ProjectResponse[]>("/projects/");
     return res.data;
   },
 
-  createProject: async (
-    payload: ProjectCreatePayload,
-  ): Promise<ProjectDetail> => {
+  createProject: async (payload: ProjectCreatePayload): Promise<ProjectDetail> => {
     const res = await apiClient.post<ProjectDetail>("/projects/", payload);
     return res.data;
   },
@@ -95,14 +98,8 @@ export const projectService = {
     return res.data;
   },
 
-  updateProject: async (
-    projectId: number,
-    payload: ProjectUpdatePayload,
-  ): Promise<ProjectResponse> => {
-    const res = await apiClient.patch<ProjectResponse>(
-      `/projects/${projectId}`,
-      payload,
-    );
+  updateProject: async (projectId: number, payload: ProjectUpdatePayload): Promise<ProjectResponse> => {
+    const res = await apiClient.patch<ProjectResponse>(`/projects/${projectId}`, payload);
     return res.data;
   },
 
@@ -110,26 +107,13 @@ export const projectService = {
     await apiClient.delete(`/projects/${projectId}`);
   },
 
-  // ── Assignment CRUD ─────────────────────────────────────────────
-  addAssignment: async (
-    projectId: number,
-    payload: AssignmentCreatePayload,
-  ): Promise<AssignmentResponse> => {
-    const res = await apiClient.post<AssignmentResponse>(
-      `/projects/${projectId}/assignments`,
-      payload,
-    );
+  addAssignment: async (projectId: number, payload: AssignmentCreatePayload): Promise<AssignmentResponse> => {
+    const res = await apiClient.post<AssignmentResponse>(`/projects/${projectId}/assignments`, payload);
     return res.data;
   },
 
-  updateAssignment: async (
-    assignmentId: number,
-    payload: AssignmentUpdatePayload,
-  ): Promise<AssignmentResponse> => {
-    const res = await apiClient.patch<AssignmentResponse>(
-      `/projects/assignments/${assignmentId}`,
-      payload,
-    );
+  updateAssignment: async (assignmentId: number, payload: AssignmentUpdatePayload): Promise<AssignmentResponse> => {
+    const res = await apiClient.patch<AssignmentResponse>(`/projects/assignments/${assignmentId}`, payload);
     return res.data;
   },
 

@@ -1,23 +1,22 @@
 /**
- * ReviewDetailView.tsx — Employee's View of a Submitted Review.
+ * ReviewDetailView.tsx — Employee Views Their Evaluation (Revised).
  *
- * Shows:
- *   - Project context header
- *   - 8 competency self-descriptions (always visible)
- *   - Primary evaluator's side-by-side comments (once Primary submits)
- *   - Performance group + impact statement from Primary
- *   - Secondary impact statements (once Primary has submitted)
- *   - "Waiting for evaluation" state if Primary hasn't submitted yet
+ * No self-review comparison. Shows:
+ *   - Project context header with performance group badge
+ *   - 7 competency evaluations from the PM
+ *   - PM's impact statement
+ *   - Secondary evaluator impact statements (if any)
  *
  * Placement: src/components/project-reviews/ReviewDetailView.tsx
  */
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Briefcase, Star, MessageSquare, UserCircle, Loader2 } from "lucide-react";
+import {
+  ArrowLeft, Briefcase, Star, MessageSquare, UserCircle, Loader2,
+} from "lucide-react";
 import {
   projectReviewService,
   type ProjectReviewResponse,
-  type EvaluatorResponse,
 } from "../../services/project-review.service";
 
 const COMPETENCIES = [
@@ -27,7 +26,6 @@ const COMPETENCIES = [
   { key: "client_deliverables", label: "Building Client-Ready Deliverables" },
   { key: "communication", label: "Communication & Client/Stakeholder Management" },
   { key: "mentoring", label: "Mentoring and Team Development" },
-  { key: "firm_growth", label: "Firm Growth" },
   { key: "competency_skills", label: "Competency and Skills" },
 ] as const;
 
@@ -94,10 +92,6 @@ export function ReviewDetailView({ reviewId, onBack }: ReviewDetailViewProps) {
     );
   }
 
-  const primaryEval = review.evaluators.find((e) => e.evaluator_type === "Primary");
-  const secondaryEvals = review.evaluators.filter((e) => e.evaluator_type === "Secondary");
-  const hasPrimaryFeedback = primaryEval !== undefined;
-
   return (
     <div className="space-y-6">
       {/* Back */}
@@ -112,111 +106,89 @@ export function ReviewDetailView({ reviewId, onBack }: ReviewDetailViewProps) {
 
       {/* Project header */}
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-light">
-            <Briefcase className="h-5 w-5 text-brand" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="font-display text-lg font-semibold text-text-main">
-              {review.project_name}
-            </h1>
-            <div className="flex items-center gap-3 mt-0.5">
-              <span className="text-xs text-text-muted font-mono">{review.project_code}</span>
-              <span className="text-xs text-text-muted">Cycle: {review.cycle}</span>
-              <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                Submitted
-              </span>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-light">
+              <Briefcase className="h-5 w-5 text-brand" aria-hidden="true" />
+            </div>
+            <div>
+              <h1 className="font-display text-lg font-semibold text-text-main">
+                {review.project_name}
+              </h1>
+              <div className="flex items-center gap-3 mt-0.5">
+                <span className="text-xs text-text-muted font-mono">{review.project_code}</span>
+                <span className="text-xs text-text-muted">Cycle: {review.cycle}</span>
+              </div>
             </div>
           </div>
+
+          {/* Performance Group */}
+          {review.performance_group && (
+            <PerformanceGroupBadge group={review.performance_group} />
+          )}
         </div>
 
-        {/* Performance Group — shown if Primary has evaluated */}
-        {hasPrimaryFeedback && primaryEval.performance_group && (
-          <div className="mt-4">
-            <PerformanceGroupBadge group={primaryEval.performance_group} />
+        {/* Reviewer info */}
+        {review.reviewer_name && (
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-text-muted">
+            <UserCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            Evaluated by: <span className="font-medium text-text-main">{review.reviewer_name}</span>
           </div>
         )}
       </div>
 
-      {/* Waiting state — if Primary hasn't submitted yet */}
-      {!hasPrimaryFeedback && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Your self-review has been submitted. Waiting for your project manager's evaluation.
-        </div>
-      )}
-
-      {/* 8 Competency Sections — side-by-side when Primary feedback exists */}
+      {/* 7 Competency Evaluations */}
       <div className="space-y-4">
-        {COMPETENCIES.map((comp, idx) => {
-          const selfKey = `self_desc_${comp.key}` as keyof ProjectReviewResponse;
-          const selfValue = (review[selfKey] as string | null) ?? "—";
+        <h2 className="text-xs font-semibold text-text-main uppercase tracking-wide">
+          Competency Evaluation
+        </h2>
 
-          const commentKey = `comment_${comp.key}` as keyof EvaluatorResponse;
-          const primaryComment = hasPrimaryFeedback
-            ? (primaryEval[commentKey] as string | null)
-            : null;
+        {COMPETENCIES.map((comp, idx) => {
+          const commentKey = `comment_${comp.key}` as keyof ProjectReviewResponse;
+          const commentValue = (review[commentKey] as string | null) ?? "—";
 
           return (
             <div key={comp.key} className="rounded-lg border border-border overflow-hidden">
-              <div className="bg-slate-50 px-4 py-2 border-b border-border">
+              <div className="bg-slate-50 px-4 py-2.5 border-b border-border">
                 <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
                   {idx + 1}. {comp.label}
                 </p>
               </div>
-
-              <div className={`grid ${hasPrimaryFeedback ? "grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border" : "grid-cols-1"}`}>
-                {/* Self-description */}
-                <div className="p-4">
-                  <p className="text-xs font-medium text-text-muted mb-1">
-                    Your Self-Assessment
-                  </p>
-                  <p className="text-sm text-text-main whitespace-pre-wrap">
-                    {selfValue}
-                  </p>
-                </div>
-
-                {/* Primary comment */}
-                {hasPrimaryFeedback && (
-                  <div className="p-4 bg-blue-50/30">
-                    <p className="text-xs font-medium text-blue-700 mb-1">
-                      Manager's Evaluation
-                    </p>
-                    <p className="text-sm text-text-main whitespace-pre-wrap">
-                      {primaryComment ?? "—"}
-                    </p>
-                  </div>
-                )}
+              <div className="p-4">
+                <p className="text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                  {commentValue}
+                </p>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Primary Impact Statement */}
-      {hasPrimaryFeedback && primaryEval.impact_statement && (
+      {/* PM Impact Statement */}
+      {review.impact_statement && (
         <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5 space-y-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-blue-600" aria-hidden="true" />
             <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
-              Manager's Impact Statement
+              Overall Impact Statement
             </p>
           </div>
-          <p className="text-sm text-blue-900 whitespace-pre-wrap">
-            {primaryEval.impact_statement}
+          <p className="text-sm text-blue-900 whitespace-pre-wrap leading-relaxed">
+            {review.impact_statement}
           </p>
-          <p className="text-xs text-blue-600">
-            — {primaryEval.evaluator_name}
-          </p>
+          {review.reviewer_name && (
+            <p className="text-xs text-blue-600">— {review.reviewer_name}</p>
+          )}
         </div>
       )}
 
       {/* Secondary Impact Statements */}
-      {hasPrimaryFeedback && secondaryEvals.length > 0 && (
+      {review.secondary_evaluations.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
+          <h2 className="text-xs font-semibold text-text-main uppercase tracking-wide">
             Additional Feedback
-          </p>
-          {secondaryEvals.map((ev) => (
+          </h2>
+          {review.secondary_evaluations.map((ev) => (
             <div
               key={ev.id}
               className="rounded-lg border border-border bg-slate-50 p-4 space-y-1.5"
@@ -225,7 +197,7 @@ export function ReviewDetailView({ reviewId, onBack }: ReviewDetailViewProps) {
                 <UserCircle className="h-3.5 w-3.5" aria-hidden="true" />
                 {ev.evaluator_name}
                 <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium">
-                  {ev.evaluator_type}
+                  Secondary
                 </span>
               </div>
               <p className="text-sm text-text-main whitespace-pre-wrap">

@@ -1,19 +1,20 @@
 /**
- * project-review.service.ts — Project Review Workflow API.
+ * project-review.service.ts — PM-Centric Evaluation API (Revised).
+ *
+ * No self-review. The PM evaluates team members directly.
  *
  * Covers:
- *   Employee:           getMyProjects, submitSelfReview, saveDraft, getReview
- *   Primary Evaluator:  getPendingEvaluations, submitPrimaryEval
- *   Secondary/Peer:     submitSecondaryPeerEval
- *   Admin:              getAllReviews
+ *   Employee:    getMyProjects, getReview
+ *   PM:          getPMQueue, getRoleExpectations, submitPMEvaluation
+ *   Secondary:   getSecondaryQueue, submitSecondaryEval
+ *   Admin:       getAllReviews
  */
 
 import apiClient from "./api.client";
 
 // ── Enums ───────────────────────────────────────────────────────────
 
-export type ProjectReviewStatus = "draft" | "submitted";
-export type EvaluatorStatus = "draft" | "submitted";
+export type ProjectReviewStatus = "pending" | "reviewed";
 export type EvaluatorType = "Primary" | "Secondary";
 export type PerformanceGroup =
   | "Needs Improvement"
@@ -24,22 +25,11 @@ export type PerformanceGroup =
 
 // ── Response Types ──────────────────────────────────────────────────
 
-export interface EvaluatorResponse {
+export interface SecondaryEvalResponse {
   id: number;
   evaluator_id: number;
   evaluator_name: string;
-  evaluator_type: EvaluatorType;
-  status: EvaluatorStatus;
-  performance_group: PerformanceGroup | null;
   impact_statement: string | null;
-  comment_task_execution: string | null;
-  comment_ownership: string | null;
-  comment_project_management: string | null;
-  comment_client_deliverables: string | null;
-  comment_communication: string | null;
-  comment_mentoring: string | null;
-  comment_firm_growth: string | null;
-  comment_competency_skills: string | null;
   created_at: string;
 }
 
@@ -48,65 +38,72 @@ export interface ProjectReviewResponse {
   org_id: number;
   user_id: number;
   project_id: number;
+  reviewer_id: number | null;
   cycle: string;
   status: ProjectReviewStatus;
   employee_name: string;
+  reviewer_name: string | null;
   project_name: string;
   project_code: string;
-  self_desc_task_execution: string | null;
-  self_desc_ownership: string | null;
-  self_desc_project_management: string | null;
-  self_desc_client_deliverables: string | null;
-  self_desc_communication: string | null;
-  self_desc_mentoring: string | null;
-  self_desc_firm_growth: string | null;
-  self_desc_competency_skills: string | null;
-  evaluators: EvaluatorResponse[];
-  is_deleted: boolean;
+  comment_task_execution: string | null;
+  comment_ownership: string | null;
+  comment_project_management: string | null;
+  comment_client_deliverables: string | null;
+  comment_communication: string | null;
+  comment_mentoring: string | null;
+  comment_competency_skills: string | null;
+  performance_group: string | null;
+  impact_statement: string | null;
+  secondary_evaluations: SecondaryEvalResponse[];
   created_at: string;
   updated_at: string | null;
 }
 
-export interface MyProjectReviewCard {
+export interface MyProjectCard {
   review_id: number | null;
   project_id: number;
   project_name: string;
   project_code: string;
   project_start_date: string | null;
-  project_end_date: string | null;
+  project_expected_end_date: string | null;
   assigned_date: string | null;
   assignment_role: string | null;
-  review_status: string | null;
-  primary_submitted: boolean;
+  department_name: string | null;
+  review_status: string | null; // "pending" | "reviewed" | null
   cycle: string | null;
 }
 
-// ── Request Payload Types ───────────────────────────────────────────
-
-export interface SelfReviewPayload {
+export interface PMPendingReviewCard {
+  review_id: number | null;
   project_id: number;
-  self_desc_task_execution: string;
-  self_desc_ownership: string;
-  self_desc_project_management: string;
-  self_desc_client_deliverables: string;
-  self_desc_communication: string;
-  self_desc_mentoring: string;
-  self_desc_firm_growth: string;
-  self_desc_competency_skills: string;
+  project_name: string;
+  project_code: string;
+  user_id: number;
+  employee_name: string;
+  assignment_role: string | null;
+  department_name: string | null;
+  designation_name: string | null;
+  assigned_date: string | null;
+  review_status: string | null;
+  cycle: string | null;
 }
 
-export interface SelfReviewDraftPayload {
-  self_desc_task_execution?: string;
-  self_desc_ownership?: string;
-  self_desc_project_management?: string;
-  self_desc_client_deliverables?: string;
-  self_desc_communication?: string;
-  self_desc_mentoring?: string;
-  self_desc_firm_growth?: string;
-  self_desc_competency_skills?: string;
+export interface RoleExpectation {
+  id: number;
+  department_name: string;
+  designation_name: string;
+  exp_task_execution: string | null;
+  exp_ownership: string | null;
+  exp_project_management: string | null;
+  exp_client_deliverables: string | null;
+  exp_communication: string | null;
+  exp_mentoring: string | null;
+  exp_competency_skills: string | null;
 }
 
-export interface PrimaryEvalPayload {
+// ── Request Payloads ────────────────────────────────────────────────
+
+export interface PMEvaluationPayload {
   performance_group: PerformanceGroup;
   impact_statement: string;
   comment_task_execution: string;
@@ -115,11 +112,10 @@ export interface PrimaryEvalPayload {
   comment_client_deliverables: string;
   comment_communication: string;
   comment_mentoring: string;
-  comment_firm_growth: string;
   comment_competency_skills: string;
 }
 
-export interface SecondaryPeerPayload {
+export interface SecondaryEvalPayload {
   impact_statement: string;
 }
 
@@ -127,92 +123,67 @@ export interface SecondaryPeerPayload {
 
 export const projectReviewService = {
   // ── Employee ────────────────────────────────────────────────────
-  /** List all projects assigned to current user with review status. */
-  getMyProjects: async (): Promise<MyProjectReviewCard[]> => {
-    const res = await apiClient.get<MyProjectReviewCard[]>(
-      "/project-reviews/mine",
-    );
+  /** List my assigned projects with review status. */
+  getMyProjects: async (): Promise<MyProjectCard[]> => {
+    const res = await apiClient.get<MyProjectCard[]>("/project-reviews/mine");
     return res.data;
   },
 
-  /** Submit a full self-review (all 8 competencies, immediately Submitted). */
-  submitSelfReview: async (
-    payload: SelfReviewPayload,
+  /** Get a single review (after PM has evaluated). */
+  getReview: async (reviewId: number): Promise<ProjectReviewResponse> => {
+    const res = await apiClient.get<ProjectReviewResponse>(`/project-reviews/${reviewId}`);
+    return res.data;
+  },
+
+  // ── PM (Primary Evaluator) ─────────────────────────────────────
+  /** List team members needing evaluation on PM's projects. */
+  getPMQueue: async (): Promise<PMPendingReviewCard[]> => {
+    const res = await apiClient.get<PMPendingReviewCard[]>("/project-reviews/pm-queue");
+    return res.data;
+  },
+
+  /** Get role expectations reference data for evaluation. */
+  getRoleExpectations: async (): Promise<RoleExpectation[]> => {
+    const res = await apiClient.get<RoleExpectation[]>("/project-reviews/role-expectations");
+    return res.data;
+  },
+
+  /** PM submits evaluation for a team member. */
+  submitPMEvaluation: async (
+    projectId: number,
+    userId: number,
+    payload: PMEvaluationPayload,
   ): Promise<ProjectReviewResponse> => {
     const res = await apiClient.post<ProjectReviewResponse>(
-      "/project-reviews/self",
+      `/project-reviews/${projectId}/evaluate/${userId}`,
       payload,
     );
     return res.data;
   },
 
-  /** Save a partial self-review draft (no status change). */
-  saveDraft: async (
+  // ── Secondary Evaluator ────────────────────────────────────────
+  /** List reviews pending secondary impact statement. */
+  getSecondaryQueue: async (): Promise<ProjectReviewResponse[]> => {
+    const res = await apiClient.get<ProjectReviewResponse[]>("/project-reviews/secondary-queue");
+    return res.data;
+  },
+
+  /** Submit secondary impact statement. */
+  submitSecondaryEval: async (
     reviewId: number,
-    payload: SelfReviewDraftPayload,
-  ): Promise<ProjectReviewResponse> => {
-    const res = await apiClient.patch<ProjectReviewResponse>(
-      `/project-reviews/${reviewId}/draft`,
-      payload,
-    );
-    return res.data;
-  },
-
-  /** Get a single review with visibility-controlled evaluator data. */
-  getReview: async (reviewId: number): Promise<ProjectReviewResponse> => {
-    const res = await apiClient.get<ProjectReviewResponse>(
-      `/project-reviews/${reviewId}`,
-    );
-    return res.data;
-  },
-
-  // ── Primary Evaluator ──────────────────────────────────────────
-  /** List submitted reviews pending the current user's primary evaluation. */
-  getPendingEvaluations: async (): Promise<ProjectReviewResponse[]> => {
-    const res = await apiClient.get<ProjectReviewResponse[]>(
-      "/project-reviews/evaluations",
-    );
-    return res.data;
-  },
-
-  /** Submit primary evaluation — 8 comments + performance group + impact. */
-  submitPrimaryEval: async (
-    reviewId: number,
-    payload: PrimaryEvalPayload,
-  ): Promise<EvaluatorResponse> => {
-    const res = await apiClient.post<EvaluatorResponse>(
-      `/project-reviews/${reviewId}/primary-eval`,
-      payload,
-    );
-    return res.data;
-  },
-
-  // ── Secondary / Peer Evaluator ─────────────────────────────────
-  /** Submit secondary or peer impact statement. */
-  submitSecondaryPeerEval: async (
-    reviewId: number,
-    payload: SecondaryPeerPayload,
-  ): Promise<EvaluatorResponse> => {
-    const res = await apiClient.post<EvaluatorResponse>(
-      `/project-reviews/${reviewId}/secondary-eval`,
+    payload: SecondaryEvalPayload,
+  ): Promise<SecondaryEvalResponse> => {
+    const res = await apiClient.post<SecondaryEvalResponse>(
+      `/project-reviews/${reviewId}/secondary`,
       payload,
     );
     return res.data;
   },
 
   // ── Admin ──────────────────────────────────────────────────────
-  /** Admin-only: list all reviews across the org for the active cycle. */
+  /** Admin-only: all reviews for the active cycle. */
   getAllReviews: async (): Promise<ProjectReviewResponse[]> => {
-    const res = await apiClient.get<ProjectReviewResponse[]>(
-      "/project-reviews/all",
-    );
-    return res.data;
-  },
-  /** List submitted reviews pending the current user's secondary evaluation. */
-  getPendingSecondaryEvaluations: async (): Promise<ProjectReviewResponse[]> => {
-    const res = await apiClient.get<ProjectReviewResponse[]>(
-      "/project-reviews/secondary-evaluations",
-    );
+    const res = await apiClient.get<ProjectReviewResponse[]>("/project-reviews/all");
     return res.data;
   },
 };

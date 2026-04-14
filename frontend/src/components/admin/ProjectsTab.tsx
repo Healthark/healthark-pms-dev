@@ -1,10 +1,10 @@
 /**
- * ProjectsTab.tsx — Admin Panel tab for managing projects.
+ * ProjectsTab.tsx — Admin Panel tab for managing projects (Revised).
  *
- * Shows a searchable table of all projects with:
- *   - Project code, name, dates, member count
- *   - "Add Project" button → opens ProjectModal in create mode
- *   - Edit/Delete actions per row
+ * Changes:
+ *   - Removed allocated hours column
+ *   - Shows expected end date
+ *   - Shows "Reports To" column (PM's senior reviewer)
  *
  * Placement: src/components/admin/ProjectsTab.tsx
  */
@@ -31,8 +31,9 @@ function formatDate(dateStr: string | null): string {
 const TABLE_HEADERS = [
   "Project",
   "Code",
-  "Start Date",
-  "End Date",
+  "Start",
+  "Expected End",
+  "Reports To",
   "Members",
   "Actions",
 ];
@@ -67,7 +68,7 @@ export function ProjectsTab() {
   }, [loadData]);
 
   const handleDelete = async (project: ProjectResponse) => {
-    if (!window.confirm(`Delete project "${project.name}"? This action is reversible (soft delete).`)) {
+    if (!window.confirm(`Delete project "${project.name}"? This is a soft delete and can be reversed.`)) {
       return;
     }
     setDeleteError("");
@@ -141,7 +142,6 @@ export function ProjectsTab() {
         </div>
       )}
 
-      {/* Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-sm text-text-muted">
           Loading projects…
@@ -198,7 +198,10 @@ export function ProjectsTab() {
                     {formatDate(project.start_date)}
                   </td>
                   <td className="px-5 py-3.5 text-text-muted">
-                    {formatDate(project.end_date)}
+                    {formatDate(project.expected_end_date)}
+                  </td>
+                  <td className="px-5 py-3.5 text-text-muted">
+                    {project.reports_to_name ?? "—"}
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1.5 text-text-muted">
@@ -233,7 +236,6 @@ export function ProjectsTab() {
         </div>
       )}
 
-      {/* Modal */}
       {showModal && (
         <ProjectModal
           projectId={editingProjectId}

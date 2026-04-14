@@ -1,32 +1,33 @@
 /**
- * ProjectReviews.tsx — Employee's Project Reviews Page.
+ * ProjectReviews.tsx — Project Reviews Page (Revised PM-Centric Flow).
  *
- * Shows a list of projects the employee is assigned to with:
- *   - Project name, code, dates (project start + assignment date)
- *   - Review status (not started / draft / submitted)
- *   - "Write Review" or "View Review" action
+ * No self-review. Employee just sees project cards with status:
+ *   - "Pending" → waiting for PM to evaluate
+ *   - "Reviewed" → can click to view the evaluation
  *
- * Tabs (role-dependent):
- *   "My Reviews"    → All users — self-review cards
- *   "Evaluations"   → Primary evaluators — pending reviews to evaluate
+ * Tabs:
+ *   "My Reviews"     → All users — project cards
+ *   "Evaluate Team"  → PM (Primary evaluator) — evaluation queue
+ *   "Secondary"      → Secondary evaluators — impact statement queue
  *
  * Placement: src/pages/ProjectReviews.tsx
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { Briefcase, CalendarDays, FileText, Loader2 } from "lucide-react";
+import {
+  Briefcase, CalendarDays, Clock, CheckCircle2, Eye,
+} from "lucide-react";
 import {
   projectReviewService,
-  type MyProjectReviewCard,
-  type ProjectReviewResponse,
+  type MyProjectCard,
 } from "../services/project-review.service";
 import { useAuth } from "../hooks/useAuth";
-import { SelfReviewForm } from "../components/project-reviews/SelfReviewForm";
 import { ReviewDetailView } from "../components/project-reviews/ReviewDetailView";
-import { EvaluationsTab } from "../components/project-reviews/EvaluationsTab";
+import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
+import { SecondaryEvalTab } from "../components/project-reviews/SecondaryEvalTab";
 
-type ActiveTab = "my" | "evaluations";
-type ViewMode = "list" | "self-review" | "detail";
+type ActiveTab = "my" | "evaluate" | "secondary";
+type ViewMode = "list" | "detail";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
@@ -37,20 +38,17 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-// ── Project Card ────────────────────────────────────────────────────
+// ── Project Card (Employee View) ────────────────────────────────────
 
 function ProjectCard({
   card,
-  onWriteReview,
   onViewReview,
 }: {
-  readonly card: MyProjectReviewCard;
-  readonly onWriteReview: (card: MyProjectReviewCard) => void;
+  readonly card: MyProjectCard;
   readonly onViewReview: (reviewId: number) => void;
 }) {
-  const hasReview = card.review_id !== null;
-  const isSubmitted = card.review_status === "submitted";
-  const canWrite = !hasReview || card.review_status === "draft";
+  const isReviewed = card.review_status === "reviewed";
+  const isPending = card.review_status === "pending" || card.review_status === null;
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow">
@@ -61,46 +59,45 @@ function ProjectCard({
             <Briefcase className="h-4 w-4 text-brand" aria-hidden="true" />
           </div>
           <div>
-            <p className="font-medium text-text-main leading-snug">
-              {card.project_name}
-            </p>
-            <span className="text-xs text-text-muted font-mono">
-              {card.project_code}
-            </span>
+            <p className="font-medium text-text-main leading-snug">{card.project_name}</p>
+            <span className="text-xs text-text-muted font-mono">{card.project_code}</span>
           </div>
         </div>
 
         {/* Status badge */}
-        {!hasReview && (
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 shrink-0">
-            Not Started
+        {isPending && (
+          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 shrink-0">
+            <Clock className="h-3 w-3" aria-hidden="true" />
+            Pending
           </span>
         )}
-        {card.review_status === "draft" && (
-          <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 shrink-0">
-            Draft
-          </span>
-        )}
-        {isSubmitted && (
-          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 shrink-0">
-            Submitted
+        {isReviewed && (
+          <span className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 shrink-0">
+            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+            Reviewed
           </span>
         )}
       </div>
 
-      {/* Role */}
-      {card.assignment_role && (
-        <p className="text-xs text-text-muted">
-          Your Role: <span className="font-medium text-text-main">{card.assignment_role}</span>
-        </p>
-      )}
+      {/* Role + Department */}
+      <div className="flex flex-wrap gap-3 text-xs text-text-muted">
+        {card.assignment_role && (
+          <span>Role: <span className="font-medium text-text-main">{card.assignment_role}</span></span>
+        )}
+        {card.department_name && (
+          <span>Dept: <span className="font-medium text-text-main">{card.department_name}</span></span>
+        )}
+        {card.cycle && (
+          <span>Cycle: <span className="font-medium text-text-main">{card.cycle}</span></span>
+        )}
+      </div>
 
       {/* Dates */}
       <div className="flex flex-wrap gap-4 text-xs text-text-muted">
         <div className="flex items-center gap-1">
           <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           Project: {formatDate(card.project_start_date)}
-          {card.project_end_date && ` — ${formatDate(card.project_end_date)}`}
+          {card.project_expected_end_date && ` — ${formatDate(card.project_expected_end_date)}`}
         </div>
         {card.assigned_date && (
           <div className="flex items-center gap-1">
@@ -110,32 +107,21 @@ function ProjectCard({
         )}
       </div>
 
-      {/* Primary feedback indicator */}
-      {isSubmitted && card.primary_submitted && (
-        <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-          Manager feedback available
-        </div>
-      )}
-
       {/* Action */}
       <div className="mt-auto pt-2 border-t border-border">
-        {canWrite ? (
-          <button
-            type="button"
-            onClick={() => onWriteReview(card)}
-            className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          >
-            {hasReview ? "Continue Draft" : "Write Self-Review"}
-          </button>
-        ) : (
+        {isReviewed && card.review_id ? (
           <button
             type="button"
             onClick={() => onViewReview(card.review_id!)}
-            className="w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
           >
-            View Review
+            <Eye className="h-4 w-4" aria-hidden="true" />
+            View Evaluation
           </button>
+        ) : (
+          <div className="text-center text-xs text-text-muted py-2">
+            Your project manager will evaluate your performance.
+          </div>
         )}
       </div>
     </div>
@@ -167,12 +153,8 @@ export function ProjectReviews() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [cards, setCards] = useState<MyProjectReviewCard[]>([]);
+  const [cards, setCards] = useState<MyProjectCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // For self-review form
-  const [selectedCard, setSelectedCard] = useState<MyProjectReviewCard | null>(null);
-  // For detail view
   const [selectedReviewId, setSelectedReviewId] = useState<number | null>(null);
 
   const loadCards = useCallback(async () => {
@@ -190,11 +172,6 @@ export function ProjectReviews() {
     void loadCards();
   }, [loadCards]);
 
-  const handleWriteReview = (card: MyProjectReviewCard) => {
-    setSelectedCard(card);
-    setViewMode("self-review");
-  };
-
   const handleViewReview = (reviewId: number) => {
     setSelectedReviewId(reviewId);
     setViewMode("detail");
@@ -202,13 +179,11 @@ export function ProjectReviews() {
 
   const handleBack = () => {
     setViewMode("list");
-    setSelectedCard(null);
     setSelectedReviewId(null);
-    void loadCards(); // Refresh to pick up status changes
+    void loadCards();
   };
 
-  // Check if user is a Primary evaluator on any project
-  // (simplified: show evaluations tab for managers/admins)
+  // Show evaluate tab for managers/admins (potential PMs)
   const showEvalTab = ["Admin", "Manager", "Principal"].includes(user?.role ?? "");
 
   const tabCls = (tab: ActiveTab) =>
@@ -218,23 +193,9 @@ export function ProjectReviews() {
         : "border-transparent text-text-muted hover:text-text-main"
     }`;
 
-  // ── Sub-views ─────────────────────────────────────────────────────
-  if (viewMode === "self-review" && selectedCard) {
-    return (
-      <SelfReviewForm
-        card={selectedCard}
-        onBack={handleBack}
-      />
-    );
-  }
-
+  // ── Detail View ───────────────────────────────────────────────────
   if (viewMode === "detail" && selectedReviewId) {
-    return (
-      <ReviewDetailView
-        reviewId={selectedReviewId}
-        onBack={handleBack}
-      />
-    );
+    return <ReviewDetailView reviewId={selectedReviewId} onBack={handleBack} />;
   }
 
   // ── List View ─────────────────────────────────────────────────────
@@ -245,27 +206,23 @@ export function ProjectReviews() {
           Project Reviews
         </h1>
         <p className="mt-0.5 text-sm text-text-muted">
-          Write self-assessments for your projects and view evaluator feedback.
+          View your project evaluations and feedback from your project manager.
         </p>
       </div>
 
       <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-        {/* Tab bar */}
         <div className="flex border-b border-border px-2">
-          <button
-            type="button"
-            className={tabCls("my")}
-            onClick={() => setActiveTab("my")}
-          >
+          <button type="button" className={tabCls("my")} onClick={() => setActiveTab("my")}>
             My Reviews
           </button>
           {showEvalTab && (
-            <button
-              type="button"
-              className={tabCls("evaluations")}
-              onClick={() => setActiveTab("evaluations")}
-            >
-              Evaluations
+            <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
+              Evaluate Team
+            </button>
+          )}
+          {showEvalTab && (
+            <button type="button" className={tabCls("secondary")} onClick={() => setActiveTab("secondary")}>
+              Secondary Reviews
             </button>
           )}
         </div>
@@ -282,29 +239,21 @@ export function ProjectReviews() {
               ) : cards.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
                   <Briefcase className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
-                  <p className="font-display text-base font-medium text-text-main">
-                    No projects assigned
-                  </p>
-                  <p className="mt-1 text-sm text-text-muted">
-                    You'll see your projects here once HR assigns you.
-                  </p>
+                  <p className="font-display text-base font-medium text-text-main">No projects assigned</p>
+                  <p className="mt-1 text-sm text-text-muted">You'll see your projects here once HR assigns you.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {cards.map((card) => (
-                    <ProjectCard
-                      key={card.project_id}
-                      card={card}
-                      onWriteReview={handleWriteReview}
-                      onViewReview={handleViewReview}
-                    />
+                    <ProjectCard key={card.project_id} card={card} onViewReview={handleViewReview} />
                   ))}
                 </div>
               )}
             </>
           )}
 
-          {activeTab === "evaluations" && showEvalTab && <EvaluationsTab />}
+          {activeTab === "evaluate" && showEvalTab && <PMEvaluationTab />}
+          {activeTab === "secondary" && showEvalTab && <SecondaryEvalTab />}
         </div>
       </div>
     </div>

@@ -1,22 +1,12 @@
 """
-Project Models — The Project Registry and Team Assignment.
+Project Models — Revised for PM-centric evaluation flow.
 
-Two models in one file:
-    Project            — The org-scoped project entity
-    ProjectAssignment   — Junction table mapping users to projects with
-                          project roles, evaluator types, and assignment dates
-
-Design Decisions:
-    - assignment_role is free-text (e.g. "Frontend Developer", "Tester") because
-      project roles vary wildly across orgs and projects. System roles (Admin,
-      Manager, Staff) remain in the users table.
-    - evaluator_type designates what kind of evaluator this person is for OTHER
-      members of the project. "Primary" means they evaluate all other members.
-      "Secondary" and "Peer" provide lighter impact-statement-only feedback.
-      null means they are a regular member who doesn't evaluate others.
-    - assigned_date tracks when the employee joined the project (distinct from
-      project start_date). This solves the "2-year project, 3-month member"
-      display problem.
+Changes from previous version:
+    - Removed allocated_hours from Project
+    - Renamed end_date → expected_end_date
+    - Added reports_to_id on Project (senior who reviews the PM)
+    - Added department_id on ProjectAssignment (auto-filled, editable per project)
+    - assignment_role auto-fills from designation but is editable
 """
 
 from sqlalchemy import (
@@ -37,8 +27,11 @@ class Project(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     start_date = Column(Date, nullable=True)
-    end_date = Column(Date, nullable=True)
-    allocated_hours = Column(String, nullable=True)
+    expected_end_date = Column(Date, nullable=True)
+
+    # The senior person who reviews the PM's own performance on this project.
+    # This is NOT the PM themselves — it's their reporting line for this project.
+    reports_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -50,6 +43,7 @@ class Project(Base):
 
     # Relationships
     organization = relationship("Organization")
+    reports_to = relationship("User", foreign_keys=[reports_to_id])
     assignments = relationship(
         "ProjectAssignment",
         back_populates="project",
@@ -65,27 +59,29 @@ class ProjectAssignment(Base):
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    # What this person does ON the project (free-text)
-    # e.g. "Frontend Developer", "Tester", "Project Manager"
+    # Auto-filled from user's designation.name but editable per project
+    # e.g. "Senior Data Engineer" → overridden to "Lead Data Engineer" for this project
     assignment_role = Column(String, nullable=True)
 
-    # What kind of evaluator this person is FOR other members
-    # "Primary" = evaluates all other members (one per project)
-    # "Secondary" / "Peer" = provides impact statement only
-    # null = regular member, not an evaluator
+    # Track which department the employee belongs to for this project
+    # Auto-filled from user's department_id but editable per project
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
+
+    # "Primary" = Project Manager who evaluates all other members
+    # "Secondary" = provides impact statement only
+    # null = regular team member
     evaluator_type = Column(String, nullable=True)
 
     # When this employee was assigned to the project
-    # (distinct from project.start_date)
     assigned_date = Column(Date, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        # One assignment per user per project
         Index("ix_project_assignments_org_proj_user", "org_id", "project_id", "user_id", unique=True),
     )
 
     # Relationships
     project = relationship("Project", back_populates="assignments")
     user = relationship("User")
+    department = relationship("Department")

@@ -1,13 +1,12 @@
 """
-Project Schemas — Admin/HR Project Management API Contract.
+Project Schemas — Revised for PM-centric flow.
 
-Covers:
-    Project CRUD:       Create, Update, Response
-    Assignment CRUD:    Create, Update, Response (with user name resolution)
-    ProjectDetail:      Full project with nested assignments list
-
-The assignment_role is free-text (e.g. "Frontend Developer", "Tester").
-The evaluator_type is constrained to Primary/Secondary/null.
+Changes:
+    - Removed allocated_hours
+    - Renamed end_date → expected_end_date
+    - Added reports_to_id + reports_to_name on Project
+    - Added department_id + department_name on Assignment
+    - Evaluator type: Primary | Secondary | null (no Peer)
 """
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -22,11 +21,14 @@ class AssignmentCreate(BaseModel):
     user_id: int
     assignment_role: Optional[str] = Field(
         default=None, max_length=100,
-        description="Project role, e.g. 'Frontend Developer', 'Tester'"
+        description="Auto-filled from designation, editable per project"
+    )
+    department_id: Optional[int] = Field(
+        default=None,
+        description="Auto-filled from user's department, editable per project"
     )
     evaluator_type: Optional[str] = Field(
         default=None, pattern=r"^(Primary|Secondary)$",
-        description="Evaluator designation: Primary, Secondary, or null"
     )
     assigned_date: Optional[date] = None
 
@@ -34,6 +36,7 @@ class AssignmentCreate(BaseModel):
 class AssignmentUpdate(BaseModel):
     """Payload for updating a member's role or evaluator type."""
     assignment_role: Optional[str] = Field(default=None, max_length=100)
+    department_id: Optional[int] = None
     evaluator_type: Optional[str] = Field(
         default=None, pattern=r"^(Primary|Secondary)$"
     )
@@ -41,12 +44,14 @@ class AssignmentUpdate(BaseModel):
 
 
 class AssignmentResponse(BaseModel):
-    """Assignment with resolved user name for display."""
+    """Assignment with resolved user/department names."""
     id: int
     project_id: int
     user_id: int
     user_name: str
     assignment_role: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     evaluator_type: Optional[str] = None
     assigned_date: Optional[date] = None
     created_at: datetime
@@ -60,20 +65,22 @@ class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    allocated_hours: Optional[str] = None
-    # Optional: create project with initial members in one shot
+    expected_end_date: Optional[date] = None
+    reports_to_id: Optional[int] = Field(
+        default=None,
+        description="Senior person who reviews the PM on this project"
+    )
     assignments: list[AssignmentCreate] = []
 
 
 class ProjectUpdate(BaseModel):
-    """Payload for updating project metadata (not assignments)."""
+    """Payload for updating project metadata."""
     project_code: Optional[str] = Field(default=None, min_length=1, max_length=20)
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
     start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    allocated_hours: Optional[str] = None
+    expected_end_date: Optional[date] = None
+    reports_to_id: Optional[int] = None
 
 
 class ProjectResponse(BaseModel):
@@ -84,8 +91,9 @@ class ProjectResponse(BaseModel):
     name: str
     description: Optional[str] = None
     start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    allocated_hours: Optional[str] = None
+    expected_end_date: Optional[date] = None
+    reports_to_id: Optional[int] = None
+    reports_to_name: Optional[str] = None
     is_deleted: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -95,5 +103,5 @@ class ProjectResponse(BaseModel):
 
 
 class ProjectDetail(ProjectResponse):
-    """Full project with nested assignments — used in the detail/edit view."""
+    """Full project with nested assignments."""
     assignments: list[AssignmentResponse] = []

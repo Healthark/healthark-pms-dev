@@ -1,22 +1,14 @@
 """
-Project Routes — HR/Admin Project Management.
+Project Routes — HR/Admin Project Management (Revised).
 
-Endpoints:
-    GET    /projects/                          → List all org projects
-    POST   /projects/                          → Create project (with optional members)
-    GET    /projects/{id}                      → Get project detail with assignments
-    PATCH  /projects/{id}                      → Update project metadata
-    DELETE /projects/{id}                      → Soft-delete project
-
-    POST   /projects/{id}/assignments          → Add a member
-    PATCH  /projects/assignments/{id}          → Update member role/evaluator type
-    DELETE /projects/assignments/{id}          → Remove a member
-
-Security Layers:
-    Layer 1 — Authentication:     CurrentUser dependency
-    Layer 2 — Tenant Isolation:   All queries filter by org_id
-    Layer 3 — Role Authorization: All endpoints require Admin role
-    Layer 4 — Ownership:          Not applicable (HR manages all)
+Changes:
+    - Removed allocated_hours
+    - expected_end_date instead of end_date
+    - reports_to_id on project (senior who reviews the PM)
+    - department_id on assignments (auto-filled from user, editable)
+    - assignment_role auto-filled from user's designation (editable)
+    - reports_to_name resolved in responses
+    - department_name resolved in assignment responses
 """
 
 from typing import List
@@ -26,6 +18,7 @@ from sqlalchemy import func
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.project_models import Project, ProjectAssignment
 from app.models.user_models import User
+from app.models.reference_models import Department
 from app.schemas.project_schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectDetail,
     AssignmentCreate, AssignmentUpdate, AssignmentResponse,
@@ -43,18 +36,57 @@ def _require_admin(current_user: User) -> None:
 
 
 def _build_assignment_response(assignment: ProjectAssignment, db: DbSession) -> AssignmentResponse:
-    """Resolve user name for an assignment."""
+    """Resolve user name and department name for an assignment."""
     user = db.query(User).filter(User.id == assignment.user_id).first()
+    dept = db.query(Department).filter(Department.id == assignment.department_id).first() if assignment.department_id else None
+
     return AssignmentResponse(
         id=assignment.id,
         project_id=assignment.project_id,
         user_id=assignment.user_id,
         user_name=user.full_name if user else "Unknown",
         assignment_role=assignment.assignment_role,
+        department_id=assignment.department_id,
+        department_name=dept.name if dept else None,
         evaluator_type=assignment.evaluator_type,
         assigned_date=assignment.assigned_date,
         created_at=assignment.created_at,
     )
+
+
+def _resolve_reports_to_name(db: DbSession, reports_to_id: int | None) -> str | None:
+    if not reports_to_id:
+        return None
+    user = db.query(User).filter(User.id == reports_to_id).first()
+    return user.full_name if user else None
+
+
+def _build_project_response(project: Project, db: DbSession, count: int) -> ProjectResponse:
+    resp = ProjectResponse.model_validate(project)
+    resp.member_count = count
+    resp.reports_to_name = _resolve_reports_to_name(db, project.reports_to_id)
+    return resp
+
+
+def _auto_fill_assignment(assignment_in: AssignmentCreate, db: DbSession) -> AssignmentCreate:
+    """
+    Auto-fill assignment_role from designation and department_id from user
+    if not explicitly provided.
+    """
+    user = db.query(User).filter(User.id == assignment_in.user_id).first()
+    if not user:
+        return assignment_in
+
+    if not assignment_in.assignment_role and user.designation_id:
+        from app.models.reference_models import Designation
+        desig = db.query(Designation).filter(Designation.id == user.designation_id).first()
+        if desig:
+            assignment_in.assignment_role = desig.name
+
+    if not assignment_in.department_id and user.department_id:
+        assignment_in.department_id = user.department_id
+
+    return assignment_in
 
 
 # =====================================================================
@@ -79,7 +111,6 @@ def list_projects(
         .all()
     )
 
-    # Build member counts in one query
     count_map = dict(
         db.query(ProjectAssignment.project_id, func.count(ProjectAssignment.id))
         .filter(ProjectAssignment.org_id == current_user.org_id)
@@ -87,13 +118,7 @@ def list_projects(
         .all()
     )
 
-    results = []
-    for p in projects:
-        resp = ProjectResponse.model_validate(p)
-        resp.member_count = count_map.get(p.id, 0)
-        results.append(resp)
-
-    return results
+    return [_build_project_response(p, db, count_map.get(p.id, 0)) for p in projects]
 
 
 @router.post("/", response_model=ProjectDetail, status_code=status.HTTP_201_CREATED)
@@ -102,13 +127,9 @@ def create_project(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """
-    Create a project with optional initial team assignments.
-    Uses db.flush() to get the project ID before inserting assignments.
-    """
+    """Create a project with optional initial team assignments."""
     _require_admin(current_user)
 
-    # Check for duplicate project code
     existing = db.query(Project).filter(
         Project.org_id == current_user.org_id,
         Project.project_code == project_in.project_code,
@@ -121,36 +142,33 @@ def create_project(
             detail=f"Project code '{project_in.project_code}' already exists.",
         )
 
-    # Validate: at most one Primary evaluator
-    primary_count = sum(
-        1 for a in project_in.assignments if a.evaluator_type == "Primary"
-    )
+    primary_count = sum(1 for a in project_in.assignments if a.evaluator_type == "Primary")
     if primary_count > 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A project can have at most one Primary evaluator.",
+            detail="A project can have at most one Primary evaluator (Project Manager).",
         )
 
-    # Create project
     new_project = Project(
         org_id=current_user.org_id,
         project_code=project_in.project_code,
         name=project_in.name,
         description=project_in.description,
         start_date=project_in.start_date,
-        end_date=project_in.end_date,
-        allocated_hours=project_in.allocated_hours,
+        expected_end_date=project_in.expected_end_date,
+        reports_to_id=project_in.reports_to_id,
     )
     db.add(new_project)
-    db.flush()  # Get ID without committing
+    db.flush()
 
-    # Bulk-insert assignments
     for assignment_in in project_in.assignments:
+        assignment_in = _auto_fill_assignment(assignment_in, db)
         db.add(ProjectAssignment(
             org_id=current_user.org_id,
             project_id=new_project.id,
             user_id=assignment_in.user_id,
             assignment_role=assignment_in.assignment_role,
+            department_id=assignment_in.department_id,
             evaluator_type=assignment_in.evaluator_type,
             assigned_date=assignment_in.assigned_date,
         ))
@@ -158,10 +176,7 @@ def create_project(
     db.commit()
     db.refresh(new_project)
 
-    # Build response with resolved names
-    assignment_responses = [
-        _build_assignment_response(a, db) for a in new_project.assignments
-    ]
+    assignment_responses = [_build_assignment_response(a, db) for a in new_project.assignments]
 
     return ProjectDetail(
         id=new_project.id,
@@ -170,8 +185,9 @@ def create_project(
         name=new_project.name,
         description=new_project.description,
         start_date=new_project.start_date,
-        end_date=new_project.end_date,
-        allocated_hours=new_project.allocated_hours,
+        expected_end_date=new_project.expected_end_date,
+        reports_to_id=new_project.reports_to_id,
+        reports_to_name=_resolve_reports_to_name(db, new_project.reports_to_id),
         is_deleted=new_project.is_deleted,
         created_at=new_project.created_at,
         updated_at=new_project.updated_at,
@@ -196,14 +212,9 @@ def get_project_detail(
     ).first()
 
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
-    assignment_responses = [
-        _build_assignment_response(a, db) for a in project.assignments
-    ]
+    assignment_responses = [_build_assignment_response(a, db) for a in project.assignments]
 
     return ProjectDetail(
         id=project.id,
@@ -212,8 +223,9 @@ def get_project_detail(
         name=project.name,
         description=project.description,
         start_date=project.start_date,
-        end_date=project.end_date,
-        allocated_hours=project.allocated_hours,
+        expected_end_date=project.expected_end_date,
+        reports_to_id=project.reports_to_id,
+        reports_to_name=_resolve_reports_to_name(db, project.reports_to_id),
         is_deleted=project.is_deleted,
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -229,7 +241,7 @@ def update_project(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Update project metadata (not assignments)."""
+    """Update project metadata."""
     _require_admin(current_user)
 
     project = db.query(Project).filter(
@@ -239,14 +251,10 @@ def update_project(
     ).first()
 
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
     update_data = project_in.model_dump(exclude_unset=True)
 
-    # Check for duplicate project code if changing it
     if "project_code" in update_data and update_data["project_code"] != project.project_code:
         existing = db.query(Project).filter(
             Project.org_id == current_user.org_id,
@@ -266,14 +274,11 @@ def update_project(
     db.commit()
     db.refresh(project)
 
-    # Get member count
     count = db.query(func.count(ProjectAssignment.id)).filter(
         ProjectAssignment.project_id == project.id
     ).scalar() or 0
 
-    resp = ProjectResponse.model_validate(project)
-    resp.member_count = count
-    return resp
+    return _build_project_response(project, db, count)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -292,10 +297,7 @@ def delete_project(
     ).first()
 
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
     project.is_deleted = True
     db.commit()
@@ -313,10 +315,9 @@ def add_assignment(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Add a team member to a project."""
+    """Add a team member to a project. Auto-fills role and department from user profile."""
     _require_admin(current_user)
 
-    # Verify project exists
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.org_id == current_user.org_id,
@@ -324,12 +325,8 @@ def add_assignment(
     ).first()
 
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
-    # Check for duplicate assignment
     existing = db.query(ProjectAssignment).filter(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.user_id == assignment_in.user_id,
@@ -342,7 +339,6 @@ def add_assignment(
             detail="This user is already assigned to this project.",
         )
 
-    # Validate: at most one Primary per project
     if assignment_in.evaluator_type == "Primary":
         existing_primary = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == project_id,
@@ -352,14 +348,18 @@ def add_assignment(
         if existing_primary:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This project already has a Primary evaluator. Remove the existing one first.",
+                detail="This project already has a Primary evaluator (Project Manager).",
             )
+
+    # Auto-fill role and department from user profile
+    assignment_in = _auto_fill_assignment(assignment_in, db)
 
     new_assignment = ProjectAssignment(
         org_id=current_user.org_id,
         project_id=project_id,
         user_id=assignment_in.user_id,
         assignment_role=assignment_in.assignment_role,
+        department_id=assignment_in.department_id,
         evaluator_type=assignment_in.evaluator_type,
         assigned_date=assignment_in.assigned_date,
     )
@@ -377,7 +377,7 @@ def update_assignment(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Update a member's project role or evaluator type."""
+    """Update a member's project role, department, or evaluator type."""
     _require_admin(current_user)
 
     assignment = db.query(ProjectAssignment).filter(
@@ -386,14 +386,10 @@ def update_assignment(
     ).first()
 
     if not assignment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assignment not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
 
     update_data = assignment_in.model_dump(exclude_unset=True)
 
-    # Validate: at most one Primary per project
     if update_data.get("evaluator_type") == "Primary":
         existing_primary = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == assignment.project_id,
@@ -431,10 +427,7 @@ def remove_assignment(
     ).first()
 
     if not assignment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assignment not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
 
     db.delete(assignment)
     db.commit()

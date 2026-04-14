@@ -1,9 +1,13 @@
 /**
- * ProjectModal.tsx — Create/Edit Project with Team Assignments.
+ * ProjectModal.tsx — Create/Edit Project with Team Assignments (Revised).
  *
- * Create mode: project form + add members inline before saving
- * Edit mode:   fetch project detail, update metadata, manage assignments
- *              (add/remove members, change roles/evaluator types)
+ * Changes:
+ *   - Removed allocated hours
+ *   - expected_end_date instead of end_date
+ *   - Added "Reports To" dropdown (senior who reviews the PM)
+ *   - Assignment rows now include Department dropdown
+ *   - Assignment role auto-fills from user's designation when selected
+ *   - Evaluator types: Primary | Secondary only
  *
  * Placement: src/components/admin/ProjectModal.tsx
  */
@@ -17,7 +21,12 @@ import {
   type AssignmentResponse,
   type AssignmentCreatePayload,
 } from "../../services/project.service";
-import type { UserResponse } from "../../services/admin.service";
+import {
+  adminService,
+  type UserResponse,
+  type DepartmentBrief,
+  type DesignationBrief,
+} from "../../services/admin.service";
 import { getErrorMessage } from "../../utils/errors";
 
 const INPUT_CLS =
@@ -26,7 +35,7 @@ const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 const EVALUATOR_TYPES = ["", "Primary", "Secondary"] as const;
 
 interface ProjectModalProps {
-  readonly projectId: number | null; // null = create mode
+  readonly projectId: number | null;
   readonly users: UserResponse[];
   readonly onClose: () => void;
   readonly onSave: () => void;
@@ -36,6 +45,7 @@ interface DraftAssignment {
   tempId: string;
   user_id: string;
   assignment_role: string;
+  department_id: string;
   evaluator_type: string;
   assigned_date: string;
 }
@@ -64,8 +74,12 @@ export function ProjectModal({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [allocatedHours, setAllocatedHours] = useState("");
+  const [expectedEndDate, setExpectedEndDate] = useState("");
+  const [reportsToId, setReportsToId] = useState("");
+
+  // ── Reference Data ──────────────────────────────────────────────
+  const [departments, setDepartments] = useState<DepartmentBrief[]>([]);
+  const [designations, setDesignations] = useState<DesignationBrief[]>([]);
 
   // ── Assignment State ────────────────────────────────────────────
   const [draftAssignments, setDraftAssignments] = useState<DraftAssignment[]>([]);
@@ -76,7 +90,23 @@ export function ProjectModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // ── Load existing project in edit mode ──────────────────────────
+  // ── Load reference data + existing project ──────────────────────
+  useEffect(() => {
+    const loadRefs = async () => {
+      try {
+        const [deptData, desigData] = await Promise.all([
+          adminService.getDepartments(),
+          adminService.getDesignations(),
+        ]);
+        setDepartments(deptData);
+        setDesignations(desigData);
+      } catch {
+        // dropdowns stay empty
+      }
+    };
+    void loadRefs();
+  }, []);
+
   useEffect(() => {
     if (!isEditing) return;
     setIsLoading(true);
@@ -87,8 +117,8 @@ export function ProjectModal({
         setName(detail.name);
         setDescription(detail.description ?? "");
         setStartDate(toDateInput(detail.start_date));
-        setEndDate(toDateInput(detail.end_date));
-        setAllocatedHours(detail.allocated_hours ?? "");
+        setExpectedEndDate(toDateInput(detail.expected_end_date));
+        setReportsToId(detail.reports_to_id?.toString() ?? "");
         setExistingAssignments(detail.assignments);
       })
       .catch((err: unknown) => setError(getErrorMessage(err)))
@@ -103,6 +133,7 @@ export function ProjectModal({
         tempId: tempId(),
         user_id: "",
         assignment_role: "",
+        department_id: "",
         evaluator_type: "",
         assigned_date: "",
       },
@@ -115,11 +146,30 @@ export function ProjectModal({
     );
   };
 
+  /** Auto-fill role and department when user is selected */
+  const handleUserSelect = (draftId: string, userId: string) => {
+    updateDraft(draftId, "user_id", userId);
+
+    if (!userId) return;
+
+    const selectedUser = users.find((u) => u.id === Number(userId));
+    if (!selectedUser) return;
+
+    // Auto-fill department from user's department
+    if (selectedUser.department_id) {
+      updateDraft(draftId, "department_id", selectedUser.department_id.toString());
+    }
+
+    // Auto-fill role from user's designation
+    if (selectedUser.designation) {
+      updateDraft(draftId, "assignment_role", selectedUser.designation.name);
+    }
+  };
+
   const removeDraft = (id: string) => {
     setDraftAssignments((prev) => prev.filter((a) => a.tempId !== id));
   };
 
-  // ── Remove Existing Assignment (Edit Mode) ─────────────────────
   const removeExisting = async (assignmentId: number) => {
     try {
       await projectService.removeAssignment(assignmentId);
@@ -129,13 +179,12 @@ export function ProjectModal({
     }
   };
 
-  // ── Already Assigned User IDs (for filtering dropdowns) ────────
+  // ── Computed ────────────────────────────────────────────────────
   const assignedUserIds = new Set([
     ...existingAssignments.map((a) => a.user_id),
     ...draftAssignments.filter((a) => a.user_id).map((a) => Number(a.user_id)),
   ]);
 
-  // ── Primary Evaluator Guard ────────────────────────────────────
   const hasPrimary =
     existingAssignments.some((a) => a.evaluator_type === "Primary") ||
     draftAssignments.some((a) => a.evaluator_type === "Primary");
@@ -147,33 +196,32 @@ export function ProjectModal({
 
     try {
       if (isEditing) {
-        // Update project metadata
         await projectService.updateProject(projectId, {
           project_code: projectCode,
           name,
           description: description || null,
           start_date: startDate || null,
-          end_date: endDate || null,
-          allocated_hours: allocatedHours || null,
+          expected_end_date: expectedEndDate || null,
+          reports_to_id: reportsToId ? Number(reportsToId) : null,
         });
 
-        // Add new assignments one by one
         for (const draft of draftAssignments) {
           if (!draft.user_id) continue;
           await projectService.addAssignment(projectId, {
             user_id: Number(draft.user_id),
             assignment_role: draft.assignment_role || null,
+            department_id: draft.department_id ? Number(draft.department_id) : null,
             evaluator_type: draft.evaluator_type || null,
             assigned_date: draft.assigned_date || null,
           });
         }
       } else {
-        // Build assignments payload
         const assignments: AssignmentCreatePayload[] = draftAssignments
           .filter((a) => a.user_id)
           .map((a) => ({
             user_id: Number(a.user_id),
             assignment_role: a.assignment_role || null,
+            department_id: a.department_id ? Number(a.department_id) : null,
             evaluator_type: a.evaluator_type || null,
             assigned_date: a.assigned_date || null,
           }));
@@ -183,8 +231,8 @@ export function ProjectModal({
           name,
           description: description || null,
           start_date: startDate || null,
-          end_date: endDate || null,
-          allocated_hours: allocatedHours || null,
+          expected_end_date: expectedEndDate || null,
+          reports_to_id: reportsToId ? Number(reportsToId) : null,
           assignments,
         });
       }
@@ -235,89 +283,43 @@ export function ProjectModal({
           ) : (
             <>
               {error && (
-                <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
-                  {error}
-                </p>
+                <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
               )}
 
               {/* ── Project Details ────────────────────────────── */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="proj-code" className={LABEL_CLS}>
-                    Project Code *
-                  </label>
-                  <input
-                    id="proj-code"
-                    className={INPUT_CLS}
-                    value={projectCode}
-                    onChange={(e) => setProjectCode(e.target.value)}
-                    placeholder="PRJ-001"
-                  />
+                  <label htmlFor="proj-code" className={LABEL_CLS}>Project Code *</label>
+                  <input id="proj-code" className={INPUT_CLS} value={projectCode} onChange={(e) => setProjectCode(e.target.value)} placeholder="PRJ-001" />
                 </div>
                 <div>
-                  <label htmlFor="proj-name" className={LABEL_CLS}>
-                    Project Name *
-                  </label>
-                  <input
-                    id="proj-name"
-                    className={INPUT_CLS}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Market Access Study Q2"
-                  />
+                  <label htmlFor="proj-name" className={LABEL_CLS}>Project Name *</label>
+                  <input id="proj-name" className={INPUT_CLS} value={name} onChange={(e) => setName(e.target.value)} placeholder="Market Access Study Q2" />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="proj-desc" className={LABEL_CLS}>
-                  Description
-                </label>
-                <textarea
-                  id="proj-desc"
-                  rows={2}
-                  className={`${INPUT_CLS} resize-none`}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Brief description of the project scope…"
-                />
+                <label htmlFor="proj-desc" className={LABEL_CLS}>Description</label>
+                <textarea id="proj-desc" rows={2} className={`${INPUT_CLS} resize-none`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of the project scope…" />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label htmlFor="proj-start" className={LABEL_CLS}>
-                    Start Date
-                  </label>
-                  <input
-                    id="proj-start"
-                    type="date"
-                    className={INPUT_CLS}
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
+                  <label htmlFor="proj-start" className={LABEL_CLS}>Start Date</label>
+                  <input id="proj-start" type="date" className={INPUT_CLS} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </div>
                 <div>
-                  <label htmlFor="proj-end" className={LABEL_CLS}>
-                    End Date
-                  </label>
-                  <input
-                    id="proj-end"
-                    type="date"
-                    className={INPUT_CLS}
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
+                  <label htmlFor="proj-end" className={LABEL_CLS}>Expected End Date</label>
+                  <input id="proj-end" type="date" className={INPUT_CLS} value={expectedEndDate} onChange={(e) => setExpectedEndDate(e.target.value)} />
                 </div>
                 <div>
-                  <label htmlFor="proj-hours" className={LABEL_CLS}>
-                    Allocated Hours
-                  </label>
-                  <input
-                    id="proj-hours"
-                    className={INPUT_CLS}
-                    value={allocatedHours}
-                    onChange={(e) => setAllocatedHours(e.target.value)}
-                    placeholder="e.g. 200"
-                  />
+                  <label htmlFor="proj-reports" className={LABEL_CLS}>PM Reports To</label>
+                  <select id="proj-reports" className={INPUT_CLS} value={reportsToId} onChange={(e) => setReportsToId(e.target.value)}>
+                    <option value="">— None —</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -327,11 +329,7 @@ export function ProjectModal({
                   <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
                     Team Members
                   </p>
-                  <button
-                    type="button"
-                    onClick={addDraftAssignment}
-                    className="flex items-center gap-1 text-xs font-medium text-brand hover:underline"
-                  >
+                  <button type="button" onClick={addDraftAssignment} className="flex items-center gap-1 text-xs font-medium text-brand hover:underline">
                     <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
                     Add Member
                   </button>
@@ -339,144 +337,126 @@ export function ProjectModal({
 
                 {/* Existing Assignments (Edit Mode) */}
                 {existingAssignments.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-slate-50 px-3 py-2"
-                  >
+                  <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-slate-50 px-3 py-2">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-text-main">
-                        {a.user_name}
-                      </span>
-                      {a.assignment_role && (
-                        <span className="ml-2 text-xs text-text-muted">
-                          ({a.assignment_role})
-                        </span>
-                      )}
+                      <span className="text-sm font-medium text-text-main">{a.user_name}</span>
+                      {a.assignment_role && <span className="ml-2 text-xs text-text-muted">({a.assignment_role})</span>}
                     </div>
+                    {a.department_name && (
+                      <span className="text-xs text-text-muted shrink-0">{a.department_name}</span>
+                    )}
                     {a.evaluator_type && (
-                      <span className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand shrink-0">
-                        {a.evaluator_type}
-                      </span>
+                      <span className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand shrink-0">{a.evaluator_type}</span>
                     )}
                     {a.assigned_date && (
-                      <span className="text-xs text-text-muted shrink-0">
-                        Joined: {a.assigned_date}
-                      </span>
+                      <span className="text-xs text-text-muted shrink-0">Joined: {a.assigned_date}</span>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => removeExisting(a.id)}
-                      className="shrink-0 rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                      aria-label={`Remove ${a.user_name}`}
-                    >
+                    <button type="button" onClick={() => removeExisting(a.id)} className="shrink-0 rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors" aria-label={`Remove ${a.user_name}`}>
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 ))}
 
-                {/* Draft Assignments (New members) */}
+                {/* Draft Assignments */}
                 {draftAssignments.map((draft) => (
-                  <div
-                    key={draft.tempId}
-                    className="grid grid-cols-12 gap-2 items-end"
-                  >
-                    {/* User Select — 3 cols */}
-                    <div className="col-span-3">
-                      <label className={LABEL_CLS}>Employee</label>
-                      <select
-                        className={INPUT_CLS}
-                        value={draft.user_id}
-                        onChange={(e) =>
-                          updateDraft(draft.tempId, "user_id", e.target.value)
-                        }
-                      >
-                        <option value="">Select…</option>
-                        {users
-                          .filter(
-                            (u) =>
-                              !assignedUserIds.has(u.id) ||
-                              String(u.id) === draft.user_id,
-                          )
-                          .map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.full_name}
+                  <div key={draft.tempId} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="grid grid-cols-12 gap-2 items-end">
+                      {/* Employee — 4 cols */}
+                      <div className="col-span-4">
+                        <label className={LABEL_CLS}>Employee</label>
+                        <select
+                          className={INPUT_CLS}
+                          value={draft.user_id}
+                          onChange={(e) => handleUserSelect(draft.tempId, e.target.value)}
+                        >
+                          <option value="">Select…</option>
+                          {users
+                            .filter((u) => !assignedUserIds.has(u.id) || String(u.id) === draft.user_id)
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>{u.full_name}</option>
+                            ))}
+                        </select>
+                      </div>
+
+                      {/* Role (auto-filled from designation) — 3 cols */}
+                      <div className="col-span-3">
+                        <label className={LABEL_CLS}>Role (Designation)</label>
+                        <select
+                          className={INPUT_CLS}
+                          value={draft.assignment_role}
+                          onChange={(e) => updateDraft(draft.tempId, "assignment_role", e.target.value)}
+                        >
+                          <option value="">— Select —</option>
+                          {designations.map((d) => (
+                            <option key={d.id} value={d.name}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Department — 2 cols */}
+                      <div className="col-span-2">
+                        <label className={LABEL_CLS}>Department</label>
+                        <select
+                          className={INPUT_CLS}
+                          value={draft.department_id}
+                          onChange={(e) => updateDraft(draft.tempId, "department_id", e.target.value)}
+                        >
+                          <option value="">— Select —</option>
+                          {departments.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Evaluator — 2 cols */}
+                      <div className="col-span-2">
+                        <label className={LABEL_CLS}>Evaluator</label>
+                        <select
+                          className={INPUT_CLS}
+                          value={draft.evaluator_type}
+                          onChange={(e) => updateDraft(draft.tempId, "evaluator_type", e.target.value)}
+                        >
+                          <option value="">None</option>
+                          {EVALUATOR_TYPES.filter((t) => t !== "").map((t) => (
+                            <option
+                              key={t}
+                              value={t}
+                              disabled={t === "Primary" && hasPrimary && draft.evaluator_type !== "Primary"}
+                            >
+                              {t}{t === "Primary" && hasPrimary && draft.evaluator_type !== "Primary" ? " (taken)" : ""}
                             </option>
                           ))}
-                      </select>
+                        </select>
+                      </div>
+
+                      {/* Remove — 1 col */}
+                      <div className="col-span-1 flex justify-center pb-1">
+                        <button type="button" onClick={() => removeDraft(draft.tempId)} className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors" aria-label="Remove member">
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Role — 3 cols */}
-                    <div className="col-span-3">
-                      <label className={LABEL_CLS}>Project Role</label>
-                      <input
-                        className={INPUT_CLS}
-                        value={draft.assignment_role}
-                        onChange={(e) =>
-                          updateDraft(draft.tempId, "assignment_role", e.target.value)
-                        }
-                        placeholder="e.g. Tester"
-                      />
-                    </div>
-
-                    {/* Evaluator Type — 2 cols */}
-                    <div className="col-span-2">
-                      <label className={LABEL_CLS}>Evaluator</label>
-                      <select
-                        className={INPUT_CLS}
-                        value={draft.evaluator_type}
-                        onChange={(e) =>
-                          updateDraft(draft.tempId, "evaluator_type", e.target.value)
-                        }
-                      >
-                        <option value="">None</option>
-                        {EVALUATOR_TYPES.filter((t) => t !== "").map((t) => (
-                          <option
-                            key={t}
-                            value={t}
-                            disabled={t === "Primary" && hasPrimary && draft.evaluator_type !== "Primary"}
-                          >
-                            {t}
-                            {t === "Primary" && hasPrimary && draft.evaluator_type !== "Primary"
-                              ? " (taken)"
-                              : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Assigned Date — 3 cols */}
-                    <div className="col-span-2">
-                      <label className={LABEL_CLS}>Joined</label>
-                      <input
-                        type="date"
-                        className={INPUT_CLS}
-                        value={draft.assigned_date}
-                        onChange={(e) =>
-                          updateDraft(draft.tempId, "assigned_date", e.target.value)
-                        }
-                      />
-                    </div>
-
-                    {/* Remove — 1 col */}
-                    <div className="col-span-1 flex justify-center pb-1">
-                      <button
-                        type="button"
-                        onClick={() => removeDraft(draft.tempId)}
-                        className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                        aria-label="Remove member"
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                    {/* Assigned Date — below the row */}
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-3">
+                        <label className={LABEL_CLS}>Joined Date</label>
+                        <input
+                          type="date"
+                          className={INPUT_CLS}
+                          value={draft.assigned_date}
+                          onChange={(e) => updateDraft(draft.tempId, "assigned_date", e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
 
-                {existingAssignments.length === 0 &&
-                  draftAssignments.length === 0 && (
-                    <p className="text-xs text-text-muted italic text-center py-3">
-                      No team members added yet. Click "Add Member" above.
-                    </p>
-                  )}
+                {existingAssignments.length === 0 && draftAssignments.length === 0 && (
+                  <p className="text-xs text-text-muted italic text-center py-3">
+                    No team members added yet. Click "Add Member" above.
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -484,11 +464,7 @@ export function ProjectModal({
 
         {/* Footer */}
         <div className="flex justify-end gap-3 border-t border-border px-6 py-4 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
-          >
+          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">
             Cancel
           </button>
           <button
@@ -497,14 +473,8 @@ export function ProjectModal({
             disabled={!canSubmit}
             className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {isSaving && (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            )}
-            {isSaving
-              ? "Saving…"
-              : isEditing
-                ? "Save Changes"
-                : "Create Project"}
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {isSaving ? "Saving…" : isEditing ? "Save Changes" : "Create Project"}
           </button>
         </div>
       </div>
