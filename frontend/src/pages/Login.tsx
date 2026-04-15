@@ -56,6 +56,22 @@ export function Login() {
    */
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", activeTenant);
+
+    let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (!favicon) {
+      favicon = document.createElement("link");
+      favicon.rel = "icon";
+      document.head.appendChild(favicon);
+    }
+    
+    if (activeTenant === "miltenyi") {
+      favicon.href = "/miltenyi-biotech-small.svg";
+      document.title = "Miltenyi Biotec PMS";
+    } else {
+      favicon.href = "/healtharklogo-small.png";
+      document.title = "HealthArk PMS";
+    }
+
   }, [activeTenant]);
 
   /**

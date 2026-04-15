@@ -18,9 +18,10 @@ export type CycleType = "annual" | "half_yearly" | "quarterly";
 export interface SystemSettingsResponse {
   id: number;
   org_id: number;
-  active_cycle_name: string;
+  active_cycle_name: string; // Handled dynamically by backend
   cycle_type: CycleType;
-  cycle_start_date: string | null; // ISO date string from backend
+  fiscal_start_month: number; // Added: 1-12 (e.g., 4 = April)
+  cycle_start_date: string | null;
   cycle_end_date: string | null;
   goals_submission_open: boolean;
   reviews_submission_open: boolean;
@@ -30,8 +31,9 @@ export interface SystemSettingsResponse {
 }
 
 export interface SystemSettingsCreate {
-  active_cycle_name: string;
+  active_cycle_name?: string; 
   cycle_type?: CycleType;
+  fiscal_start_month?: number;
   cycle_start_date?: string | null;
   cycle_end_date?: string | null;
   goals_submission_open?: boolean;
@@ -41,6 +43,7 @@ export interface SystemSettingsCreate {
 export interface SystemSettingsUpdate {
   active_cycle_name?: string;
   cycle_type?: CycleType;
+  fiscal_start_month?: number;
   cycle_start_date?: string | null;
   cycle_end_date?: string | null;
   goals_submission_open?: boolean;
@@ -48,41 +51,19 @@ export interface SystemSettingsUpdate {
 }
 
 // ── Service Object ──────────────────────────────────────────────────
-
 export const systemSettingsService = {
-  /**
-   * Fetch the current org's system settings.
-   * Called by the Topbar on mount and the Admin Panel on load.
-   */
   getSettings: async (): Promise<SystemSettingsResponse> => {
     const response = await apiClient.get<SystemSettingsResponse>("/settings/");
     return response.data;
   },
 
-  /**
-   * Initialize settings for a new organization (Admin only, one-time).
-   */
-  createSettings: async (
-    data: SystemSettingsCreate,
-  ): Promise<SystemSettingsResponse> => {
-    const response = await apiClient.post<SystemSettingsResponse>(
-      "/settings/",
-      data,
-    );
+  createSettings: async (data: SystemSettingsCreate): Promise<SystemSettingsResponse> => {
+    const response = await apiClient.post<SystemSettingsResponse>("/settings/", data);
     return response.data;
   },
 
-  /**
-   * Update the active cycle, submission windows, or date boundaries.
-   * Only sends the fields that actually changed (PATCH semantics).
-   */
-  updateSettings: async (
-    data: SystemSettingsUpdate,
-  ): Promise<SystemSettingsResponse> => {
-    const response = await apiClient.patch<SystemSettingsResponse>(
-      "/settings/",
-      data,
-    );
+  updateSettings: async (data: SystemSettingsUpdate): Promise<SystemSettingsResponse> => {
+    const response = await apiClient.patch<SystemSettingsResponse>("/settings/", data);
     return response.data;
   },
 };
