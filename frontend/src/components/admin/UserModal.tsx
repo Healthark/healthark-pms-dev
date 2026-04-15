@@ -8,7 +8,8 @@ import type {
   DesignationBrief,
 } from "../../services/admin.service";
 
-const ROLES = ["Admin", "Manager", "Principal", "Staff"] as const;
+// UPDATE 1: Restrict available roles to only Admin and Staff
+const ROLES = ["Admin", "Staff"] as const;
 
 interface UserModalProps {
   readonly isOpen: boolean;
@@ -19,7 +20,7 @@ interface UserModalProps {
   readonly editingUser: UserResponse | null;
   readonly departments: DepartmentBrief[];
   readonly designations: DesignationBrief[];
-  readonly managers: UserResponse[];
+  readonly managers: UserResponse[]; // Consider renaming this prop to 'potentialMentors' in the future
   readonly isSaving: boolean;
   readonly error: string;
 }
@@ -60,7 +61,8 @@ export function UserModal({
         full_name: editingUser.full_name,
         email: editingUser.email,
         phone: editingUser.phone ?? "",
-        role: editingUser.role,
+        // Ensure legacy roles default back to Staff when editing
+        role: ["Admin", "Staff"].includes(editingUser.role) ? editingUser.role : "Staff",
         department_id: editingUser.department_id?.toString() ?? "",
         designation_id: editingUser.designation_id?.toString() ?? "",
         mentor_id: editingUser.mentor_id?.toString() ?? "",
@@ -202,7 +204,7 @@ export function UserModal({
             </div>
             <div>
               <label htmlFor="role" className={LABEL_CLS}>
-                Role *
+                System Role *
               </label>
               <select
                 id="role"
@@ -260,7 +262,7 @@ export function UserModal({
 
           <div>
             <label htmlFor="mentor" className={LABEL_CLS}>
-              Mentor
+              Assigned Mentor / Line Manager
             </label>
             <select
               id="mentor"
@@ -271,7 +273,8 @@ export function UserModal({
               <option value="">— None —</option>
               {managers.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.full_name} ({m.role})
+                  {/* UPDATE 2: Show designation instead of the system role string */}
+                  {m.full_name} {m.designation?.name ? `(${m.designation.name})` : ""}
                 </option>
               ))}
             </select>

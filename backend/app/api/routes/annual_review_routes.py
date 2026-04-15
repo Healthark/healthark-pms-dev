@@ -21,7 +21,7 @@ Endpoints:
 Security Layers Applied:
     Layer 1 — Authentication:     CurrentUser dependency
     Layer 2 — Tenant Isolation:   All queries filter by org_id
-    Layer 3 — Role Authorization: Mentor/Admin endpoints gated
+    Layer 3 — Role Authorization: Admin endpoints gated (Mentors use relationship checks)
     Layer 4 — Ownership:          Stage-specific identity checks
 """
 
@@ -65,14 +65,6 @@ def _get_active_cycle(db: DbSession, org_id: int) -> str:
         cycle_type=settings.cycle_type,
         fiscal_start_month=settings.fiscal_start_month
     )
-
-
-def _require_mentor_or_admin(current_user: User) -> None:
-    if current_user.role not in ("Admin", "Manager", "Principal"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Mentor or Admin role required.",
-        )
 
 
 def _require_admin(current_user: User) -> None:
@@ -227,7 +219,6 @@ def get_mentee_reviews(
     filtered to the active cycle and PENDING_MENTOR status.
     Admins see all PENDING_MENTOR reviews across the org.
     """
-    _require_mentor_or_admin(current_user)
     cycle_name = _get_active_cycle(db, current_user.org_id)
 
     query = db.query(AnnualReview).filter(
@@ -254,8 +245,6 @@ def submit_mentor_evaluation(
     Mentor submits their evaluation for a mentee's self-appraisal.
     Status advances from PENDING_MENTOR → PENDING_MANAGEMENT.
     """
-    _require_mentor_or_admin(current_user)
-
     review = db.query(AnnualReview).filter(
         AnnualReview.id == review_id,
         AnnualReview.org_id == current_user.org_id,

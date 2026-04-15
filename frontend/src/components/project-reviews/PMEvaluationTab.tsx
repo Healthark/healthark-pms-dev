@@ -3,11 +3,11 @@
  *
  * Shows cards for each team member the PM needs to evaluate.
  * Clicking "Evaluate" opens a full-page form with:
- *   - Employee context (name, role, department, designation)
- *   - Role expectations reference panel (collapsible per competency)
- *   - 7 competency text areas
- *   - Performance group dropdown
- *   - Impact statement
+ * - Employee context (name, role, department, designation)
+ * - Role expectations reference panel (collapsible per competency)
+ * - 7 competency text areas
+ * - Performance group dropdown (1-5 scale)
+ * - Impact statement
  *
  * Placement: src/components/project-reviews/PMEvaluationTab.tsx
  */
@@ -41,18 +41,8 @@ const COMPETENCIES = [
 
 type CompKey = (typeof COMPETENCIES)[number]["key"];
 
-const PERFORMANCE_GROUPS: PerformanceGroup[] = [
-  "Needs Improvement",
-  "Meeting Expectations",
-  "Exceeding Expectations",
-  "Meeting High Expectations",
-  "Exceeding High Expectations",
-];
-
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
-const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-brand";
 
 // ── Role Expectation Panel ──────────────────────────────────────────
 
@@ -83,7 +73,10 @@ function ExpectationPanel({
       </button>
       {open && (
         <div className="mt-1.5 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
-          <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">{text}</p>
+          {/* Using whitespace-pre-wrap and string replacement to handle CSV formatting cleanly */}
+          <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">
+            {text.replace(/ \| /g, '\n• ')}
+          </p>
           <p className="mt-1 text-[10px] text-blue-500">
             {expectation.department_name} / {expectation.designation_name}
           </p>
@@ -175,21 +168,20 @@ function EvalModal({ card, expectation, onSubmit, onClose, isSaving, error }: Ev
             <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
           )}
 
-          {/* Performance Group */}
-          <div>
-            <label htmlFor="perf-group" className="block text-xs font-semibold text-text-main mb-1">
-              Performance Group *
-            </label>
+          {/* Performance Group Dropdown (1-5 Scale) */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-bold text-text-main">Overall Performance Rating</label>
             <select
-              id="perf-group"
-              className={INPUT_CLS}
               value={performanceGroup}
               onChange={(e) => setPerformanceGroup(e.target.value as PerformanceGroup)}
+              className="w-24 rounded-lg border border-border bg-white px-3 py-2 text-[13px] outline-none focus:border-brand"
             >
-              <option value="">Select…</option>
-              {PERFORMANCE_GROUPS.map((pg) => (
-                <option key={pg} value={pg}>{pg}</option>
-              ))}
+              <option value="" disabled>Select</option>
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
             </select>
           </div>
 
@@ -402,7 +394,7 @@ export function PMEvaluationTab() {
 
   if (cards.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
+      <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center bg-background/50">
         <ClipboardList className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
         <p className="font-display text-base font-medium text-text-main">No team members to evaluate</p>
         <p className="mt-1 text-sm text-text-muted">You're not a Primary evaluator on any active projects, or all evaluations are complete.</p>
@@ -411,7 +403,7 @@ export function PMEvaluationTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Pending */}
       {pending.length > 0 && (
         <div className="space-y-3">

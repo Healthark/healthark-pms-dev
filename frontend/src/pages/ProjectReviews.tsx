@@ -61,6 +61,17 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+// Smart formatter to handle both new 1-5 ratings and legacy text ratings
+function formatPerformanceScore(score: string | null | undefined): string {
+  if (!score) return "Not Rated";
+  // If it's a single digit 1-5 (new scale)
+  if (/^[1-5]$/.test(score)) {
+    return `${score} / 5`;
+  }
+  // Otherwise, it's legacy text (e.g., "Exceeding Expectations")
+  return score;
+}
+
 // ── Redesigned Project Card (Collapsible & Fetching) ────────────────
 
 function CollapsibleProjectCard({ 
@@ -234,7 +245,7 @@ function CollapsibleProjectCard({
                 <div className="flex items-center gap-2.5">
                   <Star className="h-4 w-4 text-emerald-600" />
                   <span className="text-[13.5px] text-text-main">
-                    Project Evaluation: <span className="font-bold text-emerald-700">{reviewDetails.performance_group || "Meeting Expectations"}</span>
+                    Project Evaluation Score: <span className="font-bold text-emerald-700">{formatPerformanceScore(reviewDetails.performance_group)}</span>
                   </span>
                 </div>
                 {reviewDetails.reviewer_name && (
@@ -353,11 +364,13 @@ function CardSkeleton() {
 export function ProjectReviews() {
   const { user } = useAuth();
   
-  // Show evaluate tab for managers/admins (potential PMs)
-  const showEvalTab = ["Admin", "Manager", "Principal"].includes(user?.role ?? "");
+  // RBAC update: Since any Staff can be assigned as a PM, we show the tab to everyone. 
+  // If they aren't a PM, the queue will naturally be empty and show the placeholder.
+  const showEvalTab = true;
 
-  // Initialize activeTab to 'evaluate' for managers, 'my' for standard employees
-  const [activeTab, setActiveTab] = useState<ActiveTab>(showEvalTab ? "evaluate" : "my");
+  // Initialize activeTab to 'evaluate' for Admins, 'my' for standard employees
+  const [activeTab, setActiveTab] = useState<ActiveTab>(user?.role === "Admin" ? "evaluate" : "my");
+  
   const [cards, setCards] = useState<MyProjectCard[]>([]);
   const [expectations, setExpectations] = useState<RoleExpectationResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);

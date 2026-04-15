@@ -15,7 +15,7 @@ identical, so the frontend needs zero changes.
 Security Layers Applied:
     Layer 1 — Authentication:   CurrentUser dependency (JWT validation)
     Layer 2 — Tenant Isolation: All queries filter by current_user.org_id
-    Layer 3 — Role Awareness:   Manager-only notifications gated by role check
+    Layer 3 — Role Awareness:   Admin sees all org goals; Mentors see mentee goals based on relationship
     Layer 4 — Ownership:        Goal counts scoped to current_user.id
 """
 
@@ -106,40 +106,38 @@ def get_topbar_summary(
         ))
 
     # ── Manager-Only Notifications ───────────────────────────────────
-    if current_user.role in ("Admin", "Manager", "Principal"):
+    # We dynamically check if the user has mentees, rather than checking a "Manager" string role
+    if current_user.role == "Admin":
+        mentee_ids = [
+            row[0] for row in db.query(User.id).filter(
+                User.org_id == current_user.org_id,
+                User.is_deleted == False,
+                User.id != current_user.id,
+            ).all()
+        ]
+    else:
+        mentee_ids = [
+            row[0] for row in db.query(User.id).filter(
+                User.mentor_id == current_user.id,
+                User.org_id == current_user.org_id,
+                User.is_deleted == False,
+            ).all()
+        ]
 
-        # 4. Team goals awaiting this manager's approval
-        if current_user.role == "Admin":
-            mentee_ids = [
-                row[0] for row in db.query(User.id).filter(
-                    User.org_id == current_user.org_id,
-                    User.is_deleted == False,
-                    User.id != current_user.id,
-                ).all()
-            ]
-        else:
-            mentee_ids = [
-                row[0] for row in db.query(User.id).filter(
-                    User.mentor_id == current_user.id,
-                    User.org_id == current_user.org_id,
-                    User.is_deleted == False,
-                ).all()
-            ]
+    if mentee_ids:
+        awaiting_count: int = db.query(func.count(Goal.id)).filter(
+            Goal.org_id == current_user.org_id,
+            Goal.user_id.in_(mentee_ids),
+            Goal.approval_status == ApprovalStatus.SUBMITTED.value,
+        ).scalar() or 0
 
-        if mentee_ids:
-            awaiting_count: int = db.query(func.count(Goal.id)).filter(
-                Goal.org_id == current_user.org_id,
-                Goal.user_id.in_(mentee_ids),
-                Goal.approval_status == ApprovalStatus.SUBMITTED.value,
-            ).scalar() or 0
-
-            if awaiting_count > 0:
-                notifications.append(NotificationItem(
-                    type="goals_pending_approval",
-                    message=f"{awaiting_count} goal(s) from your team await your approval.",
-                    count=awaiting_count,
-                    severity="warning",
-                ))
+        if awaiting_count > 0:
+            notifications.append(NotificationItem(
+                type="goals_pending_approval",
+                message=f"{awaiting_count} goal(s) from your team await your approval.",
+                count=awaiting_count,
+                severity="warning",
+            ))
 
     return TopbarSummary(
         active_cycle=active_cycle,

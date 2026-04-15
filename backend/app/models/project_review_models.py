@@ -40,12 +40,15 @@ class EvaluatorStatus(str, PyEnum):
 
 
 class PerformanceGroup(str, PyEnum):
-    """Fixed list assigned by the PM."""
-    NEEDS_IMPROVEMENT = "Needs Improvement"
-    MEETING_EXPECTATIONS = "Meeting Expectations"
-    EXCEEDING_EXPECTATIONS = "Exceeding Expectations"
-    MEETING_HIGH_EXPECTATIONS = "Meeting High Expectations"
-    EXCEEDING_HIGH_EXPECTATIONS = "Exceeding High Expectations"
+    """
+    Simple 1-5 numerical rating scale for overall project performance.
+    Stored as strings in the database to maintain schema compatibility.
+    """
+    RATING_1 = "1"
+    RATING_2 = "2"
+    RATING_3 = "3"
+    RATING_4 = "4"
+    RATING_5 = "5"
 
 
 class ProjectReview(Base):
