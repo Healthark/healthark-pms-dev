@@ -39,24 +39,32 @@ def seed_database():
         else:
             print("  [~] Organization 'Healthark' already exists, skipping...")
 
-        partner_org = db.query(Organization).filter(Organization.name == "Partner Org").first()
-        if not partner_org:
-            partner_org = Organization(
-                name="Partner Org",
-                domain="partnerorg.com",
-                enabled_features=["dashboard", "project_reviews", "admin"],
+        miltenyi_org = db.query(Organization).filter(Organization.name == "Miltenyi").first()
+        if not miltenyi_org:
+            miltenyi_org = Organization(
+                name="Miltenyi",
+                domain="miltenyi.com",
+                enabled_features=[
+                    "dashboard", 
+                    "goals", 
+                    "project_reviews", 
+                    "annual_reviews", 
+                    "mentoring", 
+                    "admin"
+                ],
             )
-            db.add(partner_org)
+            db.add(miltenyi_org)
             db.commit()
-            db.refresh(partner_org)
-            print("  [+] Created Organization: Partner Org (restricted suite)")
+            db.refresh(miltenyi_org)
+            print("  [+] Created Organization: Miltenyi (full suite)")
         else:
-            print("  [~] Organization 'Partner Org' already exists, skipping...")
+            print("  [~] Organization 'Miltenyi' already exists, skipping...")
 
         # ================================================================== #
         # 2. DEPARTMENTS & DESIGNATIONS                                       #
         # ================================================================== #
 
+        # Healthark Departments & Designations
         if db.query(Department).filter(Department.org_id == org.id).count() == 0:
             dept_strategy = Department(org_id=org.id, name="Strategy")
             dept_idt      = Department(org_id=org.id, name="IDT")
@@ -76,10 +84,29 @@ def seed_database():
                 desig_senior_manager, desig_associate_director, desig_director,
             ])
             db.commit()
-            print("  [+] Created Departments (Strategy, IDT, RWE, Marketing)")
-            print("  [+] Created Designations (Consultant -> Director)")
+            print("  [+] Created Healthark Departments & Designations")
         else:
-            print("  [~] Reference data already exists, skipping...")
+            print("  [~] Healthark Reference data already exists, skipping...")
+
+        # Miltenyi Departments & Designations
+        if db.query(Department).filter(Department.org_id == miltenyi_org.id).count() == 0:
+            dept_rnd = Department(org_id=miltenyi_org.id, name="R&D")
+            dept_mfg = Department(org_id=miltenyi_org.id, name="Manufacturing")
+            dept_com = Department(org_id=miltenyi_org.id, name="Commercial")
+
+            desig_scientist = Designation(org_id=miltenyi_org.id, name="Scientist", level=1)
+            desig_sr_scientist = Designation(org_id=miltenyi_org.id, name="Senior Scientist", level=2)
+            desig_lead = Designation(org_id=miltenyi_org.id, name="Team Lead", level=3)
+            desig_dir = Designation(org_id=miltenyi_org.id, name="Director", level=4)
+
+            db.add_all([
+                dept_rnd, dept_mfg, dept_com,
+                desig_scientist, desig_sr_scientist, desig_lead, desig_dir
+            ])
+            db.commit()
+            print("  [+] Created Miltenyi Departments & Designations")
+        else:
+            print("  [~] Miltenyi Reference data already exists, skipping...")
 
         # ================================================================== #
         # 3. USERS - Healthark                                                #
@@ -96,11 +123,11 @@ def seed_database():
         desig_senior_manager    = db.query(Designation).filter_by(org_id=org.id, name="Senior Manager").first()
         desig_director          = db.query(Designation).filter_by(org_id=org.id, name="Director").first()
 
+        pw = get_password_hash("password123")
+
         admin_user = db.query(User).filter(User.org_id == org.id, User.email == "admin@healthark.com").first()
 
         if not admin_user:
-            pw = get_password_hash("password123")
-
             admin_user = User(
                 org_id=org.id,
                 department_id=dept_marketing.id,
@@ -114,148 +141,32 @@ def seed_database():
             db.add(admin_user)
             db.commit()
             db.refresh(admin_user)
-            print("  [+] Created: admin@healthark.com (Admin, Director, Marketing)")
+            print("  [+] Created: admin@healthark.com")
 
-            priya = User(
-                org_id=org.id,
-                department_id=dept_strategy.id,
-                designation_id=desig_senior_manager.id,
-                employee_code="EMP-101",
-                full_name="Priya Sharma",
-                email="priya@healthark.com",
-                role="Manager",
-                password_hash=pw,
-            )
+            priya = User(org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_manager.id, employee_code="EMP-101", full_name="Priya Sharma", email="priya@healthark.com", role="Manager", password_hash=pw)
             db.add(priya)
             db.commit()
             db.refresh(priya)
-            print("  [+] Created: priya@healthark.com (Manager, Senior Manager, Strategy)")
 
-            arjun = User(
-                org_id=org.id,
-                department_id=dept_strategy.id,
-                designation_id=desig_senior_consultant.id,
-                employee_code="EMP-102",
-                full_name="Arjun Patel",
-                email="arjun@healthark.com",
-                role="Staff",
-                mentor_id=priya.id,
-                password_hash=pw,
-            )
-            db.add(arjun)
-            db.commit()
-            db.refresh(arjun)
-            print("  [+] Created: arjun@healthark.com (Staff, Senior Consultant, Strategy)")
-
-            neha = User(
-                org_id=org.id,
-                department_id=dept_strategy.id,
-                designation_id=desig_consultant.id,
-                employee_code="EMP-103",
-                full_name="Neha Gupta",
-                email="neha@healthark.com",
-                role="Staff",
-                mentor_id=priya.id,
-                password_hash=pw,
-            )
-            db.add(neha)
-            db.commit()
-            db.refresh(neha)
-            print("  [+] Created: neha@healthark.com (Staff, Consultant, Strategy)")
-
-            david = User(
-                org_id=org.id,
-                department_id=dept_idt.id,
-                designation_id=desig_manager.id,
-                employee_code="EMP-201",
-                full_name="David Miller",
-                email="david@healthark.com",
-                role="Manager",
-                password_hash=pw,
-            )
-            db.add(david)
+            arjun = User(org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_consultant.id, employee_code="EMP-102", full_name="Arjun Patel", email="arjun@healthark.com", role="Staff", mentor_id=priya.id, password_hash=pw)
+            neha = User(org_id=org.id, department_id=dept_strategy.id, designation_id=desig_consultant.id, employee_code="EMP-103", full_name="Neha Gupta", email="neha@healthark.com", role="Staff", mentor_id=priya.id, password_hash=pw)
+            david = User(org_id=org.id, department_id=dept_idt.id, designation_id=desig_manager.id, employee_code="EMP-201", full_name="David Miller", email="david@healthark.com", role="Manager", password_hash=pw)
+            db.add_all([arjun, neha, david])
             db.commit()
             db.refresh(david)
-            print("  [+] Created: david@healthark.com (Manager, Manager, IDT)")
 
-            rahul = User(
-                org_id=org.id,
-                department_id=dept_idt.id,
-                designation_id=desig_senior_consultant.id,
-                employee_code="EMP-202",
-                full_name="Rahul Verma",
-                email="rahul@healthark.com",
-                role="Staff",
-                mentor_id=david.id,
-                password_hash=pw,
-            )
-            db.add(rahul)
-            db.commit()
-            db.refresh(rahul)
-            print("  [+] Created: rahul@healthark.com (Staff, Senior Consultant, IDT)")
-
-            meera = User(
-                org_id=org.id,
-                department_id=dept_idt.id,
-                designation_id=desig_consultant.id,
-                employee_code="EMP-203",
-                full_name="Meera Joshi",
-                email="meera@healthark.com",
-                role="Staff",
-                mentor_id=david.id,
-                password_hash=pw,
-            )
-            db.add(meera)
-            db.commit()
-            db.refresh(meera)
-            print("  [+] Created: meera@healthark.com (Staff, Consultant, IDT)")
-
-            vikram = User(
-                org_id=org.id,
-                department_id=dept_rwe.id,
-                designation_id=desig_manager.id,
-                employee_code="EMP-301",
-                full_name="Vikram Singh",
-                email="vikram@healthark.com",
-                role="Manager",
-                password_hash=pw,
-            )
-            db.add(vikram)
+            rahul = User(org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_consultant.id, employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.com", role="Staff", mentor_id=david.id, password_hash=pw)
+            meera = User(org_id=org.id, department_id=dept_idt.id, designation_id=desig_consultant.id, employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.com", role="Staff", mentor_id=david.id, password_hash=pw)
+            vikram = User(org_id=org.id, department_id=dept_rwe.id, designation_id=desig_manager.id, employee_code="EMP-301", full_name="Vikram Singh", email="vikram@healthark.com", role="Manager", password_hash=pw)
+            db.add_all([rahul, meera, vikram])
             db.commit()
             db.refresh(vikram)
-            print("  [+] Created: vikram@healthark.com (Manager, Manager, RWE)")
 
-            ananya = User(
-                org_id=org.id,
-                department_id=dept_rwe.id,
-                designation_id=desig_senior_consultant.id,
-                employee_code="EMP-302",
-                full_name="Ananya Reddy",
-                email="ananya@healthark.com",
-                role="Staff",
-                mentor_id=vikram.id,
-                password_hash=pw,
-            )
-            db.add(ananya)
+            ananya = User(org_id=org.id, department_id=dept_rwe.id, designation_id=desig_senior_consultant.id, employee_code="EMP-302", full_name="Ananya Reddy", email="ananya@healthark.com", role="Staff", mentor_id=vikram.id, password_hash=pw)
+            karan = User(org_id=org.id, department_id=dept_rwe.id, designation_id=desig_consultant.id, employee_code="EMP-303", full_name="Karan Mehta", email="karan@healthark.com", role="Staff", mentor_id=vikram.id, password_hash=pw)
+            db.add_all([ananya, karan])
             db.commit()
-            db.refresh(ananya)
-            print("  [+] Created: ananya@healthark.com (Staff, Senior Consultant, RWE)")
-
-            karan = User(
-                org_id=org.id,
-                department_id=dept_rwe.id,
-                designation_id=desig_consultant.id,
-                employee_code="EMP-303",
-                full_name="Karan Mehta",
-                email="karan@healthark.com",
-                role="Staff",
-                mentor_id=vikram.id,
-                password_hash=pw,
-            )
-            db.add(karan)
-            db.commit()
-            db.refresh(karan)
-            print("  [+] Created: karan@healthark.com (Staff, Consultant, RWE)")
+            print("  [+] Created Healthark staff users")
 
         else:
             print("  [~] Healthark users already exist, resolving references...")
@@ -270,30 +181,61 @@ def seed_database():
             karan  = db.query(User).filter_by(org_id=org.id, email="karan@healthark.com").first()
 
         # ================================================================== #
-        # 4. PARTNER ORG USERS                                                #
+        # 4. USERS - Miltenyi                                                 #
         # ================================================================== #
 
-        if db.query(User).filter(User.org_id == partner_org.id).count() == 0:
-            partner_dept  = Department(org_id=partner_org.id, name="Operations")
-            partner_desig = Designation(org_id=partner_org.id, name="Analyst", level=1)
-            db.add_all([partner_dept, partner_desig])
-            db.commit()
+        dept_rnd = db.query(Department).filter_by(org_id=miltenyi_org.id, name="R&D").first()
+        dept_mfg = db.query(Department).filter_by(org_id=miltenyi_org.id, name="Manufacturing").first()
+        dept_com = db.query(Department).filter_by(org_id=miltenyi_org.id, name="Commercial").first()
 
-            alice = User(
-                org_id=partner_org.id,
-                department_id=partner_dept.id,
-                designation_id=partner_desig.id,
-                employee_code="PRT-001",
-                full_name="Alice Partner",
-                email="alice@partnerorg.com",
-                role="Admin",
-                password_hash=get_password_hash("password123"),
+        desig_scientist = db.query(Designation).filter_by(org_id=miltenyi_org.id, name="Scientist").first()
+        desig_sr_scientist = db.query(Designation).filter_by(org_id=miltenyi_org.id, name="Senior Scientist").first()
+        desig_lead = db.query(Designation).filter_by(org_id=miltenyi_org.id, name="Team Lead").first()
+        desig_dir = db.query(Designation).filter_by(org_id=miltenyi_org.id, name="Director").first()
+
+        if db.query(User).filter(User.org_id == miltenyi_org.id).count() == 0:
+            alice_admin = User(
+                org_id=miltenyi_org.id, department_id=dept_com.id, designation_id=desig_dir.id,
+                employee_code="MIL-000", full_name="Alice Admin", email="admin@miltenyi.com",
+                role="Admin", password_hash=pw
             )
-            db.add(alice)
+            db.add(alice_admin)
             db.commit()
-            print("  [+] Created Partner Org user: alice@partnerorg.com")
+            db.refresh(alice_admin)
+
+            bob_lead = User(
+                org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_lead.id,
+                employee_code="MIL-101", full_name="Bob Builder", email="bob@miltenyi.com",
+                role="Manager", password_hash=pw
+            )
+            db.add(bob_lead)
+            db.commit()
+            db.refresh(bob_lead)
+
+            charlie = User(org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_sr_scientist.id, employee_code="MIL-102", full_name="Charlie Chemist", email="charlie@miltenyi.com", role="Staff", mentor_id=bob_lead.id, password_hash=pw)
+            dana = User(org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_scientist.id, employee_code="MIL-103", full_name="Dana DNA", email="dana@miltenyi.com", role="Staff", mentor_id=bob_lead.id, password_hash=pw)
+            
+            evan_mfg = User(
+                org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_lead.id,
+                employee_code="MIL-201", full_name="Evan Engineer", email="evan@miltenyi.com",
+                role="Manager", password_hash=pw
+            )
+            db.add_all([charlie, dana, evan_mfg])
+            db.commit()
+            db.refresh(evan_mfg)
+
+            fiona = User(org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_scientist.id, employee_code="MIL-202", full_name="Fiona Factory", email="fiona@miltenyi.com", role="Staff", mentor_id=evan_mfg.id, password_hash=pw)
+            db.add(fiona)
+            db.commit()
+            print("  [+] Created Miltenyi staff users")
         else:
-            print("  [~] Partner Org users already exist, skipping...")
+            print("  [~] Miltenyi users already exist, skipping...")
+            alice_admin = db.query(User).filter_by(org_id=miltenyi_org.id, email="admin@miltenyi.com").first()
+            bob_lead = db.query(User).filter_by(org_id=miltenyi_org.id, email="bob@miltenyi.com").first()
+            charlie = db.query(User).filter_by(org_id=miltenyi_org.id, email="charlie@miltenyi.com").first()
+            dana = db.query(User).filter_by(org_id=miltenyi_org.id, email="dana@miltenyi.com").first()
+            evan_mfg = db.query(User).filter_by(org_id=miltenyi_org.id, email="evan@miltenyi.com").first()
+            fiona = db.query(User).filter_by(org_id=miltenyi_org.id, email="fiona@miltenyi.com").first()
 
         # ================================================================== #
         # 5. SYSTEM SETTINGS                                                  #
@@ -304,32 +246,36 @@ def seed_database():
                 org_id=org.id,
                 active_cycle_name="H1 FY26",
                 cycle_type=CycleType.HALF_YEARLY.value,
+                fiscal_start_month=4, # April Start
                 goals_submission_open=True,
                 reviews_submission_open=True,
                 updated_by_id=admin_user.id,
             ))
             db.commit()
-            print("  [+] Created System Settings for Healthark (H1 FY26)")
+            print("  [+] Created System Settings for Healthark (H1 FY26 - Half Yearly)")
         else:
             print("  [~] Healthark system settings already exist, skipping...")
 
-        if not db.query(SystemSettings).filter(SystemSettings.org_id == partner_org.id).first():
+        if not db.query(SystemSettings).filter(SystemSettings.org_id == miltenyi_org.id).first():
             db.add(SystemSettings(
-                org_id=partner_org.id,
-                active_cycle_name="H1 FY26",
-                cycle_type=CycleType.HALF_YEARLY.value,
+                org_id=miltenyi_org.id,
+                active_cycle_name="Q1 FY26",
+                cycle_type=CycleType.QUARTERLY.value,
+                fiscal_start_month=4, # April Start
                 goals_submission_open=True,
-                reviews_submission_open=False,
+                reviews_submission_open=True,
+                updated_by_id=alice_admin.id,
             ))
             db.commit()
-            print("  [+] Created System Settings for Partner Org (H1 FY26)")
+            print("  [+] Created System Settings for Miltenyi (Q1 FY26 - Quarterly)")
         else:
-            print("  [~] Partner Org system settings already exist, skipping...")
+            print("  [~] Miltenyi system settings already exist, skipping...")
 
         # ================================================================== #
         # 6. SAMPLE PROJECTS + ASSIGNMENTS                                    #
         # ================================================================== #
 
+        # Healthark Projects
         if db.query(Project).filter(Project.org_id == org.id).count() == 0 and priya and david and vikram:
 
             proj_ma = Project(
@@ -344,26 +290,10 @@ def seed_database():
             db.add(proj_ma)
             db.flush()
 
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_ma.id, user_id=priya.id,
-                assignment_role=desig_senior_manager.name, department_id=dept_strategy.id,
-                evaluator_type="Primary", assigned_date=date(2025, 1, 15),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_ma.id, user_id=arjun.id,
-                assignment_role=desig_senior_consultant.name, department_id=dept_strategy.id,
-                evaluator_type=None, assigned_date=date(2025, 1, 15),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_ma.id, user_id=neha.id,
-                assignment_role=desig_consultant.name, department_id=dept_strategy.id,
-                evaluator_type=None, assigned_date=date(2025, 2, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_ma.id, user_id=david.id,
-                assignment_role=desig_manager.name, department_id=dept_idt.id,
-                evaluator_type="Secondary", assigned_date=date(2025, 1, 15),
-            ))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_ma.id, user_id=priya.id, assignment_role=desig_senior_manager.name, department_id=dept_strategy.id, evaluator_type="Primary", assigned_date=date(2025, 1, 15)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_ma.id, user_id=arjun.id, assignment_role=desig_senior_consultant.name, department_id=dept_strategy.id, evaluator_type=None, assigned_date=date(2025, 1, 15)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_ma.id, user_id=neha.id, assignment_role=desig_consultant.name, department_id=dept_strategy.id, evaluator_type=None, assigned_date=date(2025, 2, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_ma.id, user_id=david.id, assignment_role=desig_manager.name, department_id=dept_idt.id, evaluator_type="Secondary", assigned_date=date(2025, 1, 15)))
 
             db.commit()
             print("  [+] Created Project: PRJ-001 Market Access Strategy H1 (PM: Priya)")
@@ -380,26 +310,10 @@ def seed_database():
             db.add(proj_idt)
             db.flush()
 
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_idt.id, user_id=david.id,
-                assignment_role=desig_manager.name, department_id=dept_idt.id,
-                evaluator_type="Primary", assigned_date=date(2025, 2, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_idt.id, user_id=rahul.id,
-                assignment_role=desig_senior_consultant.name, department_id=dept_idt.id,
-                evaluator_type=None, assigned_date=date(2025, 2, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_idt.id, user_id=meera.id,
-                assignment_role=desig_consultant.name, department_id=dept_idt.id,
-                evaluator_type=None, assigned_date=date(2025, 2, 15),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_idt.id, user_id=vikram.id,
-                assignment_role=desig_manager.name, department_id=dept_rwe.id,
-                evaluator_type="Secondary", assigned_date=date(2025, 2, 1),
-            ))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_idt.id, user_id=david.id, assignment_role=desig_manager.name, department_id=dept_idt.id, evaluator_type="Primary", assigned_date=date(2025, 2, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_idt.id, user_id=rahul.id, assignment_role=desig_senior_consultant.name, department_id=dept_idt.id, evaluator_type=None, assigned_date=date(2025, 2, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_idt.id, user_id=meera.id, assignment_role=desig_consultant.name, department_id=dept_idt.id, evaluator_type=None, assigned_date=date(2025, 2, 15)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_idt.id, user_id=vikram.id, assignment_role=desig_manager.name, department_id=dept_rwe.id, evaluator_type="Secondary", assigned_date=date(2025, 2, 1)))
 
             db.commit()
             print("  [+] Created Project: PRJ-002 Patient Journey Analytics (PM: David)")
@@ -416,27 +330,10 @@ def seed_database():
             db.add(proj_rwe)
             db.flush()
 
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_rwe.id, user_id=vikram.id,
-                assignment_role=desig_manager.name, department_id=dept_rwe.id,
-                evaluator_type="Primary", assigned_date=date(2025, 3, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_rwe.id, user_id=ananya.id,
-                assignment_role=desig_senior_consultant.name, department_id=dept_rwe.id,
-                evaluator_type=None, assigned_date=date(2025, 3, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_rwe.id, user_id=karan.id,
-                assignment_role=desig_consultant.name, department_id=dept_rwe.id,
-                evaluator_type=None, assigned_date=date(2025, 3, 15),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_rwe.id, user_id=arjun.id,
-                assignment_role="Lead Analyst",
-                department_id=dept_strategy.id,
-                evaluator_type=None, assigned_date=date(2025, 4, 1),
-            ))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_rwe.id, user_id=vikram.id, assignment_role=desig_manager.name, department_id=dept_rwe.id, evaluator_type="Primary", assigned_date=date(2025, 3, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_rwe.id, user_id=ananya.id, assignment_role=desig_senior_consultant.name, department_id=dept_rwe.id, evaluator_type=None, assigned_date=date(2025, 3, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_rwe.id, user_id=karan.id, assignment_role=desig_consultant.name, department_id=dept_rwe.id, evaluator_type=None, assigned_date=date(2025, 3, 15)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_rwe.id, user_id=arjun.id, assignment_role="Lead Analyst", department_id=dept_strategy.id, evaluator_type=None, assigned_date=date(2025, 4, 1)))
 
             db.commit()
             print("  [+] Created Project: PRJ-003 RWE Outcomes Study (PM: Vikram)")
@@ -453,44 +350,68 @@ def seed_database():
             db.add(proj_cross)
             db.flush()
 
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_cross.id, user_id=priya.id,
-                assignment_role=desig_senior_manager.name, department_id=dept_strategy.id,
-                evaluator_type="Primary", assigned_date=date(2025, 4, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_cross.id, user_id=rahul.id,
-                assignment_role="Data Lead",
-                department_id=dept_idt.id,
-                evaluator_type=None, assigned_date=date(2025, 4, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_cross.id, user_id=ananya.id,
-                assignment_role="RWE Lead",
-                department_id=dept_rwe.id,
-                evaluator_type=None, assigned_date=date(2025, 4, 1),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_cross.id, user_id=neha.id,
-                assignment_role=desig_consultant.name, department_id=dept_strategy.id,
-                evaluator_type=None, assigned_date=date(2025, 4, 15),
-            ))
-            db.add(ProjectAssignment(
-                org_id=org.id, project_id=proj_cross.id, user_id=vikram.id,
-                assignment_role=desig_manager.name, department_id=dept_rwe.id,
-                evaluator_type="Secondary", assigned_date=date(2025, 4, 1),
-            ))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_cross.id, user_id=priya.id, assignment_role=desig_senior_manager.name, department_id=dept_strategy.id, evaluator_type="Primary", assigned_date=date(2025, 4, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_cross.id, user_id=rahul.id, assignment_role="Data Lead", department_id=dept_idt.id, evaluator_type=None, assigned_date=date(2025, 4, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_cross.id, user_id=ananya.id, assignment_role="RWE Lead", department_id=dept_rwe.id, evaluator_type=None, assigned_date=date(2025, 4, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_cross.id, user_id=neha.id, assignment_role=desig_consultant.name, department_id=dept_strategy.id, evaluator_type=None, assigned_date=date(2025, 4, 15)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_cross.id, user_id=vikram.id, assignment_role=desig_manager.name, department_id=dept_rwe.id, evaluator_type="Secondary", assigned_date=date(2025, 4, 1)))
 
             db.commit()
             print("  [+] Created Project: PRJ-004 Integrated Evidence Package (PM: Priya)")
 
         else:
-            print("  [~] Projects already exist or users missing, skipping...")
+            print("  [~] Healthark Projects already exist, skipping...")
+
+
+        # Miltenyi Projects
+        if db.query(Project).filter(Project.org_id == miltenyi_org.id).count() == 0 and bob_lead and evan_mfg:
+            
+            proj_cell = Project(
+                org_id=miltenyi_org.id,
+                project_code="MIL-PRJ-001",
+                name="Cell Therapy Automation Pipeline",
+                description="Develop automated pipeline for CAR-T cell processing.",
+                start_date=date(2025, 1, 10),
+                expected_end_date=date(2025, 7, 30),
+                reports_to_id=alice_admin.id,
+            )
+            db.add(proj_cell)
+            db.flush()
+
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_cell.id, user_id=bob_lead.id, assignment_role=desig_lead.name, department_id=dept_rnd.id, evaluator_type="Primary", assigned_date=date(2025, 1, 10)))
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_cell.id, user_id=charlie.id, assignment_role=desig_sr_scientist.name, department_id=dept_rnd.id, evaluator_type=None, assigned_date=date(2025, 1, 15)))
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_cell.id, user_id=dana.id, assignment_role=desig_scientist.name, department_id=dept_rnd.id, evaluator_type=None, assigned_date=date(2025, 2, 1)))
+
+            db.commit()
+            print("  [+] Created Project: MIL-PRJ-001 Cell Therapy Automation (PM: Bob)")
+
+            proj_macs = Project(
+                org_id=miltenyi_org.id,
+                project_code="MIL-PRJ-002",
+                name="MACS Quant Scaling",
+                description="Scale up manufacturing process for new MACS Quant flow cytometers.",
+                start_date=date(2025, 3, 1),
+                expected_end_date=date(2025, 10, 31),
+                reports_to_id=alice_admin.id,
+            )
+            db.add(proj_macs)
+            db.flush()
+
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=evan_mfg.id, assignment_role=desig_lead.name, department_id=dept_mfg.id, evaluator_type="Primary", assigned_date=date(2025, 3, 1)))
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=fiona.id, assignment_role=desig_scientist.name, department_id=dept_mfg.id, evaluator_type=None, assigned_date=date(2025, 3, 1)))
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=bob_lead.id, assignment_role="R&D Liaison", department_id=dept_rnd.id, evaluator_type="Secondary", assigned_date=date(2025, 3, 15)))
+
+            db.commit()
+            print("  [+] Created Project: MIL-PRJ-002 MACS Quant Scaling (PM: Evan)")
+
+        else:
+            print("  [~] Miltenyi Projects already exist, skipping...")
 
         # ================================================================== #
         # 7. ROLE EXPECTATIONS (Placeholder)                                  #
         # ================================================================== #
 
+        # Healthark Role Expectations
         if db.query(RoleExpectation).filter(RoleExpectation.org_id == org.id).count() == 0:
             core_depts = [dept_strategy, dept_idt, dept_rwe]
             core_desigs = [desig_consultant, desig_senior_consultant, desig_manager]
@@ -511,11 +432,38 @@ def seed_database():
                             exp_competency_skills=f"[{dept.name} / {desig.name}] Competency & Skills expectations to be filled.",
                         ))
                 db.commit()
-                print("  [+] Created 9 Role Expectation rows (placeholder)")
+                print("  [+] Created 9 Role Expectation rows for Healthark (placeholder)")
             else:
-                print("  [!] Some departments/designations missing, skipping role expectations...")
+                print("  [!] Some Healthark departments/designations missing, skipping role expectations...")
         else:
-            print("  [~] Role expectations already exist, skipping...")
+            print("  [~] Healthark Role expectations already exist, skipping...")
+            
+        # Miltenyi Role Expectations
+        if db.query(RoleExpectation).filter(RoleExpectation.org_id == miltenyi_org.id).count() == 0:
+            mil_depts = [dept_rnd, dept_mfg]
+            mil_desigs = [desig_scientist, desig_sr_scientist, desig_lead]
+
+            if all(d is not None for d in mil_depts) and all(d is not None for d in mil_desigs):
+                for dept in mil_depts:
+                    for desig in mil_desigs:
+                        db.add(RoleExpectation(
+                            org_id=miltenyi_org.id,
+                            department_id=dept.id,
+                            designation_id=desig.id,
+                            exp_task_execution=f"[{dept.name} / {desig.name}] Task Execution expectations to be filled.",
+                            exp_ownership=f"[{dept.name} / {desig.name}] Ownership expectations to be filled.",
+                            exp_project_management=f"[{dept.name} / {desig.name}] Project Management expectations to be filled.",
+                            exp_client_deliverables=f"[{dept.name} / {desig.name}] Client Deliverables expectations to be filled.",
+                            exp_communication=f"[{dept.name} / {desig.name}] Communication expectations to be filled.",
+                            exp_mentoring=f"[{dept.name} / {desig.name}] Mentoring expectations to be filled.",
+                            exp_competency_skills=f"[{dept.name} / {desig.name}] Competency & Skills expectations to be filled.",
+                        ))
+                db.commit()
+                print("  [+] Created 6 Role Expectation rows for Miltenyi (placeholder)")
+            else:
+                print("  [!] Some Miltenyi departments/designations missing, skipping role expectations...")
+        else:
+            print("  [~] Miltenyi Role expectations already exist, skipping...")
 
         # ================================================================== #
         # DONE                                                                #
@@ -524,34 +472,23 @@ def seed_database():
         print("\n" + "=" * 60)
         print("Database seeding completed successfully!")
         print("=" * 60)
-        print("\n--- Test Accounts (all passwords: password123) ---")
+        print("\n--- HEALTHARK Accounts (all passwords: password123) ---")
+        print("  ADMIN:    admin@healthark.com    Sarah Admin     (Admin)")
+        print("  STRATEGY: priya@healthark.com    Priya Sharma    (Manager) - PM on PRJ-001, PRJ-004")
+        print("            arjun@healthark.com    Arjun Patel     (Staff)   - mentor: Priya")
+        print("  IDT:      david@healthark.com    David Miller    (Manager) - PM on PRJ-002")
+        print("            rahul@healthark.com    Rahul Verma     (Staff)   - mentor: David")
+        print("  RWE:      vikram@healthark.com   Vikram Singh    (Manager) - PM on PRJ-003")
+        print("            ananya@healthark.com   Ananya Reddy    (Staff)   - mentor: Vikram")
         print()
-        print("  ADMIN:")
-        print("    admin@healthark.com    Sarah Admin     (Admin, Director, Marketing)")
+        print("--- MILTENYI Accounts (Quarterly Cycle | all passwords: password123) ---")
+        print("  ADMIN:    admin@miltenyi.com     Alice Admin     (Admin)")
+        print("  R&D:      bob@miltenyi.com       Bob Builder     (Manager) - PM on MIL-PRJ-001")
+        print("            charlie@miltenyi.com   Charlie Chemist (Staff)   - mentor: Bob")
+        print("            dana@miltenyi.com      Dana DNA        (Staff)   - mentor: Bob")
+        print("  MFG:      evan@miltenyi.com      Evan Engineer   (Manager) - PM on MIL-PRJ-002")
+        print("            fiona@miltenyi.com     Fiona Factory   (Staff)   - mentor: Evan")
         print()
-        print("  STRATEGY DEPARTMENT:")
-        print("    priya@healthark.com    Priya Sharma    (Manager, Senior Manager)  - PM on PRJ-001, PRJ-004")
-        print("    arjun@healthark.com    Arjun Patel     (Staff, Senior Consultant) - mentor: Priya")
-        print("    neha@healthark.com     Neha Gupta      (Staff, Consultant)        - mentor: Priya")
-        print()
-        print("  IDT DEPARTMENT:")
-        print("    david@healthark.com    David Miller    (Manager, Manager)         - PM on PRJ-002")
-        print("    rahul@healthark.com    Rahul Verma     (Staff, Senior Consultant) - mentor: David")
-        print("    meera@healthark.com    Meera Joshi     (Staff, Consultant)        - mentor: David")
-        print()
-        print("  RWE DEPARTMENT:")
-        print("    vikram@healthark.com   Vikram Singh    (Manager, Manager)         - PM on PRJ-003")
-        print("    ananya@healthark.com   Ananya Reddy    (Staff, Senior Consultant) - mentor: Vikram")
-        print("    karan@healthark.com    Karan Mehta     (Staff, Consultant)        - mentor: Vikram")
-        print()
-        print("  PARTNER ORG:")
-        print("    alice@partnerorg.com   Alice Partner   (Admin)                    - restricted features")
-        print()
-        print("--- Projects ---")
-        print("  PRJ-001  Market Access Strategy H1          PM: Priya   reports to: Sarah")
-        print("  PRJ-002  Patient Journey Analytics          PM: David   reports to: Sarah")
-        print("  PRJ-003  RWE Outcomes Study - Cardiology    PM: Vikram  reports to: Priya")
-        print("  PRJ-004  Integrated Evidence Package        PM: Priya   reports to: Sarah")
 
     except Exception as e:
         print(f"\n[ERROR] Seeding failed: {e}")
