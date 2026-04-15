@@ -443,7 +443,7 @@ export function ProjectReviews() {
                   <CollapsibleProjectCard 
                     key={card.project_id} 
                     card={card} 
-                    defaultExpanded={index === 0} 
+                    defaultExpanded={false} 
                   />
                 ))
               )}

@@ -22,6 +22,7 @@ class SystemSettingsResponse(BaseModel):
 
     active_cycle_name: str
     cycle_type: CycleType
+    fiscal_start_month: int
     cycle_start_date: Optional[date] = None
     cycle_end_date: Optional[date] = None
 
@@ -49,6 +50,12 @@ class SystemSettingsCreate(BaseModel):
         description="Display label for the active cycle, e.g. 'H1 FY26'"
     )
     cycle_type: CycleType = CycleType.ANNUAL
+    fiscal_start_month: int = Field(
+        default=4,
+        ge=1,
+        le=12,
+        description="Month (1-12) the fiscal year starts"
+    )
     cycle_start_date: Optional[date] = None
     cycle_end_date: Optional[date] = None
     goals_submission_open: bool = False
@@ -66,6 +73,12 @@ class SystemSettingsUpdate(BaseModel):
         description="Display label for the active cycle"
     )
     cycle_type: Optional[CycleType] = None
+    fiscal_start_month: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=12,
+        description="Month (1-12) the fiscal year starts"
+    )
     cycle_start_date: Optional[date] = None
     cycle_end_date: Optional[date] = None
     goals_submission_open: Optional[bool] = None

@@ -21,6 +21,7 @@ Security Layers Applied:
     Layer 4 — Ownership:        Goals scoped to current_user.id
 """
 
+from datetime import date
 from sqlalchemy import func
 from fastapi import APIRouter
 
@@ -29,6 +30,7 @@ from app.models.system_settings_models import SystemSettings
 from app.models.goal_models import Goal, GoalStatus
 from app.models.user_models import User
 from app.schemas.dashboard_schemas import DashboardSummary
+from app.core.cycle_utils import get_current_cycle_info
 
 router = APIRouter()
 
@@ -46,7 +48,15 @@ def get_dashboard_summary(
         SystemSettings.org_id == current_user.org_id
     ).first()
 
-    active_cycle = settings.active_cycle_name if settings else None
+    # Dynamically calculate the active cycle based on the org's cadence
+    if settings:
+        active_cycle = get_current_cycle_info(
+            current_date=date.today(),
+            cycle_type=settings.cycle_type,
+            fiscal_start_month=settings.fiscal_start_month
+        )
+    else:
+        active_cycle = None
 
     # ── Goal Counts (Single Query) ───────────────────────────────────
     # Returns rows like: [("pending", 3), ("in_progress", 2), ("completed", 1)]

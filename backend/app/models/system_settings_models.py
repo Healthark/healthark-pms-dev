@@ -50,10 +50,13 @@ class SystemSettings(Base):
     # reviews/goals created during this period.
     active_cycle_name = Column(String, nullable=False)  # e.g. "H1 FY26"
 
-    # The machine-readable cadence — used by the frontend to gate features.
-    # For example, Annual Review forms are only accessible when
-    # cycle_type == "annual" or the org explicitly opens reviews.
-    cycle_type = Column(String, nullable=False, default=CycleType.ANNUAL.value)
+    # The machine-readable cadence — used by the utility to calculate
+    # current Q1/Q2 or H1/H2 periods.
+    cycle_type = Column(String, nullable=False, default=CycleType.HALF_YEARLY.value)
+
+    # NEW: Anchors the fiscal year. 4 = April, 1 = January, etc.
+    # Used by the utility to determine if current month belongs to Q1, Q2, etc.
+    fiscal_start_month = Column(Integer, nullable=False, default=4)
 
     # Optional date boundaries for reporting and deadline enforcement.
     cycle_start_date = Column(Date, nullable=True)
