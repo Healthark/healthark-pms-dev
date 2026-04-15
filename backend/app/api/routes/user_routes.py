@@ -20,6 +20,8 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.dependencies import DbSession, CurrentUser
 from app.core.security import verify_password, get_password_hash
 from app.schemas.user_schemas import PasswordChangeRequest, UserProfile
+from app.models.role_expectation_models import RoleExpectation
+from app.schemas.user_schemas import UserRoleExpectationResponse
 
 router = APIRouter()
 
@@ -83,3 +85,56 @@ def change_password(
     db.commit()
 
     return {"message": "Password updated successfully."}
+
+@router.get("/me/expectations", response_model=UserRoleExpectationResponse)
+def get_my_role_expectations(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Return the role expectations (7 competencies) specific to the 
+    current user's Department and Designation.
+    """
+    dept_name = current_user.department.name if current_user.department else "Unassigned"
+    desig_name = current_user.designation.name if current_user.designation else "Unassigned"
+    
+    # Default fallback object
+    fallback_response = UserRoleExpectationResponse(
+        department_name=dept_name,
+        designation_name=desig_name,
+        exp_task_execution="Role expectation not defined",
+        exp_ownership="Role expectation not defined",
+        exp_project_management="Role expectation not defined",
+        exp_client_deliverables="Role expectation not defined",
+        exp_communication="Role expectation not defined",
+        exp_mentoring="Role expectation not defined",
+        exp_competency_skills="Role expectation not defined",
+    )
+
+    # If the user doesn't have a department or designation, return fallbacks immediately
+    if not current_user.department_id or not current_user.designation_id:
+        return fallback_response
+
+    # Query the database for the specific expectations
+    expectation = db.query(RoleExpectation).filter(
+        RoleExpectation.org_id == current_user.org_id,
+        RoleExpectation.department_id == current_user.department_id,
+        RoleExpectation.designation_id == current_user.designation_id,
+    ).first()
+
+    # If no specific expectations are mapped for this role, return fallbacks
+    if not expectation:
+        return fallback_response
+
+    # Return the mapped expectations
+    return UserRoleExpectationResponse(
+        department_name=dept_name,
+        designation_name=desig_name,
+        exp_task_execution=expectation.exp_task_execution or "Role expectation not defined",
+        exp_ownership=expectation.exp_ownership or "Role expectation not defined",
+        exp_project_management=expectation.exp_project_management or "Role expectation not defined",
+        exp_client_deliverables=expectation.exp_client_deliverables or "Role expectation not defined",
+        exp_communication=expectation.exp_communication or "Role expectation not defined",
+        exp_mentoring=expectation.exp_mentoring or "Role expectation not defined",
+        exp_competency_skills=expectation.exp_competency_skills or "Role expectation not defined",
+    )

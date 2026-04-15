@@ -25,6 +25,20 @@ import { useAuth } from "../hooks/useAuth";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { SecondaryEvalTab } from "../components/project-reviews/SecondaryEvalTab";
 
+// Make sure you export this interface from your service file
+export interface RoleExpectationResponse {
+  id: number;
+  department_name: string;
+  designation_name: string;
+  exp_task_execution: string;
+  exp_ownership: string;
+  exp_project_management: string;
+  exp_client_deliverables: string;
+  exp_communication: string;
+  exp_mentoring: string;
+  exp_competency_skills: string;
+}
+
 type ActiveTab = "my" | "evaluate" | "secondary";
 
 // List of competencies from the backend schema
@@ -51,9 +65,11 @@ function formatDate(dateStr: string | null): string {
 
 function CollapsibleProjectCard({ 
   card, 
+  expectations,
   defaultExpanded = false 
 }: { 
   readonly card: MyProjectCard;
+  readonly expectations: RoleExpectationResponse[];
   readonly defaultExpanded?: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -63,6 +79,11 @@ function CollapsibleProjectCard({
 
   const isReviewed = card.review_status === "reviewed";
   const isPending = card.review_status === "pending" || card.review_status === null;
+
+  // Find the matching role expectation for this specific user's project role
+  const roleExp = expectations.find(
+    (e) => e.department_name === card.department_name && e.designation_name === card.assignment_role
+  );
 
   // Fetch details when expanding
   const handleToggle = async () => {
@@ -86,37 +107,37 @@ function CollapsibleProjectCard({
             categories: [
               {
                 title: "Task Execution & Problem Solving",
-                expected_behavior: "Consistently delivers high-quality work, solves complex technical problems, and meets all deadlines.",
+                expected_behavior: roleExp?.exp_task_execution || "Role expectation not defined",
                 score_comment: data.comment_task_execution
               },
               {
                 title: "Ownership & Accountability",
-                expected_behavior: "Takes full responsibility for assigned tasks, proactively identifies issues, and ensures end-to-end completion.",
+                expected_behavior: roleExp?.exp_ownership || "Role expectation not defined",
                 score_comment: data.comment_ownership
               },
               {
                 title: "Project Management and Risk Mitigation",
-                expected_behavior: "Effectively plans tasks, identifies potential risks early, and communicates impacts to stakeholders.",
+                expected_behavior: roleExp?.exp_project_management || "Role expectation not defined",
                 score_comment: data.comment_project_management
               },
               {
                 title: "Building Client-Ready Deliverables",
-                expected_behavior: "Produces polished, error-free deliverables that meet client expectations and require minimal revision.",
+                expected_behavior: roleExp?.exp_client_deliverables || "Role expectation not defined",
                 score_comment: data.comment_client_deliverables
               },
               {
                 title: "Communication & Client Management",
-                expected_behavior: "Communicates clearly and professionally with team members and clients; manages expectations effectively.",
+                expected_behavior: roleExp?.exp_communication || "Role expectation not defined",
                 score_comment: data.comment_communication
               },
               {
                 title: "Mentoring and Team Development",
-                expected_behavior: "Actively supports junior team members, shares knowledge, and contributes to a positive team environment.",
+                expected_behavior: roleExp?.exp_mentoring || "Role expectation not defined",
                 score_comment: data.comment_mentoring
               },
               {
                 title: "Competency and Skills",
-                expected_behavior: "Demonstrates deep technical expertise in relevant technologies and stays updated with industry trends.",
+                expected_behavior: roleExp?.exp_competency_skills || "Role expectation not defined",
                 score_comment: data.comment_competency_skills
               }
             ]
@@ -245,8 +266,9 @@ function CollapsibleProjectCard({
                           <Target className="h-3.5 w-3.5 text-text-muted" />
                           <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Role Expectation</span>
                         </div>
-                        <p className="text-[13px] leading-relaxed text-text-muted italic">
-                          Consistently demonstrates behaviors aligned with this competency for their current role, level, and tenure.
+                        {/* We use whitespace-pre-wrap to handle the `|` dividers as visual line breaks if needed, or simply render the text */}
+                        <p className="text-[13px] leading-relaxed text-text-muted italic whitespace-pre-wrap">
+                          {reviewDetails.categories.find((c: any) => c.title === comp.label)?.expected_behavior.replace(/ \| /g, '\n• ')}
                         </p>
                       </div>
 
@@ -337,16 +359,24 @@ export function ProjectReviews() {
   // Initialize activeTab to 'evaluate' for managers, 'my' for standard employees
   const [activeTab, setActiveTab] = useState<ActiveTab>(showEvalTab ? "evaluate" : "my");
   const [cards, setCards] = useState<MyProjectCard[]>([]);
+  const [expectations, setExpectations] = useState<RoleExpectationResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Design elements
   const [selectedCycle, setSelectedCycle] = useState('H1 FY26');
   const cycleOptions = ['H1 FY26', 'H2 FY25', 'H1 FY25', 'H2 FY24'];
 
-  const loadCards = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      setCards(await projectReviewService.getMyProjects());
+      // Fetch both projects and role expectations in parallel
+      const [projectsData, expectationsData] = await Promise.all([
+        projectReviewService.getMyProjects(),
+        // Add this method to your project-review.service.ts
+        projectReviewService.getRoleExpectations() 
+      ]);
+      setCards(projectsData);
+      setExpectations(expectationsData);
     } catch {
       // Stays empty on error
     } finally {
@@ -355,8 +385,8 @@ export function ProjectReviews() {
   }, []);
 
   useEffect(() => {
-    void loadCards();
-  }, [loadCards]);
+    void loadData();
+  }, [loadData]);
 
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-3 text-[14px] font-semibold border-b-2 transition-all ${
@@ -443,6 +473,7 @@ export function ProjectReviews() {
                   <CollapsibleProjectCard 
                     key={card.project_id} 
                     card={card} 
+                    expectations={expectations}
                     defaultExpanded={false} 
                   />
                 ))

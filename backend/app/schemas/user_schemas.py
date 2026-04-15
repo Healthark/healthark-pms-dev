@@ -46,3 +46,15 @@ class UserProfile(BaseModel):
     mentor_name: Optional[str] = None
 
     created_at: datetime
+
+# Add this to the bottom of app/schemas/user_schemas.py
+class UserRoleExpectationResponse(BaseModel):
+    department_name: str | None
+    designation_name: str | None
+    exp_task_execution: str
+    exp_ownership: str
+    exp_project_management: str
+    exp_client_deliverables: str
+    exp_communication: str
+    exp_mentoring: str
+    exp_competency_skills: str
