@@ -1,6 +1,12 @@
-import { useState, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import { AuthContext, type AuthContextType } from "./AuthContext";
 import type { AuthResponse } from "../services/auth.service";
+
+// Maps outside the component and acts as source of truth
+const THEME_MAP: Record<number, string> = {
+  1: "healthark",
+  2: "miltenyi",
+};
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -43,6 +49,20 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
     localStorage.removeItem("user");
     setUser(null);
   }, []);
+
+  /**
+   * Dynamic Theming Sync
+   * Automatically updates the CSS variables on the root document whenever 
+   * the authenticated organization changes.
+   */
+  useEffect(() => {
+    if (user?.org_id) {
+      const themeKey = THEME_MAP[user.org_id] || "healthark";
+      document.documentElement.setAttribute("data-theme", themeKey);
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, [user?.org_id]);
 
   /**
    * The primary Story 1.2 guard. Checks the features array that came

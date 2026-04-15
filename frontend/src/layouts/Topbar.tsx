@@ -88,7 +88,7 @@ export function Topbar() {
           </span>
         ) : settings?.active_cycle_name ? (
           <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
-            <CalendarDays className="h-3 w-3" aria-hidden="true" />
+            <CalendarDays className="h-3 w-3 text-accent" aria-hidden="true" />
             {settings.active_cycle_name}
           </span>
         ) : null}
@@ -112,10 +112,7 @@ export function Topbar() {
           <Bell className="w-5 h-5" />
           {/* Red dot — only shown when there are real notifications */}
           {hasNotifications && (
-            <span
-              className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-surface"
-              aria-hidden="true"
-            />
+            <span className="absolute top-1.5 right-2 w-2 h-2 bg-accent rounded-full border-2 border-surface" aria-hidden="true" />
           )}
         </button>
 

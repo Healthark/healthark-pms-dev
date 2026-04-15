@@ -1,31 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  /* Brand Colors */
-  --color-brand: #315C84;
-  --color-brand-light: #EBF1F6;
-  /* Very soft blue for hover states */
-
+  /* Map Tailwind colors to our dynamic CSS variables */
+  --color-brand: var(--brand);
+  --color-brand-light: var(--brand-light);
+  --color-accent: var(--accent); /* <-- NEW: Dynamic Accent Color */
+  
   /* Layout Colors */
-  --color-background: #F8FAFC;
-  /* Slate 50 - Softer than pure white for the main page */
+  --color-background: var(--background); /* Made background dynamic too */
   --color-surface: #FFFFFF;
-  /* Pure white for cards, topbar, sidebar */
 
   /* Text Colors */
   --color-text-main: #0F172A;
-  /* Slate 900 - Primary text */
   --color-text-muted: #64748B;
-  /* Slate 500 - Secondary text */
 
-  /* Status Colors (Tweaked for light mode contrast) */
+  /* Status Colors */
   --color-green: #10B981;
   --color-amber: #F59E0B;
   --color-red: #EF4444;
-
-  /* Borders & Shadows */
   --color-border: #E2E8F0;
-  /* Slate 200 */
 
   /* Typography */
   --font-display: 'Poppins', sans-serif;
@@ -35,6 +28,22 @@
 
 /* Base Styles */
 @layer base {
+  /* Default Theme (HealthArk - org_id: 1) */
+  :root, [data-theme="healthark"] {
+    --brand: #315C84;
+    --brand-light: #EBF1F6;
+    --accent: #0EA5E9; /* A nice secondary Sky Blue for HealthArk */
+    --background: #F8FAFC; 
+  }
+
+  /* Miltenyi Biotec Theme (org_id: 2) */
+  [data-theme="miltenyi"] {
+    --brand: #3C1053; /* Miltenyi Deep Purple */
+    --brand-light: #F4EFF8; 
+    --accent: #F37920; /* <-- NEW: Miltenyi Vibrant Orange */
+    --background: #FDFCFE; 
+  }
+
   body {
     @apply bg-background text-text-main font-body min-h-screen overflow-x-hidden antialiased;
   }
