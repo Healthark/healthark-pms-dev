@@ -90,6 +90,57 @@ export function SystemSettingsTab({
   return (
     <div className="p-6 max-w-2xl space-y-6">
 
+      {/* ── Goal & Review Access Controls ───────────────────────────── */}
+      <div>
+        <h3 className="font-display text-lg font-semibold text-text-main mb-4">
+          Goal & Review Access Controls
+        </h3>
+        <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
+
+          {/* Yearly Goal Settings */}
+          <div className="px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+              Yearly Goal Settings
+            </p>
+            <div className="divide-y divide-border/60">
+              <ToggleRow
+                label="Edit Access for Yearly Goals"
+                description="When off, no one in the org can create or edit yearly goals."
+                checked={goalsEditEnabled}
+                onChange={onGoalsEditEnabledChange}
+              />
+              <ToggleRow
+                label="View Final Rating for Yearly Goals"
+                description="When on, employees can see their final rating on annual reviews."
+                checked={finalRatingVisible}
+                onChange={onFinalRatingVisibleChange}
+              />
+              <ToggleRow
+                label="Edit Comments for Yearly Goals"
+                description="Controls whether users can edit comments on yearly goal reviews."
+                checked={editCommentsEnabled}
+                onChange={setEditCommentsEnabled}
+              />
+            </div>
+          </div>
+
+          {/* Project Goal Settings */}
+          <div className="px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+              Project Goal Settings
+            </p>
+            <div className="divide-y divide-border/60">
+              <ToggleRow
+                label="View Ratings for Project Goals"
+                description="When on, employees can see their project performance ratings."
+                checked={projectRatingsVisible}
+                onChange={onProjectRatingsVisibleChange}
+              />
+            </div>
+          </div>
+
+        </div>
+      </div>
       {/* ── Performance Cycle Configuration ────────────────────────── */}
       <div>
         <h3 className="font-display text-lg font-semibold text-text-main mb-4">
@@ -156,58 +207,6 @@ export function SystemSettingsTab({
               </select>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Goal & Review Access Controls ───────────────────────────── */}
-      <div>
-        <h3 className="font-display text-lg font-semibold text-text-main mb-4">
-          Goal & Review Access Controls
-        </h3>
-        <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
-
-          {/* Yearly Goal Settings */}
-          <div className="px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-              Yearly Goal Settings
-            </p>
-            <div className="divide-y divide-border/60">
-              <ToggleRow
-                label="Edit Access for Yearly Goals"
-                description="When off, no one in the org can create or edit yearly goals."
-                checked={goalsEditEnabled}
-                onChange={onGoalsEditEnabledChange}
-              />
-              <ToggleRow
-                label="View Final Rating for Yearly Goals"
-                description="When on, employees can see their final rating on annual reviews."
-                checked={finalRatingVisible}
-                onChange={onFinalRatingVisibleChange}
-              />
-              <ToggleRow
-                label="Edit Comments for Yearly Goals"
-                description="Controls whether users can edit comments on yearly goal reviews."
-                checked={editCommentsEnabled}
-                onChange={setEditCommentsEnabled}
-              />
-            </div>
-          </div>
-
-          {/* Project Goal Settings */}
-          <div className="px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-              Project Goal Settings
-            </p>
-            <div className="divide-y divide-border/60">
-              <ToggleRow
-                label="View Ratings for Project Goals"
-                description="When on, employees can see their project performance ratings."
-                checked={projectRatingsVisible}
-                onChange={onProjectRatingsVisibleChange}
-              />
-            </div>
-          </div>
-
         </div>
       </div>
 

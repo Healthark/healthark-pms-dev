@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   UserCircle, Briefcase, Send, Loader2, X, ClipboardList,
-  ChevronDown, ChevronUp, BookOpen, CalendarDays,
+  ChevronDown, ChevronUp, BookOpen, CalendarDays, Info,
 } from "lucide-react";
 import {
   projectReviewService,
@@ -170,18 +170,35 @@ function EvalModal({ card, expectation, onSubmit, onClose, isSaving, error }: Ev
 
           {/* Performance Group Dropdown (1-5 Scale) */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[13px] font-bold text-text-main">Overall Performance Rating</label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[13px] font-bold text-text-main">Overall Performance Rating</label>
+              <div className="group relative inline-flex items-center">
+                <Info className="h-3.5 w-3.5 text-text-muted cursor-default" aria-hidden="true" />
+                <div className="invisible group-hover:visible pointer-events-none absolute top-full left-0 z-50 mt-2 w-72 rounded-lg border border-border bg-white px-3 py-2.5 text-xs text-text-main shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  {/* Arrow */}
+                  <div className="absolute left-3 bottom-full border-4 border-transparent border-b-border" />
+                  <p className="font-semibold mb-1.5 text-text-main">Rating Guide</p>
+                  <ul className="space-y-1.5 text-text-muted">
+                    <li><span className="font-semibold text-text-main">Rating 1 —</span> Performed beyond expectations; significantly exceeded project goals.</li>
+                    <li><span className="font-semibold text-text-main">Rating 2 —</span> Performed at the expected level but exceeded goals.</li>
+                    <li><span className="font-semibold text-text-main">Rating 3 —</span> Performed at the expected level and achieved goals.</li>
+                    <li><span className="font-semibold text-text-main">Rating 4 —</span> Did not perform at the expected level; partially achieved goals.</li>
+                    <li><span className="font-semibold text-text-main">Rating 5 —</span> Did not perform at the expected level; did not achieve goals.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
             <select
               value={performanceGroup}
               onChange={(e) => setPerformanceGroup(e.target.value as PerformanceGroup)}
               className="w-24 rounded-lg border border-border bg-white px-3 py-2 text-[13px] outline-none focus:border-brand"
             >
               <option value="" disabled>Select</option>
-              <option value="5">5</option>
-              <option value="4">4</option>
-              <option value="3">3</option>
-              <option value="2">2</option>
               <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
             </select>
           </div>
 
