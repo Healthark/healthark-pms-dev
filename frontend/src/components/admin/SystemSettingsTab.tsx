@@ -120,40 +120,44 @@ export function SystemSettingsTab({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Cadence Dropdown */}
+            {/* Cadence (Read-Only) */}
             <div>
               <label htmlFor="cycle-type" className="block text-sm font-medium text-text-main mb-1">
                 Cycle Cadence
               </label>
-              <select
-                id="cycle-type"
-                value={cycleType}
-                onChange={(e) => onCycleTypeChange(e.target.value as CycleType)}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-brand"
-              >
-                <option value="quarterly">Quarterly</option>
-                <option value="half_yearly">Half-Yearly</option>
-                <option value="annual">Annual</option>
-              </select>
+              <div className="flex items-center gap-2">
+                <input
+                  id="cycle-type"
+                  type="text"
+                  value={cycleType === "half_yearly" ? "Half-Yearly" : cycleType === "annual" ? "Annual" : "Quarterly"}
+                  disabled
+                  className="w-full rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-text-muted cursor-not-allowed"
+                />
+                <span className="flex items-center gap-1.5 text-xs text-text-muted bg-gray-100 px-2 py-1 rounded-md border border-gray-200 shrink-0">
+                  <Info className="w-3.5 h-3.5" />
+                  Read Only
+                </span>
+              </div>
             </div>
 
-            {/* Fiscal Start Month Dropdown */}
+            {/* Fiscal Start Month (Read-Only) */}
             <div>
               <label htmlFor="fiscal-start" className="block text-sm font-medium text-text-main mb-1">
                 Fiscal Start Month
               </label>
-              <select
-                id="fiscal-start"
-                value={fiscalStartMonth}
-                onChange={(e) => onFiscalStartMonthChange(Number(e.target.value))}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-brand"
-              >
-                {MONTHS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <input
+                  id="fiscal-start"
+                  type="text"
+                  value={MONTHS.find((m) => m.value === fiscalStartMonth)?.label ?? "—"}
+                  disabled
+                  className="w-full rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-text-muted cursor-not-allowed"
+                />
+                <span className="flex items-center gap-1.5 text-xs text-text-muted bg-gray-100 px-2 py-1 rounded-md border border-gray-200 shrink-0">
+                  <Info className="w-3.5 h-3.5" />
+                  Read Only
+                </span>
+              </div>
             </div>
           </div>
         </div>
