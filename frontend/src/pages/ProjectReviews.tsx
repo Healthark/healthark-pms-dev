@@ -21,7 +21,6 @@ import {
   type MyProjectCard,
   type ProjectReviewResponse,
 } from "../services/project-review.service";
-import { useAuth } from "../hooks/useAuth";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { SecondaryEvalTab } from "../components/project-reviews/SecondaryEvalTab";
 
@@ -362,14 +361,11 @@ function CardSkeleton() {
 // ── Main Page Component ─────────────────────────────────────────────
 
 export function ProjectReviews() {
-  const { user } = useAuth();
-  
-  // RBAC update: Since any Staff can be assigned as a PM, we show the tab to everyone. 
-  // If they aren't a PM, the queue will naturally be empty and show the placeholder.
+  // Any user can be assigned as a PM, so evaluation tabs are shown to everyone.
+  // If they aren't a PM, the queue will naturally be empty.
   const showEvalTab = true;
 
-  // Initialize activeTab to 'evaluate' for Admins, 'my' for standard employees
-  const [activeTab, setActiveTab] = useState<ActiveTab>(user?.role === "Admin" ? "evaluate" : "my");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   
   const [cards, setCards] = useState<MyProjectCard[]>([]);
   const [expectations, setExpectations] = useState<RoleExpectationResponse[]>([]);
@@ -454,21 +450,25 @@ export function ProjectReviews() {
       {/* ── Main Content Container ── */}
       <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
         
-        {/* Only show the tab bar if the user is a manager evaluating others */}
-        {showEvalTab && (
-          <div className="flex border-b border-border px-2">
-            <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
-              Evaluate Team
-            </button>
-            <button type="button" className={tabCls("secondary")} onClick={() => setActiveTab("secondary")}>
-              Secondary Reviews
-            </button>
-          </div>
-        )}
+        <div className="flex border-b border-border px-2">
+          <button type="button" className={tabCls("my")} onClick={() => setActiveTab("my")}>
+            My Reviews
+          </button>
+          {showEvalTab && (
+            <>
+              <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
+                Evaluate Team
+              </button>
+              <button type="button" className={tabCls("secondary")} onClick={() => setActiveTab("secondary")}>
+                Secondary Reviews
+              </button>
+            </>
+          )}
+        </div>
 
         <div className="p-5">
           {/* Employee Default View (Cards) */}
-          {!showEvalTab && activeTab === "my" && (
+          {activeTab === "my" && (
             <div className="flex flex-col gap-5">
               {isLoading ? (
                 <>

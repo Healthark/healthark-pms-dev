@@ -88,18 +88,26 @@ class UserUpdate(BaseModel):
 
 class AdminSettingsResponse(BaseModel):
     """
-    Simplified settings payload for the Admin Panel's SystemSettingsTab.
+    Full settings payload for the Admin Panel's SystemSettingsTab.
 
-    The frontend expects 'active_cycle', not 'active_cycle_name'.
-    We handle this translation in the route, not in the schema,
-    to keep the schema a clean mirror of the TypeScript interface.
+    'active_cycle' is the computed cycle name (read-only, system-calculated).
+    cycle_type and fiscal_start_month are the editable inputs that drive it.
     """
     id: int
     org_id: int
     active_cycle: Optional[str] = None
+    cycle_type: str
+    fiscal_start_month: int
+    goals_edit_enabled: bool
+    yearly_goals_final_rating_visible: bool
+    project_ratings_visible: bool
     updated_at: Optional[datetime] = None
 
 
 class AdminSettingsUpdate(BaseModel):
-    """Payload from the SystemSettingsTab save button."""
-    active_cycle: str = Field(..., min_length=1, max_length=50)
+    """Payload from the SystemSettingsTab save button. All fields optional (PATCH semantics)."""
+    cycle_type: Optional[str] = Field(default=None, pattern=r"^(annual|half_yearly|quarterly)$")
+    fiscal_start_month: Optional[int] = Field(default=None, ge=1, le=12)
+    goals_edit_enabled: Optional[bool] = None
+    yearly_goals_final_rating_visible: Optional[bool] = None
+    project_ratings_visible: Optional[bool] = None

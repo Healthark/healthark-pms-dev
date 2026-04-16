@@ -1,6 +1,5 @@
 import { Search, Pencil, UserX } from "lucide-react";
 import type { UserResponse } from "../../services/admin.service";
-import { RoleBadge } from "./RoleBadge";
 import { StatusBadge } from "./StatusBadge";
 
 interface UsersTabProps {
@@ -15,7 +14,7 @@ interface UsersTabProps {
 const TABLE_HEADERS = [
   "Employee",
   "Email",
-  "Role",
+  "Mentor",
   "Department",
   "Designation",
   "Status",
@@ -96,8 +95,15 @@ export function UsersTab({
                     className={`transition-colors hover:bg-slate-50 ${user.is_deleted ? "opacity-60" : ""}`}
                   >
                     <td className="px-5 py-3.5">
-                      <div className="font-medium text-text-main">
-                        {user.full_name}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-text-main">
+                          {user.full_name}
+                        </span>
+                        {user.role === "Admin" && (
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                            Admin
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-text-muted">
                         {user.employee_code}
@@ -106,8 +112,8 @@ export function UsersTab({
                     <td className="px-5 py-3.5 text-text-muted">
                       {user.email}
                     </td>
-                    <td className="px-5 py-3.5">
-                      <RoleBadge role={user.role} />
+                    <td className="px-5 py-3.5 text-text-muted">
+                      {users.find((u) => u.id === user.mentor_id)?.full_name ?? "—"}
                     </td>
                     <td className="px-5 py-3.5 text-text-muted">
                       {user.department?.name ?? "—"}

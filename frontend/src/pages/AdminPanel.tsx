@@ -9,7 +9,9 @@ import {
   type DepartmentBrief,
   type DesignationBrief,
   type SystemSettings,
+  type AdminSettingsUpdatePayload,
 } from "../services/admin.service";
+import type { CycleType } from "../services/system-settings.service";
 import { getErrorMessage } from "../utils/errors";
 import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
@@ -39,8 +41,14 @@ export default function AdminPanel() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
-  const [cycleInput, setCycleInput] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
+
+  // Settings form state
+  const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
+  const [fiscalStartMonth, setFiscalStartMonth] = useState(4);
+  const [goalsEditEnabled, setGoalsEditEnabled] = useState(true);
+  const [finalRatingVisible, setFinalRatingVisible] = useState(false);
+  const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
 
   const { refreshSettings } = useSystemSettings();
   // ── Bootstrap ─────────────────────────────────────────────────────────────
@@ -57,7 +65,11 @@ export default function AdminPanel() {
       setDepartments(deptData);
       setDesignations(desigData);
       setSettings(settingsData);
-      setCycleInput(settingsData.active_cycle ?? "");
+      setCycleType((settingsData.cycle_type as CycleType) ?? "half_yearly");
+      setFiscalStartMonth(settingsData.fiscal_start_month ?? 4);
+      setGoalsEditEnabled(settingsData.goals_edit_enabled ?? true);
+      setFinalRatingVisible(settingsData.yearly_goals_final_rating_visible ?? false);
+      setProjectRatingsVisible(settingsData.project_ratings_visible ?? false);
     } catch {
       // Errors handled per-operation below
     } finally {
@@ -141,8 +153,20 @@ export default function AdminPanel() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      const updated = await adminService.updateSettings(cycleInput);
+      const payload: AdminSettingsUpdatePayload = {
+        cycle_type: cycleType,
+        fiscal_start_month: fiscalStartMonth,
+        goals_edit_enabled: goalsEditEnabled,
+        yearly_goals_final_rating_visible: finalRatingVisible,
+        project_ratings_visible: projectRatingsVisible,
+      };
+      const updated = await adminService.updateSettings(payload);
       setSettings(updated);
+      setCycleType(updated.cycle_type as CycleType);
+      setFiscalStartMonth(updated.fiscal_start_month);
+      setGoalsEditEnabled(updated.goals_edit_enabled);
+      setFinalRatingVisible(updated.yearly_goals_final_rating_visible);
+      setProjectRatingsVisible(updated.project_ratings_visible);
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
       await refreshSettings();
@@ -230,12 +254,20 @@ export default function AdminPanel() {
 
         {activeTab === "settings" && (
           <SystemSettingsTab
-            cycleInput={cycleInput}
-            onCycleInputChange={setCycleInput}
+            activeCycleName={settings?.active_cycle ?? ""}
+            cycleType={cycleType}
+            onCycleTypeChange={setCycleType}
+            fiscalStartMonth={fiscalStartMonth}
+            onFiscalStartMonthChange={setFiscalStartMonth}
+            goalsEditEnabled={goalsEditEnabled}
+            onGoalsEditEnabledChange={setGoalsEditEnabled}
+            finalRatingVisible={finalRatingVisible}
+            onFinalRatingVisibleChange={setFinalRatingVisible}
+            projectRatingsVisible={projectRatingsVisible}
+            onProjectRatingsVisibleChange={setProjectRatingsVisible}
             onSave={handleSaveSettings}
             isSaving={isSaving}
             settingsSaved={settingsSaved}
-            savedCycleName={settings?.active_cycle ?? null}
           />
         )}
       </div>

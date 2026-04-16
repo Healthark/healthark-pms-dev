@@ -26,7 +26,9 @@ from app.api.dependencies import DbSession, CurrentUser
 from app.core.security import get_password_hash
 from app.models.user_models import User
 from app.models.reference_models import Department, Designation
-from app.models.system_settings_models import SystemSettings
+from app.models.system_settings_models import SystemSettings, CycleType
+from app.core.cycle_utils import get_current_cycle_info
+from datetime import date
 from app.schemas.admin_schemas import (
     DepartmentBrief,
     DesignationBrief,
@@ -306,6 +308,11 @@ def get_admin_settings(
         id=settings.id,
         org_id=settings.org_id,
         active_cycle=settings.active_cycle_name,
+        cycle_type=settings.cycle_type,
+        fiscal_start_month=settings.fiscal_start_month,
+        goals_edit_enabled=settings.goals_edit_enabled,
+        yearly_goals_final_rating_visible=settings.yearly_goals_final_rating_visible,
+        project_ratings_visible=settings.project_ratings_visible,
         updated_at=settings.updated_at,
     )
 
@@ -317,10 +324,10 @@ def update_admin_settings(
     current_user: CurrentUser,
 ):
     """
-    Update the active cycle from the Admin Panel.
+    Update cycle configuration and goal access controls from the Admin Panel.
 
-    Maps the frontend's 'active_cycle' field back to the database's
-    'active_cycle_name' column transparently.
+    Cycle cadence and fiscal month are editable; active_cycle_name is
+    recomputed automatically from those two values + today's date.
     """
     _require_admin(current_user)
 
@@ -334,8 +341,23 @@ def update_admin_settings(
             detail="System settings have not been configured.",
         )
 
-    # Map frontend field → database column
-    settings.active_cycle_name = settings_in.active_cycle
+    if settings_in.cycle_type is not None:
+        settings.cycle_type = settings_in.cycle_type
+    if settings_in.fiscal_start_month is not None:
+        settings.fiscal_start_month = settings_in.fiscal_start_month
+    if settings_in.goals_edit_enabled is not None:
+        settings.goals_edit_enabled = settings_in.goals_edit_enabled
+    if settings_in.yearly_goals_final_rating_visible is not None:
+        settings.yearly_goals_final_rating_visible = settings_in.yearly_goals_final_rating_visible
+    if settings_in.project_ratings_visible is not None:
+        settings.project_ratings_visible = settings_in.project_ratings_visible
+
+    # Recompute the cycle label from the (possibly updated) cadence + fiscal month
+    settings.active_cycle_name = get_current_cycle_info(
+        date.today(),
+        CycleType(settings.cycle_type),
+        settings.fiscal_start_month,
+    )
     settings.updated_by_id = current_user.id
 
     db.commit()
@@ -345,6 +367,11 @@ def update_admin_settings(
         id=settings.id,
         org_id=settings.org_id,
         active_cycle=settings.active_cycle_name,
+        cycle_type=settings.cycle_type,
+        fiscal_start_month=settings.fiscal_start_month,
+        goals_edit_enabled=settings.goals_edit_enabled,
+        yearly_goals_final_rating_visible=settings.yearly_goals_final_rating_visible,
+        project_ratings_visible=settings.project_ratings_visible,
         updated_at=settings.updated_at,
     )
 

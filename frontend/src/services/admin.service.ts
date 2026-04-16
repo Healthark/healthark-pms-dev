@@ -36,7 +36,20 @@ export interface SystemSettings {
   id: number;
   org_id: number;
   active_cycle: string | null;
+  cycle_type: string;
+  fiscal_start_month: number;
+  goals_edit_enabled: boolean;
+  yearly_goals_final_rating_visible: boolean;
+  project_ratings_visible: boolean;
   updated_at: string | null;
+}
+
+export interface AdminSettingsUpdatePayload {
+  cycle_type?: string;
+  fiscal_start_month?: number;
+  goals_edit_enabled?: boolean;
+  yearly_goals_final_rating_visible?: boolean;
+  project_ratings_visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,10 +126,8 @@ export const adminService = {
     return res.data;
   },
 
-  updateSettings: async (activeCycle: string): Promise<SystemSettings> => {
-    const res = await apiClient.patch<SystemSettings>("/admin/settings", {
-      active_cycle: activeCycle,
-    });
+  updateSettings: async (payload: AdminSettingsUpdatePayload): Promise<SystemSettings> => {
+    const res = await apiClient.patch<SystemSettings>("/admin/settings", payload);
     return res.data;
   },
 };

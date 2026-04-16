@@ -68,6 +68,12 @@ class SystemSettings(Base):
     goals_submission_open = Column(Boolean, default=False)
     reviews_submission_open = Column(Boolean, default=False)
 
+    # ── Goal & Review Access Controls ────────────────────────────────
+    # Org-wide toggles surfaced in the Admin Panel's Goal Settings card.
+    goals_edit_enabled = Column(Boolean, default=True, nullable=False)
+    yearly_goals_final_rating_visible = Column(Boolean, default=False, nullable=False)
+    project_ratings_visible = Column(Boolean, default=False, nullable=False)
+
     # ── Audit Trail ──────────────────────────────────────────────────
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
