@@ -70,6 +70,7 @@ export interface MyProjectCard {
   assignment_role: string | null;
   department_name: string | null;
   review_status: string | null; // "pending" | "reviewed" | null
+  performance_group: string | null;
   pm_name: string | null;
   cycle: string | null;
 }
@@ -86,6 +87,7 @@ export interface PMPendingReviewCard {
   designation_name: string | null;
   assigned_date: string | null;
   review_status: string | null;
+  performance_group: string | null;
   cycle: string | null;
 }
 
@@ -215,6 +217,18 @@ export const projectReviewService = {
     payload: SecondaryEvalPayload,
   ): Promise<SecondaryEvalResponse> => {
     const res = await apiClient.post<SecondaryEvalResponse>(
+      `/project-reviews/${reviewId}/secondary`,
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Update an existing secondary impact statement. */
+  updateSecondaryEval: async (
+    reviewId: number,
+    payload: SecondaryEvalPayload,
+  ): Promise<SecondaryEvalResponse> => {
+    const res = await apiClient.put<SecondaryEvalResponse>(
       `/project-reviews/${reviewId}/secondary`,
       payload,
     );

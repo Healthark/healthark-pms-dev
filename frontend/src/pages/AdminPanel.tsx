@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Users, Settings, FolderOpen } from "lucide-react";
+import { UserPlus, Users, Settings, FolderOpen, BarChart2 } from "lucide-react";
 
 import {
   adminService,
@@ -18,10 +18,11 @@ import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
 import { DeactivateModal } from "../components/admin/DeactivateModal";
+import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 
 
-type ActiveTab = "users" | "projects" | "settings";
+type ActiveTab = "users" | "projects" | "reviews" | "settings";
 
 export default function AdminPanel() {
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -231,6 +232,14 @@ export default function AdminPanel() {
           </button>
           <button
             type="button"
+            className={tabCls("reviews")}
+            onClick={() => setActiveTab("reviews")}
+          >
+            <BarChart2 className="h-4 w-4" aria-hidden="true" />
+            Reviews
+          </button>
+          <button
+            type="button"
             className={tabCls("settings")}
             onClick={() => setActiveTab("settings")}
           >
@@ -251,6 +260,12 @@ export default function AdminPanel() {
         )}
 
         {activeTab === "projects" && <ProjectsTab />}
+
+        {activeTab === "reviews" && (
+          <div className="p-5">
+            <ManagementTab />
+          </div>
+        )}
 
         {activeTab === "settings" && (
           <SystemSettingsTab

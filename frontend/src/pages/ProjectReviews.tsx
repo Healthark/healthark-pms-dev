@@ -1,20 +1,16 @@
 /**
  * ProjectReviews.tsx — Project Reviews Page (Revised PM-Centric Flow).
  *
- * No self-review. Employee just sees project cards with status:
- * - "Pending" → waiting for PM to evaluate
- * - "Reviewed" → can click to expand and fetch/view the evaluation
- *
- * Tabs:
- * "Evaluate Team"  → PM (Primary evaluator) — evaluation queue
- * "Secondary"      → Secondary evaluators — impact statement queue
+ * My Reviews: Toggle between Card Grid view and Table view.
+ * Evaluate Team: PM evaluation queue + Secondary evaluation queue.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import {
-  Briefcase, CalendarDays, Clock, CheckCircle2,
-  ChevronDown, User, Target, MessageSquare,
-  CalendarClock, FileText, Star, Loader2, UserCircle
+  Briefcase, Clock, CheckCircle2,
+  User, Target, MessageSquare,
+  CalendarClock, FileText, Star, Loader2, UserCircle, X,
+  LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen, Lock, Search,
 } from "lucide-react";
 import {
   projectReviewService,
@@ -23,11 +19,8 @@ import {
 } from "../services/project-review.service";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
-import { SecondaryEvalTab } from "../components/project-reviews/SecondaryEvalTab";
-import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { useAuth } from "../hooks/useAuth";
 
-// Make sure you export this interface from your service file
 export interface RoleExpectationResponse {
   id: number;
   department_name: string;
@@ -41,51 +34,226 @@ export interface RoleExpectationResponse {
   exp_competency_skills: string;
 }
 
-type ActiveTab = "my" | "evaluate" | "management";
+type ActiveTab = "my" | "evaluate";
+type ViewMode = "grid" | "table";
 
-// List of competencies from the backend schema
 const COMPETENCIES = [
-  { key: "task_execution", label: "Task Execution & Problem Solving" },
-  { key: "ownership", label: "Ownership & Accountability" },
-  { key: "project_management", label: "Project Management and Risk Mitigation" },
-  { key: "client_deliverables", label: "Building Client-Ready Deliverables" },
-  { key: "communication", label: "Communication & Client/Stakeholder Management" },
-  { key: "mentoring", label: "Mentoring and Team Development" },
-  { key: "competency_skills", label: "Competency and Skills" },
+  { key: "task_execution", label: "Task Execution & Problem Solving", expKey: "exp_task_execution" },
+  { key: "ownership", label: "Ownership & Accountability", expKey: "exp_ownership" },
+  { key: "project_management", label: "Project Management and Risk Mitigation", expKey: "exp_project_management" },
+  { key: "client_deliverables", label: "Building Client-Ready Deliverables", expKey: "exp_client_deliverables" },
+  { key: "communication", label: "Communication & Client/Stakeholder Management", expKey: "exp_communication" },
+  { key: "mentoring", label: "Mentoring and Team Development", expKey: "exp_mentoring" },
+  { key: "competency_skills", label: "Competency and Skills", expKey: "exp_competency_skills" },
 ] as const;
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-// Smart formatter to handle both new 1-5 ratings and legacy text ratings
 function formatPerformanceScore(score: string | null | undefined): string {
-  if (!score) return "Not Rated";
-  // If it's a single digit 1-5 (new scale)
-  if (/^[1-5]$/.test(score)) {
-    return `${score} / 5`;
-  }
-  // Otherwise, it's legacy text (e.g., "Exceeding Expectations")
+  if (!score) return "—";
+  if (/^[1-5]$/.test(score)) return score;
   return score;
 }
 
-// ── Redesigned Project Card (Collapsible & Fetching) ────────────────
+// ── Reusable: Role Expectation Toggle ──────────────────────────────
 
-function CollapsibleProjectCard({ 
-  card, 
+function ExpectationToggle({
+  text,
+}: {
+  readonly text: string | null | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!text) return null;
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+      >
+        <BookOpen className="h-3 w-3" aria-hidden="true" />
+        {open ? "Hide" : "View"} Role Expectations
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {open && (
+        <div className="mt-1.5 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
+          <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">
+            {text.replace(/ \| /g, "\n• ")}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Summary Card (compact, grid item) ──────────────────────────────
+
+function ProjectSummaryCard({
+  card,
+  isSelected,
+  onClick,
+}: {
+  readonly card: MyProjectCard;
+  readonly isSelected: boolean;
+  readonly onClick: () => void;
+}) {
+  const isReviewed = card.review_status === "reviewed";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left rounded-xl border p-4 transition-all duration-200 ${
+        isSelected
+          ? "border-brand bg-brand/5 ring-1 ring-brand/30 shadow-md"
+          : "border-border bg-surface hover:border-brand/30 hover:shadow-sm"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-mono text-text-muted bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+          {card.project_code}
+        </span>
+        {isReviewed ? (
+          <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
+            <CheckCircle2 className="h-3 w-3" /> Reviewed
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+            <Clock className="h-3 w-3" /> Pending
+          </span>
+        )}
+      </div>
+
+      <h3 className="text-[14px] font-semibold text-text-main leading-snug mb-1.5 line-clamp-2">
+        {card.project_name}
+      </h3>
+
+      <div className="flex items-center gap-1.5 text-[12px] text-text-muted">
+        <User className="h-3 w-3 shrink-0" />
+        <span className="truncate">{card.pm_name ?? "Unassigned"}</span>
+      </div>
+
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/60">
+        {isReviewed ? (
+          <span className="text-[11px] text-text-muted">Click to view evaluation</span>
+        ) : (
+          <span className="text-[11px] text-text-muted italic">Awaiting PM evaluation</span>
+        )}
+        {card.cycle && (
+          <span className="text-[10px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+            {card.cycle}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ── Competency Block (shared between grid detail & table expanded) ──
+
+function CompetencyBlock({
+  review,
+  roleExp,
+  compact,
+}: {
+  readonly review: ProjectReviewResponse;
+  readonly roleExp: RoleExpectationResponse | undefined;
+  readonly compact?: boolean;
+}) {
+  return (
+    <div className={`flex flex-col ${compact ? "gap-3" : "gap-4"}`}>
+      {COMPETENCIES.map((comp, idx) => {
+        const commentKey = `comment_${comp.key}` as keyof ProjectReviewResponse;
+        const commentValue = review[commentKey] as string | null;
+        if (!commentValue) return null;
+
+        const expText = roleExp
+          ? (roleExp as Record<string, unknown>)[comp.expKey] as string | null
+          : null;
+
+        return (
+          <div key={comp.key} className={`flex flex-col gap-2 ${compact ? "rounded-lg bg-slate-50 p-3 border border-slate-100" : "rounded-xl bg-slate-50 p-5 border border-slate-100"}`}>
+            <h3 className={`font-bold uppercase tracking-widest text-brand ${compact ? "text-[12px]" : "text-[13.5px]"}`}>
+              {idx + 1}. {comp.label}
+            </h3>
+
+            <ExpectationToggle text={expText} />
+
+            <div className={compact ? "px-0.5" : "px-1 mt-1"}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <MessageSquare className="h-3.5 w-3.5 text-brand" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand">Manager Review</span>
+              </div>
+              <p className={`leading-relaxed text-text-main whitespace-pre-wrap ${compact ? "text-[13px]" : "text-[13.5px]"}`}>
+                {commentValue}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Impact + Secondary Block (shared) ───────────────────────────────
+
+function ImpactBlock({
+  review,
+  compact,
+}: {
+  readonly review: ProjectReviewResponse;
+  readonly compact?: boolean;
+}) {
+  return (
+    <>
+      {review.impact_statement && (
+        <div className={`${compact ? "rounded-lg p-3" : "rounded-xl p-5"} border border-blue-200 bg-blue-50/50`}>
+          <h3 className="text-[12px] font-bold uppercase tracking-widest text-blue-700 mb-2 flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5" /> Overall Impact Statement
+          </h3>
+          <p className={`leading-relaxed text-blue-900 whitespace-pre-wrap ${compact ? "text-[13px]" : "text-[13.5px]"}`}>
+            {review.impact_statement}
+          </p>
+        </div>
+      )}
+
+      {review.secondary_evaluations && review.secondary_evaluations.length > 0 && (
+        <div className={`${compact ? "rounded-lg p-3" : "rounded-xl p-5"} border border-dashed border-border bg-background/50`}>
+          <h3 className="text-[12px] font-bold uppercase tracking-widest text-text-muted mb-3 flex items-center gap-2">
+            <User className="h-3.5 w-3.5" /> Secondary Feedback
+          </h3>
+          <div className="flex flex-col gap-3">
+            {review.secondary_evaluations.map((ev) => (
+              <div key={ev.id} className="flex flex-col gap-1.5 pb-3 border-b border-border/50 last:border-0 last:pb-0">
+                <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-text-main">
+                  <UserCircle className="h-4 w-4 text-text-muted" />
+                  {ev.evaluator_name}
+                  <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold tracking-wider text-slate-600 uppercase">
+                    Secondary
+                  </span>
+                </div>
+                <p className="text-[13px] leading-relaxed text-text-muted pl-5 whitespace-pre-wrap">
+                  {ev.impact_statement ?? "—"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Grid: Review Detail Panel (shown below the grid) ────────────────
+
+function ReviewDetailPanel({
+  card,
   expectations,
-  defaultExpanded = false 
-}: { 
+  onClose,
+}: {
   readonly card: MyProjectCard;
   readonly expectations: RoleExpectationResponse[];
-  readonly defaultExpanded?: boolean;
+  readonly onClose: () => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [reviewDetails, setReviewDetails] = useState<ProjectReviewResponse | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
@@ -93,275 +261,207 @@ function CollapsibleProjectCard({
   const { settings } = useSystemSettings();
   const projectRatingsVisible = settings?.project_ratings_visible ?? false;
 
-  const isReviewed = card.review_status === "reviewed";
-  const isPending = card.review_status === "pending" || card.review_status === null;
-
-  // Find the matching role expectation for this specific user's project role
   const roleExp = expectations.find(
     (e) => e.department_name === card.department_name && e.designation_name === card.assignment_role
   );
 
-  // Fetch details when expanding
-  const handleToggle = async () => {
-    if (!isReviewed) return;
+  useEffect(() => {
+    if (!card.review_id) return;
+    setIsFetching(true);
+    setError("");
+    setReviewDetails(null);
 
-    if (!isExpanded) {
-      setIsExpanded(true);
-      // Fetch only if we haven't already fetched it
-      if (!reviewDetails && card.review_id) {
-        setIsFetching(true);
-        setError("");
-        try {
-          const data = await projectReviewService.getReview(card.review_id);
-          
-          // Transform flat response into categorical structure for the UI
-          const transformedData = {
-            ...data,
-            secondary_impact_statement: (data.secondary_evaluations || [])
-              .map(ev => `${ev.evaluator_name}: ${ev.impact_statement}`)
-              .join('\n\n'),
-            categories: [
-              {
-                title: "Task Execution & Problem Solving",
-                expected_behavior: roleExp?.exp_task_execution || "Role expectation not defined",
-                score_comment: data.comment_task_execution
-              },
-              {
-                title: "Ownership & Accountability",
-                expected_behavior: roleExp?.exp_ownership || "Role expectation not defined",
-                score_comment: data.comment_ownership
-              },
-              {
-                title: "Project Management and Risk Mitigation",
-                expected_behavior: roleExp?.exp_project_management || "Role expectation not defined",
-                score_comment: data.comment_project_management
-              },
-              {
-                title: "Building Client-Ready Deliverables",
-                expected_behavior: roleExp?.exp_client_deliverables || "Role expectation not defined",
-                score_comment: data.comment_client_deliverables
-              },
-              {
-                title: "Communication & Client Management",
-                expected_behavior: roleExp?.exp_communication || "Role expectation not defined",
-                score_comment: data.comment_communication
-              },
-              {
-                title: "Mentoring and Team Development",
-                expected_behavior: roleExp?.exp_mentoring || "Role expectation not defined",
-                score_comment: data.comment_mentoring
-              },
-              {
-                title: "Competency and Skills",
-                expected_behavior: roleExp?.exp_competency_skills || "Role expectation not defined",
-                score_comment: data.comment_competency_skills
-              }
-            ]
-          } as any;
-          
-          setReviewDetails(transformedData);
-        } catch (err) {
-          setError("Failed to fetch evaluation details");
-          console.error(err);
-        } finally {
-          setIsFetching(false);
-        }
-      }
-    } else {
-      setIsExpanded(false);
-    }
-  };
+    projectReviewService
+      .getReview(card.review_id)
+      .then(setReviewDetails)
+      .catch(() => setError("Failed to fetch evaluation details"))
+      .finally(() => setIsFetching(false));
+  }, [card.review_id]);
+
+  const isPending = card.review_status !== "reviewed";
 
   return (
-    <section className="flex flex-col rounded-2xl border border-border bg-surface p-6 shadow-sm transition-all duration-300 hover:shadow-md">
-      {/* Project Header (Clickable Toggle) */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={!isReviewed}
-        className={`flex w-full items-center justify-between outline-none transition-all ${
-          isExpanded ? 'border-b border-border/60 pb-5 mb-5' : ''
-        } ${!isReviewed ? 'cursor-default opacity-90' : 'cursor-pointer'}`}
-      >
-        <div className="flex items-start sm:items-center gap-4 text-left">
-          <div className="mt-1 sm:mt-0 flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-brand shrink-0">
-            <Briefcase className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[17px] font-bold text-text-main">
-                {card.project_name}
-              </h2>
-              <span className="text-xs text-text-muted font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                {card.project_code}
-              </span>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3 text-[12.5px] text-text-muted">
-              <span className="flex items-center gap-1.5 font-medium text-text-main/80">
-                <User className="h-3.5 w-3.5" /> 
-                {card.pm_name ? `PM: ${card.pm_name}` : "PM: Pending Assignment"}
-              </span>
-              <span className="hidden sm:inline opacity-50">•</span>
-              <span className="flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5" /> 
-                {formatDate(card.project_start_date)} — {formatDate(card.project_expected_end_date)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Status indicator (Right side) */}
-        <div className="flex items-center gap-3">
-          {isPending && (
-            <span className="flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase text-amber-700">
-              <Clock className="h-3.5 w-3.5" /> Pending
+    <div className="rounded-xl border border-brand/20 bg-surface shadow-md animate-in slide-in-from-top-2 fade-in duration-300">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-[16px] font-bold text-text-main">{card.project_name}</h3>
+            <span className="text-[11px] font-mono text-text-muted bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+              {card.project_code}
             </span>
-          )}
-          {isReviewed && (
-            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors ${
-              isExpanded 
-                ? 'bg-brand/10 border-brand/20 text-brand' 
-                : 'bg-background border-border/50 text-text-muted hover:bg-border/50'
-            } ml-4`}>
-              <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-            </div>
-          )}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-[12px] text-text-muted">
+            <span className="flex items-center gap-1"><User className="h-3 w-3" /> PM: {card.pm_name ?? "Unassigned"}</span>
+            <span>Cycle: {card.cycle}</span>
+          </div>
         </div>
-      </button>
+        <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-slate-100 transition-colors" aria-label="Close details">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
 
-      {/* Collapsible Content */}
-      {isExpanded && isReviewed && (
-        <div className="flex flex-col gap-6 animate-in slide-in-from-top-2 fade-in duration-300 min-h-[100px]">
-          
-          {isFetching ? (
-            <div className="flex flex-col items-center justify-center py-8 text-text-muted gap-3">
-              <Loader2 className="h-6 w-6 animate-spin text-brand" />
-              <span className="text-[13px] font-medium">Fetching evaluation details...</span>
-            </div>
-          ) : error ? (
-            <div className="text-center py-6 text-[13px] text-red-600 bg-red-50 rounded-xl">
-              {error}
-            </div>
-          ) : reviewDetails ? (
-            <>
-              {/* Performance Rating — hidden until admin enables visibility */}
-              {projectRatingsVisible && (
-                <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <Star className="h-4 w-4 text-emerald-600" />
-                    <span className="text-[13.5px] text-text-main">
-                      Project Evaluation Score: <span className="font-bold text-emerald-700">{formatPerformanceScore(reviewDetails.performance_group)}</span>
-                    </span>
-                  </div>
-                  {reviewDetails.reviewer_name && (
-                    <div className="flex items-center gap-1.5 text-[12px] text-emerald-800/80 font-medium bg-emerald-100/50 px-2.5 py-1 rounded-md">
-                      <UserCircle className="h-3.5 w-3.5" />
-                      Evaluated by {reviewDetails.reviewer_name}
-                    </div>
-                  )}
+      {/* Body */}
+      <div className="px-5 py-5">
+        {isPending ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Clock className="h-8 w-8 text-amber-500 mb-3" />
+            <p className="font-medium text-text-main">Evaluation Pending</p>
+            <p className="mt-1 text-sm text-text-muted">Your PM hasn't submitted the evaluation for this cycle yet.</p>
+          </div>
+        ) : isFetching ? (
+          <div className="flex flex-col items-center justify-center py-10 text-text-muted gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-brand" />
+            <span className="text-[13px] font-medium">Fetching evaluation details...</span>
+          </div>
+        ) : error ? (
+          <div className="text-center py-6 text-[13px] text-red-600 bg-red-50 rounded-xl">{error}</div>
+        ) : reviewDetails ? (
+          <div className="flex flex-col gap-6">
+            {projectRatingsVisible && (
+              <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Star className="h-4 w-4 text-emerald-600" />
+                  <span className="text-[13.5px] text-text-main">
+                    Project Evaluation Score: <span className="font-bold text-emerald-700">{formatPerformanceScore(reviewDetails.performance_group)}</span>
+                  </span>
                 </div>
-              )}
-
-              {/* Enhanced Categories Section mapped from API Response */}
-              <div className="flex flex-col gap-4">
-                {COMPETENCIES.map((comp, idx) => {
-                  const commentKey = `comment_${comp.key}` as keyof ProjectReviewResponse;
-                  const commentValue = reviewDetails[commentKey] as string | null;
-
-                  // Skip rendering this category if the manager left no comment for it
-                  if (!commentValue) return null;
-
-                  return (
-                    <div key={comp.key} className="flex flex-col gap-3 rounded-xl bg-slate-50 p-5 border border-slate-100">
-                      <h3 className="text-[13.5px] font-bold uppercase tracking-widest text-brand">
-                        {idx + 1}. {comp.label}
-                      </h3>
-                      
-                      {/* The Expectation Block */}
-                      <div className="rounded-lg bg-white p-4 border border-slate-200 shadow-sm">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <Target className="h-3.5 w-3.5 text-text-muted" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Role Expectation</span>
-                        </div>
-                        {/* We use whitespace-pre-wrap to handle the `|` dividers as visual line breaks if needed, or simply render the text */}
-                        <p className="text-[13px] leading-relaxed text-text-muted italic whitespace-pre-wrap">
-                          {reviewDetails.categories.find((c: any) => c.title === comp.label)?.expected_behavior.replace(/ \| /g, '\n• ')}
-                        </p>
-                      </div>
-
-                      {/* The Manager Review Block */}
-                      <div className="px-1 mt-1">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <MessageSquare className="h-3.5 w-3.5 text-brand" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-brand">Manager Review</span>
-                        </div>
-                        <p className="text-[13.5px] leading-relaxed text-text-main whitespace-pre-wrap">
-                          {commentValue}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+                {reviewDetails.reviewer_name && (
+                  <div className="flex items-center gap-1.5 text-[12px] text-emerald-800/80 font-medium bg-emerald-100/50 px-2.5 py-1 rounded-md">
+                    <UserCircle className="h-3.5 w-3.5" />
+                    Evaluated by {reviewDetails.reviewer_name}
+                  </div>
+                )}
               </div>
-
-              {/* PM Overall Impact Statement */}
-              {reviewDetails.impact_statement && (
-                <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50/50 p-5">
-                  <h3 className="text-[12px] font-bold uppercase tracking-widest text-blue-700 mb-3 flex items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5" /> Overall Impact Statement
-                  </h3>
-                  <p className="text-[13.5px] leading-relaxed text-blue-900 whitespace-pre-wrap">
-                    {reviewDetails.impact_statement}
-                  </p>
-                </div>
-              )}
-
-              {/* Secondary Evaluator Impact Statements */}
-              {reviewDetails.secondary_evaluations && reviewDetails.secondary_evaluations.length > 0 && (
-                <div className="mt-2 rounded-xl border border-dashed border-border p-5 bg-background/50">
-                  <h3 className="text-[12px] font-bold uppercase tracking-widest text-text-muted mb-4 flex items-center gap-2">
-                    <User className="h-3.5 w-3.5" /> Secondary Feedback
-                  </h3>
-                  <div className="flex flex-col gap-4">
-                    {reviewDetails.secondary_evaluations.map((ev) => (
-                      <div key={ev.id} className="flex flex-col gap-2 pb-4 border-b border-border/50 last:border-0 last:pb-0">
-                        <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-text-main">
-                          <UserCircle className="h-4 w-4 text-text-muted" />
-                          {ev.evaluator_name}
-                          <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold tracking-wider text-slate-600 uppercase">
-                            Secondary Evaluator
-                          </span>
-                        </div>
-                        <p className="text-[13.5px] leading-relaxed text-text-muted pl-5 whitespace-pre-wrap">
-                          {ev.impact_statement ?? "—"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : null}
-
-        </div>
-      )}
-    </section>
+            )}
+            <CompetencyBlock review={reviewDetails} roleExp={roleExp} />
+            <ImpactBlock review={reviewDetails} />
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
-// ── Skeleton Loader ──────────────────────────────────────────────────
+// ── Table View: Expandable Row ──────────────────────────────────────
 
-function CardSkeleton() {
+function TableExpandedRow({
+  card,
+  expectations,
+}: {
+  readonly card: MyProjectCard;
+  readonly expectations: RoleExpectationResponse[];
+}) {
+  const [reviewDetails, setReviewDetails] = useState<ProjectReviewResponse | null>(null);
+  const [isFetching, setIsFetching] = useState(true);
+  const [error, setError] = useState("");
+
+  const { settings } = useSystemSettings();
+  const projectRatingsVisible = settings?.project_ratings_visible ?? false;
+
+  const roleExp = expectations.find(
+    (e) => e.department_name === card.department_name && e.designation_name === card.assignment_role
+  );
+
+  useEffect(() => {
+    if (!card.review_id) { setIsFetching(false); return; }
+    setIsFetching(true);
+    projectReviewService
+      .getReview(card.review_id)
+      .then(setReviewDetails)
+      .catch(() => setError("Failed to load"))
+      .finally(() => setIsFetching(false));
+  }, [card.review_id]);
+
+  if (card.review_status !== "reviewed") {
+    return (
+      <tr>
+        <td colSpan={6} className="px-5 py-6 text-center text-sm text-text-muted bg-slate-50/50">
+          <Clock className="h-5 w-5 text-amber-500 mx-auto mb-2" />
+          Evaluation pending — awaiting PM review.
+        </td>
+      </tr>
+    );
+  }
+
+  if (isFetching) {
+    return (
+      <tr>
+        <td colSpan={6} className="px-5 py-6 text-center bg-slate-50/50">
+          <Loader2 className="h-5 w-5 animate-spin text-brand mx-auto" />
+        </td>
+      </tr>
+    );
+  }
+
+  if (error || !reviewDetails) {
+    return (
+      <tr>
+        <td colSpan={6} className="px-5 py-4 text-center text-sm text-red-600 bg-red-50/30">
+          {error || "No data available"}
+        </td>
+      </tr>
+    );
+  }
+
   return (
-    <div className="flex flex-col rounded-2xl border border-border bg-surface p-6 shadow-sm animate-pulse">
-      <div className="flex items-center gap-4">
-        <div className="h-12 w-12 rounded-full bg-slate-100 shrink-0" />
-        <div className="space-y-2.5 w-full">
-          <div className="h-4 w-1/3 rounded bg-slate-100" />
+    <tr>
+      <td colSpan={6} className="p-0">
+        <div className="border-t border-brand/10 bg-slate-50/40 px-5 py-5 animate-in slide-in-from-top-1 fade-in duration-200">
+          <div className="flex flex-col gap-4">
+            {/* Rating bar */}
+            {projectRatingsVisible && (
+              <div className="flex items-center gap-2.5 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+                <Star className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-[13px] text-text-main">
+                  Score: <span className="font-bold text-emerald-700">{formatPerformanceScore(reviewDetails.performance_group)}</span>
+                </span>
+                {reviewDetails.reviewer_name && (
+                  <span className="ml-auto text-[11px] text-emerald-700">by {reviewDetails.reviewer_name}</span>
+                )}
+              </div>
+            )}
+
+            <CompetencyBlock review={reviewDetails} roleExp={roleExp} compact />
+            <ImpactBlock review={reviewDetails} compact />
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── Skeleton Loaders ────────────────────────────────────────────────
+
+function GridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-xl border border-border bg-surface p-4">
+          <div className="flex justify-between mb-3">
+            <div className="h-4 w-16 rounded bg-slate-100" />
+            <div className="h-4 w-20 rounded-full bg-slate-100" />
+          </div>
+          <div className="h-4 w-3/4 rounded bg-slate-100 mb-2" />
           <div className="h-3 w-1/2 rounded bg-slate-100" />
         </div>
-      </div>
+      ))}
+    </div>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex gap-6 px-5 py-3 border-b border-border">
+          <div className="h-4 w-1/4 rounded bg-slate-100" />
+          <div className="h-4 w-16 rounded bg-slate-100" />
+          <div className="h-4 w-1/5 rounded bg-slate-100" />
+          <div className="h-4 w-20 rounded-full bg-slate-100" />
+          <div className="h-4 w-12 rounded bg-slate-100" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -371,25 +471,36 @@ function CardSkeleton() {
 export function ProjectReviews() {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
-  const isAdmin = user?.role === "Admin";
+
+  const projectRatingsVisible = settings?.project_ratings_visible ?? false;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [selectedCycle, setSelectedCycle] = useState<string>("");
+  const [selectedCardKey, setSelectedCardKey] = useState<string | null>(null);
+  const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pmFilter, setPmFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [deptFilter, setDeptFilter] = useState<string>("all");
 
   const [cards, setCards] = useState<MyProjectCard[]>([]);
   const [expectations, setExpectations] = useState<RoleExpectationResponse[]>([]);
+  const [showEvaluateTab, setShowEvaluateTab] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch both projects and role expectations in parallel
-      const [projectsData, expectationsData] = await Promise.all([
+      const [projectsData, expectationsData, pmQueue, secQueue] = await Promise.all([
         projectReviewService.getMyProjects(),
-        // Add this method to your project-review.service.ts
-        projectReviewService.getRoleExpectations() 
+        projectReviewService.getRoleExpectations(),
+        projectReviewService.getPMQueue().catch(() => []),
+        projectReviewService.getSecondaryQueue().catch(() => []),
       ]);
       setCards(projectsData);
       setExpectations(expectationsData);
+      setShowEvaluateTab(pmQueue.length > 0 || secQueue.length > 0);
     } catch {
       // Stays empty on error
     } finally {
@@ -397,9 +508,43 @@ export function ProjectReviews() {
     }
   }, []);
 
+  useEffect(() => { void loadData(); }, [loadData]);
+
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    if (settings?.active_cycle_name && selectedCycle === "") {
+      setSelectedCycle(settings.active_cycle_name);
+    }
+  }, [settings?.active_cycle_name, selectedCycle]);
+
+  const availableCycles = Array.from(new Set(cards.map((c) => c.cycle).filter(Boolean) as string[]));
+
+  const availablePMs = Array.from(new Set(cards.map((c) => c.pm_name).filter(Boolean) as string[]));
+  const availableDepts = Array.from(new Set(cards.map((c) => c.department_name).filter(Boolean) as string[]));
+
+  // Apply all filters
+  const filteredCards = cards.filter((c) => {
+    if (selectedCycle && selectedCycle !== "all" && c.cycle !== selectedCycle) return false;
+    if (pmFilter !== "all" && c.pm_name !== pmFilter) return false;
+    if (statusFilter !== "all" && c.review_status !== statusFilter) return false;
+    if (deptFilter !== "all" && c.department_name !== deptFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = c.project_name.toLowerCase().includes(q);
+      const matchesCode = c.project_code.toLowerCase().includes(q);
+      if (!matchesName && !matchesCode) return false;
+    }
+    return true;
+  });
+
+  const selectedCard = filteredCards.find(
+    (c) => `${c.project_id}-${c.cycle}` === selectedCardKey
+  );
+
+  // Clear selections when filters change
+  useEffect(() => {
+    setSelectedCardKey(null);
+    setExpandedRowKey(null);
+  }, [selectedCycle, pmFilter, statusFilter, deptFilter, searchQuery]);
 
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-3 text-[14px] font-semibold border-b-2 transition-all ${
@@ -408,9 +553,16 @@ export function ProjectReviews() {
         : "border-transparent text-text-muted hover:text-text-main"
     }`;
 
+  const viewBtnCls = (mode: ViewMode) =>
+    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+      viewMode === mode
+        ? "bg-brand/10 text-brand"
+        : "text-text-muted hover:bg-slate-100"
+    }`;
+
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-6 pb-10 animate-in fade-in duration-500">
-      
+
       {/* ── Page Header ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -423,7 +575,6 @@ export function ProjectReviews() {
           </p>
         </div>
 
-        {/* Active Cycle & Reviews Status Badge */}
         <div className="flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2 shadow-sm">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Active Cycle</span>
@@ -434,14 +585,10 @@ export function ProjectReviews() {
               </span>
             </div>
           </div>
-          <div className="h-8 w-[1px] bg-border" />
+          <div className="h-8 w-px bg-border" />
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Reviews</span>
-            <span
-              className={`mt-1 text-[13px] font-semibold flex items-center gap-1.5 ${
-                settings?.reviews_submission_open ? "text-emerald-600" : "text-text-muted"
-              }`}
-            >
+            <span className={`mt-1 text-[13px] font-semibold flex items-center gap-1.5 ${settings?.reviews_submission_open ? "text-emerald-600" : "text-text-muted"}`}>
               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
               {settings?.reviews_submission_open ? "Open" : "Closed"}
             </span>
@@ -451,69 +598,229 @@ export function ProjectReviews() {
 
       {/* ── Main Content Container ── */}
       <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-        
+
         <div className="flex border-b border-border px-2">
           <button type="button" className={tabCls("my")} onClick={() => setActiveTab("my")}>
             My Reviews
           </button>
-          <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
-            Evaluate Team
-          </button>
-          {isAdmin && (
-            <button type="button" className={tabCls("management")} onClick={() => setActiveTab("management")}>
-              Management
+          {showEvaluateTab && (
+            <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
+              Evaluate Team
             </button>
           )}
         </div>
 
         <div className="p-5">
-          {/* Employee Default View (Cards) */}
+          {/* ── My Reviews Tab ── */}
           {activeTab === "my" && (
             <div className="flex flex-col gap-5">
+              {/* Toolbar */}
+              {!isLoading && cards.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  {/* Row 1: Search + View Toggle */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="relative flex-1 max-w-xs">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Search projects..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+                      <button type="button" className={viewBtnCls("grid")} onClick={() => setViewMode("grid")}>
+                        <LayoutGrid className="h-3.5 w-3.5" /> Cards
+                      </button>
+                      <button type="button" className={viewBtnCls("table")} onClick={() => setViewMode("table")}>
+                        <Table2 className="h-3.5 w-3.5" /> Table
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Filters */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
+                      <select
+                        value={selectedCycle}
+                        onChange={(e) => setSelectedCycle(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+                      >
+                        <option value="all">All Cycles</option>
+                        {availableCycles.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">PM</label>
+                      <select
+                        value={pmFilter}
+                        onChange={(e) => setPmFilter(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
+                      >
+                        <option value="all">All PMs</option>
+                        {availablePMs.map((pm) => (
+                          <option key={pm} value={pm}>{pm}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+                      >
+                        <option value="all">All</option>
+                        <option value="reviewed">Reviewed</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Dept</label>
+                      <select
+                        value={deptFilter}
+                        onChange={(e) => setDeptFilter(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+                      >
+                        <option value="all">All Depts</option>
+                        {availableDepts.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Content */}
               {isLoading ? (
-                <>
-                  <CardSkeleton />
-                  <CardSkeleton />
-                </>
+                viewMode === "grid" ? <GridSkeleton /> : <TableSkeleton />
               ) : cards.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center bg-background/50">
                   <Briefcase className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
                   <p className="font-display text-base font-medium text-text-main">No projects assigned</p>
                   <p className="mt-1 text-sm text-text-muted">You'll see your project evaluations here once HR assigns them.</p>
                 </div>
+              ) : filteredCards.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center bg-background/50">
+                  <Search className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
+                  <p className="font-display text-sm font-medium text-text-main">No matching reviews</p>
+                  <p className="mt-1 text-xs text-text-muted">Try adjusting your filters or search query.</p>
+                </div>
+              ) : viewMode === "grid" ? (
+                /* ── Grid View ── */
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredCards.map((card) => {
+                      const key = `${card.project_id}-${card.cycle}`;
+                      return (
+                        <ProjectSummaryCard
+                          key={key}
+                          card={card}
+                          isSelected={selectedCardKey === key}
+                          onClick={() => setSelectedCardKey(selectedCardKey === key ? null : key)}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {selectedCard && (
+                    <ReviewDetailPanel
+                      key={selectedCardKey}
+                      card={selectedCard}
+                      expectations={expectations}
+                      onClose={() => setSelectedCardKey(null)}
+                    />
+                  )}
+                </>
               ) : (
-                cards.map((card) => (
-                  <CollapsibleProjectCard 
-                    key={card.project_id} 
-                    card={card} 
-                    expectations={expectations}
-                    defaultExpanded={false} 
-                  />
-                ))
+                /* ── Table View ── */
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-border">
+                        <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Code</th>
+                        <th className="hidden sm:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">PM</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Rating</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {filteredCards.map((card) => {
+                        const key = `${card.project_id}-${card.cycle}`;
+                        const isExpanded = expandedRowKey === key;
+                        const isReviewed = card.review_status === "reviewed";
+
+                        return (
+                          <Fragment key={key}>
+                            <tr
+                              className={`transition-colors cursor-pointer ${
+                                isExpanded ? "bg-brand/5" : "hover:bg-slate-50/60"
+                              }`}
+                              onClick={() => setExpandedRowKey(isExpanded ? null : key)}
+                            >
+                              <td className="px-5 py-3 font-medium text-text-main">
+                                <div className="flex items-center gap-2">
+                                  <ChevronDown className={`h-4 w-4 text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                                  {card.project_name}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 font-mono text-text-muted text-[12px]">{card.project_code}</td>
+                              <td className="hidden sm:table-cell px-4 py-3 text-text-muted">{card.pm_name ?? "—"}</td>
+                              <td className="px-4 py-3">
+                                <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {card.cycle ?? "—"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {isReviewed ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
+                                    <CheckCircle2 className="h-3 w-3" /> Reviewed
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">
+                                    <Clock className="h-3 w-3" /> Pending
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {!projectRatingsVisible ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-text-muted/60">
+                                    <Lock className="h-3 w-3" /> Hidden
+                                  </span>
+                                ) : card.performance_group ? (
+                                  <span className="font-semibold text-text-main">{card.performance_group}</span>
+                                ) : (
+                                  <span className="text-text-muted">—</span>
+                                )}
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <TableExpandedRow card={card} expectations={expectations} />
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
 
-          {/* Evaluate Team — PM queue + Secondary queue in one view */}
-          {activeTab === "evaluate" && (
-            <div className="flex flex-col gap-10">
-              <div>
-                <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted mb-4 pb-2 border-b border-border">
-                  Primary Evaluations
-                </h3>
-                <PMEvaluationTab />
-              </div>
-              <div>
-                <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted mb-4 pb-2 border-b border-border">
-                  Secondary Evaluations
-                </h3>
-                <SecondaryEvalTab />
-              </div>
-            </div>
+          {/* ── Evaluate Team Tab ── */}
+          {activeTab === "evaluate" && showEvaluateTab && (
+            <PMEvaluationTab />
           )}
-
-          {/* Management — Admin only */}
-          {activeTab === "management" && isAdmin && <ManagementTab />}
         </div>
       </div>
     </div>
