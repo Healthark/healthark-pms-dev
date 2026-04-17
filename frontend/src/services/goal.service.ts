@@ -55,6 +55,7 @@ export interface Goal {
   manager_id: number | null;
   title: string;
   description: string | null;
+  attachment_url: string | null;
   status: GoalStatus;
   approval_status: ApprovalStatus;
   manager_feedback: string | null;
@@ -75,6 +76,7 @@ export interface TeamGoal extends Goal {
 export interface GoalCreatePayload {
   title: string;
   description?: string | null;
+  attachment_url?: string | null;
   status?: GoalStatus;
   start_date?: string | null;
   due_date?: string | null;
@@ -86,6 +88,7 @@ export interface GoalCreatePayload {
 export interface GoalUpdatePayload {
   title?: string;
   description?: string | null;
+  attachment_url?: string | null;
   status?: GoalStatus;
   start_date?: string | null;
   due_date?: string | null;
