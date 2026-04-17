@@ -982,11 +982,12 @@ def seed_database():
         # 10. GOALS                                                           #
         # ================================================================== #
 
-        def _goal(user, manager, title, desc, status, approval, progress_notes=None):
+        def _goal(user, manager, title, desc, status, approval, progress_notes=None, goal_type="yearly"):
             db.add(Goal(
                 org_id=org.id, user_id=user.id,
                 manager_id=manager.id if manager else None,
                 title=title, description=desc,
+                goal_type=goal_type,
                 status=status, approval_status=approval,
                 progress_notes=progress_notes,
             ))

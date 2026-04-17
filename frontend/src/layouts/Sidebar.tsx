@@ -87,7 +87,6 @@ const MAIN_NAV: NavItemData[] = [
   { id: "yearly-goals", path: "/yearly-goals", label: "Yearly Goals", icon: Target, feature: "goals" },
   { id: "annual-reviews", path: "/annual-reviews", label: "Annual Reviews", icon: FileText, feature: "annual_reviews" },
   { id: "my-mentees", path: "/my-mentees", label: "My Mentees", icon: Users, feature: "mentoring" },
-  { id: "practitioners", path: "/practitioners", label: "Practitioners Reviews", icon: FileText, feature: "project_reviews" },
   { id: "admin", path: "/admin", label: "Admin Panel", icon: Settings, feature: "admin", requiredRole: ["Admin"] },
 ];
 

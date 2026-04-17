@@ -110,14 +110,14 @@ export interface GoalApprovalPayload {
 export const goalService = {
   // ── Employee — Goals ────────────────────────────────────────────
   getMyGoals: async (goalType?: GoalType): Promise<Goal[]> => {
-    const res = await apiClient.get<Goal[]>("/goals", {
+    const res = await apiClient.get<Goal[]>("/goals/", {
       params: goalType ? { goal_type: goalType } : undefined,
     });
     return res.data;
   },
 
   createGoal: async (payload: GoalCreatePayload): Promise<Goal> => {
-    const res = await apiClient.post<Goal>("/goals", payload);
+    const res = await apiClient.post<Goal>("/goals/", payload);
     return res.data;
   },
 
