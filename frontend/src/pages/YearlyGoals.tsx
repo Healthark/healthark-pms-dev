@@ -1,5 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Target, Lock } from "lucide-react";
+import { useState, useEffect, useCallback, Fragment } from "react";
+import {
+  Plus, Target, Lock, Search,
+  LayoutGrid, Table2, ChevronDown,
+  Pencil, SendHorizonal, Link, MessageSquare,
+} from "lucide-react";
 import {
   goalService,
   type Goal,
@@ -14,6 +18,8 @@ import { getErrorMessage } from "../utils/errors";
 import { YearlyGoalCard } from "../components/goals/YearlyGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
+import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
+import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,6 +38,7 @@ const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
 ];
 
 type ActiveTab = "my" | "team";
+type ViewMode = "grid" | "table";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,53 +53,6 @@ function recomputeProgress(criteria: Criterion[]): number {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function FilterPills({
-  goals,
-  activeFilter,
-  onFilterChange,
-}: {
-  goals: Goal[];
-  activeFilter: ApprovalFilter;
-  onFilterChange: (f: ApprovalFilter) => void;
-}) {
-  const count = (val: ApprovalFilter) =>
-    val === "all"
-      ? goals.length
-      : goals.filter((g) => g.approval_status === val).length;
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {FILTER_CONFIG.map((f) => {
-        const isActive = activeFilter === f.value;
-        const n = count(f.value);
-        return (
-          <button
-            key={f.value}
-            type="button"
-            onClick={() => onFilterChange(f.value)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              isActive
-                ? "bg-brand text-white"
-                : "bg-slate-100 text-text-muted hover:bg-slate-200"
-            }`}
-          >
-            {f.label}
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                isActive
-                  ? "bg-white/20 text-white"
-                  : "bg-white text-text-muted"
-              }`}
-            >
-              {n}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function EmptyState({
   onAdd,
@@ -168,6 +128,10 @@ export function YearlyGoals() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
+  const [cycleFilter, setCycleFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -265,16 +229,30 @@ export function YearlyGoals() {
     [],
   );
 
-  const filteredGoals =
-    approvalFilter === "all"
-      ? goals
-      : goals.filter((g) => g.approval_status === approvalFilter);
+  const availableCycles = Array.from(
+    new Set(goals.map((g) => g.cycle_name).filter(Boolean)),
+  ) as string[];
+
+  const filteredGoals = goals
+    .filter((g) => approvalFilter === "all" || g.approval_status === approvalFilter)
+    .filter((g) => cycleFilter === "all" || g.cycle_name === cycleFilter)
+    .filter((g) =>
+      searchQuery.trim() === "" ||
+      g.title.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
 
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
       activeTab === tab
         ? "border-brand text-brand"
         : "border-transparent text-text-muted hover:text-text-main"
+    }`;
+
+  const viewBtnCls = (mode: ViewMode) =>
+    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+      viewMode === mode
+        ? "bg-brand/10 text-brand"
+        : "text-text-muted hover:bg-slate-100"
     }`;
 
   return (
@@ -339,13 +317,63 @@ export function YearlyGoals() {
           {/* ── My Goals tab ── */}
           {activeTab === "my" && (
             <div className="space-y-4">
-              {/* Filter pills — shown when goals exist, counts per state built in */}
+              {/* Toolbar */}
               {!isLoading && goals.length > 0 && (
-                <FilterPills
-                  goals={goals}
-                  activeFilter={approvalFilter}
-                  onFilterChange={setApprovalFilter}
-                />
+                <div className="flex flex-col gap-3">
+                  {/* Row 1: Search + View Toggle */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="relative flex-1 max-w-xs">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Search goals..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+                      <button type="button" className={viewBtnCls("grid")} onClick={() => setViewMode("grid")}>
+                        <LayoutGrid className="h-3.5 w-3.5" /> Cards
+                      </button>
+                      <button type="button" className={viewBtnCls("table")} onClick={() => setViewMode("table")}>
+                        <Table2 className="h-3.5 w-3.5" /> Table
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Filters */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="goal-cycle-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
+                      <select
+                        id="goal-cycle-filter"
+                        value={cycleFilter}
+                        onChange={(e) => setCycleFilter(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
+                      >
+                        <option value="all">All Cycles</option>
+                        {availableCycles.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="goal-status-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
+                      <select
+                        id="goal-status-filter"
+                        value={approvalFilter}
+                        onChange={(e) => setApprovalFilter(e.target.value as ApprovalFilter)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+                      >
+                        {FILTER_CONFIG.map((f) => (
+                          <option key={f.value} value={f.value}>{f.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Content */}
@@ -363,7 +391,8 @@ export function YearlyGoals() {
                   editGateOpen={yearlyGoalsEditEnabled}
                   hasFilter={true}
                 />
-              ) : (
+              ) : viewMode === "grid" ? (
+                /* ── Card / Grid View ── */
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredGoals.map((goal) => (
                     <YearlyGoalCard
@@ -375,6 +404,125 @@ export function YearlyGoals() {
                       editGateOpen={yearlyGoalsEditEnabled}
                     />
                   ))}
+                </div>
+              ) : (
+                /* ── Table View ── */
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-border">
+                        <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Goal</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {filteredGoals.map((goal) => {
+                        const isExpanded = expandedGoalId === goal.id;
+                        const isDraft = goal.approval_status === "draft";
+                        const isChangesRequired = goal.approval_status === "changes_requested";
+                        const canEdit = (isDraft || isChangesRequired) && yearlyGoalsEditEnabled;
+                        const canSubmit = isDraft || isChangesRequired;
+
+                        return (
+                          <Fragment key={goal.id}>
+                            <tr
+                              className={`transition-colors cursor-pointer ${isExpanded ? "bg-brand/5" : "hover:bg-slate-50/60"}`}
+                              onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
+                            >
+                              <td className="px-5 py-3 font-medium text-text-main max-w-xs">
+                                <div className="flex items-center gap-2">
+                                  <ChevronDown className={`h-4 w-4 text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                                  <span className="line-clamp-1">{goal.title}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {goal.cycle_name ? (
+                                  <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {goal.cycle_name}
+                                  </span>
+                                ) : (
+                                  <span className="text-[12px] text-text-muted">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <ApprovalStatusBadge status={goal.approval_status} />
+                              </td>
+                              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openEdit(goal)}
+                                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                                    >
+                                      <Pencil className="h-3 w-3" /> Edit
+                                    </button>
+                                  )}
+                                  {canSubmit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSubmit(goal)}
+                                      className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
+                                    >
+                                      <SendHorizonal className="h-3 w-3" /> Request Approval
+                                    </button>
+                                  )}
+                                  {goal.approval_status === "submitted" && (
+                                    <span className="text-[11px] text-text-muted italic">Awaiting review…</span>
+                                  )}
+                                  {goal.approval_status === "approved" && (
+                                    <span className="text-[11px] font-semibold text-green-600">✓ Approved</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-brand/5">
+                                <td colSpan={4} className="px-10 py-4">
+                                  <div className="space-y-3 max-w-2xl">
+                                    {goal.description && (
+                                      <p className="text-sm text-text-muted">{goal.description}</p>
+                                    )}
+                                    {goal.attachment_url && (
+                                      <a
+                                        href={goal.attachment_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1.5 text-xs text-brand hover:underline w-fit"
+                                      >
+                                        <Link className="h-3 w-3 shrink-0" /> Attachment
+                                      </a>
+                                    )}
+                                    {isChangesRequired && goal.manager_feedback && (
+                                      <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                                        <MessageSquare className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                                        <div>
+                                          <p className="text-xs font-semibold text-amber-700 mb-0.5">Mentor Feedback</p>
+                                          <p className="text-xs text-amber-800">{goal.manager_feedback}</p>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {goal.criteria.length > 0 && (
+                                      <CriteriaChecklist
+                                        criteria={goal.criteria}
+                                        approvalStatus={goal.approval_status}
+                                        progressPercent={goal.progress_percent}
+                                        onCriterionUpdate={(updated: Criterion) =>
+                                          handleCriterionUpdate(goal.id, updated)
+                                        }
+                                      />
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
