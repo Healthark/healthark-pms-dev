@@ -21,6 +21,7 @@ import {
   type MyProjectCard,
   type ProjectReviewResponse,
 } from "../services/project-review.service";
+import { useSystemSettings } from "../hooks/useSystemSettings";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { SecondaryEvalTab } from "../components/project-reviews/SecondaryEvalTab";
 
@@ -86,6 +87,9 @@ function CollapsibleProjectCard({
   const [reviewDetails, setReviewDetails] = useState<ProjectReviewResponse | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
+
+  const { settings } = useSystemSettings();
+  const projectRatingsVisible = settings?.project_ratings_visible ?? false;
 
   const isReviewed = card.review_status === "reviewed";
   const isPending = card.review_status === "pending" || card.review_status === null;
@@ -239,21 +243,23 @@ function CollapsibleProjectCard({
             </div>
           ) : reviewDetails ? (
             <>
-              {/* Performance Rating */}
-              <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <Star className="h-4 w-4 text-emerald-600" />
-                  <span className="text-[13.5px] text-text-main">
-                    Project Evaluation Score: <span className="font-bold text-emerald-700">{formatPerformanceScore(reviewDetails.performance_group)}</span>
-                  </span>
-                </div>
-                {reviewDetails.reviewer_name && (
-                  <div className="flex items-center gap-1.5 text-[12px] text-emerald-800/80 font-medium bg-emerald-100/50 px-2.5 py-1 rounded-md">
-                    <UserCircle className="h-3.5 w-3.5" />
-                    Evaluated by {reviewDetails.reviewer_name}
+              {/* Performance Rating — hidden until admin enables visibility */}
+              {projectRatingsVisible && (
+                <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <Star className="h-4 w-4 text-emerald-600" />
+                    <span className="text-[13.5px] text-text-main">
+                      Project Evaluation Score: <span className="font-bold text-emerald-700">{formatPerformanceScore(reviewDetails.performance_group)}</span>
+                    </span>
                   </div>
-                )}
-              </div>
+                  {reviewDetails.reviewer_name && (
+                    <div className="flex items-center gap-1.5 text-[12px] text-emerald-800/80 font-medium bg-emerald-100/50 px-2.5 py-1 rounded-md">
+                      <UserCircle className="h-3.5 w-3.5" />
+                      Evaluated by {reviewDetails.reviewer_name}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Enhanced Categories Section mapped from API Response */}
               <div className="flex flex-col gap-4">

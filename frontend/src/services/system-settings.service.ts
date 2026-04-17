@@ -25,6 +25,7 @@ export interface SystemSettingsResponse {
   cycle_end_date: string | null;
   goals_submission_open: boolean;
   reviews_submission_open: boolean;
+  project_ratings_visible: boolean;
   updated_by_id: number | null;
   created_at: string;
   updated_at: string | null;

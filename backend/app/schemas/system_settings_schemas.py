@@ -28,6 +28,7 @@ class SystemSettingsResponse(BaseModel):
 
     goals_submission_open: bool
     reviews_submission_open: bool
+    project_ratings_visible: bool
 
     updated_by_id: Optional[int] = None
     created_at: datetime
