@@ -123,6 +123,21 @@ class GoalResponse(GoalBase):
 
     @computed_field
     @property
+    def fy_year(self) -> Optional[int]:
+        """
+        4-digit fiscal start year extracted from cycle_name ("H1 2026" → 2026).
+        None for regular goals or yearly goals created before this field existed.
+        Used by the frontend Year filter on the Yearly Goals page.
+        """
+        if not self.cycle_name:
+            return None
+        for token in self.cycle_name.split():
+            if token.isdigit() and len(token) == 4:
+                return int(token)
+        return None
+
+    @computed_field
+    @property
     def progress_percent(self) -> int:
         """
         Computed progress: (completed criteria / total criteria) * 100.

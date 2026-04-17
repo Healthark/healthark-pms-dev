@@ -59,6 +59,7 @@ export interface Goal {
   attachment_url: string | null;
   goal_type: GoalType;
   cycle_name: string | null;
+  fy_year: number | null;
   status: GoalStatus;
   approval_status: ApprovalStatus;
   manager_feedback: string | null;

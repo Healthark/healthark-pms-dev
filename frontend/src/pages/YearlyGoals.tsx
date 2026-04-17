@@ -128,7 +128,7 @@ export function YearlyGoals() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
-  const [cycleFilter, setCycleFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
@@ -229,13 +229,13 @@ export function YearlyGoals() {
     [],
   );
 
-  const availableCycles = Array.from(
-    new Set(goals.map((g) => g.cycle_name).filter(Boolean)),
-  ) as string[];
+  const availableYears = Array.from(
+    new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
+  ).sort((a, b) => b - a);
 
   const filteredGoals = goals
     .filter((g) => approvalFilter === "all" || g.approval_status === approvalFilter)
-    .filter((g) => cycleFilter === "all" || g.cycle_name === cycleFilter)
+    .filter((g) => yearFilter === "all" || g.fy_year === Number(yearFilter))
     .filter((g) =>
       searchQuery.trim() === "" ||
       g.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -345,16 +345,16 @@ export function YearlyGoals() {
                   {/* Row 2: Filters */}
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <label htmlFor="goal-cycle-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
+                      <label htmlFor="goal-year-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Year</label>
                       <select
-                        id="goal-cycle-filter"
-                        value={cycleFilter}
-                        onChange={(e) => setCycleFilter(e.target.value)}
-                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
+                        id="goal-year-filter"
+                        value={yearFilter}
+                        onChange={(e) => setYearFilter(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
                       >
-                        <option value="all">All Cycles</option>
-                        {availableCycles.map((c) => (
-                          <option key={c} value={c}>{c}</option>
+                        <option value="all">All Years</option>
+                        {availableYears.map((y) => (
+                          <option key={y} value={y}>{y}</option>
                         ))}
                       </select>
                     </div>

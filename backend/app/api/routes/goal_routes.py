@@ -37,7 +37,7 @@ from app.schemas.goal_schemas import (
     GoalApprovalUpdate,
     TeamGoalResponse,
 )
-from app.core.cycle_utils import extract_fy_label
+from app.core.cycle_utils import get_goal_cycle_name
 
 router = APIRouter()
 
@@ -183,9 +183,10 @@ def create_goal(
     if goal_in.goal_type == GoalType.YEARLY:
         settings = _get_settings(db, current_user.org_id)
         _assert_yearly_gate_open(settings)
-        # Strip "H1 FY26" → "FY26" so the goal belongs to the full fiscal year,
-        # independent of which half-year review period it was created in.
-        cycle_name = extract_fy_label(settings.active_cycle_name)
+        # Stamp the half-yearly cycle at creation time ("H1 2026", "H2 2025").
+        # Derived from the wall-clock UTC time so it's always accurate regardless
+        # of which active_cycle_name the admin has set.
+        cycle_name = get_goal_cycle_name(datetime.now(timezone.utc))
 
     # ── Build the Goal record ──────────────────────────────────────────
     new_goal = Goal(

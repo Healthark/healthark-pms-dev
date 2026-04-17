@@ -1,5 +1,25 @@
-from datetime import date
+from datetime import date, datetime
 from app.models.system_settings_models import CycleType
+
+
+def get_goal_cycle_name(created_at: datetime, fiscal_start_month: int = 4) -> str:
+    """
+    Derive the half-yearly cycle label for a yearly goal from its creation timestamp.
+
+    Returns "H1 YYYY" or "H2 YYYY" where YYYY is the 4-digit fiscal start year.
+
+    Examples (fiscal_start_month=4, Indian FY):
+        April 2026    → "H1 2026"   (H1 FY26: Apr–Sep 2026)
+        October 2026  → "H2 2026"   (H2 FY26: Oct 2026–Mar 2027)
+        February 2027 → "H2 2026"   (still H2 FY26)
+        October 2025  → "H2 2025"   (H2 FY25: Oct 2025–Mar 2026)
+    """
+    month = created_at.month
+    year = created_at.year
+    fiscal_year = year if month >= fiscal_start_month else year - 1
+    relative_month = (month - fiscal_start_month) % 12
+    h_num = (relative_month // 6) + 1
+    return f"H{h_num} {fiscal_year}"
 
 
 def extract_fy_label(cycle_name: str) -> str:
