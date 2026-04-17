@@ -17,29 +17,35 @@ Security Layers Applied:
     Layer 2 — Tenant Isolation: All queries strictly filter by current_user.org_id
     Layer 3 — Role Awareness:   Relationship checks for team/mentee actions
     Layer 4 — Ownership:        Users can only edit their own goals; Mentors can edit mentee goals
+    Layer 5 — Gate Checks:      Yearly goals respect the yearly_goals_edit_enabled flag
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
-from app.models.goal_models import Goal, GoalStatus, ApprovalStatus
+from app.models.goal_models import Goal, GoalStatus, ApprovalStatus, GoalType
 from app.models.goal_criteria_models import GoalCriterion
+from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.goal_schemas import (
     GoalCreate,
     GoalUpdate,
     GoalResponse,
     GoalApprovalUpdate,
+    TeamGoalResponse,
 )
+from app.core.cycle_utils import extract_fy_label
 
 router = APIRouter()
 
-# ── Dependency Helpers ───────────────────────────────────────────────
+
+# ── Helpers ──────────────────────────────────────────────────────────
 
 def _get_goal_with_relations(db: DbSession, goal_id: int, org_id: int) -> Goal:
-    """Helper to fetch a goal with eagerly loaded criteria."""
+    """Fetch a goal with eagerly loaded criteria, scoped to the org."""
     goal = (
         db.query(Goal)
         .options(joinedload(Goal.criteria))
@@ -54,6 +60,31 @@ def _get_goal_with_relations(db: DbSession, goal_id: int, org_id: int) -> Goal:
     return goal
 
 
+def _get_settings(db: DbSession, org_id: int) -> SystemSettings:
+    """Fetch org settings, raising 500 if not yet initialized."""
+    settings = db.query(SystemSettings).filter(
+        SystemSettings.org_id == org_id
+    ).first()
+    if not settings:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="System settings have not been initialized for this organization.",
+        )
+    return settings
+
+
+def _assert_yearly_gate_open(settings: SystemSettings) -> None:
+    """Raise 403 when the yearly-goal edit window is closed."""
+    if not settings.yearly_goals_edit_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Yearly goal submissions are currently closed. "
+                "Please wait for the Admin to open the next submission window."
+            ),
+        )
+
+
 # =====================================================================
 # CORE CRUD OPERATIONS
 # =====================================================================
@@ -63,30 +94,45 @@ def list_goals(
     db: DbSession,
     current_user: CurrentUser,
     team_only: bool = False,
+    goal_type: Optional[str] = None,
     status_filter: Optional[str] = None,
 ):
     """
     List goals.
-    - If team_only=False (default), lists the current user's own goals.
-    - If team_only=True, lists goals belonging to the user's mentees (or all org goals if Admin).
+
+    Filtering:
+        team_only=false (default) — the current user's own goals
+        team_only=true            — goals belonging to the user's mentees
+                                    (or all org goals if Admin)
+        goal_type=yearly          — only yearly goals
+        goal_type=regular         — only regular goals
+        (omit goal_type)          — all goals regardless of type
+
+    The goal_type filter is the primary way the frontend separates the
+    "Yearly Goals" tab (goal_type=yearly) from project-cycle goals.
+    Together with cycle_name and created_at / approved_at, it forms the
+    basis for future period-based filtering (e.g. "FY26 approved goals").
     """
     query = db.query(Goal).filter(Goal.org_id == current_user.org_id)
 
     if team_only:
-        # Check relationship instead of string role
-        if current_user.role == "Admin":
-            users = db.query(User).filter(User.org_id == current_user.org_id).all()
-            team_ids = [u.id for u in users]
-        else:
-            team = db.query(User).filter(User.mentor_id == current_user.id, User.org_id == current_user.org_id).all()
-            team_ids = [u.id for u in team]
-            
+        # Always scope to direct mentees — Admin role is not a bypass here.
+        # For the proper team goals view (with owner_name) use GET /goals/team.
+        team = db.query(User).filter(
+            User.mentor_id == current_user.id,
+            User.org_id == current_user.org_id,
+        ).all()
+        team_ids = [u.id for u in team]
+
         if not team_ids:
-            return []  # User has no mentees, so no team goals exist
-            
+            return []
+
         query = query.filter(Goal.user_id.in_(team_ids))
     else:
         query = query.filter(Goal.user_id == current_user.id)
+
+    if goal_type:
+        query = query.filter(Goal.goal_type == goal_type)
 
     if status_filter:
         query = query.filter(Goal.status == status_filter)
@@ -103,15 +149,24 @@ def create_goal(
 ):
     """
     Create a new goal.
-    - By default, creates a goal for the current user.
-    - If user_id is provided, creates a goal for that user (requires mentor relationship or Admin).
+
+    For yearly goals (goal_type="yearly"):
+        - yearly_goals_edit_enabled must be True (Admin gate)
+        - cycle_name is auto-stamped from the active_cycle_name in settings,
+          stripped to the bare FY label ("H1 FY26" → "FY26").  This makes the
+          goal permanently queryable by fiscal year even after the cycle rotates.
+
+    For regular goals:
+        - No gate check; follows existing project-cycle submission rules.
     """
+    # ── Authorization: creating on behalf of another user ─────────────
     if user_id and user_id != current_user.id:
-        target_user = db.query(User).filter(User.id == user_id, User.org_id == current_user.org_id).first()
+        target_user = db.query(User).filter(
+            User.id == user_id, User.org_id == current_user.org_id
+        ).first()
         if not target_user:
             raise HTTPException(status_code=404, detail="Target user not found.")
-        
-        # Check if Admin or the mentor of the target user
+
         if current_user.role != "Admin" and target_user.mentor_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -123,22 +178,33 @@ def create_goal(
         target_user_id = current_user.id
         target_manager_id = current_user.mentor_id
 
-    # Create the root Goal object
+    # ── Gate check + cycle stamping for yearly goals ───────────────────
+    cycle_name: Optional[str] = None
+    if goal_in.goal_type == GoalType.YEARLY:
+        settings = _get_settings(db, current_user.org_id)
+        _assert_yearly_gate_open(settings)
+        # Strip "H1 FY26" → "FY26" so the goal belongs to the full fiscal year,
+        # independent of which half-year review period it was created in.
+        cycle_name = extract_fy_label(settings.active_cycle_name)
+
+    # ── Build the Goal record ──────────────────────────────────────────
     new_goal = Goal(
         org_id=current_user.org_id,
         user_id=target_user_id,
         manager_id=target_manager_id,
         title=goal_in.title,
         description=goal_in.description,
+        attachment_url=goal_in.attachment_url,
+        goal_type=goal_in.goal_type.value,
+        cycle_name=cycle_name,
         start_date=goal_in.start_date,
         due_date=goal_in.due_date,
         status=GoalStatus.PENDING.value,
         approval_status=ApprovalStatus.DRAFT.value,
     )
     db.add(new_goal)
-    db.flush()  # Generates the new_goal.id required for the criteria foreign keys
+    db.flush()  # Generates new_goal.id required by criteria FK
 
-    # Bulk create associated criteria
     if goal_in.criteria:
         criteria_objects = [
             GoalCriterion(
@@ -155,6 +221,53 @@ def create_goal(
     return _get_goal_with_relations(db, new_goal.id, current_user.org_id)
 
 
+@router.get("/team", response_model=List[TeamGoalResponse])
+def list_team_goals(
+    db: DbSession,
+    current_user: CurrentUser,
+    goal_type: Optional[str] = None,
+):
+    """
+    Return yearly goals for all of the current user's direct mentees.
+
+    This is the exclusive data source for the Team Goals tab.  Only the
+    assigned mentor sees a mentee's goals — there is no Admin bypass.
+    If an Admin is also someone's assigned mentor they see those goals;
+    otherwise they see nothing here (Admin role ≠ approval authority).
+    """
+    mentees = db.query(User).filter(
+        User.mentor_id == current_user.id,
+        User.org_id == current_user.org_id,
+        User.is_deleted == False,  # noqa: E712
+    ).all()
+
+    if not mentees:
+        return []
+
+    mentee_ids = [u.id for u in mentees]
+
+    query = (
+        db.query(Goal)
+        .options(joinedload(Goal.owner), joinedload(Goal.criteria))
+        .filter(
+            Goal.org_id == current_user.org_id,
+            Goal.user_id.in_(mentee_ids),
+        )
+    )
+
+    if goal_type:
+        query = query.filter(Goal.goal_type == goal_type)
+
+    goals = query.order_by(Goal.created_at.desc()).all()
+
+    # Inject owner_name onto each ORM object so TeamGoalResponse.from_attributes
+    # can read it as a plain attribute (Pydantic from_attributes mode).
+    for g in goals:
+        g.owner_name = g.owner.full_name if g.owner else "Unknown"
+
+    return goals
+
+
 @router.get("/{goal_id}", response_model=GoalResponse)
 def get_goal(
     goal_id: int,
@@ -168,8 +281,9 @@ def get_goal(
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
 
-    # Determine if the caller is an Admin or the mentor for the goal owner
-    is_manager = current_user.role == "Admin" or (goal_owner and goal_owner.mentor_id == current_user.id)
+    is_manager = current_user.role == "Admin" or (
+        goal_owner and goal_owner.mentor_id == current_user.id
+    )
     is_owner = goal.user_id == current_user.id
 
     if not (is_owner or is_manager):
@@ -190,13 +304,20 @@ def update_goal(
 ):
     """
     Update a goal's properties.
-    Cannot be edited if APPROVED, unless the caller is the user's mentor or Admin.
+
+    Additional gate for yearly goals (employees only):
+        yearly_goals_edit_enabled must be True.  Mentors and Admins bypass
+        this check — they can always leave feedback and adjust metadata.
+
+    Resets approval_status from CHANGES_REQUESTED → DRAFT when the employee
+    edits, so they can re-submit for another review cycle.
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
 
-    # Determine if the caller is an Admin or the mentor for the goal owner
-    is_manager = current_user.role == "Admin" or (goal_owner and goal_owner.mentor_id == current_user.id)
+    is_manager = current_user.role == "Admin" or (
+        goal_owner and goal_owner.mentor_id == current_user.id
+    )
     is_owner = goal.user_id == current_user.id
 
     if not (is_owner or is_manager):
@@ -205,20 +326,25 @@ def update_goal(
             detail="You do not have permission to edit this goal.",
         )
 
-    # Business Logic: Approved goals are locked for the employee.
+    # Approved goals are locked for employees; managers can still update them.
     if goal.approval_status == ApprovalStatus.APPROVED.value and not is_manager:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Approved goals cannot be edited. Contact your mentor.",
         )
 
-    # Dynamic Field Updates
+    # Gate check: employees cannot edit yearly goals when the window is closed.
+    # Managers bypass this — they need access to leave feedback at any time.
+    if goal.goal_type == GoalType.YEARLY.value and not is_manager:
+        settings = _get_settings(db, current_user.org_id)
+        _assert_yearly_gate_open(settings)
+
     update_data = goal_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(goal, field, value)
 
-    # If the user edits a goal that previously had changes requested,
-    # reset it back to draft mode so they can submit it again.
+    # Reset to draft when an employee edits a changes_requested goal so they
+    # can go through the submit → approve flow again.
     if is_owner and goal.approval_status == ApprovalStatus.CHANGES_REQUESTED.value:
         goal.approval_status = ApprovalStatus.DRAFT.value
 
@@ -234,27 +360,37 @@ def delete_goal(
 ):
     """
     Permanently delete a goal.
-    Only the owner (in draft stage) or their mentor/Admin can delete.
+
+    Employees can only delete their own DRAFT goals.
+    Yearly-goal employees additionally need yearly_goals_edit_enabled = True.
+    Mentors and Admins can delete any goal regardless of state or gate.
     """
-    goal = db.query(Goal).filter(Goal.id == goal_id, Goal.org_id == current_user.org_id).first()
+    goal = db.query(Goal).filter(
+        Goal.id == goal_id, Goal.org_id == current_user.org_id
+    ).first()
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found.")
-        
+
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
 
-    # Determine if the caller is an Admin or the mentor for the goal owner
-    is_manager = current_user.role == "Admin" or (goal_owner and goal_owner.mentor_id == current_user.id)
+    is_manager = current_user.role == "Admin" or (
+        goal_owner and goal_owner.mentor_id == current_user.id
+    )
     is_owner = goal.user_id == current_user.id
 
     if not (is_owner or is_manager):
         raise HTTPException(status_code=403, detail="Permission denied.")
 
-    # Employees cannot delete goals once they are submitted or approved
-    if is_owner and not is_manager and goal.approval_status != ApprovalStatus.DRAFT.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete a goal that has already been submitted for approval.",
-        )
+    if is_owner and not is_manager:
+        if goal.approval_status != ApprovalStatus.DRAFT.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete a goal that has already been submitted for approval.",
+            )
+        # Gate check for yearly goal deletion (same window logic as create/edit).
+        if goal.goal_type == GoalType.YEARLY.value:
+            settings = _get_settings(db, current_user.org_id)
+            _assert_yearly_gate_open(settings)
 
     db.delete(goal)
     db.commit()
@@ -272,13 +408,18 @@ def submit_goal(
     current_user: CurrentUser,
 ):
     """
-    Moves a goal from DRAFT to SUBMITTED.
-    Once submitted, the employee can no longer edit it.
+    Move a goal from DRAFT → SUBMITTED.
+
+    Intentionally has no gate check for yearly_goals_edit_enabled:
+    a user who completed their goal before the window closed should
+    still be able to submit it for mentor review.
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
-    
-    is_manager = current_user.role == "Admin" or (goal_owner and goal_owner.mentor_id == current_user.id)
+
+    is_manager = current_user.role == "Admin" or (
+        goal_owner and goal_owner.mentor_id == current_user.id
+    )
     is_owner = goal.user_id == current_user.id
 
     if not (is_owner or is_manager):
@@ -292,7 +433,6 @@ def submit_goal(
 
     goal.approval_status = ApprovalStatus.SUBMITTED.value
     db.commit()
-    
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
 
@@ -305,16 +445,32 @@ def approve_goal(
 ):
     """
     Mentor/Admin approves or rejects a submitted goal.
-    Provides optional manager feedback.
+
+    When approved:
+        - approval_status → APPROVED
+        - approved_at     → current UTC timestamp
+          This timestamp enables future period-based filtering:
+          e.g. "goals approved during H1 FY26" for dashboards and reports.
+
+    When changes are requested:
+        - approval_status → CHANGES_REQUESTED
+        - manager_feedback is set with the mentor's comments
+        - approved_at remains None (goal was never approved)
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
 
-    # Verify relationship (must be Admin or the goal owner's mentor)
-    if current_user.role != "Admin" and (not goal_owner or goal_owner.mentor_id != current_user.id):
+    # Only the goal owner's assigned mentor may approve or reject.
+    # Admin role does NOT grant approval authority — Admins manage system
+    # settings, not individual goal reviews.  If an Admin is also the
+    # assigned mentor for this user they can still approve via that relationship.
+    if not goal_owner or goal_owner.mentor_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to approve goals for this user."
+            detail=(
+                "Only the assigned mentor can approve or request changes on this goal. "
+                "Contact the goal owner's mentor."
+            ),
         )
 
     if goal.approval_status != ApprovalStatus.SUBMITTED.value:
@@ -323,9 +479,13 @@ def approve_goal(
             detail="Goal is not currently awaiting approval.",
         )
 
-    # Apply the approval status from the request schema
     goal.approval_status = approval_in.approval_status.value
     goal.manager_feedback = approval_in.feedback
+
+    # Stamp the approval timestamp only on the APPROVED transition.
+    # CHANGES_REQUESTED leaves approved_at as None — the goal was not approved.
+    if approval_in.approval_status == ApprovalStatus.APPROVED:
+        goal.approved_at = datetime.now(timezone.utc)
 
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)

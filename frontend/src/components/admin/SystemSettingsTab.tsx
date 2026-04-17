@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Save, Info } from "lucide-react";
 import type { CycleType } from "../../services/system-settings.service";
 
@@ -9,8 +8,8 @@ interface SystemSettingsTabProps {
   readonly fiscalStartMonth: number;
   readonly onFiscalStartMonthChange: (val: number) => void;
   // Goal access controls
-  readonly goalsEditEnabled: boolean;
-  readonly onGoalsEditEnabledChange: (val: boolean) => void;
+  readonly yearlyGoalsEditEnabled: boolean;
+  readonly onYearlyGoalsEditEnabledChange: (val: boolean) => void;
   readonly finalRatingVisible: boolean;
   readonly onFinalRatingVisibleChange: (val: boolean) => void;
   readonly projectRatingsVisible: boolean;
@@ -18,6 +17,7 @@ interface SystemSettingsTabProps {
   readonly onSave: () => void;
   readonly isSaving: boolean;
   readonly settingsSaved: boolean;
+  readonly saveError?: string;
 }
 
 const MONTHS = [
@@ -74,8 +74,8 @@ export function SystemSettingsTab({
   onCycleTypeChange,
   fiscalStartMonth,
   onFiscalStartMonthChange,
-  goalsEditEnabled,
-  onGoalsEditEnabledChange,
+  yearlyGoalsEditEnabled,
+  onYearlyGoalsEditEnabledChange,
   finalRatingVisible,
   onFinalRatingVisibleChange,
   projectRatingsVisible,
@@ -83,9 +83,8 @@ export function SystemSettingsTab({
   onSave,
   isSaving,
   settingsSaved,
+  saveError,
 }: SystemSettingsTabProps) {
-  // Frontend-only toggle — no backend connection yet (flow TBD)
-  const [editCommentsEnabled, setEditCommentsEnabled] = useState(false);
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
@@ -106,20 +105,14 @@ export function SystemSettingsTab({
               <ToggleRow
                 label="Edit Access for Yearly Goals"
                 description="When off, no one in the org can create or edit yearly goals."
-                checked={goalsEditEnabled}
-                onChange={onGoalsEditEnabledChange}
+                checked={yearlyGoalsEditEnabled}
+                onChange={onYearlyGoalsEditEnabledChange}
               />
               <ToggleRow
                 label="View Final Rating for Yearly Goals"
                 description="When on, employees can see their final rating on annual reviews."
                 checked={finalRatingVisible}
                 onChange={onFinalRatingVisibleChange}
-              />
-              <ToggleRow
-                label="Edit Comments for Yearly Goals"
-                description="Controls whether users can edit comments on yearly goal reviews."
-                checked={editCommentsEnabled}
-                onChange={setEditCommentsEnabled}
               />
             </div>
           </div>
@@ -216,7 +209,9 @@ export function SystemSettingsTab({
 
       {/* ── Save Actions ─────────────────────────────────────────────── */}
       <div className="pt-2 flex items-center justify-between">
-        {settingsSaved ? (
+        {saveError ? (
+          <p className="text-sm text-red-600 font-medium">{saveError}</p>
+        ) : settingsSaved ? (
           <p className="text-sm text-green-600 font-medium">
             ✓ Configuration saved successfully.
           </p>

@@ -5,11 +5,11 @@ interface ApprovalStatusBadgeProps {
 }
 
 const CONFIG: Record<ApprovalStatus, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "bg-slate-100 text-slate-500" },
-  submitted: { label: "Pending Review", cls: "bg-blue-100 text-blue-700" },
+  draft: { label: "Draft", cls: "bg-slate-100 text-slate-600" },
+  submitted: { label: "Requested", cls: "bg-blue-100 text-blue-700" },
   approved: { label: "Approved", cls: "bg-green-100 text-green-700" },
   changes_requested: {
-    label: "Changes Requested",
+    label: "Changes Required",
     cls: "bg-amber-100 text-amber-700",
   },
 };

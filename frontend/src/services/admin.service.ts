@@ -39,6 +39,7 @@ export interface SystemSettings {
   cycle_type: string;
   fiscal_start_month: number;
   goals_edit_enabled: boolean;
+  yearly_goals_edit_enabled: boolean;
   yearly_goals_final_rating_visible: boolean;
   project_ratings_visible: boolean;
   updated_at: string | null;
@@ -48,6 +49,7 @@ export interface AdminSettingsUpdatePayload {
   cycle_type?: string;
   fiscal_start_month?: number;
   goals_edit_enabled?: boolean;
+  yearly_goals_edit_enabled?: boolean;
   yearly_goals_final_rating_visible?: boolean;
   project_ratings_visible?: boolean;
 }

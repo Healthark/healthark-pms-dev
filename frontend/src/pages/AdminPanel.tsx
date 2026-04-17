@@ -42,11 +42,12 @@ export default function AdminPanel() {
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaveError, setSettingsSaveError] = useState("");
 
   // Settings form state
   const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
   const [fiscalStartMonth, setFiscalStartMonth] = useState(4);
-  const [goalsEditEnabled, setGoalsEditEnabled] = useState(true);
+  const [yearlyGoalsEditEnabled, setYearlyGoalsEditEnabled] = useState(false);
   const [finalRatingVisible, setFinalRatingVisible] = useState(false);
   const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
 
@@ -67,7 +68,7 @@ export default function AdminPanel() {
       setSettings(settingsData);
       setCycleType((settingsData.cycle_type as CycleType) ?? "half_yearly");
       setFiscalStartMonth(settingsData.fiscal_start_month ?? 4);
-      setGoalsEditEnabled(settingsData.goals_edit_enabled ?? true);
+      setYearlyGoalsEditEnabled(settingsData.yearly_goals_edit_enabled ?? false);
       setFinalRatingVisible(settingsData.yearly_goals_final_rating_visible ?? false);
       setProjectRatingsVisible(settingsData.project_ratings_visible ?? false);
     } catch {
@@ -152,26 +153,29 @@ export default function AdminPanel() {
   // ── Settings handler ──────────────────────────────────────────────────────
   const handleSaveSettings = async () => {
     setIsSaving(true);
+    setSettingsSaveError("");
     try {
       const payload: AdminSettingsUpdatePayload = {
         cycle_type: cycleType,
         fiscal_start_month: fiscalStartMonth,
-        goals_edit_enabled: goalsEditEnabled,
+        yearly_goals_edit_enabled: yearlyGoalsEditEnabled,
         yearly_goals_final_rating_visible: finalRatingVisible,
         project_ratings_visible: projectRatingsVisible,
       };
-      const updated = await adminService.updateSettings(payload);
-      setSettings(updated);
-      setCycleType(updated.cycle_type as CycleType);
-      setFiscalStartMonth(updated.fiscal_start_month);
-      setGoalsEditEnabled(updated.goals_edit_enabled);
-      setFinalRatingVisible(updated.yearly_goals_final_rating_visible);
-      setProjectRatingsVisible(updated.project_ratings_visible);
+      await adminService.updateSettings(payload);
+      // Re-fetch from DB so local state always reflects what was actually persisted.
+      const fresh = await adminService.getSettings();
+      setSettings(fresh);
+      setCycleType((fresh.cycle_type as CycleType) ?? "half_yearly");
+      setFiscalStartMonth(fresh.fiscal_start_month ?? 4);
+      setYearlyGoalsEditEnabled(fresh.yearly_goals_edit_enabled ?? false);
+      setFinalRatingVisible(fresh.yearly_goals_final_rating_visible ?? false);
+      setProjectRatingsVisible(fresh.project_ratings_visible ?? false);
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
       await refreshSettings();
-    } catch {
-      // no-op — button re-enables
+    } catch (err) {
+      setSettingsSaveError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
@@ -259,8 +263,8 @@ export default function AdminPanel() {
             onCycleTypeChange={setCycleType}
             fiscalStartMonth={fiscalStartMonth}
             onFiscalStartMonthChange={setFiscalStartMonth}
-            goalsEditEnabled={goalsEditEnabled}
-            onGoalsEditEnabledChange={setGoalsEditEnabled}
+            yearlyGoalsEditEnabled={yearlyGoalsEditEnabled}
+            onYearlyGoalsEditEnabledChange={setYearlyGoalsEditEnabled}
             finalRatingVisible={finalRatingVisible}
             onFinalRatingVisibleChange={setFinalRatingVisible}
             projectRatingsVisible={projectRatingsVisible}
@@ -268,6 +272,7 @@ export default function AdminPanel() {
             onSave={handleSaveSettings}
             isSaving={isSaving}
             settingsSaved={settingsSaved}
+            saveError={settingsSaveError}
           />
         )}
       </div>

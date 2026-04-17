@@ -1,4 +1,4 @@
-import { CalendarDays, UserCircle, Check, RotateCcw } from "lucide-react";
+import { CalendarDays, UserCircle, Check, RotateCcw, Link } from "lucide-react";
 import type { TeamGoal } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { GoalStatusBadge } from "./GoalStatusBadge";
@@ -46,6 +46,19 @@ export function TeamGoalCard({
         <p className="text-sm text-text-muted line-clamp-2">
           {goal.description}
         </p>
+      )}
+
+      {/* Attachment link — mentor needs to review the referenced material */}
+      {goal.attachment_url && (
+        <a
+          href={goal.attachment_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs text-brand hover:underline truncate w-fit"
+        >
+          <Link className="h-3 w-3 shrink-0" aria-hidden="true" />
+          Attachment
+        </a>
       )}
 
       {/* Badges */}

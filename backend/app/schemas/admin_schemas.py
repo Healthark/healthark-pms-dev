@@ -99,6 +99,7 @@ class AdminSettingsResponse(BaseModel):
     cycle_type: str
     fiscal_start_month: int
     goals_edit_enabled: bool
+    yearly_goals_edit_enabled: bool
     yearly_goals_final_rating_visible: bool
     project_ratings_visible: bool
     updated_at: Optional[datetime] = None
@@ -109,5 +110,6 @@ class AdminSettingsUpdate(BaseModel):
     cycle_type: Optional[str] = Field(default=None, pattern=r"^(annual|half_yearly|quarterly)$")
     fiscal_start_month: Optional[int] = Field(default=None, ge=1, le=12)
     goals_edit_enabled: Optional[bool] = None
+    yearly_goals_edit_enabled: Optional[bool] = None
     yearly_goals_final_rating_visible: Optional[bool] = None
     project_ratings_visible: Optional[bool] = None

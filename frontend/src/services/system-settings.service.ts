@@ -18,13 +18,17 @@ export type CycleType = "annual" | "half_yearly" | "quarterly";
 export interface SystemSettingsResponse {
   id: number;
   org_id: number;
-  active_cycle_name: string; // Handled dynamically by backend
+  active_cycle_name: string;
   cycle_type: CycleType;
-  fiscal_start_month: number; // Added: 1-12 (e.g., 4 = April)
+  fiscal_start_month: number;
   cycle_start_date: string | null;
   cycle_end_date: string | null;
   goals_submission_open: boolean;
   reviews_submission_open: boolean;
+  goals_edit_enabled: boolean;
+  /** True when the Admin has opened the yearly-goal submission window. */
+  yearly_goals_edit_enabled: boolean;
+  yearly_goals_final_rating_visible: boolean;
   project_ratings_visible: boolean;
   updated_by_id: number | null;
   created_at: string;
@@ -32,13 +36,14 @@ export interface SystemSettingsResponse {
 }
 
 export interface SystemSettingsCreate {
-  active_cycle_name?: string; 
+  active_cycle_name?: string;
   cycle_type?: CycleType;
   fiscal_start_month?: number;
   cycle_start_date?: string | null;
   cycle_end_date?: string | null;
   goals_submission_open?: boolean;
   reviews_submission_open?: boolean;
+  yearly_goals_edit_enabled?: boolean;
 }
 
 export interface SystemSettingsUpdate {
@@ -49,6 +54,10 @@ export interface SystemSettingsUpdate {
   cycle_end_date?: string | null;
   goals_submission_open?: boolean;
   reviews_submission_open?: boolean;
+  goals_edit_enabled?: boolean;
+  yearly_goals_edit_enabled?: boolean;
+  yearly_goals_final_rating_visible?: boolean;
+  project_ratings_visible?: boolean;
 }
 
 // ── Service Object ──────────────────────────────────────────────────

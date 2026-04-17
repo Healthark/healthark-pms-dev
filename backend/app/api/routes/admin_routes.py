@@ -311,6 +311,7 @@ def get_admin_settings(
         cycle_type=settings.cycle_type,
         fiscal_start_month=settings.fiscal_start_month,
         goals_edit_enabled=settings.goals_edit_enabled,
+        yearly_goals_edit_enabled=settings.yearly_goals_edit_enabled,
         yearly_goals_final_rating_visible=settings.yearly_goals_final_rating_visible,
         project_ratings_visible=settings.project_ratings_visible,
         updated_at=settings.updated_at,
@@ -347,6 +348,8 @@ def update_admin_settings(
         settings.fiscal_start_month = settings_in.fiscal_start_month
     if settings_in.goals_edit_enabled is not None:
         settings.goals_edit_enabled = settings_in.goals_edit_enabled
+    if settings_in.yearly_goals_edit_enabled is not None:
+        settings.yearly_goals_edit_enabled = settings_in.yearly_goals_edit_enabled
     if settings_in.yearly_goals_final_rating_visible is not None:
         settings.yearly_goals_final_rating_visible = settings_in.yearly_goals_final_rating_visible
     if settings_in.project_ratings_visible is not None:
@@ -370,6 +373,7 @@ def update_admin_settings(
         cycle_type=settings.cycle_type,
         fiscal_start_month=settings.fiscal_start_month,
         goals_edit_enabled=settings.goals_edit_enabled,
+        yearly_goals_edit_enabled=settings.yearly_goals_edit_enabled,
         yearly_goals_final_rating_visible=settings.yearly_goals_final_rating_visible,
         project_ratings_visible=settings.project_ratings_visible,
         updated_at=settings.updated_at,

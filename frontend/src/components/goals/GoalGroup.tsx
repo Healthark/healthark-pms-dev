@@ -9,6 +9,8 @@ interface GoalGroupProps {
   readonly onSubmit: (goal: Goal) => void;
   readonly onProgressUpdate: (goal: Goal, newStatus: GoalStatus) => void;
   readonly onCriterionUpdate: (goalId: number, updated: Criterion) => void;
+  /** When false, the edit button is hidden on yearly goals in draft/changes_requested state. */
+  readonly editGateOpen: boolean;
 }
 
 export function GoalGroup({
@@ -19,6 +21,7 @@ export function GoalGroup({
   onSubmit,
   onProgressUpdate,
   onCriterionUpdate,
+  editGateOpen,
 }: GoalGroupProps) {
   if (goals.length === 0) return null;
 
@@ -48,6 +51,7 @@ export function GoalGroup({
             onSubmit={onSubmit}
             onProgressUpdate={onProgressUpdate}
             onCriterionUpdate={onCriterionUpdate}
+            editGateOpen={editGateOpen}
           />
         ))}
       </div>

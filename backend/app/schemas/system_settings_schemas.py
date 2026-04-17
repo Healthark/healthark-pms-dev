@@ -28,14 +28,18 @@ class SystemSettingsResponse(BaseModel):
 
     goals_submission_open: bool
     reviews_submission_open: bool
+    goals_edit_enabled: bool
+    # True when the Admin has opened the yearly-goal submission window.
+    # Exposed here so the frontend can show/hide the "Add Goal" button
+    # and disable the edit pencil on draft yearly goals without an extra API call.
+    yearly_goals_edit_enabled: bool
+    yearly_goals_final_rating_visible: bool
     project_ratings_visible: bool
 
     updated_by_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    # Architect Note: from_attributes=True tells Pydantic to read directly
-    # from SQLAlchemy model attributes instead of expecting a plain dict.
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -61,6 +65,7 @@ class SystemSettingsCreate(BaseModel):
     cycle_end_date: Optional[date] = None
     goals_submission_open: bool = False
     reviews_submission_open: bool = False
+    yearly_goals_edit_enabled: bool = False
 
 
 # ── Update Schema ────────────────────────────────────────────────────
@@ -84,3 +89,7 @@ class SystemSettingsUpdate(BaseModel):
     cycle_end_date: Optional[date] = None
     goals_submission_open: Optional[bool] = None
     reviews_submission_open: Optional[bool] = None
+    goals_edit_enabled: Optional[bool] = None
+    yearly_goals_edit_enabled: Optional[bool] = None
+    yearly_goals_final_rating_visible: Optional[bool] = None
+    project_ratings_visible: Optional[bool] = None

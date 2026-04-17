@@ -1,6 +1,26 @@
 from datetime import date
 from app.models.system_settings_models import CycleType
 
+
+def extract_fy_label(cycle_name: str) -> str:
+    """
+    Extract the bare fiscal-year label from any cycle name.
+
+    The active_cycle_name on SystemSettings follows the cadence of the org's
+    review cycle (e.g. "H1 FY26", "Q2 FY26"), but yearly goals belong to a
+    full fiscal year, not a half or quarter.  This helper strips the period
+    prefix so the goal is stamped with just the year it belongs to.
+
+        "H1 FY26"  →  "FY26"
+        "Q3 FY27"  →  "FY27"
+        "FY26"     →  "FY26"   (already bare — returned unchanged)
+    """
+    for token in cycle_name.upper().split():
+        if token.startswith("FY"):
+            return token
+    return cycle_name  # Fallback: return as-is if pattern not found
+
+
 def get_current_cycle_info(current_date: date, cycle_type: CycleType, fiscal_start_month: int = 4) -> str:
     """
     Returns the cycle name in the canonical format used across the app:

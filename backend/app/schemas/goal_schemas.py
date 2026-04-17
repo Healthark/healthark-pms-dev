@@ -11,7 +11,7 @@ Changes from previous version:
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from typing import Optional
 from datetime import datetime
-from app.models.goal_models import GoalStatus, ApprovalStatus
+from app.models.goal_models import GoalStatus, ApprovalStatus, GoalType
 
 
 # =====================================================================
@@ -66,6 +66,11 @@ class GoalBase(BaseModel):
 class GoalCreate(GoalBase):
     user_id: int
     manager_id: Optional[int] = None
+    # "yearly" goals are gate-controlled by yearly_goals_edit_enabled.
+    # "regular" goals follow the normal project-cycle submission rules.
+    goal_type: GoalType = GoalType.REGULAR
+    # Optional external reference (e.g. Google Drive folder URL).
+    attachment_url: Optional[str] = None
     # Optional criteria array — if provided, backend inserts them
     # transactionally with the parent goal in a single commit.
     criteria: list[CriterionCreate] = []
@@ -74,6 +79,7 @@ class GoalCreate(GoalBase):
 class GoalUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    attachment_url: Optional[str] = None
     status: Optional[GoalStatus] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -94,9 +100,21 @@ class GoalResponse(GoalBase):
     org_id: int
     user_id: int
     manager_id: Optional[int] = None
+    goal_type: str
+    # Bare FY label stamped at creation for yearly goals (e.g. "FY26").
+    # None for regular goals.
+    cycle_name: Optional[str] = None
+    attachment_url: Optional[str] = None
     approval_status: str
     manager_feedback: Optional[str] = None
     progress_notes: Optional[str] = None
+    # Timestamps for differentiating goals by lifecycle stage.
+    # created_at  — when the goal was first saved (always present)
+    # updated_at  — when it was last modified (auto-managed by SQLAlchemy)
+    # approved_at — set the moment approval_status transitions to APPROVED;
+    #               None until then. Enables future filters like
+    #               "goals approved in H1 FY26".
+    approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

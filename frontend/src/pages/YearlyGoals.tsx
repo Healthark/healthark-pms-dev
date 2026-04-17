@@ -1,29 +1,17 @@
-/**
- * YearlyGoals.tsx — Updated for Story 3.1 + 3.3.
- *
- * Changes:
- *   - Added handleCriterionUpdate to update a single criterion inside
- *     a goal's criteria array without refetching all goals
- *   - Passes onCriterionUpdate through GoalGroup → GoalCard → CriteriaChecklist
- *   - Progress_percent recomputed automatically by Pydantic on the next
- *     full refresh, but we also compute it client-side for instant feedback
- *
- * Placement: src/pages/YearlyGoals.tsx
- */
-
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Target } from "lucide-react";
+import { Plus, Target, Lock } from "lucide-react";
 import {
   goalService,
   type Goal,
-  type GoalStatus,
   type GoalCreatePayload,
   type GoalUpdatePayload,
   type Criterion,
+  type ApprovalStatus,
 } from "../services/goal.service";
 import { useAuth } from "../hooks/useAuth";
+import { useSystemSettings } from "../hooks/useSystemSettings";
 import { getErrorMessage } from "../utils/errors";
-import { GoalGroup } from "../components/goals/GoalGroup";
+import { YearlyGoalCard } from "../components/goals/YearlyGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 
@@ -33,24 +21,15 @@ import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 
 const MANAGER_ROLES = ["Admin", "Manager", "Principal"] as const;
 
-const GROUP_CONFIG = [
-  { status: "pending" as const, label: "Pending", dotClass: "bg-amber-400" },
-  {
-    status: "in_progress" as const,
-    label: "In Progress",
-    dotClass: "bg-blue-400",
-  },
-  {
-    status: "completed" as const,
-    label: "Completed",
-    dotClass: "bg-green-400",
-  },
-  {
-    status: "cancelled" as const,
-    label: "Cancelled",
-    dotClass: "bg-slate-400",
-  },
-] as const;
+type ApprovalFilter = "all" | ApprovalStatus;
+
+const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "submitted", label: "Requested" },
+  { value: "changes_requested", label: "Changes Required" },
+  { value: "approved", label: "Approved" },
+];
 
 type ActiveTab = "my" | "team";
 
@@ -58,11 +37,6 @@ type ActiveTab = "my" | "team";
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Client-side progress recomputation after a criterion toggle.
- * Mirrors the backend's computed_field logic so the UI updates instantly
- * without waiting for a full goal refetch.
- */
 function recomputeProgress(criteria: Criterion[]): number {
   if (criteria.length === 0) return 0;
   const completed = criteria.filter((c) => c.is_completed).length;
@@ -70,69 +44,103 @@ function recomputeProgress(criteria: Criterion[]): number {
 }
 
 // ---------------------------------------------------------------------------
-// Stat pill
+// Sub-components
 // ---------------------------------------------------------------------------
 
-function StatPill({
-  label,
-  count,
-  colorClass,
+function FilterPills({
+  goals,
+  activeFilter,
+  onFilterChange,
 }: {
-  label: string;
-  count: number;
-  colorClass: string;
+  goals: Goal[];
+  activeFilter: ApprovalFilter;
+  onFilterChange: (f: ApprovalFilter) => void;
 }) {
+  const count = (val: ApprovalFilter) =>
+    val === "all"
+      ? goals.length
+      : goals.filter((g) => g.approval_status === val).length;
+
   return (
-    <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm shadow-sm">
-      <span className={`font-semibold ${colorClass}`}>{count}</span>
-      <span className="text-text-muted">{label}</span>
+    <div className="flex flex-wrap gap-2">
+      {FILTER_CONFIG.map((f) => {
+        const isActive = activeFilter === f.value;
+        const n = count(f.value);
+        return (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => onFilterChange(f.value)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              isActive
+                ? "bg-brand text-white"
+                : "bg-slate-100 text-text-muted hover:bg-slate-200"
+            }`}
+          >
+            {f.label}
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                isActive
+                  ? "bg-white/20 text-white"
+                  : "bg-white text-text-muted"
+              }`}
+            >
+              {n}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({
+  onAdd,
+  editGateOpen,
+  hasFilter,
+}: {
+  onAdd: () => void;
+  editGateOpen: boolean;
+  hasFilter: boolean;
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
       <Target className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
       <p className="font-display text-base font-medium text-text-main">
-        No goals yet
+        {hasFilter ? "No goals match this filter" : "No goals yet"}
       </p>
       <p className="mt-1 text-sm text-text-muted">
-        Set your first annual goal to start tracking progress.
+        {hasFilter
+          ? "Try selecting a different filter above."
+          : editGateOpen
+          ? "Set your first annual goal to start tracking progress."
+          : "Goal submissions are currently closed. Check back when the next window opens."}
       </p>
+      {!hasFilter && editGateOpen && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="mt-4 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Add your first goal
+        </button>
+      )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton
-// ---------------------------------------------------------------------------
-
 function GoalSkeleton() {
   return (
-    <div className="space-y-6">
-      {[1, 2].map((g) => (
-        <div key={g} className="space-y-3 animate-pulse">
-          <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-slate-200" />
-            <div className="h-3 w-24 rounded bg-slate-200" />
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {[1, 2].map((c) => (
-              <div
-                key={c}
-                className="h-32 rounded-lg border border-border bg-surface p-4"
-              >
-                <div className="h-3 w-3/4 rounded bg-slate-100 mb-2" />
-                <div className="h-2.5 w-full rounded bg-slate-100" />
-                <div className="h-2.5 w-1/2 rounded bg-slate-100 mt-1.5" />
-              </div>
-            ))}
-          </div>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 animate-pulse">
+      {[1, 2, 3].map((n) => (
+        <div
+          key={n}
+          className="h-44 rounded-lg border border-border bg-surface p-4"
+        >
+          <div className="h-3 w-3/4 rounded bg-slate-100 mb-3" />
+          <div className="h-2.5 w-full rounded bg-slate-100" />
+          <div className="h-2.5 w-2/3 rounded bg-slate-100 mt-1.5" />
         </div>
       ))}
     </div>
@@ -145,11 +153,21 @@ function GoalSkeleton() {
 
 export function YearlyGoals() {
   const { user } = useAuth();
+  const { settings } = useSystemSettings();
+
   const isManager = MANAGER_ROLES.includes(
     user?.role as (typeof MANAGER_ROLES)[number],
   );
+  const yearlyGoalsEditEnabled = settings?.yearly_goals_edit_enabled ?? false;
+
+  // Extract bare FY label ("H1 FY26" → "FY26") for the page header.
+  const fyLabel = settings?.active_cycle_name
+    ? settings.active_cycle_name.split(" ").find((t) => t.startsWith("FY")) ??
+      settings.active_cycle_name
+    : null;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -160,7 +178,7 @@ export function YearlyGoals() {
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
-      setGoals(await goalService.getMyGoals());
+      setGoals(await goalService.getMyGoals("yearly"));
     } catch {
       /* stays empty */
     } finally {
@@ -189,7 +207,7 @@ export function YearlyGoals() {
     setModalError("");
   };
 
-  // Save (create or update)
+  // Create or update
   const handleSave = async (payload: GoalCreatePayload | GoalUpdatePayload) => {
     setIsSaving(true);
     setModalError("");
@@ -203,9 +221,10 @@ export function YearlyGoals() {
           prev.map((g) => (g.id === updated.id ? updated : g)),
         );
       } else {
-        const created = await goalService.createGoal(
-          payload as GoalCreatePayload,
-        );
+        const created = await goalService.createGoal({
+          ...(payload as GoalCreatePayload),
+          goal_type: "yearly",
+        });
         setGoals((prev) => [created, ...prev]);
       }
       closeModal();
@@ -216,33 +235,17 @@ export function YearlyGoals() {
     }
   };
 
-  // Submit for review
+  // Submit draft / changes_requested goal for mentor review
   const handleSubmit = async (goal: Goal) => {
     try {
       const updated = await goalService.submitGoal(goal.id);
       setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
     } catch {
-      // Goal stays in draft — user can retry
+      /* goal stays in draft — user can retry */
     }
   };
 
-  // Quick progress cycling (approved goals only)
-  const handleProgressUpdate = async (goal: Goal, newStatus: GoalStatus) => {
-    try {
-      const updated = await goalService.updateGoal(goal.id, {
-        status: newStatus,
-      });
-      setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
-    } catch {
-      // Status stays unchanged — user can retry
-    }
-  };
-
-  /**
-   * Criterion update handler — replaces the updated criterion inside
-   * the parent goal's criteria array and recomputes progress_percent
-   * client-side for instant visual feedback.
-   */
+  // Criterion toggle — client-side progress recompute for instant feedback
   const handleCriterionUpdate = useCallback(
     (goalId: number, updated: Criterion) => {
       setGoals((prev) =>
@@ -262,8 +265,10 @@ export function YearlyGoals() {
     [],
   );
 
-  const countByStatus = (s: Goal["status"]) =>
-    goals.filter((g) => g.status === s).length;
+  const filteredGoals =
+    approvalFilter === "all"
+      ? goals
+      : goals.filter((g) => g.approval_status === approvalFilter);
 
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -279,21 +284,33 @@ export function YearlyGoals() {
         <div>
           <h1 className="font-display text-xl font-semibold text-text-main">
             Yearly Goals
+            {fyLabel && (
+              <span className="ml-2 text-sm font-normal text-text-muted">
+                · {fyLabel}
+              </span>
+            )}
           </h1>
           <p className="mt-0.5 text-sm text-text-muted">
-            Define, track, and complete your annual objectives.
+            Define and track your annual objectives for mentor approval.
           </p>
         </div>
-        {activeTab === "my" && (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Add Goal
-          </button>
-        )}
+
+        {activeTab === "my" &&
+          (yearlyGoalsEditEnabled ? (
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add Goal
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Goal submissions are currently closed.
+            </div>
+          ))}
       </div>
 
       {/* Tab container */}
@@ -321,49 +338,41 @@ export function YearlyGoals() {
         <div className="p-5">
           {/* ── My Goals tab ── */}
           {activeTab === "my" && (
-            <div className="space-y-5">
-              {/* Stats */}
+            <div className="space-y-4">
+              {/* Filter pills — shown when goals exist, counts per state built in */}
               {!isLoading && goals.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  <StatPill
-                    label="Total"
-                    count={goals.length}
-                    colorClass="text-text-main"
-                  />
-                  <StatPill
-                    label="Pending"
-                    count={countByStatus("pending")}
-                    colorClass="text-amber-600"
-                  />
-                  <StatPill
-                    label="In Progress"
-                    count={countByStatus("in_progress")}
-                    colorClass="text-blue-600"
-                  />
-                  <StatPill
-                    label="Completed"
-                    count={countByStatus("completed")}
-                    colorClass="text-green-600"
-                  />
-                </div>
+                <FilterPills
+                  goals={goals}
+                  activeFilter={approvalFilter}
+                  onFilterChange={setApprovalFilter}
+                />
               )}
 
+              {/* Content */}
               {isLoading ? (
                 <GoalSkeleton />
               ) : goals.length === 0 ? (
-                <EmptyState onAdd={openAdd} />
+                <EmptyState
+                  onAdd={openAdd}
+                  editGateOpen={yearlyGoalsEditEnabled}
+                  hasFilter={false}
+                />
+              ) : filteredGoals.length === 0 ? (
+                <EmptyState
+                  onAdd={openAdd}
+                  editGateOpen={yearlyGoalsEditEnabled}
+                  hasFilter={true}
+                />
               ) : (
-                <div className="space-y-8">
-                  {GROUP_CONFIG.map(({ status, label, dotClass }) => (
-                    <GoalGroup
-                      key={status}
-                      title={label}
-                      dotClass={dotClass}
-                      goals={goals.filter((g) => g.status === status)}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredGoals.map((goal) => (
+                    <YearlyGoalCard
+                      key={goal.id}
+                      goal={goal}
                       onEdit={openEdit}
                       onSubmit={handleSubmit}
-                      onProgressUpdate={handleProgressUpdate}
                       onCriterionUpdate={handleCriterionUpdate}
+                      editGateOpen={yearlyGoalsEditEnabled}
                     />
                   ))}
                 </div>
@@ -376,7 +385,7 @@ export function YearlyGoals() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Create / Edit modal */}
       <GoalFormModal
         isOpen={showModal}
         onClose={closeModal}

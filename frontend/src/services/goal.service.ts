@@ -18,6 +18,7 @@ export type ApprovalStatus =
   | "submitted"
   | "approved"
   | "changes_requested";
+export type GoalType = "regular" | "yearly";
 
 // ── Criterion Types ─────────────────────────────────────────────────
 
@@ -56,12 +57,15 @@ export interface Goal {
   title: string;
   description: string | null;
   attachment_url: string | null;
+  goal_type: GoalType;
+  cycle_name: string | null;
   status: GoalStatus;
   approval_status: ApprovalStatus;
   manager_feedback: string | null;
   progress_notes: string | null;
   start_date: string | null;
   due_date: string | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string | null;
   criteria: Criterion[];
@@ -77,6 +81,7 @@ export interface GoalCreatePayload {
   title: string;
   description?: string | null;
   attachment_url?: string | null;
+  goal_type?: GoalType;
   status?: GoalStatus;
   start_date?: string | null;
   due_date?: string | null;
@@ -104,8 +109,10 @@ export interface GoalApprovalPayload {
 
 export const goalService = {
   // ── Employee — Goals ────────────────────────────────────────────
-  getMyGoals: async (): Promise<Goal[]> => {
-    const res = await apiClient.get<Goal[]>("/goals");
+  getMyGoals: async (goalType?: GoalType): Promise<Goal[]> => {
+    const res = await apiClient.get<Goal[]>("/goals", {
+      params: goalType ? { goal_type: goalType } : undefined,
+    });
     return res.data;
   },
 
@@ -155,8 +162,10 @@ export const goalService = {
   },
 
   // ── Manager ─────────────────────────────────────────────────────
-  getTeamGoals: async (): Promise<TeamGoal[]> => {
-    const res = await apiClient.get<TeamGoal[]>("/goals/team");
+  getTeamGoals: async (goalType?: GoalType): Promise<TeamGoal[]> => {
+    const res = await apiClient.get<TeamGoal[]>("/goals/team", {
+      params: goalType ? { goal_type: goalType } : undefined,
+    });
     return res.data;
   },
 
@@ -165,7 +174,7 @@ export const goalService = {
     payload: GoalApprovalPayload,
   ): Promise<Goal> => {
     const res = await apiClient.patch<Goal>(
-      `/goals/${goalId}/approval`,
+      `/goals/${goalId}/approve`,
       payload,
     );
     return res.data;

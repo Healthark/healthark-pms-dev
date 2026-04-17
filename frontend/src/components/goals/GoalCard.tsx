@@ -18,6 +18,7 @@ import {
   PlayCircle,
   CheckCircle2,
   FileText,
+  Link,
 } from "lucide-react";
 import type { Goal, GoalStatus, Criterion } from "../../services/goal.service";
 import { GoalStatusBadge } from "./GoalStatusBadge";
@@ -30,6 +31,8 @@ interface GoalCardProps {
   readonly onSubmit: (goal: Goal) => void;
   readonly onProgressUpdate: (goal: Goal, newStatus: GoalStatus) => void;
   readonly onCriterionUpdate: (goalId: number, updated: Criterion) => void;
+  /** When false, the edit button is hidden on yearly goals that aren't yet submitted/approved. */
+  readonly editGateOpen: boolean;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -82,6 +85,7 @@ export function GoalCard({
   onSubmit,
   onProgressUpdate,
   onCriterionUpdate,
+  editGateOpen,
 }: GoalCardProps) {
   const isSubmitted = goal.approval_status === "submitted";
   const isApproved = goal.approval_status === "approved";
@@ -90,7 +94,12 @@ export function GoalCard({
   const canSubmit =
     goal.approval_status === "draft" ||
     goal.approval_status === "changes_requested";
-  const canEdit = !isSubmitted && !isCancelled;
+  // Yearly goals also require the edit window to be open before the employee
+  // can edit. Submitted and cancelled goals remain locked regardless.
+  const canEdit =
+    !isSubmitted &&
+    !isCancelled &&
+    (goal.goal_type !== "yearly" || editGateOpen);
   const canProgress = isApproved && !isCancelled && !isCompleted;
   const hasCriteria = goal.criteria.length > 0;
 
@@ -130,6 +139,19 @@ export function GoalCard({
         <p className="text-sm text-text-muted line-clamp-2">
           {goal.description}
         </p>
+      )}
+
+      {/* Attachment link */}
+      {goal.attachment_url && (
+        <a
+          href={goal.attachment_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs text-brand hover:underline truncate w-fit"
+        >
+          <Link className="h-3 w-3 shrink-0" aria-hidden="true" />
+          Attachment
+        </a>
       )}
 
       {/* Manager feedback banner */}

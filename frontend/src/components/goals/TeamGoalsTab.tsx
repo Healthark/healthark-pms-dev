@@ -124,7 +124,7 @@ export function TeamGoalsTab() {
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await goalService.getTeamGoals();
+      const data = await goalService.getTeamGoals("yearly");
       setGoals(data);
     } catch {
       // Stays empty
@@ -224,10 +224,10 @@ export function TeamGoalsTab() {
             aria-hidden="true"
           />
           <p className="font-display text-base font-medium text-text-main">
-            No goals here
+            No yearly goals here
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            Your team hasn't submitted any goals for this filter yet.
+            Your team hasn't submitted any yearly goal requests for this filter yet.
           </p>
         </div>
       ) : (
