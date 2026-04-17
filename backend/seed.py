@@ -4,6 +4,9 @@ from app.models.reference_models import Department, Designation
 from app.models.user_models import User
 from app.models.system_settings_models import SystemSettings, CycleType
 from app.models.project_models import Project, ProjectAssignment
+from app.models.project_review_models import ProjectReview, ProjectReviewEvaluator
+from app.models.annual_review_models import AnnualReview
+from app.models.goal_models import Goal
 from app.models.role_expectation_models import RoleExpectation
 from app.core.security import get_password_hash
 from datetime import date
@@ -479,6 +482,636 @@ def seed_database():
             print(f"  [+] Seeded {added_count} Role Expectations for Healthark from data dictionary")
         else:
             print("  [~] Healthark Role expectations already exist, skipping...")
+
+
+        # ================================================================== #
+        # 8. HISTORICAL PROJECT REVIEWS                                       #
+        # ================================================================== #
+
+        proj_ma    = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-001").first()
+        proj_idt   = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-002").first()
+        proj_rwe   = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-003").first()
+        proj_cross = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-004").first()
+
+        def _pr(user, project, reviewer, cycle, status, pg=None, impact=None, **comments):
+            if not db.query(ProjectReview).filter_by(
+                org_id=org.id, user_id=user.id, project_id=project.id, cycle=cycle
+            ).first():
+                db.add(ProjectReview(
+                    org_id=org.id, user_id=user.id, project_id=project.id,
+                    reviewer_id=reviewer.id if reviewer else None,
+                    cycle=cycle, status=status,
+                    performance_group=pg, impact_statement=impact, **comments
+                ))
+
+        def _pre(review_id, evaluator, impact, status="submitted"):
+            if not db.query(ProjectReviewEvaluator).filter_by(
+                project_review_id=review_id, evaluator_id=evaluator.id
+            ).first():
+                db.add(ProjectReviewEvaluator(
+                    org_id=org.id, project_review_id=review_id,
+                    evaluator_id=evaluator.id, evaluator_type="Secondary",
+                    status=status, impact_statement=impact,
+                ))
+
+        if db.query(ProjectReview).filter(ProjectReview.org_id == org.id).count() == 0 \
+                and proj_ma and proj_idt and proj_rwe and proj_cross:
+
+            # ── H1 FY25: All Reviewed ──────────────────────────────────────
+            # PRJ-001 (PM: Priya)
+            _pr(arjun, proj_ma, priya, "H1 FY25", "reviewed", pg="4",
+                impact="Arjun consistently delivered high-quality EU market analysis with strong analytical rigor.",
+                comment_task_execution="Applied frameworks independently; delivered structured outputs for all EU segments.",
+                comment_ownership="Owned the EU market analysis end-to-end with minimal supervision.",
+                comment_project_management="Maintained updated project docs and communicated proactively.",
+                comment_client_deliverables="Decks were well-structured with compelling narratives and minimal errors.",
+                comment_communication="Clear and timely communications; MOMs precise with ownership tags.",
+                comment_mentoring="Supported Neha on deck formatting and secondary research methodology.",
+                comment_competency_skills="Developing solid expertise in oncology market access frameworks.",
+            )
+            _pr(neha, proj_ma, priya, "H1 FY25", "reviewed", pg="3",
+                impact="Neha contributed effectively to research and slide preparation across EU markets.",
+                comment_task_execution="Completed assigned research tasks with guidance; learning to structure independently.",
+                comment_ownership="Reliable on assigned modules; could proactively flag delays earlier.",
+                comment_project_management="Follows instructions well; working on self-organizing.",
+                comment_client_deliverables="Produced clean slides with good formatting consistency.",
+                comment_communication="Clear meeting notes; improving ability to synthesize client feedback.",
+                comment_mentoring="Participates actively in team discussions.",
+                comment_competency_skills="Building foundation in market access research.",
+            )
+            db.flush()
+            arjun_ma_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=arjun.id, project_id=proj_ma.id, cycle="H1 FY25").first()
+            neha_ma_h1  = db.query(ProjectReview).filter_by(org_id=org.id, user_id=neha.id,  project_id=proj_ma.id, cycle="H1 FY25").first()
+            if arjun_ma_h1: _pre(arjun_ma_h1.id, david, "Arjun integrated IDT data perspectives seamlessly into the strategy deliverable.")
+            if neha_ma_h1:  _pre(neha_ma_h1.id,  david, "Neha was responsive to cross-functional requests and maintained clear documentation.")
+            db.commit()
+
+            # PRJ-002 (PM: David)
+            _pr(rahul, proj_idt, david, "H1 FY25", "reviewed", pg="4",
+                impact="Rahul delivered the core analytics pipeline with strong technical quality.",
+                comment_task_execution="Independently developed and tested multiple data pipeline components.",
+                comment_ownership="Took full ownership of assigned modules; proactively resolved blockers.",
+                comment_project_management="Tracked tasks diligently and flagged risks proactively.",
+                comment_client_deliverables="Code quality was high; dashboards were client-ready with minimal rework.",
+                comment_communication="Clear updates; good at translating technical details for stakeholders.",
+                comment_mentoring="Guided Meera on data modeling and visualization best practices.",
+                comment_competency_skills="Strong SQL and visualization skills; developing Python proficiency.",
+            )
+            _pr(meera, proj_idt, david, "H1 FY25", "reviewed", pg="3",
+                impact="Meera contributed meaningfully to data preparation and dashboard components.",
+                comment_task_execution="Completed assigned data tasks with guidance; learning to work independently.",
+                comment_ownership="Reliable on assigned work; building confidence to manage full modules.",
+                comment_project_management="Adheres to timelines; proactive communication improving.",
+                comment_client_deliverables="Produced well-formatted outputs; number accuracy improving.",
+                comment_communication="Good meeting participation; written communication becoming more concise.",
+                comment_mentoring="Eager to learn; receptive to feedback during code reviews.",
+                comment_competency_skills="Progressing well in SQL and data visualization tools.",
+            )
+            db.flush()
+            rahul_idt_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=rahul.id, project_id=proj_idt.id, cycle="H1 FY25").first()
+            meera_idt_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=meera.id, project_id=proj_idt.id, cycle="H1 FY25").first()
+            if rahul_idt_h1: _pre(rahul_idt_h1.id, vikram, "Rahul's RWE data integration added significant value to the analytics platform.")
+            if meera_idt_h1: _pre(meera_idt_h1.id, vikram, "Meera handled cross-functional data requests well and maintained good documentation.")
+            db.commit()
+
+            # PRJ-003 (PM: Vikram)
+            _pr(ananya, proj_rwe, vikram, "H1 FY25", "reviewed", pg="4",
+                impact="Ananya led protocol design and statistical analysis with strong scientific rigor.",
+                comment_task_execution="Structured complex RWE methodology questions independently with scientific depth.",
+                comment_ownership="Owned the protocol design module; proactively managed dependencies.",
+                comment_project_management="Thorough planning and risk communication; excellent timeline adherence.",
+                comment_client_deliverables="Study outputs were scientifically sound and client-ready.",
+                comment_communication="Confident presenter; translates complex RWE concepts clearly.",
+                comment_mentoring="Actively coached Karan on study design principles.",
+                comment_competency_skills="Growing expertise in cardiovascular outcomes research.",
+            )
+            _pr(karan, proj_rwe, vikram, "H1 FY25", "reviewed", pg="3",
+                impact="Karan supported data collection and literature review effectively.",
+                comment_task_execution="Completed literature review tasks thoroughly with guidance on prioritization.",
+                comment_ownership="Dependable on assigned tasks; building initiative for broader scope.",
+                comment_project_management="Good at following project plans; working on proactive risk flagging.",
+                comment_client_deliverables="Research summaries were accurate; formatting improving.",
+                comment_communication="Clear internal communications; developing confidence in stakeholder interactions.",
+                comment_mentoring="Active participant in team discussions.",
+                comment_competency_skills="Building foundational RWE knowledge; progressing steadily.",
+            )
+            db.commit()
+
+            # PRJ-004 (PM: Priya) — cross-functional
+            _pr(rahul, proj_cross, priya, "H1 FY25", "reviewed", pg="4",
+                impact="Rahul's IDT analytics work was a cornerstone of the integrated evidence package.",
+                comment_task_execution="Delivered the data integration layer connecting IDT, strategy, and RWE workstreams.",
+                comment_ownership="Managed the data pipeline end-to-end with minimal oversight.",
+                comment_project_management="Coordinated well across three teams; maintained a clear cross-functional tracker.",
+                comment_client_deliverables="Final data outputs were clean, well-documented, and client-facing ready.",
+                comment_communication="Excellent communicator across functional boundaries.",
+                comment_mentoring="Supported cross-functional team members on data access and tooling.",
+                comment_competency_skills="Showcased breadth across analytics, data engineering, and RWE data concepts.",
+            )
+            _pr(ananya, proj_cross, priya, "H1 FY25", "reviewed", pg="4",
+                impact="Ananya's RWE input strengthened the evidence base significantly.",
+                comment_task_execution="Independently synthesized RWE evidence into the oncology evidence package.",
+                comment_ownership="Took initiative to go beyond assigned scope and drive the evidence narrative.",
+                comment_project_management="Excellent cross-workstream coordination; flagged timeline risks early.",
+                comment_client_deliverables="RWE sections were scientifically robust and visually compelling.",
+                comment_communication="Effective communicator with both technical and strategy team members.",
+                comment_mentoring="Shared RWE knowledge with strategy team members.",
+                comment_competency_skills="Demonstrated strong oncology RWE expertise in cross-functional setting.",
+            )
+            _pr(neha, proj_cross, priya, "H1 FY25", "reviewed", pg="3",
+                impact="Neha contributed to strategy slides and research compilation.",
+                comment_task_execution="Handled research and slide compilation tasks reliably.",
+                comment_ownership="Dependable contributor; building confidence for broader ownership.",
+                comment_project_management="Good at following plans; improving at proactive status updates.",
+                comment_client_deliverables="Outputs were well-formatted; storytelling improving.",
+                comment_communication="Clear and timely on assigned communication tasks.",
+                comment_mentoring="Learning from cross-functional exposure.",
+                comment_competency_skills="Growing understanding of integrated evidence requirements.",
+            )
+            db.flush()
+            rahul_cross_h1  = db.query(ProjectReview).filter_by(org_id=org.id, user_id=rahul.id,  project_id=proj_cross.id, cycle="H1 FY25").first()
+            ananya_cross_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=ananya.id, project_id=proj_cross.id, cycle="H1 FY25").first()
+            neha_cross_h1   = db.query(ProjectReview).filter_by(org_id=org.id, user_id=neha.id,   project_id=proj_cross.id, cycle="H1 FY25").first()
+            if rahul_cross_h1:  _pre(rahul_cross_h1.id,  vikram, "Rahul's cross-functional coordination on the RWE-IDT integration was excellent.")
+            if ananya_cross_h1: _pre(ananya_cross_h1.id, vikram, "Ananya delivered strong RWE sections with scientific rigor and good client focus.")
+            if neha_cross_h1:   _pre(neha_cross_h1.id,   vikram, "Neha was a reliable contributor across the cross-functional workstreams.")
+            db.commit()
+
+            # ── H2 FY25: Mix of Reviewed and Pending ──────────────────────
+            # PRJ-001 (PM: Priya) — both reviewed
+            _pr(arjun, proj_ma, priya, "H2 FY25", "reviewed", pg="4",
+                impact="Arjun stepped up significantly, taking on broader project coordination responsibilities.",
+                comment_task_execution="Proactively identified and structured research gaps without supervision.",
+                comment_ownership="Owned two major modules simultaneously; no missed deadlines.",
+                comment_project_management="Introduced a cross-team tracker that improved coordination.",
+                comment_client_deliverables="High-quality, narrative-driven slides with strong data visualization.",
+                comment_communication="Increasingly confident in stakeholder meetings; clear written updates.",
+                comment_mentoring="Actively guided Neha and Karan on research frameworks.",
+                comment_competency_skills="Strong growth in market access strategy; demonstrating Senior Consultant potential.",
+            )
+            _pr(neha, proj_ma, priya, "H2 FY25", "reviewed", pg="4",
+                impact="Neha showed strong improvement in quality and independence during H2.",
+                comment_task_execution="Began structuring tasks independently with less guidance needed.",
+                comment_ownership="More proactive in flagging risks and seeking clarification early.",
+                comment_project_management="Better at timeline adherence and progress communication.",
+                comment_client_deliverables="Noticeable improvement in slide quality and storyboarding.",
+                comment_communication="More confident in team discussions; writing quality improved.",
+                comment_mentoring="Beginning to support newer members on basic tasks.",
+                comment_competency_skills="Solid progress in core market access research competencies.",
+            )
+            db.commit()
+
+            # PRJ-002 (PM: David) — Rahul reviewed, Meera pending
+            _pr(rahul, proj_idt, david, "H2 FY25", "reviewed", pg="5",
+                impact="Rahul delivered an exceptional H2 with strong technical leadership across the platform.",
+                comment_task_execution="Led architecture decisions for the expanded analytics platform independently.",
+                comment_ownership="End-to-end ownership across three complex workstreams; zero delivery misses.",
+                comment_project_management="Introduced sprint planning that improved the team's delivery velocity significantly.",
+                comment_client_deliverables="Client-facing dashboards were best-in-class; zero rework requested.",
+                comment_communication="Excellent executive-level communication; translated technical complexity clearly.",
+                comment_mentoring="Strong mentor to Meera; ran weekly coaching sessions throughout H2.",
+                comment_competency_skills="Demonstrated Senior Consultant-level depth across data engineering and analytics.",
+            )
+            _pr(meera, proj_idt, david, "H2 FY25", "pending")
+            db.commit()
+
+            # PRJ-003 (PM: Vikram) — Ananya reviewed, Karan pending
+            _pr(ananya, proj_rwe, vikram, "H2 FY25", "reviewed", pg="5",
+                impact="Ananya's leadership elevated the quality of the entire H2 cardiology deliverable.",
+                comment_task_execution="Led statistical analysis design independently; set a high standard for the team.",
+                comment_ownership="Complete ownership of study protocol and evidence synthesis.",
+                comment_project_management="Managed stakeholder timelines across 4 client sites seamlessly.",
+                comment_client_deliverables="Deliverables were publication-ready with strong scientific rigor.",
+                comment_communication="Effective client presenter; built strong rapport with clinical stakeholders.",
+                comment_mentoring="Mentored Karan on study design; organized internal knowledge sessions.",
+                comment_competency_skills="Emerging as an RWE SME in cardiovascular outcomes research.",
+            )
+            _pr(karan, proj_rwe, vikram, "H2 FY25", "pending")
+            db.commit()
+
+            # PRJ-004 (PM: Priya) — Rahul + Ananya reviewed, Neha pending
+            _pr(rahul, proj_cross, priya, "H2 FY25", "reviewed", pg="4",
+                impact="Rahul's H2 contribution to the integrated evidence package was outstanding.",
+                comment_task_execution="Led the cross-functional data harmonization with minimal guidance.",
+                comment_ownership="Managed multi-team dependencies with full accountability.",
+                comment_project_management="Exceptional tracker management and risk escalation.",
+                comment_client_deliverables="Integrated evidence outputs were best-in-class.",
+                comment_communication="Proactively communicated cross-functional risks to leadership.",
+                comment_mentoring="Supported strategy and RWE team members on data tooling.",
+                comment_competency_skills="Demonstrated strong cross-functional expertise.",
+            )
+            _pr(ananya, proj_cross, priya, "H2 FY25", "reviewed", pg="5",
+                impact="Ananya's RWE leadership was pivotal to the H2 oncology evidence package.",
+                comment_task_execution="Led the RWE synthesis workstream with high scientific standards.",
+                comment_ownership="Full ownership of RWE narrative; went beyond scope to strengthen evidence base.",
+                comment_project_management="Managed timelines across multiple workstreams without issues.",
+                comment_client_deliverables="Best-in-class RWE output; received specific client praise.",
+                comment_communication="Excellent at presenting complex evidence to non-technical stakeholders.",
+                comment_mentoring="Coached the strategy team on RWE interpretation.",
+                comment_competency_skills="Top-tier RWE expertise; recognized as internal SME.",
+            )
+            _pr(neha, proj_cross, priya, "H2 FY25", "pending")
+            db.commit()
+
+            # ── H1 FY26 (Current): All Pending ────────────────────────────
+            _pr(ananya, proj_rwe,   vikram, "H1 FY26", "pending")
+            _pr(karan,  proj_rwe,   vikram, "H1 FY26", "pending")
+            _pr(rahul,  proj_cross, priya,  "H1 FY26", "pending")
+            _pr(ananya, proj_cross, priya,  "H1 FY26", "pending")
+            _pr(neha,   proj_cross, priya,  "H1 FY26", "pending")
+            db.commit()
+
+            print("  [+] Created Project Reviews: H1 FY25 (all reviewed), H2 FY25 (mixed), H1 FY26 (pending)")
+        else:
+            print("  [~] Healthark Project Reviews already exist, skipping...")
+
+
+        # ================================================================== #
+        # 9. ANNUAL REVIEWS                                                   #
+        # ================================================================== #
+
+        def _ar(user, mentor, cycle, status, **fields):
+            if not db.query(AnnualReview).filter_by(
+                org_id=org.id, user_id=user.id, cycle_name=cycle
+            ).first():
+                db.add(AnnualReview(
+                    org_id=org.id, user_id=user.id,
+                    mentor_id=mentor.id if mentor else None,
+                    cycle_name=cycle, status=status, **fields
+                ))
+
+        if db.query(AnnualReview).filter(AnnualReview.org_id == org.id).count() == 0:
+
+            # ── H1 FY25: All Completed ────────────────────────────────────
+            _ar(arjun, priya, "H1 FY25", "completed",
+                self_desc_ownership="Led the EU market analysis module independently with full accountability across all milestones.",
+                self_desc_productivity="Completed all research and slide tasks ahead of deadlines consistently.",
+                self_desc_communication="Maintained clear, structured communications and produced concise MOMs throughout.",
+                self_desc_leadership="Supported Neha on research methodology and deck structuring; initiated team knowledge sessions.",
+                self_desc_adaptability="Adapted quickly to scope changes in the EU market analysis module without losing pace.",
+                self_desc_time_management="Managed multiple research streams simultaneously with zero missed deadlines.",
+                self_stars=4,
+                mentor_comment_ownership="Arjun demonstrated strong module ownership; delivered consistently high quality work.",
+                mentor_comment_productivity="Highly productive; one of the most efficient contributors on the project.",
+                mentor_comment_communication="Clear communicator; MOMs and progress updates were always timely and precise.",
+                mentor_comment_leadership="Showed early signs of leadership potential; mentored Neha effectively.",
+                mentor_comment_adaptability="Handled multiple scope changes gracefully without disrupting timelines.",
+                mentor_comment_time_management="Excellent time management; consistently ahead of schedule.",
+                mentor_stars=4,
+                management_stars=4, final_stars=4,
+                management_comments="Arjun is a high-performer tracking well for a Senior Consultant promotion.",
+                final_rating_enabled=True,
+            )
+            _ar(neha, priya, "H1 FY25", "completed",
+                self_desc_ownership="Completed all assigned research tasks and delivered slides as required.",
+                self_desc_productivity="Maintained consistent output quality across the project.",
+                self_desc_communication="Improved communication through regular check-ins with Priya.",
+                self_desc_leadership="Beginning to take initiative on smaller research tasks.",
+                self_desc_adaptability="Adapted to new slide formats and research tools quickly.",
+                self_desc_time_management="Met all individual deadlines with support from the team.",
+                self_stars=3,
+                mentor_comment_ownership="Neha is reliable on assigned tasks; building confidence for broader scope.",
+                mentor_comment_productivity="Consistent output; quality improving with each deliverable.",
+                mentor_comment_communication="Good written communication; verbal confidence growing.",
+                mentor_comment_leadership="Early stages of initiative; needs encouragement to lead tasks.",
+                mentor_comment_adaptability="Good adaptability to new frameworks and tools.",
+                mentor_comment_time_management="Met deadlines consistently; still requires prompting for proactive flagging.",
+                mentor_stars=3,
+                management_stars=3, final_stars=3,
+                management_comments="Neha is on track as a Consultant; continuing to grow steadily.",
+                final_rating_enabled=True,
+            )
+            _ar(rahul, david, "H1 FY25", "completed",
+                self_desc_ownership="Owned the analytics pipeline development end-to-end with full accountability.",
+                self_desc_productivity="Delivered high-quality code and dashboards ahead of schedule.",
+                self_desc_communication="Maintained clear cross-team communications on data dependencies.",
+                self_desc_leadership="Guided Meera on data modeling and helped onboard her to project tooling.",
+                self_desc_adaptability="Handled changing data requirements without disruption to timelines.",
+                self_desc_time_management="Managed tasks across the sprint backlog effectively.",
+                self_stars=4,
+                mentor_comment_ownership="Rahul is one of our most accountable team members; full ownership demonstrated.",
+                mentor_comment_productivity="Exceptional productivity; consistently the highest quality output on the team.",
+                mentor_comment_communication="Clear and structured communications; technical explanations are accessible.",
+                mentor_comment_leadership="Strong mentor to Meera; genuine investment in her growth.",
+                mentor_comment_adaptability="Adapted to multiple technical stack changes without losing pace.",
+                mentor_comment_time_management="Outstanding time management; planned ahead effectively.",
+                mentor_stars=4,
+                management_stars=4, final_stars=4,
+                management_comments="Rahul is one of our top performers in IDT; strong Senior Consultant track.",
+                final_rating_enabled=True,
+            )
+            _ar(meera, david, "H1 FY25", "completed",
+                self_desc_ownership="Completed all assigned data tasks and supported the dashboard development.",
+                self_desc_productivity="Maintained steady output quality throughout the project.",
+                self_desc_communication="Improved at writing concise updates and flagging blockers.",
+                self_desc_leadership="Participated actively in team reviews and knowledge sharing.",
+                self_desc_adaptability="Adapted to new data tools and formats with support from Rahul.",
+                self_desc_time_management="Met assigned deadlines with guidance from David.",
+                self_stars=3,
+                mentor_comment_ownership="Meera is reliable; building confidence to own larger modules.",
+                mentor_comment_productivity="Good output quality; accuracy has improved significantly.",
+                mentor_comment_communication="Improving; becoming more proactive with status updates.",
+                mentor_comment_leadership="Participates well in team discussions; developing mentoring instincts.",
+                mentor_comment_adaptability="Good adaptability; handled new tooling transitions well.",
+                mentor_comment_time_management="Consistent with deadlines; growing independence in planning.",
+                mentor_stars=3,
+                management_stars=3, final_stars=3,
+                management_comments="Meera is progressing well as a Consultant; steady improvement trajectory.",
+                final_rating_enabled=True,
+            )
+            _ar(ananya, vikram, "H1 FY25", "completed",
+                self_desc_ownership="Led the cardiology study protocol design with full scientific accountability.",
+                self_desc_productivity="Delivered study outputs on schedule; maintained high scientific standards throughout.",
+                self_desc_communication="Presented RWE methodology clearly to client and internal stakeholders.",
+                self_desc_leadership="Coached Karan on study design fundamentals and statistical reasoning.",
+                self_desc_adaptability="Adapted to changing client data requirements mid-study without protocol disruption.",
+                self_desc_time_management="Managed multi-site coordination timelines effectively.",
+                self_stars=4,
+                mentor_comment_ownership="Ananya is a standout on ownership; led a complex study with full accountability.",
+                mentor_comment_productivity="High-quality scientific outputs; minimal rework required across any deliverable.",
+                mentor_comment_communication="Excellent communicator; confident with clinical and client stakeholders.",
+                mentor_comment_leadership="Natural mentor; significantly improved Karan's study design capability.",
+                mentor_comment_adaptability="Handled protocol changes gracefully; maintained scientific integrity.",
+                mentor_comment_time_management="Exceptional planning; multi-site timelines managed with no issues.",
+                mentor_stars=4,
+                management_stars=4, final_stars=4,
+                management_comments="Ananya is our strongest RWE contributor; on track for Senior Consultant.",
+                final_rating_enabled=True,
+            )
+            _ar(karan, vikram, "H1 FY25", "completed",
+                self_desc_ownership="Completed literature review and data collection tasks as assigned.",
+                self_desc_productivity="Maintained consistent research output with improving quality.",
+                self_desc_communication="Improved at writing structured research summaries.",
+                self_desc_leadership="Learning to participate more actively in team discussions.",
+                self_desc_adaptability="Adapted to new literature databases and research tools.",
+                self_desc_time_management="Met deadlines with guidance; improving at self-organization.",
+                self_stars=3,
+                mentor_comment_ownership="Karan is dependable; building initiative for broader ownership.",
+                mentor_comment_productivity="Steady output; accuracy has improved significantly.",
+                mentor_comment_communication="Good written communication; developing confidence verbally.",
+                mentor_comment_leadership="Growing participation in team discussions; needs encouragement.",
+                mentor_comment_adaptability="Good at learning new tools and methodologies.",
+                mentor_comment_time_management="Consistent with deadlines; improving at proactive planning.",
+                mentor_stars=3,
+                management_stars=3, final_stars=3,
+                management_comments="Karan is a solid Consultant; progressing steadily in RWE domain.",
+                final_rating_enabled=True,
+            )
+            db.commit()
+
+            # ── H2 FY25: Mixed Statuses ───────────────────────────────────
+            _ar(arjun, priya, "H2 FY25", "completed",
+                self_desc_ownership="Stepped up to manage two modules simultaneously while supporting Neha's growth.",
+                self_desc_productivity="Strong output quality with increased independence; introduced team tracking improvements.",
+                self_desc_communication="Increasingly confident in stakeholder meetings; leading internal discussions.",
+                self_desc_leadership="Mentored Neha and Karan on research methodology and storyboarding.",
+                self_desc_adaptability="Handled mid-project scope expansion without disruption.",
+                self_desc_time_management="Zero missed deadlines across both modules; proactive risk flagging.",
+                self_stars=4,
+                mentor_comment_ownership="Arjun consistently exceeded expectations; strong Senior Consultant candidate.",
+                mentor_comment_productivity="Exceptional; quality and quantity of outputs both outstanding.",
+                mentor_comment_communication="Confident communicator; excellent in stakeholder presentations.",
+                mentor_comment_leadership="Strong mentor presence; team looks to him for guidance.",
+                mentor_comment_adaptability="Thrives in ambiguity; handles scope changes with maturity.",
+                mentor_comment_time_management="Flawless time management; plan-ahead mindset evident.",
+                mentor_stars=4,
+                management_stars=4, final_stars=4,
+                management_comments="Arjun is ready for Senior Consultant; recommend for promotion in the next cycle.",
+                final_rating_enabled=True,
+            )
+            _ar(neha, priya, "H2 FY25", "completed",
+                self_desc_ownership="Took on more ownership in H2 with broader research and slide responsibilities.",
+                self_desc_productivity="Improved output quality significantly; more independent in task execution.",
+                self_desc_communication="More confident in team communications; improving at verbal updates.",
+                self_desc_leadership="Starting to support newer team members on basic tasks.",
+                self_desc_adaptability="Adapted to new slide formats and client feedback efficiently.",
+                self_desc_time_management="Consistently met deadlines; improving at proactive planning.",
+                self_stars=4,
+                mentor_comment_ownership="Neha showed strong improvement in ownership; growing into the Senior Consultant role.",
+                mentor_comment_productivity="Visible improvement in output quality and efficiency.",
+                mentor_comment_communication="Good growth in communication; more proactive in team settings.",
+                mentor_comment_leadership="Starting to show leadership instincts; supporting junior members.",
+                mentor_comment_adaptability="Adaptable to feedback; quick to incorporate improvements.",
+                mentor_comment_time_management="Strong improvement in time management independence.",
+                mentor_stars=4,
+                management_stars=4, final_stars=4,
+                management_comments="Neha has shown excellent growth in H2; tracking towards Senior Consultant.",
+                final_rating_enabled=True,
+            )
+            # Rahul: pending_mentor — self-review submitted, awaiting mentor
+            _ar(rahul, david, "H2 FY25", "pending_mentor",
+                self_desc_ownership="Led architecture decisions and multi-stream delivery with full accountability.",
+                self_desc_productivity="Outstanding delivery quality; delivered sprint planning that improved team velocity.",
+                self_desc_communication="Executive-level communication; strong clarity in technical explanations.",
+                self_desc_leadership="Ran weekly coaching sessions with Meera; strong mentor presence.",
+                self_desc_adaptability="Handled major architectural changes mid-project without disruption.",
+                self_desc_time_management="Zero delivery misses; managed competing priorities effectively.",
+                self_stars=5,
+            )
+            # Meera: pending_management — mentor has reviewed, awaiting management calibration
+            _ar(meera, david, "H2 FY25", "pending_management",
+                self_desc_ownership="Took on more complete module ownership in H2 with growing confidence.",
+                self_desc_productivity="Improved code quality and delivery speed significantly.",
+                self_desc_communication="Better written and verbal communication; more proactive updates.",
+                self_desc_leadership="Participating in code reviews; learning from Rahul's coaching.",
+                self_desc_adaptability="Adapted to new architectural requirements effectively.",
+                self_desc_time_management="Consistently met sprint deadlines; improving at estimation.",
+                self_stars=4,
+                mentor_comment_ownership="Meera demonstrated significantly improved ownership in H2.",
+                mentor_comment_productivity="Strong improvement in code quality and delivery pace.",
+                mentor_comment_communication="Good progress; more proactive and structured communications.",
+                mentor_comment_leadership="Developing; participating meaningfully in team reviews.",
+                mentor_comment_adaptability="Good at adapting to feedback and changing requirements.",
+                mentor_comment_time_management="Consistent delivery; improving at self-planning.",
+                mentor_stars=4,
+            )
+            _ar(ananya, vikram, "H2 FY25", "completed",
+                self_desc_ownership="Led the cardiology study and cross-functional evidence package with full ownership.",
+                self_desc_productivity="Highest-quality scientific outputs; no rework required on key deliverables.",
+                self_desc_communication="Strong client presenter; received positive feedback from clinical stakeholders.",
+                self_desc_leadership="Mentored Karan and coached strategy team on RWE concepts.",
+                self_desc_adaptability="Managed protocol changes and multi-site complexity with maturity.",
+                self_desc_time_management="Exceptional multi-project planning; no timeline issues across any workstream.",
+                self_stars=5,
+                mentor_comment_ownership="Ananya is our most accountable team member; exceptional ownership across projects.",
+                mentor_comment_productivity="Outstanding; consistently best-in-class output quality.",
+                mentor_comment_communication="Excellent; builds strong client relationships with clear communication.",
+                mentor_comment_leadership="Strong mentor and team leader; significantly elevated Karan's capability.",
+                mentor_comment_adaptability="Handles complexity with calm and scientific rigor.",
+                mentor_comment_time_management="Flawless; manages multiple high-stakes deadlines without issues.",
+                mentor_stars=5,
+                management_stars=5, final_stars=5,
+                management_comments="Ananya is one of our best performers; recommend for Senior Consultant with strong consideration for Manager track.",
+                final_rating_enabled=True,
+            )
+            # Karan: draft — hasn't submitted yet
+            _ar(karan, vikram, "H2 FY25", "draft",
+                self_desc_ownership="Took on more responsibilities in H2 literature review and data collection tasks.",
+                self_desc_productivity="Improving output quality and research depth throughout the cycle.",
+            )
+            db.commit()
+
+            # ── H1 FY26 (Current): Some In Progress ──────────────────────
+            # Neha: pending_mentor — submitted self-review
+            _ar(neha, priya, "H1 FY26", "pending_mentor",
+                self_desc_ownership="Taking on broader ownership with more independent project management in H1 FY26.",
+                self_desc_productivity="Strong output quality; introducing process improvements in slide workflow.",
+                self_desc_communication="Leading more client-facing communications; confident in stakeholder meetings.",
+                self_desc_leadership="Actively mentoring junior researchers on the team.",
+                self_desc_adaptability="Adapting well to complex cross-functional project demands.",
+                self_desc_time_management="Proactive planning and timeline management across multiple projects.",
+                self_stars=4,
+            )
+            # Arjun + Rahul: draft — self-review started but not submitted
+            _ar(arjun, priya, "H1 FY26", "draft",
+                self_desc_ownership="Leading multiple market access modules with full ownership in H1 FY26.",
+                self_desc_productivity="High output quality with increased strategic depth across deliverables.",
+            )
+            _ar(rahul, david, "H1 FY26", "draft",
+                self_desc_ownership="Owning the platform architecture evolution with cross-team coordination.",
+                self_desc_productivity="Strong delivery across multiple technical workstreams simultaneously.",
+            )
+            db.commit()
+
+            print("  [+] Created Annual Reviews: H1 FY25 (all completed), H2 FY25 (mixed), H1 FY26 (in-progress)")
+        else:
+            print("  [~] Healthark Annual Reviews already exist, skipping...")
+
+
+        # ================================================================== #
+        # 10. GOALS                                                           #
+        # ================================================================== #
+
+        def _goal(user, manager, title, desc, status, approval, progress_notes=None):
+            db.add(Goal(
+                org_id=org.id, user_id=user.id,
+                manager_id=manager.id if manager else None,
+                title=title, description=desc,
+                status=status, approval_status=approval,
+                progress_notes=progress_notes,
+            ))
+
+        if db.query(Goal).filter(Goal.org_id == org.id).count() == 0:
+
+            # H1 FY25 — all completed / approved
+            _goal(arjun, priya, "Complete EU Market Access Framework for Oncology",
+                "Develop a comprehensive market access framework covering 5 EU markets for the oncology product launch.",
+                "completed", "approved",
+                progress_notes="Framework completed and presented to client. Positive feedback received. All 5 markets covered.",
+            )
+            _goal(arjun, priya, "Upskill in Healthcare Financial Modeling",
+                "Complete a structured financial modeling course and apply learnings to an active project.",
+                "completed", "approved",
+                progress_notes="Completed course and built a bottom-up forecast model applied to PRJ-001.",
+            )
+            _goal(neha, priya, "Independently Lead a Research Module",
+                "Own and deliver a complete research module on a live project with minimal supervision.",
+                "completed", "approved",
+                progress_notes="Led competitive landscape module on PRJ-001. Delivered on time with positive feedback.",
+            )
+            _goal(rahul, david, "Build End-to-End Patient Analytics Pipeline",
+                "Design, build, and deploy a production-ready patient journey analytics pipeline for the client dashboard.",
+                "completed", "approved",
+                progress_notes="Pipeline deployed to production. Dashboard live and used by client. Zero critical bugs reported.",
+            )
+            _goal(rahul, david, "Mentor Meera on Data Engineering Fundamentals",
+                "Run bi-weekly coaching sessions with Meera to build her data engineering capability.",
+                "completed", "approved",
+                progress_notes="Ran 8 coaching sessions. Meera independently completed her first data module in H1 FY25.",
+            )
+            _goal(meera, david, "Complete First Independent Data Analysis Module",
+                "Independently own a data analysis module on an active project end-to-end.",
+                "completed", "approved",
+                progress_notes="Completed the data cleansing and visualization module for PRJ-002 with minimal guidance.",
+            )
+            _goal(ananya, vikram, "Design Cardiovascular Outcomes Study Protocol",
+                "Lead the design and documentation of the RWE study protocol for the cardiology outcomes study.",
+                "completed", "approved",
+                progress_notes="Protocol designed and submitted to client. IRB approved. Study launched.",
+            )
+            _goal(karan, vikram, "Build Literature Review Competency in Cardiovascular RWE",
+                "Conduct structured literature reviews and synthesize findings for the cardiology outcomes study.",
+                "completed", "approved",
+                progress_notes="Completed systematic review of 150+ papers. Summary integrated into study protocol.",
+            )
+            db.commit()
+
+            # H2 FY25 — mix of completed and in-progress
+            _goal(arjun, priya, "Lead Cross-Functional Coordination for Oncology Evidence Package",
+                "Own cross-team coordination across strategy, IDT, and RWE workstreams for the integrated evidence package.",
+                "completed", "approved",
+                progress_notes="Led weekly cross-functional sync. Shared tracker adopted by all three teams.",
+            )
+            _goal(arjun, priya, "Develop Senior-Level Storyboarding Skills",
+                "Independently craft full client deck storyboards with compelling narratives and minimal review rounds.",
+                "completed", "approved",
+                progress_notes="Led storyboarding for 2 major client decks. Both approved in first client review.",
+            )
+            _goal(neha, priya, "Drive Client Communication on a Live Project",
+                "Lead at least 2 client update calls and draft client communications independently.",
+                "in_progress", "approved",
+                progress_notes="Led 1 client call so far; preparing for the second. Feedback from Priya was positive.",
+            )
+            _goal(rahul, david, "Lead Technical Architecture for Platform Expansion",
+                "Define and implement the expanded architecture for the patient analytics platform.",
+                "completed", "approved",
+                progress_notes="Architecture approved by Architecture Review Board. Delivered 2 weeks ahead of schedule.",
+            )
+            _goal(meera, david, "Own Full Feature Development End-to-End",
+                "Take end-to-end ownership of a feature from design to production deployment.",
+                "in_progress", "approved",
+                progress_notes="Feature in final testing phase. Deployment planned for next sprint.",
+            )
+            _goal(ananya, vikram, "Publish RWE Study Interim Results",
+                "Prepare and submit interim results from the cardiology outcomes study for internal review.",
+                "completed", "approved",
+                progress_notes="Interim analysis completed. Report approved for internal publication.",
+            )
+            _goal(karan, vikram, "Manage Data Collection Across Clinical Sites",
+                "Own the data collection coordination across 4 clinical sites for the outcomes study.",
+                "in_progress", "approved",
+                progress_notes="3 of 4 sites completed. Final site data expected next month.",
+            )
+            db.commit()
+
+            # H1 FY26 (current) — approved / submitted / draft
+            _goal(arjun, priya, "Take PM-Level Ownership on Integrated Evidence Package",
+                "Step into a PM-equivalent role on PRJ-004 with full accountability for delivery and client communication.",
+                "in_progress", "approved",
+                progress_notes="Managing project tracker and client communications independently. On track.",
+            )
+            _goal(arjun, priya, "Build Proposal Development Capability",
+                "Lead or co-lead at least one client proposal in H1 FY26.",
+                "pending", "submitted",
+            )
+            _goal(neha, priya, "Lead a Complete Client Workstream Independently",
+                "Own end-to-end delivery of a client workstream with minimal supervision.",
+                "in_progress", "approved",
+                progress_notes="Leading the competitor benchmarking workstream independently.",
+            )
+            _goal(rahul, david, "Introduce Agile Delivery Framework to IDT Practice",
+                "Design and roll out an Agile sprint framework for the IDT team that improves delivery predictability.",
+                "in_progress", "approved",
+                progress_notes="Sprint framework piloted. Team velocity improvement measured at ~25%.",
+            )
+            _goal(meera, david, "Independently Deliver a Complete Analytics Module",
+                "Deliver a complete analytics module from requirements gathering to client handoff.",
+                "pending", "submitted",
+            )
+            _goal(ananya, vikram, "Present at Firm-Wide RWE Knowledge Session",
+                "Organize and present a knowledge session on cardiovascular RWE best practices for the firm.",
+                "in_progress", "approved",
+                progress_notes="Session scheduled. Presentation deck 80% complete.",
+            )
+            _goal(karan, vikram, "Complete Statistical Analysis for Cardiology Outcomes Study",
+                "Own the complete statistical analysis for the cardiology outcomes study in H1 FY26.",
+                "pending", "draft",
+            )
+            db.commit()
+
+            print("  [+] Created Goals: H1 FY25 (completed), H2 FY25 (mixed), H1 FY26 (current)")
+        else:
+            print("  [~] Healthark Goals already exist, skipping...")
 
 
         # ================================================================== #
