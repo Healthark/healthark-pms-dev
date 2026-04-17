@@ -23,7 +23,6 @@ Endpoints:
 """
 
 from typing import List, Optional
-from datetime import date
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
@@ -44,7 +43,6 @@ from app.schemas.project_review_schemas import (
     RoleExpectationResponse,
     AdminMemberReviewRow, AdminProjectSummary,
 )
-from app.core.cycle_utils import get_current_cycle_info
 
 router = APIRouter()
 
@@ -52,22 +50,18 @@ router = APIRouter()
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def _get_active_cycle(db: DbSession, org_id: int) -> str:
-    """Resolve the org's dynamically calculated active cycle."""
+    """Return the admin-configured active cycle name from SystemSettings."""
     settings = db.query(SystemSettings).filter(
         SystemSettings.org_id == org_id
     ).first()
-    
-    if not settings:
+
+    if not settings or not settings.active_cycle_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active performance cycle configured.",
         )
-        
-    return get_current_cycle_info(
-        current_date=date.today(),
-        cycle_type=settings.cycle_type,
-        fiscal_start_month=settings.fiscal_start_month
-    )
+
+    return settings.active_cycle_name
 
 
 def _build_review_response(review: ProjectReview, db: DbSession) -> ProjectReviewResponse:

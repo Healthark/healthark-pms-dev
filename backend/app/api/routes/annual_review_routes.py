@@ -26,7 +26,6 @@ Security Layers Applied:
 """
 
 from typing import List
-from datetime import date
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import DbSession, CurrentUser
@@ -41,30 +40,24 @@ from app.schemas.annual_review_schemas import (
     AnnualReviewResponse,
     CalibrationRow,
 )
-from app.core.cycle_utils import get_current_cycle_info
-
 router = APIRouter()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def _get_active_cycle(db: DbSession, org_id: int) -> str:
-    """Resolve the org's dynamically calculated active cycle."""
+    """Return the admin-configured active cycle name from SystemSettings."""
     settings = db.query(SystemSettings).filter(
         SystemSettings.org_id == org_id
     ).first()
 
-    if not settings:
+    if not settings or not settings.active_cycle_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active performance cycle configured. Contact your HR administrator.",
         )
-        
-    return get_current_cycle_info(
-        current_date=date.today(),
-        cycle_type=settings.cycle_type,
-        fiscal_start_month=settings.fiscal_start_month
-    )
+
+    return settings.active_cycle_name
 
 
 def _require_admin(current_user: User) -> None:

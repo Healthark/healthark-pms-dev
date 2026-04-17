@@ -13,7 +13,6 @@ Security Layers Applied:
     Layer 4 — Ownership:          Not applicable (org-level singleton, no per-user ownership)
 """
 
-from datetime import date
 from enum import Enum
 from fastapi import APIRouter, HTTPException, status
 
@@ -24,7 +23,6 @@ from app.schemas.system_settings_schemas import (
     SystemSettingsResponse,
     SystemSettingsUpdate,
 )
-from app.core.cycle_utils import get_current_cycle_info
 
 router = APIRouter()
 
@@ -50,16 +48,6 @@ def get_system_settings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="System settings have not been configured for this organization."
         )
-
-    # Dynamically calculate the active cycle so the frontend is always in sync with reality
-    calculated_cycle = get_current_cycle_info(
-        current_date=date.today(),
-        cycle_type=settings.cycle_type,
-        fiscal_start_month=settings.fiscal_start_month
-    )
-    
-    # Override the static field for the response so the UI always gets the live calculated value
-    settings.active_cycle_name = calculated_cycle
 
     return settings
 
