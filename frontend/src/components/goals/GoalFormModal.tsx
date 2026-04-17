@@ -13,7 +13,6 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, X } from "lucide-react";
 import type {
   Goal,
   GoalCreatePayload,
@@ -44,6 +43,7 @@ interface GoalFormModalProps {
 interface FormState {
   title: string;
   description: string;
+  attachment_url: string;
   status: GoalStatus;
   start_date: string;
   due_date: string;
@@ -59,6 +59,7 @@ interface CriterionDraft {
 const EMPTY: FormState = {
   title: "",
   description: "",
+  attachment_url: "",
   status: "pending",
   start_date: "",
   due_date: "",
@@ -100,6 +101,7 @@ export function GoalFormModal({
       setForm({
         title: editingGoal.title,
         description: editingGoal.description ?? "",
+        attachment_url: editingGoal.attachment_url ?? "",
         status: editingGoal.status,
         start_date: toDateInput(editingGoal.start_date),
         due_date: toDateInput(editingGoal.due_date),
@@ -119,29 +121,13 @@ export function GoalFormModal({
   const set = (field: keyof FormState, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // ── Criteria Handlers ─────────────────────────────────────────────
-
-  const addCriterion = () => {
-    setCriteria((prev) => [...prev, { tempId: createTempId(), title: "" }]);
-  };
-
-  const updateCriterion = (tempId: string, title: string) => {
-    setCriteria((prev) =>
-      prev.map((c) => (c.tempId === tempId ? { ...c, title } : c)),
-    );
-  };
-
-  const removeCriterion = (tempId: string) => {
-    setCriteria((prev) => prev.filter((c) => c.tempId !== tempId));
-  };
-
   // ── Submit ────────────────────────────────────────────────────────
-
   const handleSubmit = async () => {
     if (isEditing) {
       await onSave({
         title: form.title || undefined,
         description: form.description || null,
+        attachment_url: form.attachment_url || null,
         status: form.status,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
@@ -156,6 +142,7 @@ export function GoalFormModal({
       await onSave({
         title: form.title,
         description: form.description || null,
+        attachment_url: form.attachment_url || null,
         status: form.status,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
@@ -225,56 +212,32 @@ export function GoalFormModal({
             />
           </div>
 
-          {/* ── Key Results (Create mode only) ─────────────────────── */}
-          {!isEditing && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className={LABEL_CLS}>Key Results (Criteria)</label>
-                <button
-                  type="button"
-                  onClick={addCriterion}
-                  className="flex items-center gap-1 text-xs font-medium text-brand hover:underline"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  Add Key Result
-                </button>
-              </div>
-
-              {criteria.length === 0 ? (
-                <p className="text-xs text-text-muted italic">
-                  No key results added yet. Click "Add Key Result" to break this
-                  goal into measurable criteria.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {criteria.map((c, idx) => (
-                    <div key={c.tempId} className="flex items-center gap-2">
-                      <span className="text-xs text-text-muted font-medium w-5 shrink-0 text-right">
-                        {idx + 1}.
-                      </span>
-                      <input
-                        className={INPUT_CLS}
-                        value={c.title}
-                        onChange={(e) =>
-                          updateCriterion(c.tempId, e.target.value)
-                        }
-                        placeholder={`Key result ${idx + 1}`}
-                        aria-label={`Key result ${idx + 1}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCriterion(c.tempId)}
-                        className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                        aria-label={`Remove key result ${idx + 1}`}
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))}
+          {/* Attachment URL */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-1">
+              <label htmlFor="goal-attachment" className={LABEL_CLS + " mb-0"}>
+                Attachment (URL)
+              </label>
+              <div className="relative group">
+                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-default select-none">
+                  i
+                </span>
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                  Create a folder in Google Drive named after your goal, then
+                  paste the folder link here as the attachment URL.
+                  <span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-slate-800" />
                 </div>
-              )}
+              </div>
             </div>
-          )}
+            <input
+              id="goal-attachment"
+              type="url"
+              className={INPUT_CLS}
+              value={form.attachment_url}
+              onChange={(e) => set("attachment_url", e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+            />
+          </div>
 
           {/* Existing criteria preview (Edit mode) */}
           {isEditing && editingGoal.criteria.length > 0 && (
@@ -330,34 +293,6 @@ export function GoalFormModal({
               </select>
             </div>
           )}
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="goal-start" className={LABEL_CLS}>
-                Start Date
-              </label>
-              <input
-                id="goal-start"
-                type="date"
-                className={INPUT_CLS}
-                value={form.start_date}
-                onChange={(e) => set("start_date", e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="goal-due" className={LABEL_CLS}>
-                Due Date
-              </label>
-              <input
-                id="goal-due"
-                type="date"
-                className={INPUT_CLS}
-                value={form.due_date}
-                onChange={(e) => set("due_date", e.target.value)}
-              />
-            </div>
-          </div>
 
           {/* Progress notes — only shown when editing an approved goal */}
           {isEditing && isApproved && (

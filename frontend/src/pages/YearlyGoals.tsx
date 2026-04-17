@@ -104,14 +104,6 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <p className="mt-1 text-sm text-text-muted">
         Set your first annual goal to start tracking progress.
       </p>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="mt-4 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-      >
-        <Plus className="h-4 w-4" aria-hidden="true" />
-        Add your first goal
-      </button>
     </div>
   );
 }
