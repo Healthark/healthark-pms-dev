@@ -227,7 +227,7 @@ function ProjectCard({
                       <td className="hidden md:table-cell px-4 py-3 text-text-muted">
                         {m.performance_group ? (
                           <span className="font-semibold text-text-main">
-                            {m.performance_group}/5
+                            {m.performance_group}
                           </span>
                         ) : (
                           "—"

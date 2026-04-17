@@ -118,10 +118,12 @@ def get_my_projects(
     current_user: CurrentUser,
 ):
     """
-    List all projects the current user is assigned to, with review status.
-    Employee sees 'pending' until PM evaluates, then 'reviewed'.
+    List all projects the current user is assigned to, with review status
+    across ALL cycles. Returns one card per (project, cycle). For the
+    current cycle a 'pending' card is added if no review exists yet.
+    Frontend handles cycle filtering.
     """
-    cycle = _get_active_cycle(db, current_user.org_id)
+    current_cycle = _get_active_cycle(db, current_user.org_id)
 
     assignments = (
         db.query(ProjectAssignment)
@@ -142,33 +144,54 @@ def get_my_projects(
 
         dept = db.query(Department).filter(Department.id == a.department_id).first() if a.department_id else None
 
-        review = db.query(ProjectReview).filter(
-            ProjectReview.org_id == current_user.org_id,
-            ProjectReview.user_id == current_user.id,
-            ProjectReview.project_id == a.project_id,
-            ProjectReview.cycle == cycle,
-        ).first()
-
         pm_assignment = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == a.project_id,
             ProjectAssignment.evaluator_type == "Primary",
         ).first()
         pm_user = db.query(User).filter(User.id == pm_assignment.user_id).first() if pm_assignment else None
 
-        cards.append(MyProjectCard(
-            review_id=review.id if review else None,
-            project_id=project.id,
-            project_name=project.name,
-            project_code=project.project_code,
-            project_start_date=project.start_date,
-            project_expected_end_date=project.expected_end_date,
-            assigned_date=a.assigned_date,
-            assignment_role=a.assignment_role,
-            department_name=dept.name if dept else None,
-            review_status=review.status if review else "pending",
-            pm_name=pm_user.full_name if pm_user else None,
-            cycle=cycle,
-        ))
+        # Get ALL reviews for this user on this project (across all cycles)
+        reviews = db.query(ProjectReview).filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.user_id == current_user.id,
+            ProjectReview.project_id == a.project_id,
+        ).all()
+
+        seen_cycles = set()
+        for review in reviews:
+            seen_cycles.add(review.cycle)
+            cards.append(MyProjectCard(
+                review_id=review.id,
+                project_id=project.id,
+                project_name=project.name,
+                project_code=project.project_code,
+                project_start_date=project.start_date,
+                project_expected_end_date=project.expected_end_date,
+                assigned_date=a.assigned_date,
+                assignment_role=a.assignment_role,
+                department_name=dept.name if dept else None,
+                review_status=review.status,
+                performance_group=review.performance_group,
+                pm_name=pm_user.full_name if pm_user else None,
+                cycle=review.cycle,
+            ))
+
+        # If no review exists for the current cycle, add a pending card
+        if current_cycle not in seen_cycles:
+            cards.append(MyProjectCard(
+                review_id=None,
+                project_id=project.id,
+                project_name=project.name,
+                project_code=project.project_code,
+                project_start_date=project.start_date,
+                project_expected_end_date=project.expected_end_date,
+                assigned_date=a.assigned_date,
+                assignment_role=a.assignment_role,
+                department_name=dept.name if dept else None,
+                review_status="pending",
+                pm_name=pm_user.full_name if pm_user else None,
+                cycle=current_cycle,
+            ))
 
     return cards
 
@@ -251,6 +274,7 @@ def get_pm_evaluation_queue(
                 designation_name=desig.name if desig else None,
                 assigned_date=ta.assigned_date,
                 review_status=review.status if review else None,
+                performance_group=review.performance_group if review else None,
                 cycle=cycle,
             ))
 
@@ -416,8 +440,9 @@ def get_secondary_evaluation_queue(
     current_user: CurrentUser,
 ):
     """
-    List reviewed reviews on projects where the current user is
-    a Secondary evaluator and hasn't submitted their impact yet.
+    List reviewed reviews on projects where the current user is a
+    Secondary evaluator. Returns both pending and already-submitted
+    reviews so the frontend can show submitted ones with edit option.
     """
     cycle = _get_active_cycle(db, current_user.org_id)
 
@@ -450,18 +475,7 @@ def get_secondary_evaluation_queue(
         .all()
     )
 
-    # Filter out ones where secondary has already submitted
-    pending = []
-    for r in reviews:
-        existing_eval = db.query(ProjectReviewEvaluator).filter(
-            ProjectReviewEvaluator.project_review_id == r.id,
-            ProjectReviewEvaluator.evaluator_id == current_user.id,
-            ProjectReviewEvaluator.status == EvaluatorStatus.SUBMITTED.value,
-        ).first()
-        if not existing_eval:
-            pending.append(_build_review_response(r, db))
-
-    return pending
+    return [_build_review_response(r, db) for r in reviews]
 
 
 @router.post("/{review_id}/secondary", response_model=SecondaryEvalResponse, status_code=status.HTTP_201_CREATED)
@@ -534,6 +548,51 @@ def submit_secondary_evaluation(
         evaluator_name=ev_user.full_name if ev_user else "Unknown",
         impact_statement=evaluator.impact_statement,
         created_at=evaluator.created_at,
+    )
+
+
+@router.put("/{review_id}/secondary", response_model=SecondaryEvalResponse)
+def update_secondary_evaluation(
+    review_id: int,
+    payload: SecondaryEvalSubmit,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Secondary evaluator updates their previously submitted impact statement."""
+    review = db.query(ProjectReview).filter(
+        ProjectReview.id == review_id,
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
+    ).first()
+
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reviewed project review not found.",
+        )
+
+    existing = db.query(ProjectReviewEvaluator).filter(
+        ProjectReviewEvaluator.project_review_id == review.id,
+        ProjectReviewEvaluator.evaluator_id == current_user.id,
+    ).first()
+
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No existing secondary evaluation found to update.",
+        )
+
+    existing.impact_statement = payload.impact_statement
+    db.commit()
+    db.refresh(existing)
+
+    ev_user = db.query(User).filter(User.id == existing.evaluator_id).first()
+    return SecondaryEvalResponse(
+        id=existing.id,
+        evaluator_id=existing.evaluator_id,
+        evaluator_name=ev_user.full_name if ev_user else "Unknown",
+        impact_statement=existing.impact_statement,
+        created_at=existing.created_at,
     )
 
 
