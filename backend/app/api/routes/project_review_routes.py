@@ -18,12 +18,14 @@ Endpoints:
     POST  /project-reviews/{review_id}/secondary    → Submit secondary impact statement
 
     ── Admin ──
-    GET   /project-reviews/all                      → All reviews for the org
+    GET   /project-reviews/management               → Per-project completion overview for active cycle
+    GET   /project-reviews/all                      → All reviews for the org (flat list)
 """
 
-from typing import List
+from typing import List, Optional
 from datetime import date
 from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.project_models import Project, ProjectAssignment
@@ -40,6 +42,7 @@ from app.schemas.project_review_schemas import (
     ProjectReviewResponse, SecondaryEvalResponse,
     MyProjectCard, PMPendingReviewCard,
     RoleExpectationResponse,
+    AdminMemberReviewRow, AdminProjectSummary,
 )
 from app.core.cycle_utils import get_current_cycle_info
 
@@ -573,8 +576,156 @@ def get_all_reviews(
 
 
 # =====================================================================
-# SINGLE REVIEW (must be LAST — catch-all path)
+# ADMIN MANAGEMENT VIEW
 # =====================================================================
+
+@router.get("/management", response_model=List[AdminProjectSummary])
+def get_management_overview(
+    db: DbSession,
+    current_user: CurrentUser,
+    cycle: Optional[str] = None,
+):
+    """
+    Admin: per-project review completion overview for the active cycle.
+
+    Returns one AdminProjectSummary per project that has non-PM members,
+    each containing per-member review status. Uses eager loading to avoid
+    N+1 queries — all project/assignment/user/department data is fetched
+    in a single query, and a review_map dict provides O(1) lookups.
+    """
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin only.",
+        )
+
+    resolved_cycle = cycle if cycle else _get_active_cycle(db, current_user.org_id)
+
+    # Single query: projects + assignments + users + departments
+    projects = (
+        db.query(Project)
+        .options(
+            joinedload(Project.assignments).joinedload(ProjectAssignment.user),
+            joinedload(Project.assignments).joinedload(ProjectAssignment.department),
+        )
+        .filter(
+            Project.org_id == current_user.org_id,
+            Project.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+
+    # All reviews for this org + cycle in one query → O(1) dict lookup
+    all_reviews = (
+        db.query(ProjectReview)
+        .filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.cycle == resolved_cycle,
+        )
+        .all()
+    )
+    review_map: dict[tuple[int, int], ProjectReview] = {
+        (r.project_id, r.user_id): r for r in all_reviews
+    }
+
+    summaries: list[AdminProjectSummary] = []
+
+    for project in projects:
+        members: list[AdminMemberReviewRow] = []
+        reviewed_count = 0
+        pm_name: str | None = None
+
+        for a in project.assignments:
+            if not a.user or a.user.is_deleted:
+                continue
+
+            if a.evaluator_type == "Primary":
+                pm_name = a.user.full_name
+                continue  # PM is excluded from the members list
+
+            review = review_map.get((project.id, a.user_id))
+            review_status = review.status if review else "not_started"
+
+            if review_status == ProjectReviewStatus.REVIEWED.value:
+                reviewed_count += 1
+
+            members.append(AdminMemberReviewRow(
+                review_id=review.id if review else None,
+                user_id=a.user_id,
+                employee_name=a.user.full_name,
+                assignment_role=a.assignment_role,
+                department_name=a.department.name if a.department else None,
+                review_status=review_status,
+                performance_group=review.performance_group if review else None,
+            ))
+
+        if members:
+            summaries.append(AdminProjectSummary(
+                project_id=project.id,
+                project_name=project.name,
+                project_code=project.project_code,
+                pm_name=pm_name,
+                total_members=len(members),
+                reviewed_count=reviewed_count,
+                members=members,
+            ))
+
+    return summaries
+
+
+# =====================================================================
+# SINGLE REVIEW — GET + PUT (must be LAST — catch-all paths)
+# =====================================================================
+
+@router.put("/{review_id}", response_model=ProjectReviewResponse)
+def update_review(
+    review_id: int,
+    payload: PMEvaluationSubmit,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    PM (or Admin) edits an already-submitted review.
+
+    Authorization: ONLY the PM who originally wrote the review
+    (review.reviewer_id == current_user.id) or an Admin may update it.
+    The employee who was reviewed cannot edit it.
+    """
+    review = db.query(ProjectReview).filter(
+        ProjectReview.id == review_id,
+        ProjectReview.org_id == current_user.org_id,
+    ).first()
+
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found.",
+        )
+
+    is_admin = current_user.role == "Admin"
+    is_reviewer = review.reviewer_id == current_user.id
+
+    if not (is_reviewer or is_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the PM who submitted this review (or an Admin) may edit it.",
+        )
+
+    review.comment_task_execution = payload.comment_task_execution
+    review.comment_ownership = payload.comment_ownership
+    review.comment_project_management = payload.comment_project_management
+    review.comment_client_deliverables = payload.comment_client_deliverables
+    review.comment_communication = payload.comment_communication
+    review.comment_mentoring = payload.comment_mentoring
+    review.comment_competency_skills = payload.comment_competency_skills
+    review.impact_statement = payload.impact_statement
+    review.performance_group = payload.performance_group.value
+
+    db.commit()
+    db.refresh(review)
+
+    return _build_review_response(review, db)
+
 
 @router.get("/{review_id}", response_model=ProjectReviewResponse)
 def get_review(

@@ -169,3 +169,29 @@ class RoleExpectationResponse(BaseModel):
     exp_communication: Optional[str] = None
     exp_mentoring: Optional[str] = None
     exp_competency_skills: Optional[str] = None
+
+
+# =====================================================================
+# ADMIN MANAGEMENT VIEW
+# =====================================================================
+
+class AdminMemberReviewRow(BaseModel):
+    """One row per team member in the admin per-cycle management view."""
+    review_id: Optional[int] = None
+    user_id: int
+    employee_name: str
+    assignment_role: Optional[str] = None
+    department_name: Optional[str] = None
+    review_status: str          # "pending" | "reviewed" | "not_started"
+    performance_group: Optional[str] = None
+
+
+class AdminProjectSummary(BaseModel):
+    """Per-project summary card for admin per-cycle management view."""
+    project_id: int
+    project_name: str
+    project_code: str
+    pm_name: Optional[str] = None
+    total_members: int
+    reviewed_count: int
+    members: list[AdminMemberReviewRow]

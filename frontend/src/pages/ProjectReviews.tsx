@@ -24,6 +24,8 @@ import {
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { SecondaryEvalTab } from "../components/project-reviews/SecondaryEvalTab";
+import { ManagementTab } from "../components/project-reviews/ManagementTab";
+import { useAuth } from "../hooks/useAuth";
 
 // Make sure you export this interface from your service file
 export interface RoleExpectationResponse {
@@ -39,7 +41,7 @@ export interface RoleExpectationResponse {
   exp_competency_skills: string;
 }
 
-type ActiveTab = "my" | "evaluate" | "secondary";
+type ActiveTab = "my" | "evaluate" | "management";
 
 // List of competencies from the backend schema
 const COMPETENCIES = [
@@ -367,19 +369,15 @@ function CardSkeleton() {
 // ── Main Page Component ─────────────────────────────────────────────
 
 export function ProjectReviews() {
-  // Any user can be assigned as a PM, so evaluation tabs are shown to everyone.
-  // If they aren't a PM, the queue will naturally be empty.
-  const showEvalTab = true;
+  const { user } = useAuth();
+  const { settings } = useSystemSettings();
+  const isAdmin = user?.role === "Admin";
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
-  
+
   const [cards, setCards] = useState<MyProjectCard[]>([]);
   const [expectations, setExpectations] = useState<RoleExpectationResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Design elements
-  const [selectedCycle, setSelectedCycle] = useState('H1 FY26');
-  const cycleOptions = ['H1 FY26', 'H2 FY25', 'H1 FY25', 'H2 FY24'];
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -425,29 +423,27 @@ export function ProjectReviews() {
           </p>
         </div>
 
-        {/* Status Badge */}
+        {/* Active Cycle & Reviews Status Badge */}
         <div className="flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2 shadow-sm">
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted ml-1.5">Cycle</span>
-            <div className="relative mt-0.5 flex items-center rounded-md hover:bg-slate-50 transition-colors px-1.5 py-0.5 group cursor-pointer">
-              <CalendarClock className="h-3.5 w-3.5 text-brand shrink-0 pointer-events-none" />
-              <select
-                value={selectedCycle}
-                onChange={(e) => setSelectedCycle(e.target.value)}
-                className="appearance-none bg-transparent pl-1.5 pr-5 text-[13px] font-semibold text-text-main outline-none cursor-pointer w-full"
-              >
-                {cycleOptions.map(cycle => (
-                  <option key={cycle} value={cycle}>{cycle}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-1.5 h-3.5 w-3.5 text-text-muted pointer-events-none group-hover:text-brand transition-colors" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Active Cycle</span>
+            <div className="mt-0.5 flex items-center gap-1.5 px-1">
+              <CalendarClock className="h-3.5 w-3.5 text-brand shrink-0" aria-hidden="true" />
+              <span className="text-[13px] font-semibold text-text-main">
+                {settings?.active_cycle_name ?? "—"}
+              </span>
             </div>
           </div>
           <div className="h-8 w-[1px] bg-border" />
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Status</span>
-            <span className="mt-1 text-[13px] font-semibold text-emerald-600 flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Completed
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Reviews</span>
+            <span
+              className={`mt-1 text-[13px] font-semibold flex items-center gap-1.5 ${
+                settings?.reviews_submission_open ? "text-emerald-600" : "text-text-muted"
+              }`}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {settings?.reviews_submission_open ? "Open" : "Closed"}
             </span>
           </div>
         </div>
@@ -460,15 +456,13 @@ export function ProjectReviews() {
           <button type="button" className={tabCls("my")} onClick={() => setActiveTab("my")}>
             My Reviews
           </button>
-          {showEvalTab && (
-            <>
-              <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
-                Evaluate Team
-              </button>
-              <button type="button" className={tabCls("secondary")} onClick={() => setActiveTab("secondary")}>
-                Secondary Reviews
-              </button>
-            </>
+          <button type="button" className={tabCls("evaluate")} onClick={() => setActiveTab("evaluate")}>
+            Evaluate Team
+          </button>
+          {isAdmin && (
+            <button type="button" className={tabCls("management")} onClick={() => setActiveTab("management")}>
+              Management
+            </button>
           )}
         </div>
 
@@ -488,7 +482,7 @@ export function ProjectReviews() {
                   <p className="mt-1 text-sm text-text-muted">You'll see your project evaluations here once HR assigns them.</p>
                 </div>
               ) : (
-                cards.map((card, index) => (
+                cards.map((card) => (
                   <CollapsibleProjectCard 
                     key={card.project_id} 
                     card={card} 
@@ -500,9 +494,26 @@ export function ProjectReviews() {
             </div>
           )}
 
-          {/* Manager Tabs */}
-          {activeTab === "evaluate" && showEvalTab && <PMEvaluationTab />}
-          {activeTab === "secondary" && showEvalTab && <SecondaryEvalTab />}
+          {/* Evaluate Team — PM queue + Secondary queue in one view */}
+          {activeTab === "evaluate" && (
+            <div className="flex flex-col gap-10">
+              <div>
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted mb-4 pb-2 border-b border-border">
+                  Primary Evaluations
+                </h3>
+                <PMEvaluationTab />
+              </div>
+              <div>
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted mb-4 pb-2 border-b border-border">
+                  Secondary Evaluations
+                </h3>
+                <SecondaryEvalTab />
+              </div>
+            </div>
+          )}
+
+          {/* Management — Admin only */}
+          {activeTab === "management" && isAdmin && <ManagementTab />}
         </div>
       </div>
     </div>

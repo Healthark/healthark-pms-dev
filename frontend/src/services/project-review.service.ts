@@ -120,6 +120,28 @@ export interface SecondaryEvalPayload {
   impact_statement: string;
 }
 
+// ── Admin Management View Types ─────────────────────────────────────
+
+export interface AdminMemberReviewRow {
+  review_id: number | null;
+  user_id: number;
+  employee_name: string;
+  assignment_role: string | null;
+  department_name: string | null;
+  review_status: "pending" | "reviewed" | "not_started";
+  performance_group: string | null;
+}
+
+export interface AdminProjectSummary {
+  project_id: number;
+  project_name: string;
+  project_code: string;
+  pm_name: string | null;
+  total_members: number;
+  reviewed_count: number;
+  members: AdminMemberReviewRow[];
+}
+
 // ── Service ─────────────────────────────────────────────────────────
 
 export const projectReviewService = {
@@ -168,6 +190,18 @@ export const projectReviewService = {
     return res.data;
   },
 
+  /** PM edits an already-submitted evaluation. */
+  updateReview: async (
+    reviewId: number,
+    payload: PMEvaluationPayload,
+  ): Promise<ProjectReviewResponse> => {
+    const res = await apiClient.put<ProjectReviewResponse>(
+      `/project-reviews/${reviewId}`,
+      payload,
+    );
+    return res.data;
+  },
+
   // ── Secondary Evaluator ────────────────────────────────────────
   /** List reviews pending secondary impact statement. */
   getSecondaryQueue: async (): Promise<ProjectReviewResponse[]> => {
@@ -191,6 +225,13 @@ export const projectReviewService = {
   /** Admin-only: all reviews for the active cycle. */
   getAllReviews: async (): Promise<ProjectReviewResponse[]> => {
     const res = await apiClient.get<ProjectReviewResponse[]>("/project-reviews/all");
+    return res.data;
+  },
+
+  /** Admin-only: per-project completion overview. Pass cycle string to view historical data. */
+  getManagementView: async (cycle?: string): Promise<AdminProjectSummary[]> => {
+    const params = cycle ? { cycle } : {};
+    const res = await apiClient.get<AdminProjectSummary[]>("/project-reviews/management", { params });
     return res.data;
   },
 };
