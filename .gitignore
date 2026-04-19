@@ -24,3 +24,11 @@ build/
 .DS_Store
 Thumbs.db
 project_structure.md
+
+
+# AI Assistant & Knowledge Graph Data
+.claude/
+graphify-out/
+.graphify_*
+CLAUDE.md
+.claudeignore
