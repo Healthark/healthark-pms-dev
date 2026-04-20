@@ -27,8 +27,14 @@ interface CriteriaChecklistProps {
   readonly criteria: Criterion[];
   readonly approvalStatus: ApprovalStatus;
   readonly progressPercent: number;
-  /** Callback to update the parent goal's criteria array after a mutation. */
-  readonly onCriterionUpdate: (updated: Criterion) => void;
+  /**
+   * Callback to update the parent goal's criteria array after a mutation.
+   * Omit together with `readOnly` to render a non-interactive checklist
+   * (used on the mentor's Team Goals view, where the mentee owns the state).
+   */
+  readonly onCriterionUpdate?: (updated: Criterion) => void;
+  /** Forces the checklist to render read-only regardless of approval status. */
+  readonly readOnly?: boolean;
 }
 
 // ── Progress Bar ────────────────────────────────────────────────────
@@ -225,9 +231,11 @@ export function CriteriaChecklist({
   approvalStatus,
   progressPercent,
   onCriterionUpdate,
+  readOnly = false,
 }: CriteriaChecklistProps) {
   const [expanded, setExpanded] = useState(false);
-  const canToggle = approvalStatus === "approved";
+  const canToggle =
+    !readOnly && !!onCriterionUpdate && approvalStatus === "approved";
   const completedCount = criteria.filter((c) => c.is_completed).length;
 
   if (criteria.length === 0) return null;
@@ -254,7 +262,7 @@ export function CriteriaChecklist({
             key={c.id}
             criterion={c}
             canToggle={canToggle}
-            onUpdate={onCriterionUpdate}
+            onUpdate={onCriterionUpdate ?? (() => {})}
           />
         ))}
       </ul>
