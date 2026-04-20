@@ -71,6 +71,28 @@ export interface Goal {
   updated_at: string | null;
   criteria: Criterion[];
   progress_percent: number;
+  // Self-review: timestamp is the single source of truth for whether
+  // the owner has submitted their self-review on an approved goal.
+  self_review_submitted_at: string | null;
+  self_desc_task_execution: string | null;
+  self_desc_ownership: string | null;
+  self_desc_client_deliverables: string | null;
+  self_desc_communication: string | null;
+  self_desc_project_management: string | null;
+  self_desc_mentoring: string | null;
+  self_desc_firm_growth: string | null;
+  self_desc_competency_skills: string | null;
+}
+
+export interface GoalSelfReviewPayload {
+  self_desc_task_execution: string;
+  self_desc_ownership: string;
+  self_desc_client_deliverables: string;
+  self_desc_communication: string;
+  self_desc_project_management: string;
+  self_desc_mentoring: string;
+  self_desc_firm_growth: string;
+  self_desc_competency_skills: string;
 }
 
 /** Extended type for the manager's Team Goals view */
@@ -131,6 +153,17 @@ export const goalService = {
 
   submitGoal: async (goalId: number): Promise<Goal> => {
     const res = await apiClient.patch<Goal>(`/goals/${goalId}/submit`, {});
+    return res.data;
+  },
+
+  submitSelfReview: async (
+    goalId: number,
+    payload: GoalSelfReviewPayload,
+  ): Promise<Goal> => {
+    const res = await apiClient.patch<Goal>(
+      `/goals/${goalId}/self-review`,
+      payload,
+    );
     return res.data;
   },
 

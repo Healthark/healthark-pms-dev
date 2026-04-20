@@ -96,6 +96,24 @@ class GoalApprovalUpdate(BaseModel):
     feedback: Optional[str] = None
 
 
+class GoalSelfReviewSubmit(BaseModel):
+    """
+    Payload the goal owner submits when reflecting on an APPROVED goal.
+
+    All 8 competency responses are captured in a single submission — the
+    self-review is one-shot (no drafts).  Each field is a free-text
+    reflection on the employee's own delivery against the approved goal.
+    """
+    self_desc_task_execution:      str = Field(..., min_length=1)
+    self_desc_ownership:           str = Field(..., min_length=1)
+    self_desc_client_deliverables: str = Field(..., min_length=1)
+    self_desc_communication:       str = Field(..., min_length=1)
+    self_desc_project_management:  str = Field(..., min_length=1)
+    self_desc_mentoring:           str = Field(..., min_length=1)
+    self_desc_firm_growth:         str = Field(..., min_length=1)
+    self_desc_competency_skills:   str = Field(..., min_length=1)
+
+
 class GoalResponse(GoalBase):
     id: int
     org_id: int
@@ -122,6 +140,19 @@ class GoalResponse(GoalBase):
     approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    # ── Self-review ──────────────────────────────────────────────────
+    # Timestamp is the single source of truth for "has the employee
+    # submitted their self-review yet?".  None until submitted.
+    self_review_submitted_at:      Optional[datetime] = None
+    self_desc_task_execution:      Optional[str] = None
+    self_desc_ownership:           Optional[str] = None
+    self_desc_client_deliverables: Optional[str] = None
+    self_desc_communication:       Optional[str] = None
+    self_desc_project_management:  Optional[str] = None
+    self_desc_mentoring:           Optional[str] = None
+    self_desc_firm_growth:         Optional[str] = None
+    self_desc_competency_skills:   Optional[str] = None
 
     # Nested criteria — populated from the SQLAlchemy relationship
     criteria: list[CriterionResponse] = []

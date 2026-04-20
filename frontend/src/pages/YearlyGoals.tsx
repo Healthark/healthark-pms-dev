@@ -3,13 +3,14 @@ import {
   Plus, Target, Lock, Search,
   LayoutGrid, Table2, ChevronDown,
   Pencil, SendHorizonal, Link, MessageSquare,
-  UserCircle,
+  UserCircle, ClipboardCheck,
 } from "lucide-react";
 import {
   goalService,
   type Goal,
   type GoalCreatePayload,
   type GoalUpdatePayload,
+  type GoalSelfReviewPayload,
   type Criterion,
   type ApprovalStatus,
 } from "../services/goal.service";
@@ -18,6 +19,7 @@ import { useSystemSettings } from "../hooks/useSystemSettings";
 import { getErrorMessage } from "../utils/errors";
 import { YearlyGoalCard } from "../components/goals/YearlyGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
+import { GoalSelfReviewModal } from "../components/goals/GoalSelfReviewModal";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
@@ -139,6 +141,11 @@ export function YearlyGoals() {
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
+  // Self-review modal state
+  const [selfReviewGoal, setSelfReviewGoal] = useState<Goal | null>(null);
+  const [isSelfReviewSaving, setIsSelfReviewSaving] = useState(false);
+  const [selfReviewError, setSelfReviewError] = useState("");
+
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -206,6 +213,35 @@ export function YearlyGoals() {
       setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
     } catch {
       /* goal stays in draft — user can retry */
+    }
+  };
+
+  // Self-review handlers
+  const openSelfReview = (goal: Goal) => {
+    setSelfReviewError("");
+    setSelfReviewGoal(goal);
+  };
+  const closeSelfReview = () => {
+    setSelfReviewGoal(null);
+    setSelfReviewError("");
+  };
+  const handleSelfReviewSubmit = async (payload: GoalSelfReviewPayload) => {
+    if (!selfReviewGoal) return;
+    setIsSelfReviewSaving(true);
+    setSelfReviewError("");
+    try {
+      const updated = await goalService.submitSelfReview(
+        selfReviewGoal.id,
+        payload,
+      );
+      setGoals((prev) =>
+        prev.map((g) => (g.id === updated.id ? updated : g)),
+      );
+      closeSelfReview();
+    } catch (err) {
+      setSelfReviewError(getErrorMessage(err));
+    } finally {
+      setIsSelfReviewSaving(false);
     }
   };
 
@@ -400,6 +436,7 @@ export function YearlyGoals() {
                       goal={goal}
                       onEdit={openEdit}
                       onSubmit={handleSubmit}
+                      onSelfReview={openSelfReview}
                       onCriterionUpdate={handleCriterionUpdate}
                       editGateOpen={yearlyGoalsEditEnabled}
                     />
@@ -486,7 +523,24 @@ export function YearlyGoals() {
                                     <span className="text-[11px] text-text-muted italic">Awaiting review…</span>
                                   )}
                                   {goal.approval_status === "approved" && (
-                                    <span className="text-[11px] font-semibold text-green-600">✓ Approved</span>
+                                    goal.self_review_submitted_at ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openSelfReview(goal)}
+                                        className="flex items-center gap-1 rounded-md bg-green-50 border border-green-200 px-2 py-1 text-[11px] font-medium text-green-700 hover:bg-green-100 transition-colors"
+                                        title="View submitted self-review"
+                                      >
+                                        <ClipboardCheck className="h-3 w-3" /> Requested
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => openSelfReview(goal)}
+                                        className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
+                                      >
+                                        <ClipboardCheck className="h-3 w-3" /> Self Review
+                                      </button>
+                                    )
                                   )}
                                 </div>
                               </td>
@@ -554,6 +608,15 @@ export function YearlyGoals() {
         editingGoal={editingGoal}
         isSaving={isSaving}
         error={modalError}
+      />
+
+      <GoalSelfReviewModal
+        isOpen={selfReviewGoal !== null}
+        goal={selfReviewGoal}
+        onClose={closeSelfReview}
+        onSubmit={handleSelfReviewSubmit}
+        isSaving={isSelfReviewSaving}
+        error={selfReviewError}
       />
     </div>
   );

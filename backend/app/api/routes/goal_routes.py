@@ -35,6 +35,7 @@ from app.schemas.goal_schemas import (
     GoalUpdate,
     GoalResponse,
     GoalApprovalUpdate,
+    GoalSelfReviewSubmit,
     TeamGoalResponse,
 )
 from app.core.cycle_utils import get_goal_cycle_name
@@ -476,6 +477,65 @@ def approve_goal(
     # CHANGES_REQUESTED leaves approved_at as None — the goal was not approved.
     if approval_in.approval_status == ApprovalStatus.APPROVED:
         goal.approved_at = datetime.now(timezone.utc)
+
+    db.commit()
+    return _get_goal_with_relations(db, goal.id, current_user.org_id)
+
+
+@router.patch("/{goal_id}/self-review", response_model=GoalResponse)
+def submit_goal_self_review(
+    goal_id: int,
+    payload: GoalSelfReviewSubmit,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Owner submits their self-review on an APPROVED goal.
+
+    Gates:
+        - Only the goal owner may submit (the mentor writes their own
+          review separately — that endpoint belongs to the annual-review
+          domain, not here).
+        - The goal must be in APPROVED state; self-review is meaningless
+          for draft/submitted/changes_requested goals.
+        - One-shot submission — once `self_review_submitted_at` is set,
+          the record is immutable.  The UI switches from "Self Review"
+          to "Requested" based on that timestamp.
+
+    Fields captured (all required, free-text):
+        task_execution, ownership, client_deliverables, communication,
+        project_management, mentoring, firm_growth, competency_skills
+    """
+    goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
+
+    # Only the owner may self-review their own goal.
+    if goal.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the goal owner can submit a self-review.",
+        )
+
+    if goal.approval_status != ApprovalStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Self-review can only be submitted on an approved goal.",
+        )
+
+    if goal.self_review_submitted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Self-review has already been submitted for this goal.",
+        )
+
+    goal.self_desc_task_execution      = payload.self_desc_task_execution
+    goal.self_desc_ownership           = payload.self_desc_ownership
+    goal.self_desc_client_deliverables = payload.self_desc_client_deliverables
+    goal.self_desc_communication       = payload.self_desc_communication
+    goal.self_desc_project_management  = payload.self_desc_project_management
+    goal.self_desc_mentoring           = payload.self_desc_mentoring
+    goal.self_desc_firm_growth         = payload.self_desc_firm_growth
+    goal.self_desc_competency_skills   = payload.self_desc_competency_skills
+    goal.self_review_submitted_at      = datetime.now(timezone.utc)
 
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
