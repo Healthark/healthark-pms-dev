@@ -45,10 +45,10 @@ router = APIRouter()
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def _get_goal_with_relations(db: DbSession, goal_id: int, org_id: int) -> Goal:
-    """Fetch a goal with eagerly loaded criteria, scoped to the org."""
+    """Fetch a goal with eagerly loaded criteria + manager, scoped to the org."""
     goal = (
         db.query(Goal)
-        .options(joinedload(Goal.criteria))
+        .options(joinedload(Goal.criteria), joinedload(Goal.manager))
         .filter(Goal.id == goal_id, Goal.org_id == org_id)
         .first()
     )
@@ -110,6 +110,7 @@ def list_goals(
     """
     query = (
         db.query(Goal)
+        .options(joinedload(Goal.manager), joinedload(Goal.criteria))
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
@@ -230,7 +231,11 @@ def list_team_goals(
 
     query = (
         db.query(Goal)
-        .options(joinedload(Goal.owner), joinedload(Goal.criteria))
+        .options(
+            joinedload(Goal.owner),
+            joinedload(Goal.manager),
+            joinedload(Goal.criteria),
+        )
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),

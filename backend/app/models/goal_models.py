@@ -71,3 +71,12 @@ class Goal(Base):
         order_by="GoalCriterion.sort_order",
         lazy="joined",
     )
+
+    @property
+    def manager_name(self):
+        """
+        Display name of the mentor this goal was routed to at creation time.
+        None when the goal owner has no mentor assigned — the frontend
+        renders that as "No Mentor Assigned".
+        """
+        return self.manager.full_name if self.manager else None

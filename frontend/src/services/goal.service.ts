@@ -53,6 +53,8 @@ export interface Goal {
   org_id: number;
   user_id: number;
   manager_id: number | null;
+  /** Display name of the assigned mentor; null when the owner has no mentor. */
+  manager_name: string | null;
   title: string;
   description: string | null;
   attachment_url: string | null;

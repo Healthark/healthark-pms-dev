@@ -3,6 +3,7 @@ import {
   Plus, Target, Lock, Search,
   LayoutGrid, Table2, ChevronDown,
   Pencil, SendHorizonal, Link, MessageSquare,
+  UserCircle,
 } from "lucide-react";
 import {
   goalService,
@@ -411,6 +412,7 @@ export function YearlyGoals() {
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-border">
                         <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Goal</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Mentor</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Actions</th>
@@ -435,6 +437,18 @@ export function YearlyGoals() {
                                   <ChevronDown className={`h-4 w-4 text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
                                   <span className="line-clamp-1">{goal.title}</span>
                                 </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {goal.manager_name ? (
+                                  <div className="flex items-center gap-1.5 text-[12.5px] text-text-main">
+                                    <UserCircle className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                                    <span className="truncate">{goal.manager_name}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[12px] italic text-text-muted">
+                                    No Mentor Assigned
+                                  </span>
+                                )}
                               </td>
                               <td className="px-4 py-3">
                                 {goal.cycle_name ? (
@@ -479,7 +493,7 @@ export function YearlyGoals() {
                             </tr>
                             {isExpanded && (
                               <tr className="bg-brand/5">
-                                <td colSpan={4} className="px-10 py-4">
+                                <td colSpan={5} className="px-10 py-4">
                                   <div className="space-y-3 max-w-2xl">
                                     {goal.description && (
                                       <p className="text-sm text-text-muted">{goal.description}</p>

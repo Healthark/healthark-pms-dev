@@ -101,6 +101,10 @@ class GoalResponse(GoalBase):
     org_id: int
     user_id: int
     manager_id: Optional[int] = None
+    # Display name of the goal's assigned mentor — populated from
+    # Goal.manager.full_name via the `manager_name` property on the model.
+    # None when the owner has no mentor (frontend renders "No Mentor Assigned").
+    manager_name: Optional[str] = None
     goal_type: str
     # Bare FY label stamped at creation for yearly goals (e.g. "FY26").
     # None for regular goals.
