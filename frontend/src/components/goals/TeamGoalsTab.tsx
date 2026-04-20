@@ -16,11 +16,14 @@ import {
   goalService,
   type TeamGoal,
   type ApprovalStatus,
+  type SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import { getErrorMessage } from "../../utils/errors";
 import { TeamGoalCard } from "./TeamGoalCard";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
+import { GoalSelfReviewModal } from "./GoalSelfReviewModal";
+import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 
 // ---------------------------------------------------------------------------
 // Feedback modal (Portal) — shown when manager clicks "Request Changes"
@@ -164,6 +167,21 @@ export function TeamGoalsTab() {
   // Feedback modal state
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
   const [modalError, setModalError] = useState("");
+
+  // Mentor view-only self-review modal state
+  const [viewSelfReviewGoal, setViewSelfReviewGoal] =
+    useState<TeamGoal | null>(null);
+  const [viewSelfReviewCycle, setViewSelfReviewCycle] =
+    useState<SelfReviewCycleHalf | null>(null);
+
+  const openMenteeSelfReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
+    setViewSelfReviewGoal(goal);
+    setViewSelfReviewCycle(half);
+  };
+  const closeMenteeSelfReview = () => {
+    setViewSelfReviewGoal(null);
+    setViewSelfReviewCycle(null);
+  };
 
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
@@ -371,6 +389,7 @@ export function TeamGoalsTab() {
                 setModalError("");
                 setFeedbackTarget(g);
               }}
+              onViewSelfReview={openMenteeSelfReview}
               isActing={isActing}
             />
           ))}
@@ -388,7 +407,7 @@ export function TeamGoalsTab() {
                   Mentee
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Cycle
+                  Year
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Status
@@ -433,9 +452,9 @@ export function TeamGoalsTab() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        {goal.cycle_name ? (
+                        {goal.fy_year ? (
                           <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-                            {goal.cycle_name}
+                            FY {goal.fy_year}
                           </span>
                         ) : (
                           <span className="text-[12px] text-text-muted">—</span>
@@ -474,9 +493,13 @@ export function TeamGoalsTab() {
                             </>
                           )}
                           {isApproved && (
-                            <span className="text-[11px] font-semibold text-green-600">
-                              ✓ Approved
-                            </span>
+                            <SelfReviewCycleMenu
+                              goal={goal}
+                              mode="mentor"
+                              onSelect={(half) =>
+                                openMenteeSelfReview(goal, half)
+                              }
+                            />
                           )}
                           {isChangesRequested && (
                             <span className="text-[11px] text-amber-700 italic">
@@ -549,6 +572,20 @@ export function TeamGoalsTab() {
           error={modalError}
         />
       )}
+
+      {/* Mentor view-only modal for mentee's self-review */}
+      <GoalSelfReviewModal
+        isOpen={viewSelfReviewGoal !== null && viewSelfReviewCycle !== null}
+        goal={viewSelfReviewGoal}
+        cycleHalf={viewSelfReviewCycle}
+        onClose={closeMenteeSelfReview}
+        // Mentor view is read-only; the submit handler is never invoked
+        // but still has to satisfy the prop signature.
+        onSubmit={async () => {}}
+        isSaving={false}
+        error=""
+        readOnly
+      />
     </div>
   );
 }

@@ -1,11 +1,16 @@
 import { CalendarDays, UserCircle, Check, RotateCcw, Link } from "lucide-react";
-import type { TeamGoal } from "../../services/goal.service";
+import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
+import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 
 interface TeamGoalCardProps {
   readonly goal: TeamGoal;
   readonly onApprove: (goal: TeamGoal) => void;
   readonly onRequestChanges: (goal: TeamGoal) => void;
+  readonly onViewSelfReview: (
+    goal: TeamGoal,
+    cycleHalf: SelfReviewCycleHalf,
+  ) => void;
   readonly isActing: boolean;
 }
 
@@ -22,12 +27,12 @@ export function TeamGoalCard({
   goal,
   onApprove,
   onRequestChanges,
+  onViewSelfReview,
   isActing,
 }: TeamGoalCardProps) {
   const isSubmitted = goal.approval_status === "submitted";
-  const isActedOn =
-    goal.approval_status === "approved" ||
-    goal.approval_status === "changes_requested";
+  const isApproved = goal.approval_status === "approved";
+  const isChangesRequested = goal.approval_status === "changes_requested";
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-sm flex flex-col gap-3">
@@ -96,9 +101,17 @@ export function TeamGoalCard({
           </div>
         )}
 
-        {isActedOn && (
+        {isApproved && (
+          <SelfReviewCycleMenu
+            goal={goal}
+            mode="mentor"
+            onSelect={(half) => onViewSelfReview(goal, half)}
+          />
+        )}
+
+        {isChangesRequested && (
           <span className="text-xs text-text-muted italic">
-            Action recorded
+            Awaiting revision
           </span>
         )}
       </div>

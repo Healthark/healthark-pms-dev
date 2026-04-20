@@ -18,6 +18,8 @@ export type ApprovalStatus =
   | "approved"
   | "changes_requested";
 export type GoalType = "regular" | "yearly";
+/** Which half of the fiscal year a self-review covers. */
+export type SelfReviewCycleHalf = "H1" | "H2";
 
 // ── Criterion Types ─────────────────────────────────────────────────
 
@@ -48,6 +50,28 @@ export interface CriterionUpdatePayload {
 
 // ── Goal Types ──────────────────────────────────────────────────────
 
+/**
+ * One fiscal-year-half self-review on a goal.
+ *
+ * A goal carries 0–2 of these: the employee submits one for H1 and
+ * one for H2 of the goal's FY.  Presence of a row (matched by
+ * cycle_half) means "Submitted".
+ */
+export interface GoalSelfReview {
+  id: number;
+  goal_id: number;
+  cycle_half: SelfReviewCycleHalf;
+  submitted_at: string;
+  self_desc_task_execution: string;
+  self_desc_ownership: string;
+  self_desc_client_deliverables: string;
+  self_desc_communication: string;
+  self_desc_project_management: string;
+  self_desc_mentoring: string;
+  self_desc_firm_growth: string;
+  self_desc_competency_skills: string;
+}
+
 export interface Goal {
   id: number;
   org_id: number;
@@ -71,17 +95,8 @@ export interface Goal {
   updated_at: string | null;
   criteria: Criterion[];
   progress_percent: number;
-  // Self-review: timestamp is the single source of truth for whether
-  // the owner has submitted their self-review on an approved goal.
-  self_review_submitted_at: string | null;
-  self_desc_task_execution: string | null;
-  self_desc_ownership: string | null;
-  self_desc_client_deliverables: string | null;
-  self_desc_communication: string | null;
-  self_desc_project_management: string | null;
-  self_desc_mentoring: string | null;
-  self_desc_firm_growth: string | null;
-  self_desc_competency_skills: string | null;
+  /** 0–2 entries, one per FY half. Look up by `cycle_half`. */
+  self_reviews: GoalSelfReview[];
 }
 
 export interface GoalSelfReviewPayload {
@@ -158,10 +173,11 @@ export const goalService = {
 
   submitSelfReview: async (
     goalId: number,
+    cycleHalf: SelfReviewCycleHalf,
     payload: GoalSelfReviewPayload,
   ): Promise<Goal> => {
     const res = await apiClient.patch<Goal>(
-      `/goals/${goalId}/self-review`,
+      `/goals/${goalId}/self-review/${cycleHalf}`,
       payload,
     );
     return res.data;

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict, computed_field
 from typing import Optional
 from datetime import datetime
 from app.models.goal_models import ApprovalStatus, GoalType
+from app.models.goal_self_review_models import SelfReviewCycleHalf
 
 
 # =====================================================================
@@ -98,11 +99,12 @@ class GoalApprovalUpdate(BaseModel):
 
 class GoalSelfReviewSubmit(BaseModel):
     """
-    Payload the goal owner submits when reflecting on an APPROVED goal.
+    Payload the goal owner submits when reflecting on an APPROVED goal
+    for ONE half of the fiscal year (H1 or H2).  The cycle_half comes
+    from the URL path parameter, not the body.
 
-    All 8 competency responses are captured in a single submission — the
-    self-review is one-shot (no drafts).  Each field is a free-text
-    reflection on the employee's own delivery against the approved goal.
+    Each submission is one-shot — once persisted for a given
+    (goal_id, cycle_half) it cannot be re-submitted.
     """
     self_desc_task_execution:      str = Field(..., min_length=1)
     self_desc_ownership:           str = Field(..., min_length=1)
@@ -112,6 +114,27 @@ class GoalSelfReviewSubmit(BaseModel):
     self_desc_mentoring:           str = Field(..., min_length=1)
     self_desc_firm_growth:         str = Field(..., min_length=1)
     self_desc_competency_skills:   str = Field(..., min_length=1)
+
+
+class GoalSelfReviewResponse(BaseModel):
+    """
+    One half's self-review on an approved goal.  A goal has 0–2 of these
+    attached (keyed by cycle_half = "H1" or "H2").
+    """
+    id: int
+    goal_id: int
+    cycle_half: SelfReviewCycleHalf
+    submitted_at: datetime
+    self_desc_task_execution:      str
+    self_desc_ownership:           str
+    self_desc_client_deliverables: str
+    self_desc_communication:       str
+    self_desc_project_management:  str
+    self_desc_mentoring:           str
+    self_desc_firm_growth:         str
+    self_desc_competency_skills:   str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GoalResponse(GoalBase):
@@ -141,18 +164,11 @@ class GoalResponse(GoalBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    # ── Self-review ──────────────────────────────────────────────────
-    # Timestamp is the single source of truth for "has the employee
-    # submitted their self-review yet?".  None until submitted.
-    self_review_submitted_at:      Optional[datetime] = None
-    self_desc_task_execution:      Optional[str] = None
-    self_desc_ownership:           Optional[str] = None
-    self_desc_client_deliverables: Optional[str] = None
-    self_desc_communication:       Optional[str] = None
-    self_desc_project_management:  Optional[str] = None
-    self_desc_mentoring:           Optional[str] = None
-    self_desc_firm_growth:         Optional[str] = None
-    self_desc_competency_skills:   Optional[str] = None
+    # ── Self-reviews ─────────────────────────────────────────────────
+    # 0–2 rows, one per fiscal-year half.  The presence of a row in this
+    # list (matched by cycle_half) is the source of truth for "submitted
+    # for that half".  Absent halves are rendered as "Not Submitted".
+    self_reviews: list[GoalSelfReviewResponse] = []
 
     # Nested criteria — populated from the SQLAlchemy relationship
     criteria: list[CriterionResponse] = []

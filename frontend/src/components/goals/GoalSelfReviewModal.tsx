@@ -1,18 +1,21 @@
 /**
- * GoalSelfReviewModal.tsx — Owner's reflection on an approved yearly goal.
+ * GoalSelfReviewModal.tsx — Owner's (or mentor-view) reflection form for
+ * a single half (H1 / H2) of an approved yearly goal.
  *
- * Opens from the Actions column when a goal is in the APPROVED state and
- * the self-review has not yet been submitted.  After submission, the
- * Actions cell flips from "Self Review" to "Requested" and the form is
- * shown in read-only mode.
+ * - Opens from the My Goals H1/H2 cycle dropdown.  When the matching
+ *   self-review already exists, the modal renders read-only.
+ * - The mentor also opens this modal (via readOnly=true) to view what
+ *   the mentee submitted — they cannot edit or submit.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ClipboardCheck, Send, Loader2, X } from "lucide-react";
 import type {
   Goal,
+  GoalSelfReview,
   GoalSelfReviewPayload,
+  SelfReviewCycleHalf,
 } from "../../services/goal.service";
 
 // ── Competency schema — matches backend self_desc_* columns ─────────
@@ -88,17 +91,24 @@ function emptyForm(): Record<CompetencyKey, string> {
   };
 }
 
-function readFromGoal(goal: Goal): Record<CompetencyKey, string> {
+function readFromReview(review: GoalSelfReview): Record<CompetencyKey, string> {
   return {
-    task_execution: goal.self_desc_task_execution ?? "",
-    ownership: goal.self_desc_ownership ?? "",
-    client_deliverables: goal.self_desc_client_deliverables ?? "",
-    communication: goal.self_desc_communication ?? "",
-    project_management: goal.self_desc_project_management ?? "",
-    mentoring: goal.self_desc_mentoring ?? "",
-    firm_growth: goal.self_desc_firm_growth ?? "",
-    competency_skills: goal.self_desc_competency_skills ?? "",
+    task_execution: review.self_desc_task_execution,
+    ownership: review.self_desc_ownership,
+    client_deliverables: review.self_desc_client_deliverables,
+    communication: review.self_desc_communication,
+    project_management: review.self_desc_project_management,
+    mentoring: review.self_desc_mentoring,
+    firm_growth: review.self_desc_firm_growth,
+    competency_skills: review.self_desc_competency_skills,
   };
+}
+
+function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
+  // "H1 FY 2026" / "H2 FY 2026" — stable across grid/table/mentor views.
+  return goal.fy_year
+    ? `${cycleHalf} FY ${goal.fy_year}`
+    : cycleHalf;
 }
 
 // ── Props ───────────────────────────────────────────────────────────
@@ -106,10 +116,16 @@ function readFromGoal(goal: Goal): Record<CompetencyKey, string> {
 interface GoalSelfReviewModalProps {
   readonly isOpen: boolean;
   readonly goal: Goal | null;
+  readonly cycleHalf: SelfReviewCycleHalf | null;
   readonly onClose: () => void;
-  readonly onSubmit: (payload: GoalSelfReviewPayload) => Promise<void>;
+  readonly onSubmit: (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalSelfReviewPayload,
+  ) => Promise<void>;
   readonly isSaving: boolean;
   readonly error: string;
+  /** Force the modal into view-only mode (mentor viewing mentee's entry). */
+  readonly readOnly?: boolean;
 }
 
 // ── Component ───────────────────────────────────────────────────────
@@ -117,28 +133,32 @@ interface GoalSelfReviewModalProps {
 export function GoalSelfReviewModal({
   isOpen,
   goal,
+  cycleHalf,
   onClose,
   onSubmit,
   isSaving,
   error,
+  readOnly = false,
 }: GoalSelfReviewModalProps) {
-  const isSubmitted = Boolean(goal?.self_review_submitted_at);
+  const existing =
+    goal && cycleHalf
+      ? goal.self_reviews.find((sr) => sr.cycle_half === cycleHalf) ?? null
+      : null;
 
-  // Seed the form from the goal when it has a prior submission, else empty.
-  const [form, setForm] = useState<Record<CompetencyKey, string>>(() =>
-    goal && isSubmitted ? readFromGoal(goal) : emptyForm(),
-  );
+  const isLocked = readOnly || existing !== null;
 
-  // Re-seed when the modal is opened for a different goal.
-  // Using a keyed remount in the parent would also work, but resetting
-  // state on goal.id change keeps this component self-contained.
-  const [lastGoalId, setLastGoalId] = useState<number | null>(goal?.id ?? null);
-  if (goal && goal.id !== lastGoalId) {
-    setLastGoalId(goal.id);
-    setForm(isSubmitted ? readFromGoal(goal) : emptyForm());
-  }
+  const [form, setForm] = useState<Record<CompetencyKey, string>>(emptyForm);
 
-  if (!isOpen || !goal) return null;
+  // Re-seed the form whenever the modal opens on a different (goal, half).
+  // Driven by an effect so parent state changes are respected immediately.
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm(existing ? readFromReview(existing) : emptyForm());
+    // existing is recomputed from props every render; the identity check
+    // on goal.id + cycleHalf is what matters here.
+  }, [isOpen, goal?.id, cycleHalf, existing]);
+
+  if (!isOpen || !goal || !cycleHalf) return null;
 
   const setField = (key: CompetencyKey, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -156,8 +176,14 @@ export function GoalSelfReviewModal({
       self_desc_firm_growth: form.firm_growth.trim(),
       self_desc_competency_skills: form.competency_skills.trim(),
     };
-    await onSubmit(payload);
+    await onSubmit(cycleHalf, payload);
   };
+
+  const title = readOnly
+    ? `Self Review · ${cycleLabel(goal, cycleHalf)}`
+    : existing
+    ? `Self Review · ${cycleLabel(goal, cycleHalf)} (Submitted)`
+    : `Self Review · ${cycleLabel(goal, cycleHalf)}`;
 
   return createPortal(
     <div
@@ -181,11 +207,9 @@ export function GoalSelfReviewModal({
                 id="self-review-modal-title"
                 className="font-display text-base font-semibold text-text-main"
               >
-                {isSubmitted ? "Self Review (Submitted)" : "Self Review"}
+                {title}
               </h2>
-              <p className="mt-0.5 text-xs text-text-muted">
-                {goal.title}
-              </p>
+              <p className="mt-0.5 text-xs text-text-muted">{goal.title}</p>
             </div>
           </div>
           <button
@@ -206,45 +230,54 @@ export function GoalSelfReviewModal({
             </p>
           )}
 
-          {!isSubmitted && (
+          {!isLocked && (
             <p className="text-xs text-text-muted">
-              Reflect on your delivery against this goal across all 8
+              Reflect on your delivery against this goal for{" "}
+              <strong>{cycleLabel(goal, cycleHalf)}</strong> across all 8
               competencies. Once submitted, your mentor will review your
-              self-assessment.
+              self-assessment for this half.
             </p>
           )}
 
-          {COMPETENCIES.map((comp, idx) => (
-            <div key={comp.key}>
-              <label
-                htmlFor={`goal-self-${comp.key}`}
-                className="block text-xs font-semibold text-text-main mb-1"
-              >
-                {idx + 1}. {comp.label}
-                {!isSubmitted && " *"}
-              </label>
-              {isSubmitted ? (
-                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap">
-                  {form[comp.key] || "—"}
-                </div>
-              ) : (
-                <textarea
-                  id={`goal-self-${comp.key}`}
-                  rows={4}
-                  className={INPUT_CLS}
-                  value={form[comp.key]}
-                  onChange={(e) => setField(comp.key, e.target.value)}
-                  placeholder={comp.placeholder}
-                />
-              )}
-            </div>
-          ))}
+          {readOnly && !existing && (
+            <p className="rounded-lg bg-slate-50 border border-border px-4 py-3 text-sm text-text-muted">
+              The mentee has not yet submitted their self-review for this
+              half.
+            </p>
+          )}
+
+          {(isLocked ? existing !== null : true) &&
+            COMPETENCIES.map((comp, idx) => (
+              <div key={comp.key}>
+                <label
+                  htmlFor={`goal-self-${comp.key}`}
+                  className="block text-xs font-semibold text-text-main mb-1"
+                >
+                  {idx + 1}. {comp.label}
+                  {!isLocked && " *"}
+                </label>
+                {isLocked ? (
+                  <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap">
+                    {form[comp.key] || "—"}
+                  </div>
+                ) : (
+                  <textarea
+                    id={`goal-self-${comp.key}`}
+                    rows={4}
+                    className={INPUT_CLS}
+                    value={form[comp.key]}
+                    onChange={(e) => setField(comp.key, e.target.value)}
+                    placeholder={comp.placeholder}
+                  />
+                )}
+              </div>
+            ))}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 border-t border-border px-6 py-4">
           <p className="text-xs text-text-muted">
-            {isSubmitted
+            {isLocked
               ? "Self-review is locked once submitted."
               : "All 8 reflections are required."}
           </p>
@@ -254,9 +287,9 @@ export function GoalSelfReviewModal({
               onClick={onClose}
               className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
             >
-              {isSubmitted ? "Close" : "Cancel"}
+              {isLocked ? "Close" : "Cancel"}
             </button>
-            {!isSubmitted && (
+            {!isLocked && (
               <button
                 type="button"
                 onClick={handleSubmit}

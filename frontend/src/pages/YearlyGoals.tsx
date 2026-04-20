@@ -3,7 +3,7 @@ import {
   Plus, Target, Lock, Search,
   LayoutGrid, Table2, ChevronDown,
   Pencil, SendHorizonal, Link, MessageSquare,
-  UserCircle, ClipboardCheck,
+  UserCircle,
 } from "lucide-react";
 import {
   goalService,
@@ -11,6 +11,7 @@ import {
   type GoalCreatePayload,
   type GoalUpdatePayload,
   type GoalSelfReviewPayload,
+  type SelfReviewCycleHalf,
   type Criterion,
   type ApprovalStatus,
 } from "../services/goal.service";
@@ -20,6 +21,7 @@ import { getErrorMessage } from "../utils/errors";
 import { YearlyGoalCard } from "../components/goals/YearlyGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { GoalSelfReviewModal } from "../components/goals/GoalSelfReviewModal";
+import { SelfReviewCycleMenu } from "../components/goals/SelfReviewCycleMenu";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
@@ -143,6 +145,8 @@ export function YearlyGoals() {
 
   // Self-review modal state
   const [selfReviewGoal, setSelfReviewGoal] = useState<Goal | null>(null);
+  const [selfReviewCycle, setSelfReviewCycle] =
+    useState<SelfReviewCycleHalf | null>(null);
   const [isSelfReviewSaving, setIsSelfReviewSaving] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState("");
 
@@ -217,21 +221,27 @@ export function YearlyGoals() {
   };
 
   // Self-review handlers
-  const openSelfReview = (goal: Goal) => {
+  const openSelfReview = (goal: Goal, cycleHalf: SelfReviewCycleHalf) => {
     setSelfReviewError("");
     setSelfReviewGoal(goal);
+    setSelfReviewCycle(cycleHalf);
   };
   const closeSelfReview = () => {
     setSelfReviewGoal(null);
+    setSelfReviewCycle(null);
     setSelfReviewError("");
   };
-  const handleSelfReviewSubmit = async (payload: GoalSelfReviewPayload) => {
+  const handleSelfReviewSubmit = async (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalSelfReviewPayload,
+  ) => {
     if (!selfReviewGoal) return;
     setIsSelfReviewSaving(true);
     setSelfReviewError("");
     try {
       const updated = await goalService.submitSelfReview(
         selfReviewGoal.id,
+        cycleHalf,
         payload,
       );
       setGoals((prev) =>
@@ -390,7 +400,7 @@ export function YearlyGoals() {
                       >
                         <option value="all">All Years</option>
                         {availableYears.map((y) => (
-                          <option key={y} value={y}>{y}</option>
+                          <option key={y} value={y}>FY {y}</option>
                         ))}
                       </select>
                     </div>
@@ -436,7 +446,7 @@ export function YearlyGoals() {
                       goal={goal}
                       onEdit={openEdit}
                       onSubmit={handleSubmit}
-                      onSelfReview={openSelfReview}
+                      onSelfReview={(g, half) => openSelfReview(g, half)}
                       onCriterionUpdate={handleCriterionUpdate}
                       editGateOpen={yearlyGoalsEditEnabled}
                     />
@@ -450,7 +460,7 @@ export function YearlyGoals() {
                       <tr className="bg-slate-50/80 border-b border-border">
                         <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Goal</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Mentor</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Year</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Actions</th>
                       </tr>
@@ -488,9 +498,9 @@ export function YearlyGoals() {
                                 )}
                               </td>
                               <td className="px-4 py-3">
-                                {goal.cycle_name ? (
+                                {goal.fy_year ? (
                                   <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-                                    {goal.cycle_name}
+                                    FY {goal.fy_year}
                                   </span>
                                 ) : (
                                   <span className="text-[12px] text-text-muted">—</span>
@@ -523,24 +533,13 @@ export function YearlyGoals() {
                                     <span className="text-[11px] text-text-muted italic">Awaiting review…</span>
                                   )}
                                   {goal.approval_status === "approved" && (
-                                    goal.self_review_submitted_at ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => openSelfReview(goal)}
-                                        className="flex items-center gap-1 rounded-md bg-green-50 border border-green-200 px-2 py-1 text-[11px] font-medium text-green-700 hover:bg-green-100 transition-colors"
-                                        title="View submitted self-review"
-                                      >
-                                        <ClipboardCheck className="h-3 w-3" /> Requested
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => openSelfReview(goal)}
-                                        className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
-                                      >
-                                        <ClipboardCheck className="h-3 w-3" /> Self Review
-                                      </button>
-                                    )
+                                    <SelfReviewCycleMenu
+                                      goal={goal}
+                                      mode="mentee"
+                                      onSelect={(half) =>
+                                        openSelfReview(goal, half)
+                                      }
+                                    />
                                   )}
                                 </div>
                               </td>
@@ -611,8 +610,9 @@ export function YearlyGoals() {
       />
 
       <GoalSelfReviewModal
-        isOpen={selfReviewGoal !== null}
+        isOpen={selfReviewGoal !== null && selfReviewCycle !== null}
         goal={selfReviewGoal}
+        cycleHalf={selfReviewCycle}
         onClose={closeSelfReview}
         onSubmit={handleSelfReviewSubmit}
         isSaving={isSelfReviewSaving}

@@ -1,20 +1,24 @@
 import {
   CalendarDays,
-  ClipboardCheck,
   Link,
   MessageSquare,
   Pencil,
   SendHorizonal,
 } from "lucide-react";
-import type { Goal, Criterion } from "../../services/goal.service";
+import type {
+  Goal,
+  Criterion,
+  SelfReviewCycleHalf,
+} from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
+import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 
 interface YearlyGoalCardProps {
   readonly goal: Goal;
   readonly onEdit: (goal: Goal) => void;
   readonly onSubmit: (goal: Goal) => void;
-  readonly onSelfReview: (goal: Goal) => void;
+  readonly onSelfReview: (goal: Goal, cycleHalf: SelfReviewCycleHalf) => void;
   readonly onCriterionUpdate: (goalId: number, updated: Criterion) => void;
   /** When false, edit is blocked — admin has closed the yearly-goal window. */
   readonly editGateOpen: boolean;
@@ -145,26 +149,11 @@ export function YearlyGoalCard({
         )}
 
         {isApproved && (
-          goal.self_review_submitted_at ? (
-            <button
-              type="button"
-              onClick={() => onSelfReview(goal)}
-              className="flex items-center gap-1.5 rounded-md bg-green-50 border border-green-200 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
-              title="View submitted self-review"
-            >
-              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              Requested
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onSelfReview(goal)}
-              className="flex items-center gap-1.5 rounded-md bg-brand-light px-2.5 py-1.5 text-xs font-medium text-brand hover:bg-brand hover:text-white transition-colors"
-            >
-              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              Self Review
-            </button>
-          )
+          <SelfReviewCycleMenu
+            goal={goal}
+            mode="mentee"
+            onSelect={(half) => onSelfReview(goal, half)}
+          />
         )}
       </div>
     </div>

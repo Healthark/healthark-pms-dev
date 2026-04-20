@@ -28,6 +28,7 @@ from sqlalchemy.orm import joinedload
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.goal_models import Goal, ApprovalStatus, GoalType
 from app.models.goal_criteria_models import GoalCriterion
+from app.models.goal_self_review_models import GoalSelfReview, SelfReviewCycleHalf
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.goal_schemas import (
@@ -482,33 +483,32 @@ def approve_goal(
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
 
-@router.patch("/{goal_id}/self-review", response_model=GoalResponse)
+@router.patch(
+    "/{goal_id}/self-review/{cycle_half}",
+    response_model=GoalResponse,
+)
 def submit_goal_self_review(
     goal_id: int,
+    cycle_half: SelfReviewCycleHalf,
     payload: GoalSelfReviewSubmit,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """
-    Owner submits their self-review on an APPROVED goal.
+    Owner submits their self-review on an APPROVED goal for ONE half
+    of the fiscal year (H1 or H2).
 
     Gates:
-        - Only the goal owner may submit (the mentor writes their own
-          review separately — that endpoint belongs to the annual-review
-          domain, not here).
-        - The goal must be in APPROVED state; self-review is meaningless
-          for draft/submitted/changes_requested goals.
-        - One-shot submission — once `self_review_submitted_at` is set,
-          the record is immutable.  The UI switches from "Self Review"
-          to "Requested" based on that timestamp.
+        - Only the goal owner may submit.
+        - The goal must be in APPROVED state.
+        - One-shot per (goal_id, cycle_half) — double-submit returns 400.
+          The DB-level unique index also enforces this as a last resort.
 
-    Fields captured (all required, free-text):
-        task_execution, ownership, client_deliverables, communication,
-        project_management, mentoring, firm_growth, competency_skills
+    On success the updated goal is returned with the full self_reviews
+    list (so the frontend can re-render both H1 and H2 rows).
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
 
-    # Only the owner may self-review their own goal.
     if goal.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -521,21 +521,33 @@ def submit_goal_self_review(
             detail="Self-review can only be submitted on an approved goal.",
         )
 
-    if goal.self_review_submitted_at is not None:
+    # Has this half already been filled?
+    existing = next(
+        (sr for sr in goal.self_reviews if sr.cycle_half == cycle_half.value),
+        None,
+    )
+    if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Self-review has already been submitted for this goal.",
+            detail=(
+                f"Self-review for {cycle_half.value} has already been "
+                "submitted for this goal."
+            ),
         )
 
-    goal.self_desc_task_execution      = payload.self_desc_task_execution
-    goal.self_desc_ownership           = payload.self_desc_ownership
-    goal.self_desc_client_deliverables = payload.self_desc_client_deliverables
-    goal.self_desc_communication       = payload.self_desc_communication
-    goal.self_desc_project_management  = payload.self_desc_project_management
-    goal.self_desc_mentoring           = payload.self_desc_mentoring
-    goal.self_desc_firm_growth         = payload.self_desc_firm_growth
-    goal.self_desc_competency_skills   = payload.self_desc_competency_skills
-    goal.self_review_submitted_at      = datetime.now(timezone.utc)
-
+    review = GoalSelfReview(
+        goal_id=goal.id,
+        org_id=current_user.org_id,
+        cycle_half=cycle_half.value,
+        self_desc_task_execution      = payload.self_desc_task_execution,
+        self_desc_ownership           = payload.self_desc_ownership,
+        self_desc_client_deliverables = payload.self_desc_client_deliverables,
+        self_desc_communication       = payload.self_desc_communication,
+        self_desc_project_management  = payload.self_desc_project_management,
+        self_desc_mentoring           = payload.self_desc_mentoring,
+        self_desc_firm_growth         = payload.self_desc_firm_growth,
+        self_desc_competency_skills   = payload.self_desc_competency_skills,
+    )
+    db.add(review)
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)

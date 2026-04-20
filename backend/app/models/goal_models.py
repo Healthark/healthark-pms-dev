@@ -55,21 +55,6 @@ class Goal(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # ── Self-Review (available once approval_status = APPROVED) ──────
-    # Employee reflects on their own delivery against the approved goal
-    # along 8 competencies.  All 8 are captured in a single submission;
-    # `self_review_submitted_at` is the one-way flag that flips the UI
-    # from "Self Review" action to "Requested".
-    self_review_submitted_at        = Column(DateTime(timezone=True), nullable=True)
-    self_desc_task_execution        = Column(Text, nullable=True)
-    self_desc_ownership             = Column(Text, nullable=True)
-    self_desc_client_deliverables   = Column(Text, nullable=True)
-    self_desc_communication         = Column(Text, nullable=True)
-    self_desc_project_management    = Column(Text, nullable=True)
-    self_desc_mentoring             = Column(Text, nullable=True)
-    self_desc_firm_growth           = Column(Text, nullable=True)
-    self_desc_competency_skills     = Column(Text, nullable=True)
-
     __table_args__ = (
         Index("ix_goals_org_user", "org_id", "user_id"),
         # Supports future filtered queries: "all FY26 yearly goals for this org"
@@ -84,6 +69,17 @@ class Goal(Base):
         back_populates="goal",
         cascade="all, delete-orphan",
         order_by="GoalCriterion.sort_order",
+        lazy="joined",
+    )
+
+    # 0..2 self-reviews per goal (one per fiscal-year half).
+    # Always loaded together — they are small and the UI renders both rows
+    # in the H1 / H2 cycle dropdown every time a goal card is shown.
+    self_reviews = relationship(
+        "GoalSelfReview",
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by="GoalSelfReview.cycle_half",
         lazy="joined",
     )
 
