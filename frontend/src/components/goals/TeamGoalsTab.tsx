@@ -24,6 +24,8 @@ import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
 import { GoalSelfReviewModal } from "./GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
+import { SortableHeader } from "../SortableHeader";
+import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 
 // ---------------------------------------------------------------------------
 // Feedback modal (Portal) — shown when manager clicks "Request Changes"
@@ -126,6 +128,20 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "changes_requested", label: "Changes Requested" },
 ];
 
+// Team Goals table sort config. Mentee / Goal / Status are alphabetical; year
+// is numeric; Actions column is not sortable (no backing data column).
+type TeamGoalsSortKey = "title" | "owner_name" | "fy_year" | "approval_status";
+
+const TEAM_GOALS_SORT_CONFIG: Record<
+  TeamGoalsSortKey,
+  { kind: SortKind; get: (g: TeamGoal) => unknown }
+> = {
+  title:           { kind: "alpha",   get: (g) => g.title },
+  owner_name:      { kind: "alpha",   get: (g) => g.owner_name },
+  fy_year:         { kind: "numeric", get: (g) => g.fy_year },
+  approval_status: { kind: "alpha",   get: (g) => g.approval_status },
+};
+
 // ---------------------------------------------------------------------------
 // Skeleton
 // ---------------------------------------------------------------------------
@@ -159,6 +175,7 @@ export function TeamGoalsTab() {
 
   // Filters / view state — mirrors the "My Goals" tab so the two feel identical.
   const [searchQuery, setSearchQuery] = useState("");
+  const [sort, setSort] = useState<SortState<TeamGoalsSortKey> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
@@ -251,6 +268,14 @@ export function TeamGoalsTab() {
         g.owner_name.toLowerCase().includes(q)
       );
     });
+
+  // Sorting sits on top of filtering; slice first so React state stays immutable.
+  const sortedGoals = sort
+    ? filtered.slice().sort((a, b) => {
+        const { kind, get } = TEAM_GOALS_SORT_CONFIG[sort.key];
+        return compareValues(get(a), get(b), kind, sort.direction);
+      })
+    : filtered;
 
   // Reset expanded row when filters change so the UI stays coherent
   useEffect(() => {
@@ -380,7 +405,7 @@ export function TeamGoalsTab() {
       ) : viewMode === "grid" ? (
         /* ── Card / Grid View ── */
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((goal) => (
+          {sortedGoals.map((goal) => (
             <TeamGoalCard
               key={goal.id}
               goal={goal}
@@ -400,17 +425,17 @@ export function TeamGoalsTab() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-slate-50/80 border-b border-border">
-                <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Goal
+                <th className="text-left px-5 py-2.5">
+                  <SortableHeader label="Goal" columnKey="title" sort={sort} onSort={setSort} />
                 </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Mentee
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader label="Mentee" columnKey="owner_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Year
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader label="Year" columnKey="fy_year" sort={sort} onSort={setSort} />
                 </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Status
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader label="Status" columnKey="approval_status" sort={sort} onSort={setSort} />
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Actions
@@ -418,7 +443,7 @@ export function TeamGoalsTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {filtered.map((goal) => {
+              {sortedGoals.map((goal) => {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "submitted";
                 const isApproved = goal.approval_status === "approved";

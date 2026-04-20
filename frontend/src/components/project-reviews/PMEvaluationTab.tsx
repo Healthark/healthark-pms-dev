@@ -23,6 +23,8 @@ import {
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
+import { SortableHeader } from "../SortableHeader";
+import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -48,6 +50,21 @@ const EMPTY_COMMENTS: Record<CompKey, string> = {
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
+// ── Sort column config ──────────────────────────────────────────────
+// Employee / Project / Type / Dept are alpha; project_code is alphanumeric;
+// rating (performance_group) is a 1–5 numeric-like string. Action is not sortable.
+type EvalSortKey =
+  | "employee_name"
+  | "project_name"
+  | "type"
+  | "department_name"
+  | "review_status"
+  | "performance_group";
+
+// Declared below the UnifiedEvalRow definition via an inline `Record` in the
+// component — kept as SortKind values rather than a separate constant so the
+// getters close over the right type.
+
 // ── Unified Row Type ────────────────────────────────────────────────
 
 interface UnifiedEvalRow {
@@ -69,6 +86,15 @@ interface UnifiedEvalRow {
   secondaryReview?: ProjectReviewResponse;
   existingImpact?: string;
 }
+
+const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEvalRow) => unknown }> = {
+  employee_name:     { kind: "alpha",   get: (r) => r.employee_name },
+  project_name:      { kind: "alpha",   get: (r) => r.project_name },
+  type:              { kind: "alpha",   get: (r) => r.type },
+  department_name:   { kind: "alpha",   get: (r) => r.department_name },
+  review_status:     { kind: "alpha",   get: (r) => r.review_status },
+  performance_group: { kind: "numeric", get: (r) => r.performance_group },
+};
 
 // ── Role Expectation Panel ──────────────────────────────────────────
 
@@ -352,6 +378,7 @@ export function PMEvaluationTab() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortState<EvalSortKey> | null>(null);
 
   // Modal state
   const [evalTarget, setEvalTarget] = useState<UnifiedEvalRow | null>(null);
@@ -436,6 +463,14 @@ export function PMEvaluationTab() {
     }
     return true;
   });
+
+  // Sorting layered on top of filtering. `slice()` first to avoid mutating state.
+  const sortedRows = sort
+    ? filteredRows.slice().sort((a, b) => {
+        const { kind, get } = EVAL_SORT_CONFIG[sort.key];
+        return compareValues(get(a), get(b), kind, sort.direction);
+      })
+    : filteredRows;
 
   const getExpectation = (row: UnifiedEvalRow): RoleExpectation | null => {
     if (!row.department_name || !row.designation_name) return null;
@@ -567,24 +602,36 @@ export function PMEvaluationTab() {
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filteredRows.map((r) => <EvalCard key={r.key} row={r} onAction={handleAction} />)}
+          {sortedRows.map((r) => <EvalCard key={r.key} row={r} onAction={handleAction} />)}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-slate-50/80 border-b border-border">
-                <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</th>
-                <th className="hidden sm:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Type</th>
-                <th className="hidden md:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Dept</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
-                <th className="hidden md:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Rating</th>
+                <th className="text-left px-5 py-2.5">
+                  <SortableHeader label="Employee" columnKey="employee_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader label="Project" columnKey="project_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="hidden sm:table-cell text-left px-4 py-2.5">
+                  <SortableHeader label="Type" columnKey="type" sort={sort} onSort={setSort} />
+                </th>
+                <th className="hidden md:table-cell text-left px-4 py-2.5">
+                  <SortableHeader label="Dept" columnKey="department_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader label="Status" columnKey="review_status" sort={sort} onSort={setSort} />
+                </th>
+                <th className="hidden md:table-cell text-left px-4 py-2.5">
+                  <SortableHeader label="Rating" columnKey="performance_group" sort={sort} onSort={setSort} />
+                </th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {filteredRows.map((r) => {
+              {sortedRows.map((r) => {
                 const isDone = r.review_status !== "pending";
                 return (
                   <tr key={r.key} className="hover:bg-slate-50/60 transition-colors">

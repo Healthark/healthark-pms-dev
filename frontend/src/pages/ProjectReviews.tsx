@@ -20,6 +20,8 @@ import {
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { useAuth } from "../hooks/useAuth";
+import { SortableHeader } from "../components/SortableHeader";
+import { compareValues, type SortKind, type SortState } from "../utils/sort";
 
 export interface RoleExpectationResponse {
   id: number;
@@ -36,6 +38,27 @@ export interface RoleExpectationResponse {
 
 type ActiveTab = "my" | "evaluate";
 type ViewMode = "grid" | "table";
+
+// Sortable columns in the My Reviews table + their value extractors and type.
+// Project/PM are plain alphabetical; project_code and cycle are alphanumeric
+// (so "PRJ-9" sorts before "PRJ-10", "H1 FY25" before "H2 FY25"); rating is
+// a numeric 1–5 string from the backend so gets numeric compare.
+type MyReviewsSortKey =
+  | "project_name"
+  | "project_code"
+  | "pm_name"
+  | "cycle"
+  | "review_status"
+  | "performance_group";
+
+const MY_REVIEWS_SORT_CONFIG: Record<MyReviewsSortKey, { kind: SortKind; get: (c: MyProjectCard) => unknown }> = {
+  project_name:      { kind: "alpha",   get: (c) => c.project_name },
+  project_code:      { kind: "natural", get: (c) => c.project_code },
+  pm_name:           { kind: "alpha",   get: (c) => c.pm_name },
+  cycle:             { kind: "natural", get: (c) => c.cycle },
+  review_status:     { kind: "alpha",   get: (c) => c.review_status },
+  performance_group: { kind: "numeric", get: (c) => c.performance_group },
+};
 
 const COMPETENCIES = [
   { key: "task_execution", label: "Task Execution & Problem Solving", expKey: "exp_task_execution" },
@@ -483,6 +506,7 @@ export function ProjectReviews() {
   const [pmFilter, setPmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortState<MyReviewsSortKey> | null>(null);
 
   const [cards, setCards] = useState<MyProjectCard[]>([]);
   const [expectations, setExpectations] = useState<RoleExpectationResponse[]>([]);
@@ -536,7 +560,16 @@ export function ProjectReviews() {
     return true;
   });
 
-  const selectedCard = filteredCards.find(
+  // Apply current sort (if any) on top of the filtered list.
+  // We don't mutate filteredCards — Array.slice first so React state stays immutable.
+  const sortedCards = sort
+    ? filteredCards.slice().sort((a, b) => {
+        const { kind, get } = MY_REVIEWS_SORT_CONFIG[sort.key];
+        return compareValues(get(a), get(b), kind, sort.direction);
+      })
+    : filteredCards;
+
+  const selectedCard = sortedCards.find(
     (c) => `${c.project_id}-${c.cycle}` === selectedCardKey
   );
 
@@ -718,7 +751,7 @@ export function ProjectReviews() {
                 /* ── Grid View ── */
                 <>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredCards.map((card) => {
+                    {sortedCards.map((card) => {
                       const key = `${card.project_id}-${card.cycle}`;
                       return (
                         <ProjectSummaryCard
@@ -746,16 +779,28 @@ export function ProjectReviews() {
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-border">
-                        <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Code</th>
-                        <th className="hidden sm:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">PM</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Rating</th>
+                        <th className="text-left px-5 py-2.5">
+                          <SortableHeader label="Project" columnKey="project_name" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Code" columnKey="project_code" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="hidden sm:table-cell text-left px-4 py-2.5">
+                          <SortableHeader label="PM" columnKey="pm_name" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Cycle" columnKey="cycle" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Status" columnKey="review_status" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Rating" columnKey="performance_group" sort={sort} onSort={setSort} />
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {filteredCards.map((card) => {
+                      {sortedCards.map((card) => {
                         const key = `${card.project_id}-${card.cycle}`;
                         const isExpanded = expandedRowKey === key;
                         const isReviewed = card.review_status === "reviewed";

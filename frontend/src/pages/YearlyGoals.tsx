@@ -25,6 +25,8 @@ import { SelfReviewCycleMenu } from "../components/goals/SelfReviewCycleMenu";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
+import { SortableHeader } from "../components/SortableHeader";
+import { compareValues, type SortKind, type SortState } from "../utils/sort";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,6 +44,20 @@ const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
 
 type ActiveTab = "my" | "team";
 type ViewMode = "grid" | "table";
+
+// My Goals table sort config — Goal/Mentor/Status are alpha, Year is numeric.
+// Actions column is not sortable (has no backing data).
+type MyGoalsSortKey = "title" | "manager_name" | "fy_year" | "approval_status";
+
+const MY_GOALS_SORT_CONFIG: Record<
+  MyGoalsSortKey,
+  { kind: SortKind; get: (g: Goal) => unknown }
+> = {
+  title:           { kind: "alpha",   get: (g) => g.title },
+  manager_name:    { kind: "alpha",   get: (g) => g.manager_name },
+  fy_year:         { kind: "numeric", get: (g) => g.fy_year },
+  approval_status: { kind: "alpha",   get: (g) => g.approval_status },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -134,6 +150,7 @@ export function YearlyGoals() {
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sort, setSort] = useState<SortState<MyGoalsSortKey> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -286,6 +303,14 @@ export function YearlyGoals() {
       searchQuery.trim() === "" ||
       g.title.toLowerCase().includes(searchQuery.toLowerCase()),
     );
+
+  // Sorting layered on top of filtering. Slice first to keep React state immutable.
+  const sortedGoals = sort
+    ? filteredGoals.slice().sort((a, b) => {
+        const { kind, get } = MY_GOALS_SORT_CONFIG[sort.key];
+        return compareValues(get(a), get(b), kind, sort.direction);
+      })
+    : filteredGoals;
 
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -440,7 +465,7 @@ export function YearlyGoals() {
               ) : viewMode === "grid" ? (
                 /* ── Card / Grid View ── */
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {filteredGoals.map((goal) => (
+                  {sortedGoals.map((goal) => (
                     <YearlyGoalCard
                       key={goal.id}
                       goal={goal}
@@ -458,15 +483,23 @@ export function YearlyGoals() {
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-border">
-                        <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Goal</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Mentor</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Year</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</th>
+                        <th className="text-left px-5 py-2.5">
+                          <SortableHeader label="Goal" columnKey="title" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Mentor" columnKey="manager_name" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Year" columnKey="fy_year" sort={sort} onSort={setSort} />
+                        </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Status" columnKey="approval_status" sort={sort} onSort={setSort} />
+                        </th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {filteredGoals.map((goal) => {
+                      {sortedGoals.map((goal) => {
                         const isExpanded = expandedGoalId === goal.id;
                         const isDraft = goal.approval_status === "draft";
                         const isChangesRequired = goal.approval_status === "changes_requested";
