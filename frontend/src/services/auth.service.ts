@@ -12,6 +12,9 @@ export interface AuthResponse {
   role: string;
   org_id: number;
   features: string[]; // e.g. ["dashboard", "goals", "project_reviews", "mentoring"]
+  // True when at least one active user reports to this user via mentor_id.
+  // Drives mentor-only UI (Team Goals tab, etc.) regardless of role.
+  has_mentees: boolean;
 }
 
 export const authService = {

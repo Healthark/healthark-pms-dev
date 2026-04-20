@@ -86,8 +86,9 @@ export interface GoalCreatePayload {
   status?: GoalStatus;
   start_date?: string | null;
   due_date?: string | null;
-  user_id: number;
-  manager_id?: number | null;
+  // Ownership is server-determined from the JWT (or ?user_id= query param
+  // for mentor-on-behalf-of-mentee creation, authorized server-side).
+  // Intentionally not in the body to prevent client-side spoofing.
   criteria?: CriterionCreatePayload[];
 }
 

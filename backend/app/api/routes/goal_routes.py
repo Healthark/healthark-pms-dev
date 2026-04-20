@@ -93,43 +93,29 @@ def _assert_yearly_gate_open(settings: SystemSettings) -> None:
 def list_goals(
     db: DbSession,
     current_user: CurrentUser,
-    team_only: bool = False,
     goal_type: Optional[str] = None,
     status_filter: Optional[str] = None,
 ):
     """
-    List goals.
+    List the caller's own goals.
+
+    This endpoint is strictly scoped to `Goal.user_id == current_user.id`.
+    Mentee goals — even for a mentor — are NOT returned here; use
+    GET /goals/team for that view.  Keeping the two endpoints disjoint
+    makes it impossible to accidentally mix ownership in the "My Goals" UI.
 
     Filtering:
-        team_only=false (default) — the current user's own goals
-        team_only=true            — goals belonging to the user's mentees
-                                    (or all org goals if Admin)
-        goal_type=yearly          — only yearly goals
-        goal_type=regular         — only regular goals
-        (omit goal_type)          — all goals regardless of type
-
-    The goal_type filter is the primary way the frontend separates the
-    "Yearly Goals" tab (goal_type=yearly) from project-cycle goals.
-    Together with cycle_name and created_at / approved_at, it forms the
-    basis for future period-based filtering (e.g. "FY26 approved goals").
+        goal_type=yearly   — only yearly goals
+        goal_type=regular  — only regular goals
+        (omit goal_type)   — all goals regardless of type
     """
-    query = db.query(Goal).filter(Goal.org_id == current_user.org_id)
-
-    if team_only:
-        # Always scope to direct mentees — Admin role is not a bypass here.
-        # For the proper team goals view (with owner_name) use GET /goals/team.
-        team = db.query(User).filter(
-            User.mentor_id == current_user.id,
-            User.org_id == current_user.org_id,
-        ).all()
-        team_ids = [u.id for u in team]
-
-        if not team_ids:
-            return []
-
-        query = query.filter(Goal.user_id.in_(team_ids))
-    else:
-        query = query.filter(Goal.user_id == current_user.id)
+    query = (
+        db.query(Goal)
+        .filter(
+            Goal.org_id == current_user.org_id,
+            Goal.user_id == current_user.id,
+        )
+    )
 
     if goal_type:
         query = query.filter(Goal.goal_type == goal_type)
@@ -253,6 +239,9 @@ def list_team_goals(
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
+            # A mentee's DRAFT is private work; it becomes visible to the
+            # mentor only after the mentee requests approval (SUBMITTED).
+            Goal.approval_status != ApprovalStatus.DRAFT.value,
         )
     )
 

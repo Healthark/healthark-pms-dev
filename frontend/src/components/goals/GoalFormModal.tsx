@@ -35,7 +35,6 @@ interface GoalFormModalProps {
     payload: GoalCreatePayload | GoalUpdatePayload,
   ) => Promise<void>;
   readonly editingGoal: Goal | null;
-  readonly userId: number;
   readonly isSaving: boolean;
   readonly error: string;
 }
@@ -86,7 +85,6 @@ export function GoalFormModal({
   onClose,
   onSave,
   editingGoal,
-  userId,
   isSaving,
   error,
 }: GoalFormModalProps) {
@@ -146,7 +144,6 @@ export function GoalFormModal({
         status: form.status,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
-        user_id: userId,
         criteria: validCriteria.length > 0 ? validCriteria : undefined,
       } satisfies GoalCreatePayload);
     }

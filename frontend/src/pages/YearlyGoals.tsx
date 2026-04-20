@@ -25,8 +25,6 @@ import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 // Constants
 // ---------------------------------------------------------------------------
 
-const MANAGER_ROLES = ["Admin", "Manager", "Principal"] as const;
-
 type ApprovalFilter = "all" | ApprovalStatus;
 
 const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
@@ -115,9 +113,10 @@ export function YearlyGoals() {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
 
-  const isManager = MANAGER_ROLES.includes(
-    user?.role as (typeof MANAGER_ROLES)[number],
-  );
+  // A user is treated as a "mentor" purely based on whether other users
+  // report to them via mentor_id — role is not the authority here.
+  // The backend populates has_mentees on the login response.
+  const isMentor = user?.has_mentees ?? false;
   const yearlyGoalsEditEnabled = settings?.yearly_goals_edit_enabled ?? false;
 
   // Extract bare FY label ("H1 FY26" → "FY26") for the page header.
@@ -302,7 +301,7 @@ export function YearlyGoals() {
           >
             My Goals
           </button>
-          {isManager && (
+          {isMentor && (
             <button
               type="button"
               className={tabCls("team")}
@@ -529,7 +528,7 @@ export function YearlyGoals() {
           )}
 
           {/* ── Team Goals tab ── */}
-          {activeTab === "team" && isManager && <TeamGoalsTab />}
+          {activeTab === "team" && isMentor && <TeamGoalsTab />}
         </div>
       </div>
 
@@ -539,7 +538,6 @@ export function YearlyGoals() {
         onClose={closeModal}
         onSave={handleSave}
         editingGoal={editingGoal}
-        userId={user?.user_id ?? 0}
         isSaving={isSaving}
         error={modalError}
       />

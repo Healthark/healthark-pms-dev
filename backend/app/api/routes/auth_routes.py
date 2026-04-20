@@ -41,6 +41,12 @@ def login(
     org = db.query(Organization).filter(Organization.id == user.org_id).first()
     features: list[str] = (org.enabled_features or []) if org else []
 
+    has_mentees = db.query(User.id).filter(
+        User.mentor_id == user.id,
+        User.org_id == user.org_id,
+        User.is_deleted == False,  # noqa: E712
+    ).first() is not None
+
     token_payload = {
         "sub": user.email,
         "user_id": user.id,
@@ -60,6 +66,7 @@ def login(
         "role": user.role,
         "org_id": user.org_id,
         "features": features,
+        "has_mentees": has_mentees,
     }
 
 

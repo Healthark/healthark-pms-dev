@@ -64,8 +64,11 @@ class GoalBase(BaseModel):
 
 
 class GoalCreate(GoalBase):
-    user_id: int
-    manager_id: Optional[int] = None
+    # Ownership is server-determined: the goal is always stamped with
+    # current_user.id, OR with the ?user_id= query param when a mentor/Admin
+    # explicitly creates on behalf of a mentee (validated in the route).
+    # Intentionally NOT accepted in the body — a body-level user_id would
+    # let a caller silently re-home a goal to another user.
     # "yearly" goals are gate-controlled by yearly_goals_edit_enabled.
     # "regular" goals follow the normal project-cycle submission rules.
     goal_type: GoalType = GoalType.REGULAR
