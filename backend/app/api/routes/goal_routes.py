@@ -26,7 +26,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
-from app.models.goal_models import Goal, GoalStatus, ApprovalStatus, GoalType
+from app.models.goal_models import Goal, ApprovalStatus, GoalType
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
@@ -94,7 +94,6 @@ def list_goals(
     db: DbSession,
     current_user: CurrentUser,
     goal_type: Optional[str] = None,
-    status_filter: Optional[str] = None,
 ):
     """
     List the caller's own goals.
@@ -119,9 +118,6 @@ def list_goals(
 
     if goal_type:
         query = query.filter(Goal.goal_type == goal_type)
-
-    if status_filter:
-        query = query.filter(Goal.status == status_filter)
 
     return query.order_by(Goal.created_at.desc()).all()
 
@@ -186,7 +182,6 @@ def create_goal(
         cycle_name=cycle_name,
         start_date=goal_in.start_date,
         due_date=goal_in.due_date,
-        status=GoalStatus.PENDING.value,
         approval_status=ApprovalStatus.DRAFT.value,
     )
     db.add(new_goal)

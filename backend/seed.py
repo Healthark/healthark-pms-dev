@@ -982,13 +982,13 @@ def seed_database():
         # 10. GOALS                                                           #
         # ================================================================== #
 
-        def _goal(user, manager, title, desc, status, approval, progress_notes=None, goal_type="yearly"):
+        def _goal(user, manager, title, desc, approval, progress_notes=None, goal_type="yearly"):
             db.add(Goal(
                 org_id=org.id, user_id=user.id,
                 manager_id=manager.id if manager else None,
                 title=title, description=desc,
                 goal_type=goal_type,
-                status=status, approval_status=approval,
+                approval_status=approval,
                 progress_notes=progress_notes,
             ))
 
@@ -997,42 +997,42 @@ def seed_database():
             # H1 FY25 — all completed / approved
             _goal(arjun, priya, "Complete EU Market Access Framework for Oncology",
                 "Develop a comprehensive market access framework covering 5 EU markets for the oncology product launch.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Framework completed and presented to client. Positive feedback received. All 5 markets covered.",
             )
             _goal(arjun, priya, "Upskill in Healthcare Financial Modeling",
                 "Complete a structured financial modeling course and apply learnings to an active project.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Completed course and built a bottom-up forecast model applied to PRJ-001.",
             )
             _goal(neha, priya, "Independently Lead a Research Module",
                 "Own and deliver a complete research module on a live project with minimal supervision.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Led competitive landscape module on PRJ-001. Delivered on time with positive feedback.",
             )
             _goal(rahul, david, "Build End-to-End Patient Analytics Pipeline",
                 "Design, build, and deploy a production-ready patient journey analytics pipeline for the client dashboard.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Pipeline deployed to production. Dashboard live and used by client. Zero critical bugs reported.",
             )
             _goal(rahul, david, "Mentor Meera on Data Engineering Fundamentals",
                 "Run bi-weekly coaching sessions with Meera to build her data engineering capability.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Ran 8 coaching sessions. Meera independently completed her first data module in H1 FY25.",
             )
             _goal(meera, david, "Complete First Independent Data Analysis Module",
                 "Independently own a data analysis module on an active project end-to-end.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Completed the data cleansing and visualization module for PRJ-002 with minimal guidance.",
             )
             _goal(ananya, vikram, "Design Cardiovascular Outcomes Study Protocol",
                 "Lead the design and documentation of the RWE study protocol for the cardiology outcomes study.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Protocol designed and submitted to client. IRB approved. Study launched.",
             )
             _goal(karan, vikram, "Build Literature Review Competency in Cardiovascular RWE",
                 "Conduct structured literature reviews and synthesize findings for the cardiology outcomes study.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Completed systematic review of 150+ papers. Summary integrated into study protocol.",
             )
             db.commit()
@@ -1040,37 +1040,37 @@ def seed_database():
             # H2 FY25 — mix of completed and in-progress
             _goal(arjun, priya, "Lead Cross-Functional Coordination for Oncology Evidence Package",
                 "Own cross-team coordination across strategy, IDT, and RWE workstreams for the integrated evidence package.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Led weekly cross-functional sync. Shared tracker adopted by all three teams.",
             )
             _goal(arjun, priya, "Develop Senior-Level Storyboarding Skills",
                 "Independently craft full client deck storyboards with compelling narratives and minimal review rounds.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Led storyboarding for 2 major client decks. Both approved in first client review.",
             )
             _goal(neha, priya, "Drive Client Communication on a Live Project",
                 "Lead at least 2 client update calls and draft client communications independently.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="Led 1 client call so far; preparing for the second. Feedback from Priya was positive.",
             )
             _goal(rahul, david, "Lead Technical Architecture for Platform Expansion",
                 "Define and implement the expanded architecture for the patient analytics platform.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Architecture approved by Architecture Review Board. Delivered 2 weeks ahead of schedule.",
             )
             _goal(meera, david, "Own Full Feature Development End-to-End",
                 "Take end-to-end ownership of a feature from design to production deployment.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="Feature in final testing phase. Deployment planned for next sprint.",
             )
             _goal(ananya, vikram, "Publish RWE Study Interim Results",
                 "Prepare and submit interim results from the cardiology outcomes study for internal review.",
-                "completed", "approved",
+                "approved",
                 progress_notes="Interim analysis completed. Report approved for internal publication.",
             )
             _goal(karan, vikram, "Manage Data Collection Across Clinical Sites",
                 "Own the data collection coordination across 4 clinical sites for the outcomes study.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="3 of 4 sites completed. Final site data expected next month.",
             )
             db.commit()
@@ -1078,35 +1078,35 @@ def seed_database():
             # H1 FY26 (current) — approved / submitted / draft
             _goal(arjun, priya, "Take PM-Level Ownership on Integrated Evidence Package",
                 "Step into a PM-equivalent role on PRJ-004 with full accountability for delivery and client communication.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="Managing project tracker and client communications independently. On track.",
             )
             _goal(arjun, priya, "Build Proposal Development Capability",
                 "Lead or co-lead at least one client proposal in H1 FY26.",
-                "pending", "submitted",
+                "submitted",
             )
             _goal(neha, priya, "Lead a Complete Client Workstream Independently",
                 "Own end-to-end delivery of a client workstream with minimal supervision.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="Leading the competitor benchmarking workstream independently.",
             )
             _goal(rahul, david, "Introduce Agile Delivery Framework to IDT Practice",
                 "Design and roll out an Agile sprint framework for the IDT team that improves delivery predictability.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="Sprint framework piloted. Team velocity improvement measured at ~25%.",
             )
             _goal(meera, david, "Independently Deliver a Complete Analytics Module",
                 "Deliver a complete analytics module from requirements gathering to client handoff.",
-                "pending", "submitted",
+                "submitted",
             )
             _goal(ananya, vikram, "Present at Firm-Wide RWE Knowledge Session",
                 "Organize and present a knowledge session on cardiovascular RWE best practices for the firm.",
-                "in_progress", "approved",
+                "approved",
                 progress_notes="Session scheduled. Presentation deck 80% complete.",
             )
             _goal(karan, vikram, "Complete Statistical Analysis for Cardiology Outcomes Study",
                 "Own the complete statistical analysis for the cardiology outcomes study in H1 FY26.",
-                "pending", "draft",
+                "draft",
             )
             db.commit()
 

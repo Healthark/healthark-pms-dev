@@ -5,7 +5,7 @@
  *   - Added dynamic criteria array with "+ Add Key Result" button
  *   - Criteria are sent inside GoalCreatePayload on new goal creation
  *   - Edit mode shows existing criteria as read-only preview (editing
- *     individual criteria happens in the GoalCard's CriteriaChecklist)
+ *     individual criteria happens in the CriteriaChecklist on the goal row)
  *   - Criteria can be removed before submission via the X button
  *
  * Placement: src/components/goals/GoalFormModal.tsx
@@ -17,16 +17,8 @@ import type {
   Goal,
   GoalCreatePayload,
   GoalUpdatePayload,
-  GoalStatus,
   CriterionCreatePayload,
 } from "../../services/goal.service";
-
-const STATUSES: { value: GoalStatus; label: string }[] = [
-  { value: "pending", label: "Pending" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
 
 interface GoalFormModalProps {
   readonly isOpen: boolean;
@@ -43,7 +35,6 @@ interface FormState {
   title: string;
   description: string;
   attachment_url: string;
-  status: GoalStatus;
   start_date: string;
   due_date: string;
   progress_notes: string;
@@ -59,7 +50,6 @@ const EMPTY: FormState = {
   title: "",
   description: "",
   attachment_url: "",
-  status: "pending",
   start_date: "",
   due_date: "",
   progress_notes: "",
@@ -100,13 +90,12 @@ export function GoalFormModal({
         title: editingGoal.title,
         description: editingGoal.description ?? "",
         attachment_url: editingGoal.attachment_url ?? "",
-        status: editingGoal.status,
         start_date: toDateInput(editingGoal.start_date),
         due_date: toDateInput(editingGoal.due_date),
         progress_notes: editingGoal.progress_notes ?? "",
       });
       // Don't populate criteria drafts for edit mode — criteria are
-      // managed in-place via the CriteriaChecklist on the GoalCard
+      // managed in-place via the CriteriaChecklist on the goal row
       setCriteria([]);
     } else {
       setForm(EMPTY);
@@ -126,7 +115,6 @@ export function GoalFormModal({
         title: form.title || undefined,
         description: form.description || null,
         attachment_url: form.attachment_url || null,
-        status: form.status,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
         progress_notes: form.progress_notes || null,
@@ -141,7 +129,6 @@ export function GoalFormModal({
         title: form.title,
         description: form.description || null,
         attachment_url: form.attachment_url || null,
-        status: form.status,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
         criteria: validCriteria.length > 0 ? validCriteria : undefined,
@@ -267,27 +254,6 @@ export function GoalFormModal({
               <p className="text-xs text-text-muted">
                 Manage criteria from the goal card directly.
               </p>
-            </div>
-          )}
-
-          {/* Status — editing only */}
-          {isEditing && (
-            <div>
-              <label htmlFor="goal-status" className={LABEL_CLS}>
-                Progress Status
-              </label>
-              <select
-                id="goal-status"
-                className={INPUT_CLS}
-                value={form.status}
-                onChange={(e) => set("status", e.target.value as GoalStatus)}
-              >
-                {STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
             </div>
           )}
 

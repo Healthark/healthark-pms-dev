@@ -11,7 +11,7 @@ Changes from previous version:
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from typing import Optional
 from datetime import datetime
-from app.models.goal_models import GoalStatus, ApprovalStatus, GoalType
+from app.models.goal_models import ApprovalStatus, GoalType
 
 
 # =====================================================================
@@ -58,7 +58,6 @@ class CriterionResponse(BaseModel):
 class GoalBase(BaseModel):
     title: str = Field(..., description="The main objective of the goal")
     description: Optional[str] = None
-    status: GoalStatus = GoalStatus.PENDING
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
 
@@ -83,7 +82,6 @@ class GoalUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     attachment_url: Optional[str] = None
-    status: Optional[GoalStatus] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     progress_notes: Optional[str] = None

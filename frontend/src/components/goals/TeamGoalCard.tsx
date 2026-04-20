@@ -1,7 +1,6 @@
 import { CalendarDays, UserCircle, Check, RotateCcw, Link } from "lucide-react";
 import type { TeamGoal } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
-import { GoalStatusBadge } from "./GoalStatusBadge";
 
 interface TeamGoalCardProps {
   readonly goal: TeamGoal;
@@ -63,7 +62,6 @@ export function TeamGoalCard({
 
       {/* Badges */}
       <div className="flex flex-wrap items-center gap-2">
-        <GoalStatusBadge status={goal.status} />
         <ApprovalStatusBadge status={goal.approval_status} />
       </div>
 

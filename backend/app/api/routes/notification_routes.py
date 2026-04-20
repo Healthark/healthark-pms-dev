@@ -25,7 +25,7 @@ from fastapi import APIRouter
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.system_settings_models import SystemSettings
-from app.models.goal_models import Goal, GoalStatus, ApprovalStatus
+from app.models.goal_models import Goal, ApprovalStatus
 from app.models.user_models import User
 from app.schemas.notification_schemas import NotificationItem, TopbarSummary
 from app.core.cycle_utils import get_current_cycle_info
@@ -60,22 +60,7 @@ def get_topbar_summary(
     # ── Computed Notifications ───────────────────────────────────────
     notifications: list[NotificationItem] = []
 
-    # 1. Goals still in "Pending" progress status (employee hasn't started)
-    pending_count: int = db.query(func.count(Goal.id)).filter(
-        Goal.org_id == current_user.org_id,
-        Goal.user_id == current_user.id,
-        Goal.status == GoalStatus.PENDING.value,
-    ).scalar() or 0
-
-    if pending_count > 0:
-        notifications.append(NotificationItem(
-            type="goals_pending",
-            message=f"You have {pending_count} goal(s) that haven't been started yet.",
-            count=pending_count,
-            severity="warning",
-        ))
-
-    # 2. Goals sent back by manager with "Changes Requested"
+    # 1. Goals sent back by manager with "Changes Requested"
     changes_count: int = db.query(func.count(Goal.id)).filter(
         Goal.org_id == current_user.org_id,
         Goal.user_id == current_user.id,
@@ -90,7 +75,7 @@ def get_topbar_summary(
             severity="blocking",
         ))
 
-    # 3. Goals in "Draft" that haven't been submitted for approval yet
+    # 2. Goals in "Draft" that haven't been submitted for approval yet
     draft_count: int = db.query(func.count(Goal.id)).filter(
         Goal.org_id == current_user.org_id,
         Goal.user_id == current_user.id,

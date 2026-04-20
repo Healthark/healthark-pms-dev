@@ -5,14 +5,10 @@ Endpoint:
     GET /api/v1/dashboard/summary  →  Any authenticated user
 
 Returns aggregated widget data in a single round-trip:
-    - Goal counts broken down by progress status
+    - Yearly goal counts broken down by approval state
+    - Criteria-driven completion average across approved yearly goals
     - Active cycle name (for the ActiveCycleWidget)
     - Mentee count (for the MenteesWidget)
-
-Performance Note:
-    Goal counts use a single GROUP BY query instead of four separate
-    COUNT queries. This is O(1) round-trips regardless of how many
-    status values exist.
 
 Security Layers Applied:
     Layer 1 — Authentication:   CurrentUser dependency (JWT validation)
@@ -21,12 +17,13 @@ Security Layers Applied:
     Layer 4 — Ownership:        Goals scoped to current_user.id
 """
 
-from sqlalchemy import func
+from sqlalchemy import func, Integer, cast
 from fastapi import APIRouter
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.system_settings_models import SystemSettings
-from app.models.goal_models import Goal, GoalStatus
+from app.models.goal_models import Goal, GoalType, ApprovalStatus
+from app.models.goal_criteria_models import GoalCriterion
 from app.models.user_models import User
 from app.schemas.dashboard_schemas import DashboardSummary
 
@@ -48,30 +45,52 @@ def get_dashboard_summary(
 
     active_cycle = settings.active_cycle_name if settings else None
 
-    # ── Goal Counts (Single Query) ───────────────────────────────────
-    # Returns rows like: [("pending", 3), ("in_progress", 2), ("completed", 1)]
-    status_rows = (
-        db.query(Goal.status, func.count(Goal.id))
+    # ── Yearly Goal Counts by Approval State (single GROUP BY) ───────
+    approval_rows = (
+        db.query(Goal.approval_status, func.count(Goal.id))
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
+            Goal.goal_type == GoalType.YEARLY.value,
         )
-        .group_by(Goal.status)
+        .group_by(Goal.approval_status)
         .all()
     )
+    counts: dict[str, int] = dict(approval_rows)
 
-    # Convert to a dict for easy lookup — missing statuses default to 0
-    counts: dict[str, int] = dict(status_rows)
+    draft_goals             = counts.get(ApprovalStatus.DRAFT.value, 0)
+    submitted_goals         = counts.get(ApprovalStatus.SUBMITTED.value, 0)
+    approved_goals          = counts.get(ApprovalStatus.APPROVED.value, 0)
+    changes_requested_goals = counts.get(ApprovalStatus.CHANGES_REQUESTED.value, 0)
+    total_goals             = sum(counts.values())
 
-    total_goals       = sum(counts.values())
-    pending_goals     = counts.get(GoalStatus.PENDING.value, 0)
-    in_progress_goals = counts.get(GoalStatus.IN_PROGRESS.value, 0)
-    completed_goals   = counts.get(GoalStatus.COMPLETED.value, 0)
+    # ── Criteria-driven completion across approved yearly goals ─────
+    # Progress is no longer an employee-controlled field — it falls out
+    # of (completed criteria / total criteria).  We average this over the
+    # caller's approved yearly goals, because draft/submitted goals don't
+    # have meaningful progress yet.
+    criteria_totals = (
+        db.query(
+            func.count(GoalCriterion.id).label("total"),
+            func.sum(cast(GoalCriterion.is_completed, Integer)).label("done"),
+        )
+        .join(Goal, Goal.id == GoalCriterion.goal_id)
+        .filter(
+            Goal.org_id == current_user.org_id,
+            Goal.user_id == current_user.id,
+            Goal.goal_type == GoalType.YEARLY.value,
+            Goal.approval_status == ApprovalStatus.APPROVED.value,
+        )
+        .one()
+    )
+    total_criteria = int(criteria_totals.total or 0)
+    done_criteria  = int(criteria_totals.done or 0)
+    completion_percent = (
+        round((done_criteria / total_criteria) * 100) if total_criteria > 0 else 0
+    )
 
     # ── Mentee Count ─────────────────────────────────────────────────
     # How many active users list the current user as their mentor.
-    # This powers the MenteesWidget — only meaningful for Managers,
-    # but we always return it; the frontend gates visibility via hasFeature().
     mentee_count: int = db.query(func.count(User.id)).filter(
         User.mentor_id == current_user.id,
         User.is_deleted == False,  # noqa: E712 — SQLAlchemy requires == for filter
@@ -79,9 +98,11 @@ def get_dashboard_summary(
 
     return DashboardSummary(
         total_goals=total_goals,
-        pending_goals=pending_goals,
-        in_progress_goals=in_progress_goals,
-        completed_goals=completed_goals,
+        draft_goals=draft_goals,
+        submitted_goals=submitted_goals,
+        approved_goals=approved_goals,
+        changes_requested_goals=changes_requested_goals,
+        completion_percent=completion_percent,
         active_cycle=active_cycle,
         mentee_count=mentee_count,
     )

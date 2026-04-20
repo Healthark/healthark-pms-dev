@@ -12,7 +12,6 @@ import apiClient from "./api.client";
 
 // ── Enums ───────────────────────────────────────────────────────────
 
-export type GoalStatus = "pending" | "in_progress" | "completed" | "cancelled";
 export type ApprovalStatus =
   | "draft"
   | "submitted"
@@ -60,7 +59,6 @@ export interface Goal {
   goal_type: GoalType;
   cycle_name: string | null;
   fy_year: number | null;
-  status: GoalStatus;
   approval_status: ApprovalStatus;
   manager_feedback: string | null;
   progress_notes: string | null;
@@ -83,7 +81,6 @@ export interface GoalCreatePayload {
   description?: string | null;
   attachment_url?: string | null;
   goal_type?: GoalType;
-  status?: GoalStatus;
   start_date?: string | null;
   due_date?: string | null;
   // Ownership is server-determined from the JWT (or ?user_id= query param
@@ -96,7 +93,6 @@ export interface GoalUpdatePayload {
   title?: string;
   description?: string | null;
   attachment_url?: string | null;
-  status?: GoalStatus;
   start_date?: string | null;
   due_date?: string | null;
   progress_notes?: string | null;
