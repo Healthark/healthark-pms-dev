@@ -209,6 +209,8 @@ export function MenteeDetail() {
                 <MenteeProjectsTab
                   assignments={data.project_assignments}
                   menteeName={data.full_name}
+                  menteeUserId={data.user_id}
+                  onReload={reloadDetail}
                 />
               )}
             </div>

@@ -67,6 +67,7 @@ def login(
         "org_id": user.org_id,
         "features": features,
         "has_mentees": has_mentees,
+        "has_mentor": user.mentor_id is not None,
     }
 
 

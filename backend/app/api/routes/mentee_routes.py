@@ -344,6 +344,20 @@ def get_mentee_detail(
         )
         .all()
     )
+    # Mentor's own evaluator_type on each of the mentee's projects — drives
+    # the Projects tab action buttons (Evaluate / Write Impact / View).
+    mentor_assignments = (
+        db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.user_id == current_user.id,
+            ProjectAssignment.project_id.in_([a.project_id for a in assignments]) if assignments else False,  # noqa: E712
+        )
+        .all()
+    ) if assignments else []
+    mentor_role_by_project: dict[int, Optional[str]] = {
+        ma.project_id: ma.evaluator_type for ma in mentor_assignments
+    }
     project_reviews = (
         db.query(ProjectReview)
         .filter(
@@ -354,37 +368,75 @@ def get_mentee_detail(
         .order_by(ProjectReview.updated_at.desc().nullslast(), ProjectReview.created_at.desc())
         .all()
     )
-    # Latest review per project (by cycle, falling back to created_at).
-    latest_review_per_project: dict[int, ProjectReview] = {}
+
+    # PM (Primary evaluator) per project — one Primary assignment per project.
+    pm_assignment_rows = (
+        db.query(ProjectAssignment, User)
+        .join(User, ProjectAssignment.user_id == User.id)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.project_id.in_([a.project_id for a in assignments]),
+        )
+        .all()
+    ) if assignments else []
+    pm_name_by_project: dict[int, str] = {
+        pa.project_id: u.full_name for pa, u in pm_assignment_rows
+    }
+
+    # Bucket reviews by project_id and track which projects have an
+    # active-cycle review (so we can emit a placeholder row otherwise).
+    reviews_by_project: dict[int, list[ProjectReview]] = {}
+    project_ids_with_active_cycle_review: set[int] = set()
     for r in project_reviews:
-        if r.project_id not in latest_review_per_project:
-            latest_review_per_project[r.project_id] = r
+        reviews_by_project.setdefault(r.project_id, []).append(r)
+        if r.cycle == active_cycle:
+            project_ids_with_active_cycle_review.add(r.project_id)
 
     project_assignments_out: list[MenteeProjectAssignment] = []
     for a in assignments:
         if a.project is None or a.project.is_deleted:
             continue
-        review = latest_review_per_project.get(a.project_id)
-        # Only build the full review payload for completed evaluations —
-        # pending reviews have no comments/impact worth sending.
-        review_detail = (
-            _build_review_response(review, db)
-            if review and review.status == ProjectReviewStatus.REVIEWED.value
-            else None
+        common = dict(
+            project_id=a.project_id,
+            project_name=a.project.name,
+            project_code=a.project.project_code,
+            assignment_role=a.assignment_role,
+            evaluator_type=a.evaluator_type,
+            pm_name=pm_name_by_project.get(a.project_id),
+            viewer_evaluator_role=mentor_role_by_project.get(a.project_id),
         )
-        project_assignments_out.append(
-            MenteeProjectAssignment(
-                project_id=a.project_id,
-                project_name=a.project.name,
-                project_code=a.project.project_code,
-                assignment_role=a.assignment_role,
-                evaluator_type=a.evaluator_type,
-                review_status=review.status if review else None,
-                performance_group=review.performance_group if review else None,
-                cycle=review.cycle if review else None,
-                review_detail=review_detail,
+
+        # One row per existing ProjectReview (across cycles).
+        for review in reviews_by_project.get(a.project_id, []):
+            review_detail = (
+                _build_review_response(review, db)
+                if review.status == ProjectReviewStatus.REVIEWED.value
+                else None
             )
-        )
+            project_assignments_out.append(
+                MenteeProjectAssignment(
+                    **common,
+                    review_status=review.status,
+                    performance_group=review.performance_group,
+                    cycle=review.cycle,
+                    review_detail=review_detail,
+                )
+            )
+
+        # Placeholder for the active cycle when no review row exists for it.
+        # Status = None signals "not yet evaluated for this cycle"; the
+        # frontend renders it as a Pending row so a Primary mentor can act.
+        if a.project_id not in project_ids_with_active_cycle_review:
+            project_assignments_out.append(
+                MenteeProjectAssignment(
+                    **common,
+                    review_status=None,
+                    performance_group=None,
+                    cycle=active_cycle,
+                    review_detail=None,
+                )
+            )
 
     summary = _compose_summary(
         user=mentee,

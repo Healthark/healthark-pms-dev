@@ -346,7 +346,12 @@ export function YearlyGoals() {
         </div>
 
         {activeTab === "my" &&
-          (yearlyGoalsEditEnabled ? (
+          (user?.has_mentor === false ? (
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              No mentor assigned — goal creation is disabled.
+            </div>
+          ) : yearlyGoalsEditEnabled ? (
             <button
               type="button"
               onClick={openAdd}

@@ -206,10 +206,16 @@ def get_pm_evaluation_queue(
     current_user: CurrentUser,
 ):
     """
-    List all team members on projects where the current user is PM,
-    who haven't been evaluated yet for the active cycle.
+    List all team members on projects where the current user is PM, across
+    ALL cycles. For each (team_member, project) pair we emit one card per
+    existing ProjectReview row (any cycle) plus a placeholder card for the
+    active cycle when no review has been created for it yet.
+
+    The frontend defaults its Cycle filter to the active cycle, so by default
+    the page shows the same data it always did; switching the filter exposes
+    historical evaluations the PM may want to edit or review.
     """
-    cycle = _get_active_cycle(db, current_user.org_id)
+    active_cycle = _get_active_cycle(db, current_user.org_id)
 
     # Find projects where current user is Primary
     pm_assignments = (
@@ -254,29 +260,55 @@ def get_pm_evaluation_queue(
             dept = db.query(Department).filter(Department.id == ta.department_id).first() if ta.department_id else None
             desig = db.query(Designation).filter(Designation.id == user.designation_id).first() if user.designation_id else None
 
-            # Check if review already exists for this cycle
-            review = db.query(ProjectReview).filter(
-                ProjectReview.org_id == current_user.org_id,
-                ProjectReview.user_id == ta.user_id,
-                ProjectReview.project_id == pm_a.project_id,
-                ProjectReview.cycle == cycle,
-            ).first()
+            # All ProjectReview rows for this (team_member, project) across cycles
+            reviews = (
+                db.query(ProjectReview)
+                .filter(
+                    ProjectReview.org_id == current_user.org_id,
+                    ProjectReview.user_id == ta.user_id,
+                    ProjectReview.project_id == pm_a.project_id,
+                    ProjectReview.is_deleted == False,  # noqa: E712
+                )
+                .order_by(ProjectReview.created_at.desc())
+                .all()
+            )
+            cycles_with_review = {r.cycle for r in reviews}
 
-            cards.append(PMPendingReviewCard(
-                review_id=review.id if review else None,
-                project_id=project.id,
-                project_name=project.name,
-                project_code=project.project_code,
-                user_id=ta.user_id,
-                employee_name=user.full_name,
-                assignment_role=ta.assignment_role,
-                department_name=dept.name if dept else None,
-                designation_name=desig.name if desig else None,
-                assigned_date=ta.assigned_date,
-                review_status=review.status if review else None,
-                performance_group=review.performance_group if review else None,
-                cycle=cycle,
-            ))
+            # One card per existing review (any cycle)
+            for review in reviews:
+                cards.append(PMPendingReviewCard(
+                    review_id=review.id,
+                    project_id=project.id,
+                    project_name=project.name,
+                    project_code=project.project_code,
+                    user_id=ta.user_id,
+                    employee_name=user.full_name,
+                    assignment_role=ta.assignment_role,
+                    department_name=dept.name if dept else None,
+                    designation_name=desig.name if desig else None,
+                    assigned_date=ta.assigned_date,
+                    review_status=review.status,
+                    performance_group=review.performance_group,
+                    cycle=review.cycle,
+                ))
+
+            # Placeholder for the active cycle when no review row exists yet
+            if active_cycle not in cycles_with_review:
+                cards.append(PMPendingReviewCard(
+                    review_id=None,
+                    project_id=project.id,
+                    project_name=project.name,
+                    project_code=project.project_code,
+                    user_id=ta.user_id,
+                    employee_name=user.full_name,
+                    assignment_role=ta.assignment_role,
+                    department_name=dept.name if dept else None,
+                    designation_name=desig.name if desig else None,
+                    assigned_date=ta.assigned_date,
+                    review_status=None,
+                    performance_group=None,
+                    cycle=active_cycle,
+                ))
 
     return cards
 
@@ -440,12 +472,14 @@ def get_secondary_evaluation_queue(
     current_user: CurrentUser,
 ):
     """
-    List reviewed reviews on projects where the current user is a
-    Secondary evaluator. Returns both pending and already-submitted
-    reviews so the frontend can show submitted ones with edit option.
-    """
-    cycle = _get_active_cycle(db, current_user.org_id)
+    List PM-reviewed reviews on projects where the current user is a
+    Secondary evaluator, across ALL cycles. The frontend defaults its
+    Cycle filter to the active cycle, so default UX is unchanged; the
+    filter exposes historical entries the secondary may want to edit.
 
+    Only `status == reviewed` rows are returned — secondaries write
+    impact AFTER the PM has evaluated.
+    """
     secondary_assignments = (
         db.query(ProjectAssignment)
         .filter(
@@ -461,15 +495,14 @@ def get_secondary_evaluation_queue(
 
     project_ids = [a.project_id for a in secondary_assignments]
 
-    # Get reviews that have been evaluated by PM (status = reviewed)
     reviews = (
         db.query(ProjectReview)
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.project_id.in_(project_ids),
-            ProjectReview.cycle == cycle,
             ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
             ProjectReview.user_id != current_user.id,
+            ProjectReview.is_deleted == False,  # noqa: E712
         )
         .order_by(ProjectReview.created_at.desc())
         .all()

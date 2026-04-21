@@ -41,12 +41,23 @@ export interface MenteeProjectAssignment {
   project_name: string;
   project_code: string;
   assignment_role: string | null;
+  /** The MENTEE's evaluator_type on this project. */
   evaluator_type: string | null;
-  /** "pending" | "reviewed" | null (no review exists yet) */
+  /** "pending" | "reviewed" | null (placeholder row for active cycle, no review yet) */
   review_status: string | null;
   /** "1".."5" when reviewed, null otherwise. */
   performance_group: string | null;
+  /** Real cycle name when a review exists; active cycle on placeholder rows. */
   cycle: string | null;
+  /** Display name of the project's Primary evaluator (PM). */
+  pm_name: string | null;
+  /**
+   * The current mentor's OWN evaluator_type on this project.
+   *   "Primary"   → mentor is the PM → can Evaluate / Edit
+   *   "Secondary" → mentor can write / edit an impact statement
+   *   null        → mentor has no evaluator seat → read-only View
+   */
+  viewer_evaluator_role: string | null;
   /** Full PM evaluation; populated only when review_status === "reviewed". */
   review_detail: ProjectReviewResponse | null;
 }

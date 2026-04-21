@@ -55,7 +55,7 @@ const MY_REVIEWS_SORT_CONFIG: Record<MyReviewsSortKey, { kind: SortKind; get: (c
   project_name:      { kind: "alpha",   get: (c) => c.project_name },
   project_code:      { kind: "natural", get: (c) => c.project_code },
   pm_name:           { kind: "alpha",   get: (c) => c.pm_name },
-  cycle:             { kind: "natural", get: (c) => c.cycle },
+  cycle:             { kind: "cycle",   get: (c) => c.cycle },
   review_status:     { kind: "alpha",   get: (c) => c.review_status },
   performance_group: { kind: "numeric", get: (c) => c.performance_group },
 };

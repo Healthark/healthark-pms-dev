@@ -20,3 +20,6 @@ class TokenResponse(BaseModel):
     # Drives mentor-only UI (e.g. the Team Goals tab) independent of role,
     # since mentorship is an FK relationship, not a role attribute.
     has_mentees: bool = False
+    # False only for CEO/founders (mentor_id IS NULL). Yearly goal creation is
+    # blocked for these users because the approval workflow needs a mentor.
+    has_mentor: bool = False

@@ -52,19 +52,32 @@ class MenteeProjectsStats(BaseModel):
 
 
 class MenteeProjectAssignment(BaseModel):
-    """One row per mentee-project-cycle — used in the Projects tab of detail."""
+    """
+    One row per (mentee-project-cycle). A project the mentee is on may emit
+    multiple rows — one per existing ProjectReview (across cycles) plus a
+    placeholder for the active cycle when no review row exists yet.
+    """
     project_id: int
     project_name: str
     project_code: str
     assignment_role: Optional[str] = None
-    evaluator_type: Optional[str] = None
-    review_status: Optional[str] = None      # pending / reviewed / None (no review yet)
+    evaluator_type: Optional[str] = None     # The MENTEE's evaluator_type on this project.
+    review_status: Optional[str] = None      # pending / reviewed / None (placeholder for active cycle)
     performance_group: Optional[str] = None  # "1".."5" per ProjectReview.performance_group
-    cycle: Optional[str] = None              # from ProjectReview.cycle when a review exists
+    cycle: Optional[str] = None              # Real cycle when a review exists; active_cycle on placeholder rows
+    # Display name of the project's Primary evaluator (PM). Null when the
+    # project has no Primary assignment.
+    pm_name: Optional[str] = None
+    # The CURRENT mentor's own evaluator_type on this project, NOT the mentee's.
+    # Drives which action the Projects tab shows on each row:
+    #   "Primary"   → mentor is the PM and can evaluate / edit
+    #   "Secondary" → mentor can submit an impact statement
+    #   None        → mentor has no evaluator seat here — view-only
+    viewer_evaluator_role: Optional[str] = None
     # Populated only when review_status == "reviewed". Carries the full PM
     # evaluation — competency comments, impact, secondary feedback — so the
-    # Projects tab can expand a row and render the same detail the employee
-    # sees on the Project Reviews page.
+    # Projects tab can render the same detail the employee sees on the
+    # Project Reviews page.
     review_detail: Optional[ProjectReviewResponse] = None
 
 

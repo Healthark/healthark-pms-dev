@@ -6,10 +6,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import {
-  UserCircle, Briefcase, Send, Loader2, X, ClipboardList,
-  ChevronDown, ChevronUp, BookOpen, Info, Pencil,
+  UserCircle, Briefcase, ClipboardList, Pencil,
   LayoutGrid, Table2, Search, CheckCircle2, Clock,
 } from "lucide-react";
 import {
@@ -19,36 +17,19 @@ import {
   type ProjectReviewResponse,
   type SecondaryEvalPayload,
   type RoleExpectation,
-  type PerformanceGroup,
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { EvalModal } from "./EvalModal";
+import { ImpactModal } from "./ImpactModal";
 
 // ── Constants ───────────────────────────────────────────────────────
 
-const COMPETENCIES = [
-  { key: "task_execution",     label: "Task Execution & Problem Solving",           expKey: "exp_task_execution" },
-  { key: "ownership",          label: "Ownership & Accountability",                  expKey: "exp_ownership" },
-  { key: "project_management", label: "Project Management and Risk Mitigation",      expKey: "exp_project_management" },
-  { key: "client_deliverables",label: "Building Client-Ready Deliverables",          expKey: "exp_client_deliverables" },
-  { key: "communication",      label: "Communication & Client/Stakeholder Management",expKey: "exp_communication" },
-  { key: "mentoring",          label: "Mentoring and Team Development",              expKey: "exp_mentoring" },
-  { key: "competency_skills",  label: "Competency and Skills",                       expKey: "exp_competency_skills" },
-] as const;
-
-type CompKey = (typeof COMPETENCIES)[number]["key"];
 type ViewMode = "grid" | "table";
 type EvalType = "primary" | "secondary";
-
-const EMPTY_COMMENTS: Record<CompKey, string> = {
-  task_execution: "", ownership: "", project_management: "",
-  client_deliverables: "", communication: "", mentoring: "", competency_skills: "",
-};
-
-const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 // ── Sort column config ──────────────────────────────────────────────
 // Employee / Project / Type / Dept are alpha; project_code is alphanumeric;
@@ -56,7 +37,7 @@ const TEXTAREA_CLS =
 type EvalSortKey =
   | "employee_name"
   | "project_name"
-  | "type"
+  | "cycle"
   | "department_name"
   | "review_status"
   | "performance_group";
@@ -90,216 +71,11 @@ interface UnifiedEvalRow {
 const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEvalRow) => unknown }> = {
   employee_name:     { kind: "alpha",   get: (r) => r.employee_name },
   project_name:      { kind: "alpha",   get: (r) => r.project_name },
-  type:              { kind: "alpha",   get: (r) => r.type },
+  cycle:             { kind: "cycle",   get: (r) => r.cycle },
   department_name:   { kind: "alpha",   get: (r) => r.department_name },
   review_status:     { kind: "alpha",   get: (r) => r.review_status },
   performance_group: { kind: "numeric", get: (r) => r.performance_group },
 };
-
-// ── Role Expectation Panel ──────────────────────────────────────────
-
-function ExpectationPanel({
-  expectation, expKey,
-}: { readonly expectation: RoleExpectation | null; readonly expKey: string }) {
-  const [open, setOpen] = useState(false);
-  if (!expectation) return null;
-  const text = (expectation as Record<string, unknown>)[expKey] as string | null;
-  if (!text) return null;
-
-  return (
-    <div className="mb-2">
-      <button type="button" onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors">
-        <BookOpen className="h-3 w-3" />
-        {open ? "Hide" : "View"} Role Expectations
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-      </button>
-      {open && (
-        <div className="mt-1.5 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
-          <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">{text.replace(/ \| /g, "\n• ")}</p>
-          <p className="mt-1 text-[10px] text-blue-500">{expectation.department_name} / {expectation.designation_name}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── PM Evaluation Modal ─────────────────────────────────────────────
-
-function EvalModal({
-  card, expectation, isEditMode, onSubmit, onClose, isSaving, error,
-}: {
-  readonly card: UnifiedEvalRow;
-  readonly expectation: RoleExpectation | null;
-  readonly isEditMode: boolean;
-  readonly onSubmit: (payload: PMEvaluationPayload) => Promise<void>;
-  readonly onClose: () => void;
-  readonly isSaving: boolean;
-  readonly error: string;
-}) {
-  const [isLoadingReview, setIsLoadingReview] = useState(isEditMode);
-  const [fetchError, setFetchError] = useState("");
-  const [comments, setComments] = useState<Record<CompKey, string>>(EMPTY_COMMENTS);
-  const [performanceGroup, setPerformanceGroup] = useState<PerformanceGroup | "">("");
-  const [impactStatement, setImpactStatement] = useState("");
-
-  useEffect(() => {
-    if (!isEditMode || !card.review_id) return;
-    setIsLoadingReview(true);
-    projectReviewService.getReview(card.review_id)
-      .then((review) => {
-        setComments({
-          task_execution: review.comment_task_execution ?? "", ownership: review.comment_ownership ?? "",
-          project_management: review.comment_project_management ?? "", client_deliverables: review.comment_client_deliverables ?? "",
-          communication: review.comment_communication ?? "", mentoring: review.comment_mentoring ?? "",
-          competency_skills: review.comment_competency_skills ?? "",
-        });
-        setPerformanceGroup((review.performance_group ?? "") as PerformanceGroup | "");
-        setImpactStatement(review.impact_statement ?? "");
-      })
-      .catch(() => setFetchError("Failed to load evaluation data."))
-      .finally(() => setIsLoadingReview(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const setComment = (key: CompKey, value: string) => setComments((prev) => ({ ...prev, [key]: value }));
-  const allFilled = COMPETENCIES.every((c) => comments[c.key].trim().length > 0) && performanceGroup !== "" && impactStatement.trim().length > 0;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-3xl rounded-xl bg-surface shadow-xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              {isEditMode && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">Editing</span>}
-              <h2 className="font-display text-base font-semibold text-text-main">{isEditMode ? "Edit Evaluation" : "Evaluate"}: {card.employee_name}</h2>
-            </div>
-            <div className="flex items-center gap-3 mt-0.5 text-xs text-text-muted">
-              <span>{card.project_name} ({card.project_code})</span>
-              {card.department_name && <span>Dept: {card.department_name}</span>}
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"><X className="h-5 w-5" /></button>
-        </div>
-
-        {isLoadingReview ? (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 animate-pulse">
-            {COMPETENCIES.map((c) => <div key={c.key} className="space-y-1.5"><div className="h-3 w-48 rounded bg-slate-100" /><div className="h-24 rounded-lg bg-slate-100" /></div>)}
-          </div>
-        ) : fetchError ? (
-          <div className="flex-1 flex items-center justify-center px-6 py-10"><p className="rounded-lg bg-red-50 px-5 py-4 text-sm text-red-600 text-center max-w-sm">{fetchError}</p></div>
-        ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-            {error && <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <label htmlFor="perf-group" className="text-[13px] font-bold text-text-main">Overall Performance Rating</label>
-                <div className="group relative inline-flex items-center">
-                  <Info className="h-3.5 w-3.5 text-text-muted cursor-default" />
-                  <div className="invisible group-hover:visible pointer-events-none absolute top-full left-0 z-50 mt-2 w-72 rounded-lg border border-border bg-white px-3 py-2.5 text-xs text-text-main shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                    <div className="absolute left-3 bottom-full border-4 border-transparent border-b-border" />
-                    <p className="font-semibold mb-1.5">Rating Guide</p>
-                    <ul className="space-y-1.5 text-text-muted">
-                      <li><span className="font-semibold text-text-main">1 —</span> Performed beyond expectations</li>
-                      <li><span className="font-semibold text-text-main">2 —</span> Exceeded goals at expected level</li>
-                      <li><span className="font-semibold text-text-main">3 —</span> Achieved goals at expected level</li>
-                      <li><span className="font-semibold text-text-main">4 —</span> Partially achieved goals</li>
-                      <li><span className="font-semibold text-text-main">5 —</span> Did not achieve goals</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <select id="perf-group" value={performanceGroup} onChange={(e) => setPerformanceGroup(e.target.value as PerformanceGroup)}
-                className="w-24 rounded-lg border border-border bg-white px-3 py-2 text-[13px] outline-none focus:border-brand">
-                <option value="" disabled>Select</option>
-                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-              </select>
-            </div>
-            {COMPETENCIES.map((comp, idx) => (
-              <div key={comp.key}>
-                <label htmlFor={`eval-${comp.key}`} className="block text-xs font-semibold text-text-main mb-1">{idx + 1}. {comp.label} *</label>
-                <ExpectationPanel expectation={expectation} expKey={comp.expKey} />
-                <textarea id={`eval-${comp.key}`} rows={4} className={TEXTAREA_CLS} value={comments[comp.key]}
-                  onChange={(e) => setComment(comp.key, e.target.value)} placeholder={`Evaluate ${card.employee_name}'s ${comp.label.toLowerCase()}…`} />
-              </div>
-            ))}
-            <div>
-              <label htmlFor="impact" className="block text-xs font-semibold text-text-main mb-1">Overall Impact Statement *</label>
-              <textarea id="impact" rows={4} className={TEXTAREA_CLS} value={impactStatement}
-                onChange={(e) => setImpactStatement(e.target.value)} placeholder="Describe overall impact, key achievements, and areas for growth…" />
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4 shrink-0">
-          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">Cancel</button>
-          <button type="button" onClick={() => onSubmit({
-            performance_group: performanceGroup as PerformanceGroup, impact_statement: impactStatement,
-            comment_task_execution: comments.task_execution, comment_ownership: comments.ownership,
-            comment_project_management: comments.project_management, comment_client_deliverables: comments.client_deliverables,
-            comment_communication: comments.communication, comment_mentoring: comments.mentoring, comment_competency_skills: comments.competency_skills,
-          })} disabled={isSaving || !allFilled || isLoadingReview || !!fetchError}
-            className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity ${isEditMode ? "bg-amber-500" : "bg-brand"}`}>
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditMode ? <Pencil className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            {isSaving ? (isEditMode ? "Saving…" : "Submitting…") : (isEditMode ? "Save Changes" : "Submit Evaluation")}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-// ── Secondary Impact Modal ──────────────────────────────────────────
-
-function ImpactModal({
-  row, onSubmit, onClose, isSaving, error,
-}: {
-  readonly row: UnifiedEvalRow;
-  readonly onSubmit: (reviewId: number, payload: SecondaryEvalPayload) => Promise<void>;
-  readonly onClose: () => void;
-  readonly isSaving: boolean;
-  readonly error: string;
-}) {
-  const isEdit = row.review_status === "submitted";
-  const [impactStatement, setImpactStatement] = useState(row.existingImpact ?? "");
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              {isEdit && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">Editing</span>}
-              <h2 className="font-display text-base font-semibold text-text-main">{isEdit ? "Edit" : "Secondary"} Feedback</h2>
-            </div>
-            <p className="mt-0.5 text-xs text-text-muted">{row.employee_name} — {row.project_name}</p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="px-6 py-5 space-y-4">
-          {error && <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
-          <div>
-            <label htmlFor="sec-impact" className="block text-xs font-semibold text-text-main mb-1">Impact Statement *</label>
-            <p className="text-xs text-text-muted mb-2">Share your perspective on {row.employee_name}'s contribution.</p>
-            <textarea id="sec-impact" rows={5} className={TEXTAREA_CLS} value={impactStatement}
-              onChange={(e) => setImpactStatement(e.target.value)} placeholder="Describe observations about impact, collaboration, and contributions…" />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">Cancel</button>
-          <button type="button" onClick={() => onSubmit(row.secondaryReview!.id, { impact_statement: impactStatement })}
-            disabled={isSaving || !impactStatement.trim()}
-            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {isSaving ? (isEdit ? "Saving…" : "Submitting…") : (isEdit ? "Save Changes" : "Submit")}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 // ── Card View ───────────────────────────────────────────────────────
 
@@ -312,9 +88,13 @@ function EvalCard({
   return (
     <div className={`rounded-xl border bg-surface p-4 shadow-sm flex flex-col gap-3 ${isDone ? "border-green-200 bg-green-50/30" : "border-border"}`}>
       <div className="flex items-center justify-between">
-        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${isPrimary ? "bg-brand/10 text-brand" : "bg-slate-100 text-slate-600"}`}>
-          {isPrimary ? "Primary" : "Secondary"}
-        </span>
+        {row.cycle ? (
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+            {row.cycle}
+          </span>
+        ) : (
+          <span />
+        )}
         {isDone ? (
           <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
             <CheckCircle2 className="h-3 w-3" /> {row.review_status === "submitted" ? "Submitted" : "Reviewed"}
@@ -331,10 +111,15 @@ function EvalCard({
         <p className="text-[14px] font-semibold text-text-main">{row.employee_name}</p>
       </div>
 
-      <div className="flex items-center gap-1.5 text-[12px] text-text-muted">
+      <div className="flex items-center gap-1.5 flex-wrap text-[12px] text-text-muted">
         <Briefcase className="h-3 w-3 shrink-0" />
         <span className="truncate">{row.project_name}</span>
         <span className="font-mono text-[11px]">({row.project_code})</span>
+        {!isPrimary && (
+          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+            Secondary
+          </span>
+        )}
       </div>
 
       {isPrimary && (
@@ -366,6 +151,8 @@ function EvalCard({
 export function PMEvaluationTab() {
   const { user } = useAuth();
   const currentUserId = user?.user_id;
+  const { settings } = useSystemSettings();
+  const activeCycle = settings?.active_cycle_name ?? null;
 
   const [pmCards, setPmCards] = useState<PMPendingReviewCard[]>([]);
   const [secReviews, setSecReviews] = useState<ProjectReviewResponse[]>([]);
@@ -378,6 +165,13 @@ export function PMEvaluationTab() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
+  // Cycle filter — defaults to the active cycle so the page UX matches
+  // what it was before we expanded the queue across all cycles. Setting
+  // it to "" until settings load, then we sync below.
+  const [cycleFilter, setCycleFilter] = useState<string>("");
+  useEffect(() => {
+    if (cycleFilter === "" && activeCycle) setCycleFilter(activeCycle);
+  }, [activeCycle, cycleFilter]);
   const [sort, setSort] = useState<SortState<EvalSortKey> | null>(null);
 
   // Modal state
@@ -407,7 +201,9 @@ export function PMEvaluationTab() {
 
   for (const c of pmCards) {
     unifiedRows.push({
-      key: `pm-${c.project_id}-${c.user_id}`,
+      // Cycle is part of the key — same (project, user) can appear once
+      // per cycle now that the queue spans all cycles.
+      key: `pm-${c.project_id}-${c.user_id}-${c.cycle ?? "none"}`,
       type: "primary",
       employee_name: c.employee_name,
       project_id: c.project_id,
@@ -449,9 +245,11 @@ export function PMEvaluationTab() {
   // Dropdown options
   const availableDepts = Array.from(new Set(unifiedRows.map((r) => r.department_name).filter(Boolean) as string[]));
   const availableEmployees = Array.from(new Set(unifiedRows.map((r) => r.employee_name)));
+  const availableCycles = Array.from(new Set(unifiedRows.map((r) => r.cycle).filter((c): c is string => !!c)));
 
   // Filters
   const filteredRows = unifiedRows.filter((r) => {
+    if (cycleFilter !== "all" && cycleFilter !== "" && r.cycle !== cycleFilter) return false;
     if (typeFilter !== "all" && r.type !== typeFilter) return false;
     if (statusFilter === "pending" && r.review_status !== "pending") return false;
     if (statusFilter === "done" && r.review_status === "pending") return false;
@@ -555,6 +353,14 @@ export function PMEvaluationTab() {
         </div>
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
+            <select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+              <option value="all">All Cycles</option>
+              {availableCycles.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Type</label>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
@@ -616,7 +422,7 @@ export function PMEvaluationTab() {
                   <SortableHeader label="Project" columnKey="project_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="hidden sm:table-cell text-left px-4 py-2.5">
-                  <SortableHeader label="Type" columnKey="type" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Cycle" columnKey="cycle" sort={sort} onSort={setSort} />
                 </th>
                 <th className="hidden md:table-cell text-left px-4 py-2.5">
                   <SortableHeader label="Dept" columnKey="department_name" sort={sort} onSort={setSort} />
@@ -642,13 +448,18 @@ export function PMEvaluationTab() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-text-main">{r.project_name}</div>
+                      <div className="flex items-center gap-1.5 text-text-main">
+                        <span>{r.project_name}</span>
+                        {r.type === "secondary" && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                            Secondary
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] font-mono text-text-muted">{r.project_code}</div>
                     </td>
-                    <td className="hidden sm:table-cell px-4 py-3">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${r.type === "primary" ? "bg-brand/10 text-brand" : "bg-slate-100 text-slate-600"}`}>
-                        {r.type === "primary" ? "Primary" : "Secondary"}
-                      </span>
+                    <td className="hidden sm:table-cell px-4 py-3 text-text-muted">
+                      {r.cycle ?? "—"}
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-text-muted">{r.department_name ?? "—"}</td>
                     <td className="px-4 py-3">

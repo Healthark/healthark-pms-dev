@@ -167,6 +167,17 @@ def create_goal(
         target_user_id = current_user.id
         target_manager_id = current_user.mentor_id
 
+    # Goals require mentor approval, so a user with no mentor (e.g. CEO/founders)
+    # cannot create goals — they would get stuck at the approve step forever.
+    if target_manager_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot create goals for a user who has no mentor assigned. "
+                "Goals require mentor approval — contact an admin to assign a mentor first."
+            ),
+        )
+
     # ── Gate check + cycle stamping for yearly goals ───────────────────
     cycle_name: Optional[str] = None
     if goal_in.goal_type == GoalType.YEARLY:
@@ -420,6 +431,17 @@ def submit_goal(
 
     if not (is_owner or is_manager):
         raise HTTPException(status_code=403, detail="Permission denied.")
+
+    # Defense-in-depth: if the goal owner's mentor was unassigned after the
+    # draft was created, block submission — no one can approve it otherwise.
+    if not goal_owner or goal_owner.mentor_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot submit a goal for a user who has no mentor assigned. "
+                "Goals require mentor approval — contact an admin to assign a mentor first."
+            ),
+        )
 
     if goal.approval_status != ApprovalStatus.DRAFT.value:
         raise HTTPException(

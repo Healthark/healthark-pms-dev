@@ -15,6 +15,9 @@ export interface AuthResponse {
   // True when at least one active user reports to this user via mentor_id.
   // Drives mentor-only UI (Team Goals tab, etc.) regardless of role.
   has_mentees: boolean;
+  // False only for CEO/founders with no mentor assigned. Yearly goal creation
+  // is disabled for them because the approval workflow needs a mentor.
+  has_mentor: boolean;
 }
 
 export const authService = {
