@@ -23,6 +23,7 @@ import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { GoalSelfReviewModal } from "../components/goals/GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "../components/goals/SelfReviewCycleMenu";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
+import { TeamReviewTab } from "../components/goals/TeamReviewTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
@@ -42,7 +43,7 @@ const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
   { value: "approved", label: "Approved" },
 ];
 
-type ActiveTab = "my" | "team";
+type ActiveTab = "my" | "team" | "team_review";
 type ViewMode = "grid" | "table";
 
 // My Goals table sort config — Goal/Mentor/Status are alpha, Year is numeric.
@@ -374,13 +375,22 @@ export function YearlyGoals() {
             My Goals
           </button>
           {isMentor && (
-            <button
-              type="button"
-              className={tabCls("team")}
-              onClick={() => setActiveTab("team")}
-            >
-              Team Goals
-            </button>
+            <>
+              <button
+                type="button"
+                className={tabCls("team")}
+                onClick={() => setActiveTab("team")}
+              >
+                Team Goals
+              </button>
+              <button
+                type="button"
+                className={tabCls("team_review")}
+                onClick={() => setActiveTab("team_review")}
+              >
+                Team Review
+              </button>
+            </>
           )}
         </div>
 
@@ -629,6 +639,9 @@ export function YearlyGoals() {
 
           {/* ── Team Goals tab ── */}
           {activeTab === "team" && isMentor && <TeamGoalsTab />}
+
+          {/* ── Team Review tab ── */}
+          {activeTab === "team_review" && isMentor && <TeamReviewTab />}
         </div>
       </div>
 

@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Info, CheckCircle } from "lucide-react";
-import type { NotificationItem } from "../../services/notification.service";
+import { AlertTriangle, Info, CheckCircle, BellDot } from "lucide-react";
+import type { NotificationItem, UserNotificationItem } from "../../services/notification.service";
 
 interface NotificationDropdownProps {
   readonly notifications: NotificationItem[];
+  readonly userNotifications: UserNotificationItem[];
   /** DOMRect of the bell button — used to position the dropdown below it. */
   readonly anchorRect: DOMRect;
   readonly onClose: () => void;
+  readonly onMarkAllRead: () => Promise<void>;
 }
 
 const SEVERITY_STYLES: Record<
@@ -29,8 +31,10 @@ const SEVERITY_STYLES: Record<
 
 export function NotificationDropdown({
   notifications,
+  userNotifications,
   anchorRect,
   onClose,
+  onMarkAllRead,
 }: NotificationDropdownProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -67,13 +71,22 @@ export function NotificationDropdown({
         zIndex: 50,
       }}
     >
-      <div className="px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <p className="font-display text-sm font-semibold text-text-main">
           Notifications
         </p>
+        {userNotifications.some((n) => !n.is_read) && (
+          <button
+            type="button"
+            onClick={onMarkAllRead}
+            className="text-[11px] text-brand hover:underline"
+          >
+            Mark all read
+          </button>
+        )}
       </div>
 
-      {notifications.length === 0 ? (
+      {notifications.length === 0 && userNotifications.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8 px-4 text-center">
           <CheckCircle className="h-8 w-8 text-green-400" aria-hidden="true" />
           <p className="text-sm font-medium text-text-main">
@@ -84,26 +97,33 @@ export function NotificationDropdown({
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-border max-h-72 overflow-y-auto">
+        <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+          {/* System-computed notifications */}
           {notifications.map((n) => {
-            const {
-              icon: Icon,
-              iconClass,
-              bgClass,
-            } = SEVERITY_STYLES[n.severity];
+            const { icon: Icon, iconClass, bgClass } = SEVERITY_STYLES[n.severity];
             return (
               <li
                 key={n.type}
                 className={`flex items-start gap-3 px-4 py-3 ${bgClass}`}
               >
-                <Icon
-                  className={`h-4 w-4 mt-0.5 shrink-0 ${iconClass}`}
-                  aria-hidden="true"
-                />
+                <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${iconClass}`} aria-hidden="true" />
                 <p className="text-sm text-text-main">{n.message}</p>
               </li>
             );
           })}
+          {/* Direct user notifications from mentor Notify button */}
+          {userNotifications.map((n) => (
+            <li
+              key={n.id}
+              className={`flex items-start gap-3 px-4 py-3 ${n.is_read ? "bg-white" : "bg-blue-50"}`}
+            >
+              <BellDot
+                className={`h-4 w-4 mt-0.5 shrink-0 ${n.is_read ? "text-text-muted" : "text-blue-500"}`}
+                aria-hidden="true"
+              />
+              <p className="text-sm text-text-main">{n.message}</p>
+            </li>
+          ))}
         </ul>
       )}
     </div>,

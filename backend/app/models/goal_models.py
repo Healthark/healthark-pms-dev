@@ -83,6 +83,16 @@ class Goal(Base):
         lazy="joined",
     )
 
+    # 0..2 mentor reviews per goal — one per fiscal-year half, submitted by
+    # the mentor after reading the mentee's corresponding self-review.
+    mentor_reviews = relationship(
+        "GoalMentorReview",
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by="GoalMentorReview.cycle_half",
+        lazy="joined",
+    )
+
     @property
     def manager_name(self):
         """

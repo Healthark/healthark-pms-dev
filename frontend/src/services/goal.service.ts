@@ -72,6 +72,37 @@ export interface GoalSelfReview {
   self_desc_competency_skills: string;
 }
 
+/**
+ * Mentor's review of a mentee's self-review for one fiscal-year half.
+ * A goal carries 0–2 of these (one per half), each submitted after the
+ * mentee has already submitted their corresponding self-review.
+ */
+export interface GoalMentorReview {
+  id: number;
+  goal_id: number;
+  cycle_half: SelfReviewCycleHalf;
+  submitted_at: string;
+  mentor_comment_task_execution: string;
+  mentor_comment_ownership: string;
+  mentor_comment_client_deliverables: string;
+  mentor_comment_communication: string;
+  mentor_comment_project_management: string;
+  mentor_comment_mentoring: string;
+  mentor_comment_firm_growth: string;
+  mentor_comment_competency_skills: string;
+}
+
+export interface GoalMentorReviewPayload {
+  mentor_comment_task_execution: string;
+  mentor_comment_ownership: string;
+  mentor_comment_client_deliverables: string;
+  mentor_comment_communication: string;
+  mentor_comment_project_management: string;
+  mentor_comment_mentoring: string;
+  mentor_comment_firm_growth: string;
+  mentor_comment_competency_skills: string;
+}
+
 export interface Goal {
   id: number;
   org_id: number;
@@ -97,6 +128,8 @@ export interface Goal {
   progress_percent: number;
   /** 0–2 entries, one per FY half. Look up by `cycle_half`. */
   self_reviews: GoalSelfReview[];
+  /** 0–2 mentor reviews, one per FY half. Look up by `cycle_half`. */
+  mentor_reviews: GoalMentorReview[];
 }
 
 export interface GoalSelfReviewPayload {
@@ -181,6 +214,25 @@ export const goalService = {
       payload,
     );
     return res.data;
+  },
+
+  submitMentorReview: async (
+    goalId: number,
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ): Promise<Goal> => {
+    const res = await apiClient.patch<Goal>(
+      `/goals/${goalId}/mentor-review/${cycleHalf}`,
+      payload,
+    );
+    return res.data;
+  },
+
+  notifyMentee: async (
+    goalId: number,
+    payload: { action_requested: string; description: string },
+  ): Promise<void> => {
+    await apiClient.post(`/goals/${goalId}/notify`, payload);
   },
 
   // ── Employee — Criteria ─────────────────────────────────────────

@@ -21,13 +21,14 @@ Security Layers Applied:
 
 from datetime import date
 from sqlalchemy import func
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.system_settings_models import SystemSettings
 from app.models.goal_models import Goal, ApprovalStatus
 from app.models.user_models import User
-from app.schemas.notification_schemas import NotificationItem, TopbarSummary
+from app.models.goal_notification_models import GoalNotification
+from app.schemas.notification_schemas import NotificationItem, UserNotificationItem, TopbarSummary
 from app.core.cycle_utils import get_current_cycle_info
 
 router = APIRouter()
@@ -124,7 +125,46 @@ def get_topbar_summary(
                 severity="warning",
             ))
 
+    # ── Direct User Notifications (mentor → mentee via Notify button) ──
+    raw_user_notifs = (
+        db.query(GoalNotification)
+        .filter(
+            GoalNotification.recipient_id == current_user.id,
+            GoalNotification.org_id == current_user.org_id,
+        )
+        .order_by(GoalNotification.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    user_notifications = [
+        UserNotificationItem(
+            id=n.id,
+            message=n.message,
+            goal_id=n.goal_id,
+            created_at=n.created_at,
+            is_read=n.is_read,
+        )
+        for n in raw_user_notifs
+    ]
+
     return TopbarSummary(
         active_cycle=active_cycle,
         notifications=notifications,
+        user_notifications=user_notifications,
     )
+
+
+@router.post("/mark-all-read", status_code=status.HTTP_204_NO_CONTENT)
+def mark_all_notifications_read(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Mark all of the current user's direct notifications as read."""
+    db.query(GoalNotification).filter(
+        GoalNotification.recipient_id == current_user.id,
+        GoalNotification.org_id == current_user.org_id,
+        GoalNotification.is_read == False,  # noqa: E712
+    ).update({"is_read": True})
+    db.commit()
+    return None

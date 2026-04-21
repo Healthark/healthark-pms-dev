@@ -97,6 +97,50 @@ class GoalApprovalUpdate(BaseModel):
     feedback: Optional[str] = None
 
 
+class GoalNotifyPayload(BaseModel):
+    """
+    Payload for the mentor → mentee Notify action.
+    action_requested: short label for what the mentor needs (e.g. "Please submit self-review").
+    description: longer explanation visible in the mentee's notification bell.
+    """
+    action_requested: str = Field(..., min_length=1, max_length=200)
+    description:      str = Field(..., min_length=1)
+
+
+class GoalMentorReviewSubmit(BaseModel):
+    """
+    Payload the mentor submits when reviewing a mentee's self-review for one
+    fiscal-year half.  cycle_half comes from the URL path param, not the body.
+    One-shot per (goal_id, cycle_half) — enforced at DB level.
+    """
+    mentor_comment_task_execution:      str = Field(..., min_length=1)
+    mentor_comment_ownership:           str = Field(..., min_length=1)
+    mentor_comment_client_deliverables: str = Field(..., min_length=1)
+    mentor_comment_communication:       str = Field(..., min_length=1)
+    mentor_comment_project_management:  str = Field(..., min_length=1)
+    mentor_comment_mentoring:           str = Field(..., min_length=1)
+    mentor_comment_firm_growth:         str = Field(..., min_length=1)
+    mentor_comment_competency_skills:   str = Field(..., min_length=1)
+
+
+class GoalMentorReviewResponse(BaseModel):
+    """One half's mentor review on an approved goal.  0–2 per goal."""
+    id: int
+    goal_id: int
+    cycle_half: SelfReviewCycleHalf
+    submitted_at: datetime
+    mentor_comment_task_execution:      str
+    mentor_comment_ownership:           str
+    mentor_comment_client_deliverables: str
+    mentor_comment_communication:       str
+    mentor_comment_project_management:  str
+    mentor_comment_mentoring:           str
+    mentor_comment_firm_growth:         str
+    mentor_comment_competency_skills:   str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GoalSelfReviewSubmit(BaseModel):
     """
     Payload the goal owner submits when reflecting on an APPROVED goal
@@ -165,10 +209,12 @@ class GoalResponse(GoalBase):
     updated_at: Optional[datetime] = None
 
     # ── Self-reviews ─────────────────────────────────────────────────
-    # 0–2 rows, one per fiscal-year half.  The presence of a row in this
-    # list (matched by cycle_half) is the source of truth for "submitted
-    # for that half".  Absent halves are rendered as "Not Submitted".
     self_reviews: list[GoalSelfReviewResponse] = []
+
+    # ── Mentor reviews ───────────────────────────────────────────────
+    # 0–2 rows, one per fiscal-year half, filled by the mentor after
+    # reading the mentee's self-review for that half.
+    mentor_reviews: list[GoalMentorReviewResponse] = []
 
     # Nested criteria — populated from the SQLAlchemy relationship
     criteria: list[CriterionResponse] = []

@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Check,
   Circle,
+  CheckCircle2,
   Eye,
 } from "lucide-react";
 import type { Goal, SelfReviewCycleHalf } from "../../services/goal.service";
@@ -114,9 +115,13 @@ export function SelfReviewCycleMenu({
   }, [open]);
 
   const submittedCount = goal.self_reviews.length;
+  const mentorReviewedCount = goal.mentor_reviews.length;
+
   const triggerLabel =
     mode === "mentor"
-      ? submittedCount > 0
+      ? mentorReviewedCount > 0
+        ? `Reviews (${mentorReviewedCount}/${submittedCount} reviewed)`
+        : submittedCount > 0
         ? `Self Reviews (${submittedCount}/2)`
         : "Self Reviews"
       : submittedCount === 2
@@ -174,9 +179,24 @@ export function SelfReviewCycleMenu({
                 </span>
               </div>
               {mode === "mentor" ? (
-                <Eye className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                // Read-only view — icons are status indicators only, not edit actions.
+                // CheckCircle2 = mentor has reviewed this half in Team Review tab.
+                // Eye          = self-review submitted, awaiting mentor review.
+                // Circle       = mentee hasn't submitted yet.
+                (() => {
+                  const mentorReviewed = goal.mentor_reviews.some(
+                    (mr) => mr.cycle_half === half,
+                  );
+                  if (mentorReviewed) {
+                    return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
+                  }
+                  if (submitted) {
+                    return <Eye className="h-3.5 w-3.5 text-text-muted shrink-0" />;
+                  }
+                  return <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />;
+                })()
               ) : submitted ? (
-                <Eye className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
               ) : (
                 <ClipboardCheck className="h-3.5 w-3.5 text-brand shrink-0" />
               )}

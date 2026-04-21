@@ -1,4 +1,4 @@
-import { CalendarDays, UserCircle, Check, RotateCcw, Link } from "lucide-react";
+import { Bell, UserCircle, Check, RotateCcw, Link } from "lucide-react";
 import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
@@ -11,16 +11,8 @@ interface TeamGoalCardProps {
     goal: TeamGoal,
     cycleHalf: SelfReviewCycleHalf,
   ) => void;
+  readonly onNotify: (goal: TeamGoal) => void;
   readonly isActing: boolean;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "No due date";
-  return new Date(dateStr).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 export function TeamGoalCard({
@@ -28,6 +20,7 @@ export function TeamGoalCard({
   onApprove,
   onRequestChanges,
   onViewSelfReview,
+  onNotify,
   isActing,
 }: TeamGoalCardProps) {
   const isSubmitted = goal.approval_status === "submitted";
@@ -36,10 +29,17 @@ export function TeamGoalCard({
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-sm flex flex-col gap-3">
-      {/* Employee name */}
-      <div className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
-        <UserCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-        {goal.owner_name}
+      {/* Employee name + FY year */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
+          <UserCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {goal.owner_name}
+        </div>
+        {goal.fy_year && (
+          <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+            FY {goal.fy_year}
+          </span>
+        )}
       </div>
 
       {/* Title */}
@@ -52,7 +52,7 @@ export function TeamGoalCard({
         </p>
       )}
 
-      {/* Attachment link — mentor needs to review the referenced material */}
+      {/* Attachment link */}
       {goal.attachment_url && (
         <a
           href={goal.attachment_url}
@@ -65,19 +65,22 @@ export function TeamGoalCard({
         </a>
       )}
 
-      {/* Badges */}
+      {/* Status badge */}
       <div className="flex flex-wrap items-center gap-2">
         <ApprovalStatusBadge status={goal.approval_status} />
       </div>
 
-      {/* Footer */}
+      {/* Footer: Notify (left) + workflow actions (right) */}
       <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
-        <div className="flex items-center gap-1.5 text-xs text-text-muted">
-          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {formatDate(goal.due_date)}
-        </div>
+        <button
+          type="button"
+          onClick={() => onNotify(goal)}
+          title="Send an action request to the mentee"
+          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand hover:border-brand/30 transition-colors"
+        >
+          <Bell className="h-3.5 w-3.5" aria-hidden="true" /> Notify
+        </button>
 
-        {/* Action buttons — only shown for submitted goals */}
         {isSubmitted && (
           <div className="flex items-center gap-2">
             <button

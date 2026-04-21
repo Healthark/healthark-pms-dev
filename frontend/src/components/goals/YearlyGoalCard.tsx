@@ -1,9 +1,9 @@
 import {
-  CalendarDays,
   Link,
   MessageSquare,
   Pencil,
   SendHorizonal,
+  UserCircle,
 } from "lucide-react";
 import type {
   Goal,
@@ -24,15 +24,6 @@ interface YearlyGoalCardProps {
   readonly editGateOpen: boolean;
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "No due date";
-  return new Date(dateStr).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 export function YearlyGoalCard({
   goal,
   onEdit,
@@ -46,30 +37,40 @@ export function YearlyGoalCard({
   const isChangesRequired = goal.approval_status === "changes_requested";
   const isApproved = goal.approval_status === "approved";
 
-  // Edit is allowed only while the goal is still actionable AND the admin gate is open.
-  // Approved goals are permanently locked — mentor must be contacted to make changes.
   const canEdit = (isDraft || isChangesRequired) && editGateOpen;
-  // "Request Approval" is shown whenever the goal is in a state the mentor hasn't yet reviewed.
   const canSubmit = isDraft || isChangesRequired;
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3">
-      {/* Title row */}
-      <div className="flex items-start justify-between gap-3">
-        <p className="font-medium text-text-main leading-snug flex-1">
-          {goal.title}
-        </p>
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => onEdit(goal)}
-            title="Edit goal"
-            className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
-          >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
+      {/* Mentor name + FY year + edit icon */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
+          <UserCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {goal.manager_name ?? (
+            <span className="italic">No Mentor Assigned</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {goal.fy_year && (
+            <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+              FY {goal.fy_year}
+            </span>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(goal)}
+              title="Edit goal"
+              className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Title */}
+      <p className="font-medium text-text-main leading-snug">{goal.title}</p>
 
       {/* Description */}
       {goal.description && (
@@ -107,7 +108,7 @@ export function YearlyGoalCard({
         </div>
       )}
 
-      {/* Criteria checklist — optional key results */}
+      {/* Criteria checklist */}
       {goal.criteria.length > 0 && (
         <CriteriaChecklist
           criteria={goal.criteria}
@@ -124,13 +125,8 @@ export function YearlyGoalCard({
         <ApprovalStatusBadge status={goal.approval_status} />
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-border">
-        <div className="flex items-center gap-1.5 text-xs text-text-muted">
-          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {formatDate(goal.due_date)}
-        </div>
-
+      {/* Footer — workflow actions */}
+      <div className="flex items-center justify-end gap-2 mt-auto pt-1 border-t border-border">
         {canSubmit && (
           <button
             type="button"

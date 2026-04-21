@@ -51,7 +51,6 @@ export function Topbar() {
 
   const handleBellClick = useCallback(() => {
     if (anchorRect) {
-      // Second click closes the dropdown
       setAnchorRect(null);
       return;
     }
@@ -62,7 +61,26 @@ export function Topbar() {
 
   const handleClose = useCallback(() => setAnchorRect(null), []);
 
-  const hasNotifications = (summary?.notifications.length ?? 0) > 0;
+  const handleMarkAllRead = useCallback(async () => {
+    await notificationService.markAllRead();
+    // Optimistically clear unread badge; update local state
+    setSummary((prev) =>
+      prev
+        ? {
+            ...prev,
+            user_notifications: prev.user_notifications.map((n) => ({
+              ...n,
+              is_read: true,
+            })),
+          }
+        : prev,
+    );
+  }, []);
+
+  const unreadUserCount =
+    summary?.user_notifications.filter((n) => !n.is_read).length ?? 0;
+  const hasNotifications =
+    (summary?.notifications.length ?? 0) > 0 || unreadUserCount > 0;
 
   const initials = user?.full_name
     ? user.full_name
@@ -129,8 +147,10 @@ export function Topbar() {
       {anchorRect && summary && (
         <NotificationDropdown
           notifications={summary.notifications}
+          userNotifications={summary.user_notifications}
           anchorRect={anchorRect}
           onClose={handleClose}
+          onMarkAllRead={handleMarkAllRead}
         />
       )}
     </header>

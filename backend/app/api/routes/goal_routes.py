@@ -29,6 +29,8 @@ from app.api.dependencies import DbSession, CurrentUser
 from app.models.goal_models import Goal, ApprovalStatus, GoalType
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.goal_self_review_models import GoalSelfReview, SelfReviewCycleHalf
+from app.models.goal_mentor_review_models import GoalMentorReview
+from app.models.goal_notification_models import GoalNotification
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.goal_schemas import (
@@ -37,6 +39,8 @@ from app.schemas.goal_schemas import (
     GoalResponse,
     GoalApprovalUpdate,
     GoalSelfReviewSubmit,
+    GoalMentorReviewSubmit,
+    GoalNotifyPayload,
     TeamGoalResponse,
 )
 from app.core.cycle_utils import get_goal_cycle_name
@@ -551,3 +555,121 @@ def submit_goal_self_review(
     db.add(review)
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
+
+
+@router.patch(
+    "/{goal_id}/mentor-review/{cycle_half}",
+    response_model=GoalResponse,
+)
+def submit_goal_mentor_review(
+    goal_id: int,
+    cycle_half: SelfReviewCycleHalf,
+    payload: GoalMentorReviewSubmit,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Mentor submits their review of a mentee's self-review for one half.
+
+    Gates:
+        - Caller must be the goal owner's assigned mentor.
+        - Goal must be APPROVED.
+        - The mentee must have already submitted their self-review for this half.
+        - One-shot per (goal_id, cycle_half) — a second call returns 400.
+    """
+    goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
+    goal_owner = db.query(User).filter(User.id == goal.user_id).first()
+
+    if not goal_owner or goal_owner.mentor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned mentor can submit a mentor review.",
+        )
+
+    if goal.approval_status != ApprovalStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mentor reviews can only be submitted on approved goals.",
+        )
+
+    # Mentee must have submitted their self-review first.
+    mentee_review = next(
+        (sr for sr in goal.self_reviews if sr.cycle_half == cycle_half.value),
+        None,
+    )
+    if mentee_review is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The mentee has not yet submitted their self-review for {cycle_half.value}.",
+        )
+
+    # One-shot gate.
+    existing = next(
+        (mr for mr in goal.mentor_reviews if mr.cycle_half == cycle_half.value),
+        None,
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Mentor review for {cycle_half.value} has already been submitted.",
+        )
+
+    mentor_review = GoalMentorReview(
+        goal_id=goal.id,
+        org_id=current_user.org_id,
+        cycle_half=cycle_half.value,
+        mentor_comment_task_execution      = payload.mentor_comment_task_execution,
+        mentor_comment_ownership           = payload.mentor_comment_ownership,
+        mentor_comment_client_deliverables = payload.mentor_comment_client_deliverables,
+        mentor_comment_communication       = payload.mentor_comment_communication,
+        mentor_comment_project_management  = payload.mentor_comment_project_management,
+        mentor_comment_mentoring           = payload.mentor_comment_mentoring,
+        mentor_comment_firm_growth         = payload.mentor_comment_firm_growth,
+        mentor_comment_competency_skills   = payload.mentor_comment_competency_skills,
+    )
+    db.add(mentor_review)
+    db.commit()
+    return _get_goal_with_relations(db, goal.id, current_user.org_id)
+
+
+@router.post("/{goal_id}/notify", status_code=status.HTTP_204_NO_CONTENT)
+def notify_mentee(
+    goal_id: int,
+    payload: GoalNotifyPayload,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Mentor sends a structured action-request notification to the goal owner.
+
+    The notification carries a short action_requested label and a longer
+    description; both appear in the mentee's bell-icon dropdown.
+
+    Gate: caller must be the goal owner's assigned mentor.
+    """
+    goal = db.query(Goal).filter(
+        Goal.id == goal_id, Goal.org_id == current_user.org_id
+    ).first()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+
+    goal_owner = db.query(User).filter(User.id == goal.user_id).first()
+    if not goal_owner or goal_owner.mentor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned mentor can send notifications for this goal.",
+        )
+
+    notification = GoalNotification(
+        org_id=current_user.org_id,
+        goal_id=goal.id,
+        recipient_id=goal.user_id,
+        sender_id=current_user.id,
+        message=(
+            f'[{payload.action_requested}] {payload.description} '
+            f'— from {current_user.full_name} regarding "{goal.title}"'
+        ),
+    )
+    db.add(notification)
+    db.commit()
+    return None

@@ -11,6 +11,9 @@ import {
   RotateCcw,
   Link as LinkIcon,
   MessageSquare,
+  Bell,
+  Send,
+  Loader2,
 } from "lucide-react";
 import {
   goalService,
@@ -28,7 +31,7 @@ import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 
 // ---------------------------------------------------------------------------
-// Feedback modal (Portal) — shown when manager clicks "Request Changes"
+// FeedbackModal — "Request Changes" portal
 // ---------------------------------------------------------------------------
 
 interface FeedbackModalProps {
@@ -115,6 +118,126 @@ function FeedbackModal({
 }
 
 // ---------------------------------------------------------------------------
+// NotifyModal — structured action-request notification to the mentee
+// ---------------------------------------------------------------------------
+
+interface NotifyModalProps {
+  readonly goal: TeamGoal;
+  readonly onSend: (actionRequested: string, description: string) => Promise<void>;
+  readonly onClose: () => void;
+  readonly isSaving: boolean;
+  readonly error: string;
+}
+
+function NotifyModal({
+  goal,
+  onSend,
+  onClose,
+  isSaving,
+  error,
+}: NotifyModalProps) {
+  const [actionRequested, setActionRequested] = useState("");
+  const [description, setDescription] = useState("");
+  const canSend = actionRequested.trim().length > 0 && description.trim().length > 0;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notify-modal-title"
+    >
+      <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
+        {/* Header */}
+        <div className="border-b border-border px-6 py-4">
+          <div className="flex items-center gap-2 mb-0.5">
+            <Bell className="h-4 w-4 text-brand shrink-0" aria-hidden="true" />
+            <h2
+              id="notify-modal-title"
+              className="font-display text-base font-semibold text-text-main"
+            >
+              Notify Mentee
+            </h2>
+          </div>
+          <p className="text-sm text-text-muted">
+            Send an action request to{" "}
+            <strong>{goal.owner_name}</strong> for &ldquo;{goal.title}&rdquo;.
+          </p>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          {error && (
+            <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+              {error}
+            </p>
+          )}
+
+          <div>
+            <label
+              htmlFor="action-requested"
+              className="block text-xs font-semibold text-text-main mb-1"
+            >
+              Action Requested *
+            </label>
+            <input
+              id="action-requested"
+              type="text"
+              value={actionRequested}
+              onChange={(e) => setActionRequested(e.target.value)}
+              placeholder="e.g. Please submit your H1 self-review"
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="notify-description"
+              className="block text-xs font-semibold text-text-main mb-1"
+            >
+              Description *
+            </label>
+            <textarea
+              id="notify-description"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Provide additional context or instructions for the mentee."
+              className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSend(actionRequested.trim(), description.trim())}
+            disabled={isSaving || !canSend}
+            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Send className="h-4 w-4" aria-hidden="true" />
+            )}
+            {isSaving ? "Sending…" : "Send Notification"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Filter config
 // ---------------------------------------------------------------------------
 
@@ -128,8 +251,6 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "changes_requested", label: "Changes Requested" },
 ];
 
-// Team Goals table sort config. Mentee / Goal / Status are alphabetical; year
-// is numeric; Actions column is not sortable (no backing data column).
 type TeamGoalsSortKey = "title" | "owner_name" | "fy_year" | "approval_status";
 
 const TEAM_GOALS_SORT_CONFIG: Record<
@@ -173,7 +294,6 @@ export function TeamGoalsTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isActing, setIsActing] = useState(false);
 
-  // Filters / view state — mirrors the "My Goals" tab so the two feel identical.
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<SortState<TeamGoalsSortKey> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
@@ -181,23 +301,52 @@ export function TeamGoalsTab() {
   const [yearFilter, setYearFilter] = useState("all");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
 
-  // Feedback modal state
+  // "Request Changes" modal state
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
   const [modalError, setModalError] = useState("");
 
-  // Mentor view-only self-review modal state
-  const [viewSelfReviewGoal, setViewSelfReviewGoal] =
-    useState<TeamGoal | null>(null);
-  const [viewSelfReviewCycle, setViewSelfReviewCycle] =
-    useState<SelfReviewCycleHalf | null>(null);
+  // Read-only self-review view state (mentor viewing mentee's submission)
+  const [viewSelfReviewGoal, setViewSelfReviewGoal] = useState<TeamGoal | null>(null);
+  const [viewSelfReviewCycle, setViewSelfReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
 
-  const openMenteeSelfReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
+  const openViewSelfReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
     setViewSelfReviewGoal(goal);
     setViewSelfReviewCycle(half);
   };
-  const closeMenteeSelfReview = () => {
+  const closeViewSelfReview = () => {
     setViewSelfReviewGoal(null);
     setViewSelfReviewCycle(null);
+  };
+
+  // Notify modal state
+  const [notifyTarget, setNotifyTarget] = useState<TeamGoal | null>(null);
+  const [isNotifySaving, setIsNotifySaving] = useState(false);
+  const [notifyError, setNotifyError] = useState("");
+
+  const openNotifyModal = (goal: TeamGoal) => {
+    setNotifyError("");
+    setNotifyTarget(goal);
+  };
+  const closeNotifyModal = () => {
+    setNotifyTarget(null);
+    setNotifyError("");
+  };
+
+  const handleNotifySend = async (actionRequested: string, description: string) => {
+    if (!notifyTarget) return;
+    setIsNotifySaving(true);
+    setNotifyError("");
+    try {
+      await goalService.notifyMentee(notifyTarget.id, {
+        action_requested: actionRequested,
+        description,
+      });
+      closeNotifyModal();
+    } catch (err) {
+      setNotifyError(getErrorMessage(err));
+    } finally {
+      setIsNotifySaving(false);
+    }
   };
 
   const loadGoals = useCallback(async () => {
@@ -269,7 +418,6 @@ export function TeamGoalsTab() {
       );
     });
 
-  // Sorting sits on top of filtering; slice first so React state stays immutable.
   const sortedGoals = sort
     ? filtered.slice().sort((a, b) => {
         const { kind, get } = TEAM_GOALS_SORT_CONFIG[sort.key];
@@ -277,7 +425,6 @@ export function TeamGoalsTab() {
       })
     : filtered;
 
-  // Reset expanded row when filters change so the UI stays coherent
   useEffect(() => {
     setExpandedGoalId(null);
   }, [statusFilter, yearFilter, searchQuery, viewMode]);
@@ -289,11 +436,8 @@ export function TeamGoalsTab() {
         : "text-text-muted hover:bg-slate-100"
     }`;
 
-  if (isLoading) {
-    return <TeamGoalsSkeleton />;
-  }
+  if (isLoading) return <TeamGoalsSkeleton />;
 
-  // Empty state when the mentor has no mentee goals at all
   if (goals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
@@ -414,7 +558,8 @@ export function TeamGoalsTab() {
                 setModalError("");
                 setFeedbackTarget(g);
               }}
-              onViewSelfReview={openMenteeSelfReview}
+              onViewSelfReview={openViewSelfReview}
+              onNotify={openNotifyModal}
               isActing={isActing}
             />
           ))}
@@ -440,6 +585,9 @@ export function TeamGoalsTab() {
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Actions
                 </th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  Notify
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -447,8 +595,7 @@ export function TeamGoalsTab() {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "submitted";
                 const isApproved = goal.approval_status === "approved";
-                const isChangesRequested =
-                  goal.approval_status === "changes_requested";
+                const isChangesRequested = goal.approval_status === "changes_requested";
 
                 return (
                   <Fragment key={goal.id}>
@@ -460,6 +607,7 @@ export function TeamGoalsTab() {
                         setExpandedGoalId(isExpanded ? null : goal.id)
                       }
                     >
+                      {/* Goal title */}
                       <td className="px-5 py-3 font-medium text-text-main max-w-xs">
                         <div className="flex items-center gap-2">
                           <ChevronDown
@@ -470,12 +618,16 @@ export function TeamGoalsTab() {
                           <span className="line-clamp-1">{goal.title}</span>
                         </div>
                       </td>
+
+                      {/* Mentee */}
                       <td className="px-4 py-3 text-text-muted">
                         <div className="flex items-center gap-1.5">
                           <UserCircle className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{goal.owner_name}</span>
                         </div>
                       </td>
+
+                      {/* Year */}
                       <td className="px-4 py-3">
                         {goal.fy_year ? (
                           <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
@@ -485,9 +637,13 @@ export function TeamGoalsTab() {
                           <span className="text-[12px] text-text-muted">—</span>
                         )}
                       </td>
+
+                      {/* Status badge */}
                       <td className="px-4 py-3">
                         <ApprovalStatusBadge status={goal.approval_status} />
                       </td>
+
+                      {/* Actions — approval workflow + read-only self-review view */}
                       <td
                         className="px-4 py-3"
                         onClick={(e) => e.stopPropagation()}
@@ -504,8 +660,7 @@ export function TeamGoalsTab() {
                                 disabled={isActing}
                                 className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
                               >
-                                <RotateCcw className="h-3 w-3" /> Request
-                                Changes
+                                <RotateCcw className="h-3 w-3" /> Request Changes
                               </button>
                               <button
                                 type="button"
@@ -518,12 +673,12 @@ export function TeamGoalsTab() {
                             </>
                           )}
                           {isApproved && (
+                            // Read-only view of mentee's self-review.
+                            // Actual mentor reviews are filled in the Team Review tab.
                             <SelfReviewCycleMenu
                               goal={goal}
                               mode="mentor"
-                              onSelect={(half) =>
-                                openMenteeSelfReview(goal, half)
-                              }
+                              onSelect={(half) => openViewSelfReview(goal, half)}
                             />
                           )}
                           {isChangesRequested && (
@@ -533,10 +688,27 @@ export function TeamGoalsTab() {
                           )}
                         </div>
                       </td>
+
+                      {/* Notify column — opens structured action-request popup */}
+                      <td
+                        className="px-4 py-3"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openNotifyModal(goal)}
+                          title="Send an action request to the mentee"
+                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand hover:border-brand/30 transition-colors"
+                        >
+                          <Bell className="h-3 w-3" /> Notify
+                        </button>
+                      </td>
                     </tr>
+
+                    {/* Expanded detail row — colSpan covers all 6 columns */}
                     {isExpanded && (
                       <tr className="bg-brand/5">
-                        <td colSpan={5} className="px-10 py-4">
+                        <td colSpan={6} className="px-10 py-4">
                           <div className="space-y-3 max-w-2xl">
                             {goal.description && (
                               <p className="text-sm text-text-muted">
@@ -587,7 +759,7 @@ export function TeamGoalsTab() {
         </div>
       )}
 
-      {/* Feedback modal */}
+      {/* "Request Changes" modal */}
       {feedbackTarget && (
         <FeedbackModal
           goal={feedbackTarget}
@@ -598,19 +770,28 @@ export function TeamGoalsTab() {
         />
       )}
 
-      {/* Mentor view-only modal for mentee's self-review */}
+      {/* Read-only self-review modal — mentor views mentee's submission */}
       <GoalSelfReviewModal
         isOpen={viewSelfReviewGoal !== null && viewSelfReviewCycle !== null}
         goal={viewSelfReviewGoal}
         cycleHalf={viewSelfReviewCycle}
-        onClose={closeMenteeSelfReview}
-        // Mentor view is read-only; the submit handler is never invoked
-        // but still has to satisfy the prop signature.
+        onClose={closeViewSelfReview}
         onSubmit={async () => {}}
         isSaving={false}
         error=""
         readOnly
       />
+
+      {/* Notify modal — structured action-request to mentee */}
+      {notifyTarget && (
+        <NotifyModal
+          goal={notifyTarget}
+          onSend={handleNotifySend}
+          onClose={closeNotifyModal}
+          isSaving={isNotifySaving}
+          error={notifyError}
+        />
+      )}
     </div>
   );
 }

@@ -13,23 +13,29 @@ and the route simply switches from computing to reading.
 
 from pydantic import BaseModel
 from typing import Optional, Literal
+from datetime import datetime
 
 
 class NotificationItem(BaseModel):
-    """A single actionable notification displayed in the Topbar dropdown."""
-    type: str                                           # e.g. "goals_pending", "goals_changes_requested"
-    message: str                                        # Human-readable summary shown in the dropdown
-    count: int                                          # Numeric badge value (e.g. 3 pending goals)
-    severity: Literal["info", "warning", "blocking"]    # Controls icon + background color on the frontend
+    """A computed system notification (e.g. goals pending approval)."""
+    type: str
+    message: str
+    count: int
+    severity: Literal["info", "warning", "blocking"]
+
+
+class UserNotificationItem(BaseModel):
+    """A direct mentor-to-mentee notification created via the Notify button."""
+    id: int
+    message: str
+    goal_id: int
+    created_at: datetime
+    is_read: bool
 
 
 class TopbarSummary(BaseModel):
-    """
-    Lightweight payload consumed by the Topbar on every page load.
-
-    Kept intentionally small — one round-trip, no joins, no pagination.
-    The frontend silently swallows failures so the Topbar stays functional
-    even if this endpoint is temporarily unavailable.
-    """
+    """Lightweight payload consumed by the Topbar on every page load."""
     active_cycle: Optional[str] = None
     notifications: list[NotificationItem] = []
+    # Direct user-to-user notifications (from mentor Notify button).
+    user_notifications: list[UserNotificationItem] = []
