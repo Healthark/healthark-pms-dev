@@ -16,6 +16,9 @@ import { Profile } from "./pages/Profile";
 import Unauthorized from "./pages/Unauthorized";
 import { AnnualReviews } from "./pages/AnnualReviews";
 import { ProjectReviews } from "./pages/ProjectReviews";
+import { MyMentees } from "./pages/MyMentees";
+import { MenteeDetail } from "./pages/MenteeDetail";
+import { PageTitleProvider } from "./contexts/PageTitleProvider";
 
 /**
  * AppShell renders the persistent chrome (Sidebar + Topbar) around all
@@ -23,15 +26,17 @@ import { ProjectReviews } from "./pages/ProjectReviews";
  */
 function AppShell() {
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar />
-        <main className="flex-1 overflow-y-auto bg-background p-6">
-          <Outlet />
-        </main>
+    <PageTitleProvider>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Topbar />
+          <main className="flex-1 overflow-y-auto bg-background p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </PageTitleProvider>
   );
 }
 
@@ -69,13 +74,11 @@ export default function App() {
             </Route>
             {/* Profile — always visible, no feature gate */}
             <Route path="/profile" element={<Profile />} />
-            {/*
-              Future routes:
 
-              <Route element={<ProtectedRoute requiredFeature="mentoring" />}>
-                <Route path="/my-mentees" element={<MyMentees />} />
-              </Route>
-            */}
+            <Route element={<ProtectedRoute requiredFeature="mentoring" />}>
+              <Route path="/my-mentees" element={<MyMentees />} />
+              <Route path="/my-mentees/:id" element={<MenteeDetail />} />
+            </Route>
           </Route>
         </Route>
 

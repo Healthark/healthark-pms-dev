@@ -12,6 +12,7 @@ from app.api.routes import system_settings_routes
 from app.api.routes import annual_review_routes
 from app.api.routes import project_routes
 from app.api.routes import project_review_routes
+from app.api.routes import mentee_routes
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -43,6 +44,7 @@ app.include_router(system_settings_routes.router, prefix=f"{settings.API_V1_STR}
 app.include_router(annual_review_routes.router,prefix=f"{settings.API_V1_STR}/annual-reviews",tags=["Annual Reviews"],)
 app.include_router(project_routes.router,        prefix=f"{settings.API_V1_STR}/projects",        tags=["Projects"])
 app.include_router(project_review_routes.router, prefix=f"{settings.API_V1_STR}/project-reviews", tags=["Project Reviews"])
+app.include_router(mentee_routes.router,         prefix=f"{settings.API_V1_STR}/mentees",         tags=["Mentees"])
 
 @app.get("/")
 def root():
