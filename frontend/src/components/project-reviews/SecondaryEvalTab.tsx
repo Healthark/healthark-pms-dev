@@ -18,6 +18,7 @@ import {
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
 
 type ViewMode = "grid" | "table";
 
@@ -191,6 +192,7 @@ function SubmittedCard({
 export function SecondaryEvalTab() {
   const { user } = useAuth();
   const currentUserId = user?.user_id;
+  const toast = useToast();
 
   const [reviews, setReviews] = useState<ProjectReviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -255,6 +257,7 @@ export function SecondaryEvalTab() {
       setImpactTarget(null);
       setIsEditMode(false);
       setEditImpact("");
+      toast.success(isEditMode ? "Impact statement updated." : "Impact statement submitted.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     } finally {

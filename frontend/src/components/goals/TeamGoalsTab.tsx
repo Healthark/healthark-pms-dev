@@ -22,6 +22,8 @@ import {
   type SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
 import { TeamGoalCard } from "./TeamGoalCard";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
@@ -290,6 +292,9 @@ function TeamGoalsSkeleton() {
 // ---------------------------------------------------------------------------
 
 export function TeamGoalsTab() {
+  const toast = useToast();
+  const snackbar = useSnackbar();
+
   const [goals, setGoals] = useState<TeamGoal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isActing, setIsActing] = useState(false);
@@ -342,6 +347,7 @@ export function TeamGoalsTab() {
         description,
       });
       closeNotifyModal();
+      toast.success("Mentee notified.");
     } catch (err) {
       setNotifyError(getErrorMessage(err));
     } finally {
@@ -374,8 +380,9 @@ export function TeamGoalsTab() {
       setGoals((prev) =>
         prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
       );
-    } catch {
-      // Card stays in submitted state — user can retry
+      toast.success(`${goal.user_name}'s goal approved.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
     } finally {
       setIsActing(false);
     }
@@ -394,6 +401,7 @@ export function TeamGoalsTab() {
         prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
       );
       setFeedbackTarget(null);
+      toast.success("Feedback sent.");
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {

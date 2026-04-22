@@ -18,6 +18,9 @@ import {
 import { adminService, type UserResponse } from "../../services/admin.service";
 import { getErrorMessage } from "../../utils/errors";
 import { ProjectModal } from "./ProjectModal";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
+import { useConfirm } from "../../hooks/useConfirm";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
@@ -45,7 +48,10 @@ export function ProjectsTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
-  const [deleteError, setDeleteError] = useState("");
+
+  const toast = useToast();
+  const snackbar = useSnackbar();
+  const confirm = useConfirm();
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -68,15 +74,20 @@ export function ProjectsTab() {
   }, [loadData]);
 
   const handleDelete = async (project: ProjectResponse) => {
-    if (!window.confirm(`Delete project "${project.name}"? This is a soft delete and can be reversed.`)) {
-      return;
-    }
-    setDeleteError("");
+    const ok = await confirm({
+      title: "Delete project?",
+      message: `Delete "${project.name}"? This is a soft delete — the project is hidden but can be restored later.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
+
     try {
       await projectService.deleteProject(project.id);
       setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      toast.success(`"${project.name}" deleted.`);
     } catch (err: unknown) {
-      setDeleteError(getErrorMessage(err));
+      snackbar.error(getErrorMessage(err));
     }
   };
 
@@ -135,12 +146,6 @@ export function ProjectsTab() {
           Add Project
         </button>
       </div>
-
-      {deleteError && (
-        <div className="mx-5 mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
-          {deleteError}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-sm text-text-muted">

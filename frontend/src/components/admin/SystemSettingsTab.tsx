@@ -21,8 +21,6 @@ interface SystemSettingsTabProps {
   readonly onProjectRatingsVisibleChange: (val: boolean) => void;
   readonly onSave: () => void;
   readonly isSaving: boolean;
-  readonly settingsSaved: boolean;
-  readonly saveError?: string;
 }
 
 const MONTHS = [
@@ -91,8 +89,6 @@ export function SystemSettingsTab({
   onProjectRatingsVisibleChange,
   onSave,
   isSaving,
-  settingsSaved,
-  saveError,
 }: SystemSettingsTabProps) {
 
   return (
@@ -242,16 +238,7 @@ export function SystemSettingsTab({
       </div>
 
       {/* ── Save Actions ─────────────────────────────────────────────── */}
-      <div className="pt-2 flex items-center justify-between">
-        {saveError ? (
-          <p className="text-sm text-red-600 font-medium">{saveError}</p>
-        ) : settingsSaved ? (
-          <p className="text-sm text-green-600 font-medium">
-            ✓ Configuration saved successfully.
-          </p>
-        ) : (
-          <div />
-        )}
+      <div className="pt-2 flex items-center justify-end">
         <button
           type="button"
           onClick={onSave}

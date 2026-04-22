@@ -18,6 +18,8 @@ import {
   type SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
 import { TeamGoalCard } from "../goals/TeamGoalCard";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../goals/CriteriaChecklist";
@@ -144,6 +146,9 @@ interface MenteeGoalsTabProps {
 }
 
 export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabProps) {
+  const toast = useToast();
+  const snackbar = useSnackbar();
+
   const [isActing, setIsActing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<SortState<MenteeGoalsSortKey> | null>(null);
@@ -174,8 +179,9 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
     try {
       await goalService.updateApproval(goal.id, { approval_status: "approved" });
       onReload();
-    } catch {
-      /* caller stays in submitted state — user can retry */
+      toast.success(`${goal.user_name}'s goal approved.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
     } finally {
       setIsActing(false);
     }
@@ -192,6 +198,7 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
       });
       setFeedbackTarget(null);
       onReload();
+      toast.success("Feedback sent.");
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {

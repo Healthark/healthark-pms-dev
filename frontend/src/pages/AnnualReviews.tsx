@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import { useToast } from "../hooks/useToast";
 import { SelfReviewTab } from "../components/reviews/SelfReviewTab";
 import { TeamReviewTab } from "../components/reviews/TeamReviewTab";
 import { SelfReviewFormModal } from "../components/reviews/SelfReviewFormModal";
@@ -18,6 +19,7 @@ type ActiveTab = "my" | "team";
 export function AnnualReviews() {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
+  const toast = useToast();
 
   const isMentor = user?.has_mentees ?? false;
   const activeCycle = settings?.active_cycle_name ?? "";
@@ -62,6 +64,7 @@ export function AnnualReviews() {
       const created = await annualReviewService.submitSelfReview(payload);
       setReviews((prev) => [created, ...prev]);
       setShowForm(false);
+      toast.success("Self-review submitted.");
     } catch (err) {
       setFormError(getErrorMessage(err));
     } finally {

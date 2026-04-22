@@ -28,6 +28,8 @@ import {
   type DesignationBrief,
 } from "../../services/admin.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
@@ -89,6 +91,9 @@ export function ProjectModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const toast = useToast();
+  const snackbar = useSnackbar();
 
   // ── Load reference data + existing project ──────────────────────
   useEffect(() => {
@@ -175,7 +180,7 @@ export function ProjectModal({
       await projectService.removeAssignment(assignmentId);
       setExistingAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
     } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      snackbar.error(getErrorMessage(err));
     }
   };
 
@@ -238,6 +243,7 @@ export function ProjectModal({
       }
 
       onSave();
+      toast.success(isEditing ? "Project updated." : "Project created.");
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {

@@ -21,6 +21,7 @@ import {
   type SelfReviewPayload,
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useToast } from "../../hooks/useToast";
 
 // ── 8 Competencies ──────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ interface SelfReviewFormProps {
 }
 
 export function SelfReviewForm({ card, onBack }: SelfReviewFormProps) {
+  const toast = useToast();
   const [form, setForm] = useState<Record<CompetencyKey, string>>({
     task_execution: "",
     ownership: "",
@@ -126,6 +128,7 @@ export function SelfReviewForm({ card, onBack }: SelfReviewFormProps) {
         self_desc_competency_skills: form.competency_skills,
       };
       await projectReviewService.submitSelfReview(payload);
+      toast.success("Self-review submitted.");
       onBack(); // Return to list — card will show "Submitted" status
     } catch (err: unknown) {
       setError(getErrorMessage(err));
