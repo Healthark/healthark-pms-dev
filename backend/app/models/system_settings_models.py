@@ -78,6 +78,9 @@ class SystemSettings(Base):
     yearly_goals_edit_enabled = Column(Boolean, default=False, nullable=False)
     yearly_goals_final_rating_visible = Column(Boolean, default=False, nullable=False)
     project_ratings_visible = Column(Boolean, default=False, nullable=False)
+    # Admin gate to enable/disable the Annual Reviews module org-wide.
+    # When False, the Annual Reviews page is hidden and submissions are blocked.
+    annual_reviews_enabled = Column(Boolean, default=False, nullable=False)
 
     # ── Audit Trail ──────────────────────────────────────────────────
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

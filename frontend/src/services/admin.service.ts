@@ -42,6 +42,7 @@ export interface SystemSettings {
   yearly_goals_edit_enabled: boolean;
   yearly_goals_final_rating_visible: boolean;
   project_ratings_visible: boolean;
+  annual_reviews_enabled: boolean;
   updated_at: string | null;
 }
 
@@ -52,6 +53,7 @@ export interface AdminSettingsUpdatePayload {
   yearly_goals_edit_enabled?: boolean;
   yearly_goals_final_rating_visible?: boolean;
   project_ratings_visible?: boolean;
+  annual_reviews_enabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------

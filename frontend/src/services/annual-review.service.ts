@@ -56,6 +56,13 @@ export interface AnnualReview {
   updated_at: string | null;
 }
 
+export interface MenteeAnnualReview extends AnnualReview {
+  employee_name: string;
+  employee_email: string | null;
+  department: string | null;
+  designation: string | null;
+}
+
 export interface CalibrationRow {
   review_id: number;
   user_id: number;
@@ -142,9 +149,11 @@ export const annualReviewService = {
   },
 
   // ── Stage 2: Mentor ─────────────────────────────────────────────
-  /** Get reviews assigned to the current user as mentor (pending_mentor status). */
-  getMenteeReviews: async (): Promise<AnnualReview[]> => {
-    const res = await apiClient.get<AnnualReview[]>("/annual-reviews/mentees");
+  /** Get all reviews for the current mentor's direct mentees (any status). */
+  getMenteeReviews: async (): Promise<MenteeAnnualReview[]> => {
+    const res = await apiClient.get<MenteeAnnualReview[]>(
+      "/annual-reviews/mentees",
+    );
     return res.data;
   },
 

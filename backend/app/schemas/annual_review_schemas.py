@@ -152,3 +152,15 @@ class CalibrationRow(BaseModel):
     final_stars: Optional[int] = None
     status: ReviewStatus
     final_rating_enabled: bool = False
+
+
+class MenteeAnnualReview(AnnualReviewResponse):
+    """
+    A mentee's review enriched with employee display info. Used by the
+    Mentee Review and Team Review tabs so the mentor can see names,
+    department, and designation alongside the review state.
+    """
+    employee_name: str
+    employee_email: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None

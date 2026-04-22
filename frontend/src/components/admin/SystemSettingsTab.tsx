@@ -7,6 +7,9 @@ interface SystemSettingsTabProps {
   readonly onCycleTypeChange: (val: CycleType) => void;
   readonly fiscalStartMonth: number;
   readonly onFiscalStartMonthChange: (val: number) => void;
+  // Annual review controls
+  readonly annualReviewsEnabled: boolean;
+  readonly onAnnualReviewsEnabledChange: (val: boolean) => void;
   // Goal access controls
   readonly yearlyGoalsEditEnabled: boolean;
   readonly onYearlyGoalsEditEnabledChange: (val: boolean) => void;
@@ -74,6 +77,8 @@ export function SystemSettingsTab({
   onCycleTypeChange,
   fiscalStartMonth,
   onFiscalStartMonthChange,
+  annualReviewsEnabled,
+  onAnnualReviewsEnabledChange,
   yearlyGoalsEditEnabled,
   onYearlyGoalsEditEnabledChange,
   finalRatingVisible,
@@ -88,6 +93,25 @@ export function SystemSettingsTab({
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
+
+      {/* ── Annual Review Settings ───────────────────────────────────── */}
+      <div>
+        <h3 className="font-display text-lg font-semibold text-text-main mb-4">
+          Annual Review Settings
+        </h3>
+        <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
+          <div className="px-5 py-4">
+            <div className="divide-y divide-border/60">
+              <ToggleRow
+                label="Enable Annual Reviews"
+                description="When on, the Annual Reviews module is active and employees can submit self-appraisals."
+                checked={annualReviewsEnabled}
+                onChange={onAnnualReviewsEnabledChange}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ── Goal & Review Access Controls ───────────────────────────── */}
       <div>

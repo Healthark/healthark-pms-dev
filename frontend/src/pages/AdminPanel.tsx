@@ -48,6 +48,7 @@ export default function AdminPanel() {
   // Settings form state
   const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
   const [fiscalStartMonth, setFiscalStartMonth] = useState(4);
+  const [annualReviewsEnabled, setAnnualReviewsEnabled] = useState(false);
   const [yearlyGoalsEditEnabled, setYearlyGoalsEditEnabled] = useState(false);
   const [finalRatingVisible, setFinalRatingVisible] = useState(false);
   const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
@@ -69,6 +70,7 @@ export default function AdminPanel() {
       setSettings(settingsData);
       setCycleType((settingsData.cycle_type as CycleType) ?? "half_yearly");
       setFiscalStartMonth(settingsData.fiscal_start_month ?? 4);
+      setAnnualReviewsEnabled(settingsData.annual_reviews_enabled ?? false);
       setYearlyGoalsEditEnabled(settingsData.yearly_goals_edit_enabled ?? false);
       setFinalRatingVisible(settingsData.yearly_goals_final_rating_visible ?? false);
       setProjectRatingsVisible(settingsData.project_ratings_visible ?? false);
@@ -159,6 +161,7 @@ export default function AdminPanel() {
       const payload: AdminSettingsUpdatePayload = {
         cycle_type: cycleType,
         fiscal_start_month: fiscalStartMonth,
+        annual_reviews_enabled: annualReviewsEnabled,
         yearly_goals_edit_enabled: yearlyGoalsEditEnabled,
         yearly_goals_final_rating_visible: finalRatingVisible,
         project_ratings_visible: projectRatingsVisible,
@@ -169,6 +172,7 @@ export default function AdminPanel() {
       setSettings(fresh);
       setCycleType((fresh.cycle_type as CycleType) ?? "half_yearly");
       setFiscalStartMonth(fresh.fiscal_start_month ?? 4);
+      setAnnualReviewsEnabled(fresh.annual_reviews_enabled ?? false);
       setYearlyGoalsEditEnabled(fresh.yearly_goals_edit_enabled ?? false);
       setFinalRatingVisible(fresh.yearly_goals_final_rating_visible ?? false);
       setProjectRatingsVisible(fresh.project_ratings_visible ?? false);
@@ -278,6 +282,8 @@ export default function AdminPanel() {
             onCycleTypeChange={setCycleType}
             fiscalStartMonth={fiscalStartMonth}
             onFiscalStartMonthChange={setFiscalStartMonth}
+            annualReviewsEnabled={annualReviewsEnabled}
+            onAnnualReviewsEnabledChange={setAnnualReviewsEnabled}
             yearlyGoalsEditEnabled={yearlyGoalsEditEnabled}
             onYearlyGoalsEditEnabledChange={setYearlyGoalsEditEnabled}
             finalRatingVisible={finalRatingVisible}

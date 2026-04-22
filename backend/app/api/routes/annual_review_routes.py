@@ -39,6 +39,7 @@ from app.schemas.annual_review_schemas import (
     ManagementFinalize,
     AnnualReviewResponse,
     CalibrationRow,
+    MenteeAnnualReview,
 )
 router = APIRouter()
 
@@ -202,29 +203,46 @@ def get_my_review(
 # STAGE 2 — MENTOR EVALUATION
 # =====================================================================
 
-@router.get("/mentees", response_model=List[AnnualReviewResponse])
+@router.get("/mentees", response_model=List[MenteeAnnualReview])
 def get_mentee_reviews(
     db: DbSession,
     current_user: CurrentUser,
 ):
     """
-    List all reviews assigned to the current user as mentor,
-    filtered to the active cycle and PENDING_MENTOR status.
-    Admins see all PENDING_MENTOR reviews across the org.
+    List all reviews for the current user's direct mentees across all
+    cycles and statuses (DRAFT and above). Each row is enriched with
+    employee_name / department / designation so the Mentee Review and
+    Team Review tabs can render without additional lookups.
     """
-    cycle_name = _get_active_cycle(db, current_user.org_id)
-
-    query = db.query(AnnualReview).filter(
-        AnnualReview.org_id == current_user.org_id,
-        AnnualReview.cycle_name == cycle_name,
-        AnnualReview.status == ReviewStatus.PENDING_MENTOR.value,
+    reviews = (
+        db.query(AnnualReview)
+        .filter(
+            AnnualReview.org_id == current_user.org_id,
+            AnnualReview.mentor_id == current_user.id,
+        )
+        .order_by(AnnualReview.created_at.desc())
+        .all()
     )
 
-    # Non-admin mentors only see their own mentees
-    if current_user.role != "Admin":
-        query = query.filter(AnnualReview.mentor_id == current_user.id)
+    user_ids = [r.user_id for r in reviews]
+    users = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(user_ids)).all()
+    } if user_ids else {}
 
-    return query.order_by(AnnualReview.created_at.desc()).all()
+    rows: list[MenteeAnnualReview] = []
+    for r in reviews:
+        u = users.get(r.user_id)
+        base = AnnualReviewResponse.model_validate(r).model_dump()
+        rows.append(MenteeAnnualReview(
+            **base,
+            employee_name=u.full_name if u else f"Employee #{r.user_id}",
+            employee_email=u.email if u else None,
+            department=u.department.name if u and u.department else None,
+            designation=u.designation.name if u and u.designation else None,
+        ))
+
+    return rows
 
 
 @router.patch("/{review_id}/mentor-eval", response_model=AnnualReviewResponse)
@@ -252,8 +270,8 @@ def submit_mentor_evaluation(
             detail="This review is not in the mentor evaluation stage.",
         )
 
-    # Verify the caller is the assigned mentor (or Admin)
-    if current_user.role != "Admin" and review.mentor_id != current_user.id:
+    # Verify the caller is the assigned mentor
+    if review.mentor_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the assigned mentor for this review.",

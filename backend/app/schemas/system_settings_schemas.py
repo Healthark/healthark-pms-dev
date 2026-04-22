@@ -35,6 +35,7 @@ class SystemSettingsResponse(BaseModel):
     yearly_goals_edit_enabled: bool
     yearly_goals_final_rating_visible: bool
     project_ratings_visible: bool
+    annual_reviews_enabled: bool
 
     updated_by_id: Optional[int] = None
     created_at: datetime
@@ -93,3 +94,4 @@ class SystemSettingsUpdate(BaseModel):
     yearly_goals_edit_enabled: Optional[bool] = None
     yearly_goals_final_rating_visible: Optional[bool] = None
     project_ratings_visible: Optional[bool] = None
+    annual_reviews_enabled: Optional[bool] = None
