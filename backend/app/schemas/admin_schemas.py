@@ -103,6 +103,7 @@ class AdminSettingsResponse(BaseModel):
     yearly_goals_final_rating_visible: bool
     project_ratings_visible: bool
     annual_reviews_enabled: bool
+    annual_review_final_rating_visible: bool
     updated_at: Optional[datetime] = None
 
 
@@ -115,3 +116,4 @@ class AdminSettingsUpdate(BaseModel):
     yearly_goals_final_rating_visible: Optional[bool] = None
     project_ratings_visible: Optional[bool] = None
     annual_reviews_enabled: Optional[bool] = None
+    annual_review_final_rating_visible: Optional[bool] = None

@@ -26,8 +26,8 @@ export interface MenteeReviewStatus {
   review_id: number | null;
   cycle_name: string | null;
   status: ReviewStatus | null;
-  mentor_stars: number | null;
-  final_stars: number | null;
+  mentor_performance_rating: number | null;
+  final_performance_rating: number | null;
 }
 
 export interface MenteeProjectsStats {

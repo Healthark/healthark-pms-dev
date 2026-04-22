@@ -29,7 +29,7 @@ function reviewLabel(review: MenteeSummary["review"]): string {
   if (!review.status) return "No review yet";
   switch (review.status) {
     case "draft":
-      return `${review.cycle_name} · Self-appraisal in progress`;
+      return `${review.cycle_name} · Self-review in progress`;
     case "pending_mentor":
       return `${review.cycle_name} · Pending your review`;
     case "pending_management":
@@ -109,10 +109,10 @@ export function MenteeCard({ mentee }: MenteeCardProps) {
           label="Review"
           value={reviewLabel(mentee.review)}
           rightSlot={
-            mentee.review.mentor_stars !== null ? (
+            mentee.review.mentor_performance_rating !== null ? (
               <span className="flex items-center gap-0.5 text-xs font-medium text-amber-600">
                 <Star className="h-3.5 w-3.5 fill-amber-500 stroke-amber-500" aria-hidden="true" />
-                {mentee.review.mentor_stars}
+                {mentee.review.mentor_performance_rating}
               </span>
             ) : null
           }

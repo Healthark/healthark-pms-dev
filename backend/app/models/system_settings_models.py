@@ -81,6 +81,11 @@ class SystemSettings(Base):
     # Admin gate to enable/disable the Annual Reviews module org-wide.
     # When False, the Annual Reviews page is hidden and submissions are blocked.
     annual_reviews_enabled = Column(Boolean, default=False, nullable=False)
+    # When False, the Ratings column is hidden in the Mentor's Mentee Review /
+    # Team Review tabs and the employee cannot see the final rating on past
+    # reviews. Mentors still see their own mentor_performance_rating while
+    # evaluating (that's required for the workflow).
+    annual_review_final_rating_visible = Column(Boolean, default=False, nullable=False)
 
     # ── Audit Trail ──────────────────────────────────────────────────
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

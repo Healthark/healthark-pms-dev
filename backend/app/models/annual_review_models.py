@@ -2,30 +2,31 @@
 AnnualReview Model — The 3-Stage Performance Appraisal.
 
 Lifecycle:
-    Stage 1 — Employee Self-Appraisal:
-        Employee fills in self_desc_* columns for 6 core competencies,
-        selects a self_stars rating (1–5), and submits.
+    Stage 1 — Employee Self-Review:
+        Employee writes a single self_overall_review and picks a
+        self_performance_rating (1=best .. 5=worst, matching the Project
+        Review rating guide), then submits.
         Status: DRAFT → PENDING_MENTOR
 
     Stage 2 — Mentor Evaluation:
-        Mentor reviews the employee's self-descriptions side-by-side,
-        writes mentor_comment_* for each competency, assigns mentor_stars.
+        Mentor reads the employee's self-review, writes a
+        mentor_overall_review, and assigns mentor_performance_rating.
         Status: PENDING_MENTOR → PENDING_MANAGEMENT
 
     Stage 3 — Management Calibration:
         HR/Leadership reviews both scores, optionally overrides with
-        management_stars, sets final_stars, and publishes.
+        management_performance_rating, sets final_performance_rating, and
+        publishes.
         Status: PENDING_MANAGEMENT → COMPLETED
         (final_rating_enabled flips to True)
 
 Design Decisions:
-    - Each competency gets its own column pair (self_desc + mentor_comment)
-      rather than a JSON blob. This keeps the schema explicit, queryable,
-      and type-safe — no runtime key lookups.
-    - cycle_name is denormalized from SystemSettings at creation time so
-      the review remains tagged to the correct cycle even if the admin
-      rotates the active cycle later.
     - One review per user per cycle is enforced by a composite unique index.
+    - cycle_name is denormalized from SystemSettings at creation time so the
+      review remains tagged to the correct cycle even if the admin rotates it.
+    - Annual reviews are strictly yearly — cycle_name is always a bare FY
+      label (e.g. "FY26") regardless of the org's half-yearly/quarterly
+      cadence (see annual_review_routes._get_active_cycle).
 """
 
 from enum import Enum as PyEnum
@@ -56,36 +57,25 @@ class AnnualReview(Base):
     mentor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # ── Cycle Tag ────────────────────────────────────────────────────
-    # Denormalized from SystemSettings at creation time so the review
-    # stays tagged to the correct cycle permanently.
-    cycle_name = Column(String, nullable=False)  # e.g. "FY26", "H1 FY26"
+    cycle_name = Column(String, nullable=False)  # e.g. "FY26"
 
     # ── Workflow Status ──────────────────────────────────────────────
     status = Column(String, default=ReviewStatus.DRAFT.value, nullable=False)
 
-    # ── Stage 1: Employee Self-Appraisal ─────────────────────────────
-    self_desc_ownership        = Column(Text, nullable=True)
-    self_desc_productivity     = Column(Text, nullable=True)
-    self_desc_communication    = Column(Text, nullable=True)
-    self_desc_leadership       = Column(Text, nullable=True)
-    self_desc_adaptability     = Column(Text, nullable=True)
-    self_desc_time_management  = Column(Text, nullable=True)
-    self_stars                 = Column(Integer, nullable=True)  # 1–5
+    # ── Stage 1: Employee Self-Review ────────────────────────────────
+    self_overall_review     = Column(Text, nullable=True)
+    # 1 = Performed beyond expectations ... 5 = Did not achieve goals
+    self_performance_rating = Column(Integer, nullable=True)
 
     # ── Stage 2: Mentor Evaluation ───────────────────────────────────
-    mentor_comment_ownership       = Column(Text, nullable=True)
-    mentor_comment_productivity    = Column(Text, nullable=True)
-    mentor_comment_communication   = Column(Text, nullable=True)
-    mentor_comment_leadership      = Column(Text, nullable=True)
-    mentor_comment_adaptability    = Column(Text, nullable=True)
-    mentor_comment_time_management = Column(Text, nullable=True)
-    mentor_stars                   = Column(Integer, nullable=True)  # 1–5
+    mentor_overall_review     = Column(Text, nullable=True)
+    mentor_performance_rating = Column(Integer, nullable=True)
 
     # ── Stage 3: Management Calibration ──────────────────────────────
-    management_stars      = Column(Integer, nullable=True)  # Optional override
-    final_stars           = Column(Integer, nullable=True)  # The official rating
-    management_comments   = Column(Text, nullable=True)     # Calibration notes
-    final_rating_enabled  = Column(Boolean, default=False)  # True = visible to employee
+    management_performance_rating = Column(Integer, nullable=True)  # Optional override
+    final_performance_rating      = Column(Integer, nullable=True)  # Official rating
+    management_comments           = Column(Text, nullable=True)
+    final_rating_enabled          = Column(Boolean, default=False)  # Per-row publish flag
 
     # ── Audit Trail ──────────────────────────────────────────────────
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -93,7 +83,6 @@ class AnnualReview(Base):
 
     # ── Constraints ──────────────────────────────────────────────────
     __table_args__ = (
-        # One review per employee per cycle — prevents accidental duplicates
         Index("ix_annual_reviews_org_user_cycle", "org_id", "user_id", "cycle_name", unique=True),
     )
 

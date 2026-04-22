@@ -1,336 +1,427 @@
 /**
- * SelfAppraisalTab.tsx — Stage 1: Employee Self-Appraisal.
+ * SelfAppraisalTab.tsx — "My Review" list for the logged-in user.
  *
- * States:
- *   1. No review exists (404)  → Show the self-appraisal form
- *   2. Review in draft          → Show form pre-filled (future: draft save)
- *   3. Review submitted         → Read-only view with status badge
- *   4. Review completed + published → Shows final rating
+ * Layout mirrors Yearly Goals (My Goals tab): a toolbar with search + year
+ * filter + Card/Table view toggle, then a list of reviews across every cycle
+ * the user has participated in. The active cycle slot shows a "Start Self
+ * Appraisal" CTA until the user submits; past cycles are read-only.
  *
- * Placement: src/components/reviews/SelfAppraisalTab.tsx
+ * Submission is one-shot: POST /annual-reviews/self which creates the review
+ * at pending_mentor status. There is no draft-edit UX in this tab — draft
+ * rows that came from the seed or a partial save appear read-only.
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { ClipboardCheck, Star, Send, Loader2 } from "lucide-react";
+import {
+  Eye, LayoutGrid, Loader2, Plus, Search, Table2, UserCircle,
+  ClipboardCheck,
+} from "lucide-react";
 import {
   annualReviewService,
   type AnnualReview,
   type SelfAppraisalPayload,
 } from "../../services/annual-review.service";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { getErrorMessage } from "../../utils/errors";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
-import { StarRating } from "./StarRating";
+import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
+import { SelfAppraisalFormModal } from "./SelfAppraisalFormModal";
+import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
+import { SortableHeader } from "../SortableHeader";
+import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { extractFyToken, formatFyLabel } from "../../utils/fy";
 
-// ── Constants ───────────────────────────────────────────────────────
+type ViewMode = "grid" | "table";
+type SortKey = "cycle_name" | "status" | "self_performance_rating";
 
-const COMPETENCIES = [
-  {
-    key: "ownership",
-    label: "Ownership",
-    placeholder:
-      "Describe how you took ownership of your responsibilities, proactively identified problems, and drove initiatives without being asked.",
-  },
-  {
-    key: "productivity",
-    label: "Productivity",
-    placeholder:
-      "Describe your output quality and volume, efficiency improvements, and how you managed your workload.",
-  },
-  {
-    key: "communication",
-    label: "Communication",
-    placeholder:
-      "Describe how you communicated with peers, stakeholders, and leadership — both written and verbal.",
-  },
-  {
-    key: "leadership",
-    label: "Leadership",
-    placeholder:
-      "Describe how you mentored others, led projects or initiatives, and influenced team direction.",
-  },
-  {
-    key: "adaptability",
-    label: "Adaptability",
-    placeholder:
-      "Describe how you handled change, learned new skills, and adapted to shifting priorities.",
-  },
-  {
-    key: "time_management",
-    label: "Time Management",
-    placeholder:
-      "Describe how you prioritized tasks, met deadlines, and balanced competing demands.",
-  },
-] as const;
+const SORT_CONFIG: Record<
+  SortKey,
+  { kind: SortKind; get: (r: AnnualReview) => unknown }
+> = {
+  cycle_name:              { kind: "alpha",   get: (r) => r.cycle_name },
+  status:                  { kind: "alpha",   get: (r) => r.status },
+  self_performance_rating: { kind: "numeric", get: (r) => r.self_performance_rating },
+};
 
-type CompetencyKey = (typeof COMPETENCIES)[number]["key"];
+// ── Card ────────────────────────────────────────────────────────────
 
-const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
-
-// ── Skeleton ────────────────────────────────────────────────────────
-
-function FormSkeleton() {
+function SelfReviewCard({
+  review,
+  onView,
+}: {
+  readonly review: AnnualReview;
+  readonly onView: (r: AnnualReview) => void;
+}) {
   return (
-    <div className="space-y-6 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i}>
-          <div className="h-3 w-28 rounded bg-slate-100 mb-2" />
-          <div className="h-20 rounded-lg bg-slate-50 border border-border" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Read-Only View (After Submission) ───────────────────────────────
-
-function SubmittedView({ review }: { readonly review: AnnualReview }) {
-  const isPublished = review.final_rating_enabled;
-
-  return (
-    <div className="space-y-6">
-      {/* Status header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50">
-            <ClipboardCheck
-              className="h-5 w-5 text-green-600"
-              aria-hidden="true"
-            />
-          </div>
-          <div>
-            <p className="font-display text-sm font-semibold text-text-main">
-              Self-Appraisal Submitted
+    <div className="rounded-lg border border-border bg-surface p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <ClipboardCheck
+            className="h-5 w-5 text-text-muted shrink-0"
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            <p className="font-medium text-text-main truncate">
+              {formatFyLabel(review.cycle_name)}
             </p>
-            <p className="text-xs text-text-muted">
-              Cycle: {review.cycle_name}
-            </p>
+            <p className="text-[11px] text-text-muted">Self-Review</p>
           </div>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
         <ReviewStatusBadge status={review.status} />
       </div>
 
-      {/* Self-rating */}
-      {review.self_stars && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-text-muted">
-            Your Rating:
-          </span>
-          <StarRating value={review.self_stars} readonly />
+      <div className="flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="text-text-muted">Self</span>
+          <PerformanceRatingBadge value={review.self_performance_rating} />
         </div>
-      )}
-
-      {/* Competency answers (read-only) */}
-      <div className="space-y-4">
-        {COMPETENCIES.map((comp) => {
-          const selfKey = `self_desc_${comp.key}` as keyof AnnualReview;
-          const selfValue = review[selfKey] as string | null;
-          const mentorKey = `mentor_comment_${comp.key}` as keyof AnnualReview;
-          const mentorValue = review[mentorKey] as string | null;
-
-          return (
-            <div
-              key={comp.key}
-              className="rounded-lg border border-border p-4 space-y-2"
-            >
-              <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
-                {comp.label}
-              </p>
-              <p className="text-sm text-text-main whitespace-pre-wrap">
-                {selfValue || "—"}
-              </p>
-              {/* Show mentor feedback if review is published */}
-              {isPublished && mentorValue && (
-                <div className="mt-2 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
-                  <p className="text-xs font-medium text-blue-700 mb-0.5">
-                    Mentor Feedback
-                  </p>
-                  <p className="text-sm text-blue-900 whitespace-pre-wrap">
-                    {mentorValue}
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {review.final_performance_rating != null && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-text-muted">Final</span>
+            <PerformanceRatingBadge value={review.final_performance_rating} />
+          </div>
+        )}
       </div>
 
-      {/* Final rating — only shown when published */}
-      {isPublished && review.final_stars && (
-        <div className="rounded-lg border-2 border-green-200 bg-green-50 p-5 text-center space-y-2">
-          <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">
-            Your Final Rating
-          </p>
-          <StarRating value={review.final_stars} readonly size="lg" />
-          {review.management_comments && (
-            <p className="text-sm text-green-800 mt-2">
-              {review.management_comments}
-            </p>
-          )}
-        </div>
+      <button
+        type="button"
+        onClick={() => onView(review)}
+        className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 transition-colors"
+      >
+        <Eye className="h-4 w-4" aria-hidden="true" />
+        View
+      </button>
+    </div>
+  );
+}
+
+// ── Empty / active-cycle CTA ───────────────────────────────────────
+
+function StartAppraisalCTA({
+  cycleName,
+  onStart,
+  disabled,
+  disabledReason,
+}: {
+  readonly cycleName: string;
+  readonly onStart: () => void;
+  readonly disabled: boolean;
+  readonly disabledReason?: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center">
+      <ClipboardCheck
+        className="h-10 w-10 text-text-muted mb-3"
+        aria-hidden="true"
+      />
+      <p className="font-display text-base font-medium text-text-main">
+        No self-review submitted for {formatFyLabel(cycleName)}
+      </p>
+      <p className="mt-1 text-sm text-text-muted max-w-sm">
+        {disabled
+          ? (disabledReason ?? "Self-review submissions are currently closed.")
+          : "Reflect on your performance across 8 core competencies and submit when ready."}
+      </p>
+      {!disabled && (
+        <button
+          type="button"
+          onClick={onStart}
+          className="mt-4 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Start Self-Review
+        </button>
       )}
     </div>
   );
 }
 
-// ── Self-Appraisal Form ─────────────────────────────────────────────
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center py-20 text-sm text-text-muted animate-pulse gap-2">
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      Loading your reviews…
+    </div>
+  );
+}
+
+// ── Main ────────────────────────────────────────────────────────────
 
 export function SelfAppraisalTab() {
-  const [review, setReview] = useState<AnnualReview | null>(null);
+  const { settings } = useSystemSettings();
+  const activeCycle = settings?.active_cycle_name ?? "";
+  const submissionsOpen = settings?.reviews_submission_open ?? false;
+
+  const [reviews, setReviews] = useState<AnnualReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [yearFilter, setYearFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
-  // Form state — 6 competency fields + rating
-  const [form, setForm] = useState<Record<CompetencyKey, string>>({
-    ownership: "",
-    productivity: "",
-    communication: "",
-    leadership: "",
-    adaptability: "",
-    time_management: "",
-  });
-  const [selfStars, setSelfStars] = useState(0);
+  const [showForm, setShowForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
 
-  // Fetch existing review on mount
-  useEffect(() => {
-    annualReviewService
-      .getMyReview()
-      .then((data) => {
-        setReview(data);
-        setNotFound(false);
-      })
-      .catch((err: unknown) => {
-        if (
-          err !== null &&
-          typeof err === "object" &&
-          "response" in err &&
-          (err as { response: { status: number } }).response.status === 404
-        ) {
-          setNotFound(true);
-        }
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
+  const [viewTarget, setViewTarget] = useState<AnnualReview | null>(null);
 
-  const setField = useCallback((key: CompetencyKey, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  const allFilled =
-    COMPETENCIES.every((c) => form[c.key].trim().length > 0) && selfStars >= 1;
-
-  const handleSubmit = async () => {
-    setIsSaving(true);
-    setError("");
+  const load = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const payload: SelfAppraisalPayload = {
-        self_desc_ownership: form.ownership,
-        self_desc_productivity: form.productivity,
-        self_desc_communication: form.communication,
-        self_desc_leadership: form.leadership,
-        self_desc_adaptability: form.adaptability,
-        self_desc_time_management: form.time_management,
-        self_stars: selfStars,
-      };
+      setReviews(await annualReviewService.getMyReviewHistory());
+    } catch {
+      /* stays empty */
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const hasCurrent = reviews.some((r) => r.cycle_name === activeCycle);
+
+  const handleSubmit = async (payload: SelfAppraisalPayload) => {
+    setIsSaving(true);
+    setFormError("");
+    try {
       const created = await annualReviewService.submitSelfAppraisal(payload);
-      setReview(created);
-      setNotFound(false);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      setReviews((prev) => [created, ...prev]);
+      setShowForm(false);
+    } catch (err) {
+      setFormError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────
+  const availableYears = Array.from(
+    new Set(reviews.map((r) => extractFyToken(r.cycle_name))),
+  ).sort((a, b) => b.localeCompare(a));
 
-  if (isLoading) return <FormSkeleton />;
+  const filtered = reviews
+    .filter(
+      (r) => yearFilter === "all" || extractFyToken(r.cycle_name) === yearFilter,
+    )
+    .filter(
+      (r) =>
+        searchQuery.trim() === "" ||
+        r.cycle_name.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
 
-  // Review exists — show read-only view
-  if (review && !notFound) {
-    return <SubmittedView review={review} />;
-  }
+  const sorted = sort
+    ? filtered.slice().sort((a, b) => {
+        const { kind, get } = SORT_CONFIG[sort.key];
+        return compareValues(get(a), get(b), kind, sort.direction);
+      })
+    : filtered;
 
-  // No review yet — show the form
+  const viewBtnCls = (mode: ViewMode) =>
+    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+      viewMode === mode
+        ? "bg-brand/10 text-brand"
+        : "text-text-muted hover:bg-slate-100"
+    }`;
+
+  if (isLoading) return <LoadingState />;
+
   return (
-    <div className="space-y-6">
-      {/* Form header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-light">
-          <ClipboardCheck className="h-5 w-5 text-brand" aria-hidden="true" />
-        </div>
-        <div>
-          <p className="font-display text-sm font-semibold text-text-main">
-            Annual Self-Appraisal
-          </p>
-          <p className="text-xs text-text-muted">
-            Reflect on your performance across 6 core competencies and rate
-            yourself. Once submitted, your mentor will review it.
-          </p>
-        </div>
-      </div>
-
-      {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
-          {error}
-        </p>
+    <div className="space-y-4">
+      {/* Current-cycle prompt */}
+      {activeCycle && !hasCurrent && (
+        <StartAppraisalCTA
+          cycleName={activeCycle}
+          onStart={() => {
+            setFormError("");
+            setShowForm(true);
+          }}
+          disabled={!submissionsOpen}
+          disabledReason="Self-review submissions are currently closed. Check back when HR opens the window."
+        />
       )}
 
-      {/* Competency fields */}
-      <div className="space-y-5">
-        {COMPETENCIES.map((comp, idx) => (
-          <div key={comp.key}>
-            <label
-              htmlFor={`comp-${comp.key}`}
-              className="block text-xs font-semibold text-text-main mb-1"
-            >
-              {idx + 1}. {comp.label} *
-            </label>
-            <textarea
-              id={`comp-${comp.key}`}
-              rows={4}
-              className={INPUT_CLS}
-              value={form[comp.key]}
-              onChange={(e) => setField(comp.key, e.target.value)}
-              placeholder={comp.placeholder}
-            />
+      {/* Toolbar — only when there is some history to filter */}
+      {reviews.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by cycle…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+              />
+            </div>
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+              <button
+                type="button"
+                className={viewBtnCls("grid")}
+                onClick={() => setViewMode("grid")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Cards
+              </button>
+              <button
+                type="button"
+                className={viewBtnCls("table")}
+                onClick={() => setViewMode("table")}
+              >
+                <Table2 className="h-3.5 w-3.5" /> Table
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
 
-      {/* Star rating */}
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-text-main">
-          Overall Self-Rating *
-        </p>
-        <p className="text-xs text-text-muted">
-          How would you rate your overall performance this year? (1 = Needs
-          Improvement, 5 = Exceptional)
-        </p>
-        <StarRating value={selfStars} onChange={setSelfStars} />
-      </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="self-review-year-filter"
+                className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+              >
+                Year
+              </label>
+              <select
+                id="self-review-year-filter"
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+              >
+                <option value="all">All Years</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>
+                    {formatFyLabel(y)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Submit */}
-      <div className="flex items-center justify-between border-t border-border pt-5">
-        <p className="text-xs text-text-muted">
-          Once submitted, you cannot edit your self-appraisal.
-        </p>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isSaving || !allFilled}
-          className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Send className="h-4 w-4" aria-hidden="true" />
-          )}
-          {isSaving ? "Submitting…" : "Submit Self-Appraisal"}
-        </button>
-      </div>
+      {/* Content — empty state is covered by the CTA above */}
+      {reviews.length === 0 ? null : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
+          <UserCircle
+            className="h-10 w-10 text-text-muted mb-3"
+            aria-hidden="true"
+          />
+          <p className="font-display text-base font-medium text-text-main">
+            No reviews match this filter
+          </p>
+          <p className="mt-1 text-sm text-text-muted">
+            Try selecting a different year.
+          </p>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {sorted.map((r) => (
+            <SelfReviewCard key={r.id} review={r} onView={setViewTarget} />
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-border">
+                <th className="text-left px-5 py-2.5">
+                  <SortableHeader
+                    label="Year"
+                    columnKey="cycle_name"
+                    sort={sort}
+                    onSort={setSort}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader
+                    label="Status"
+                    columnKey="status"
+                    sort={sort}
+                    onSort={setSort}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5">
+                  <SortableHeader
+                    label="Self Rating"
+                    columnKey="self_performance_rating"
+                    sort={sort}
+                    onSort={setSort}
+                  />
+                </th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  Final Rating
+                </th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {sorted.map((r) => (
+                <tr
+                  key={r.id}
+                  className="hover:bg-slate-50/60 transition-colors"
+                >
+                  <td className="px-5 py-3 font-medium text-text-main">
+                    <span className="text-[12.5px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                      {formatFyLabel(r.cycle_name)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <ReviewStatusBadge status={r.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <PerformanceRatingBadge
+                      value={r.self_performance_rating}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <PerformanceRatingBadge
+                      value={r.final_performance_rating}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setViewTarget(r)}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                    >
+                      <Eye className="h-3 w-3" /> View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Form modal (current cycle only) */}
+      {showForm && activeCycle && (
+        <SelfAppraisalFormModal
+          cycleName={activeCycle}
+          onSubmit={handleSubmit}
+          onClose={() => {
+            setShowForm(false);
+            setFormError("");
+          }}
+          isSaving={isSaving}
+          error={formError}
+        />
+      )}
+
+      {/* Read-only detail modal */}
+      {viewTarget && (
+        <AnnualReviewDetailModal
+          review={viewTarget}
+          title="Self Annual Review"
+          subtitle={`Year: ${formatFyLabel(viewTarget.cycle_name)}`}
+          onClose={() => setViewTarget(null)}
+        />
+      )}
     </div>
   );
 }

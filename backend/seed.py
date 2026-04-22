@@ -790,6 +790,9 @@ def seed_database():
         # 9. ANNUAL REVIEWS                                                   #
         # ================================================================== #
 
+        # Performance rating scale: 1 = Performed beyond expectations,
+        # 5 = Did not achieve goals. (Same guide as Project Reviews.)
+
         def _ar(user, mentor, cycle, status, **fields):
             if not db.query(AnnualReview).filter_by(
                 org_id=org.id, user_id=user.id, cycle_name=cycle,
@@ -800,225 +803,115 @@ def seed_database():
                     cycle_name=cycle, status=status, **fields,
                 ))
 
+        # Shared narrative packs — one overall self-review + one overall
+        # mentor review per tier, keeps the seed readable.
+        STRONG_SELF = (
+            "Owned the full workstream end-to-end with clear accountability. "
+            "Delivered client-ready artifacts with minimal rework, structured "
+            "stakeholder updates, planned and mitigated risks proactively, "
+            "coached juniors on methodology, and contributed to firm-level "
+            "initiatives beyond day-to-day project work."
+        )
+        STRONG_MENTOR = (
+            "Consistently takes charge without prompting. Full accountability "
+            "across every workstream I observed — artifacts land in "
+            "client-ready shape with minimal edits, team looks to them for "
+            "guidance, and they contribute visibly to firm initiatives. "
+            "Technical depth and trajectory are excellent."
+        )
+        SOLID_SELF = (
+            "Completed assigned tasks reliably and flagged issues early. "
+            "Quality of deliverables improved through the cycle. Managed my "
+            "workstreams with guidance from my mentor, supported peers during "
+            "tooling onboarding, and picked up new frameworks this cycle."
+        )
+        SOLID_MENTOR = (
+            "Dependable on assigned work; initiative is growing. Artifact "
+            "quality is improving cycle over cycle and communications are "
+            "becoming more proactive. Planning independence is growing and "
+            "early mentoring instincts are starting to show."
+        )
+
         if db.query(AnnualReview).filter(AnnualReview.org_id == org.id).count() == 0:
-            # H1 FY25 — all completed
-            _ar(arjun, priya, "H1 FY25", "completed",
-                self_desc_ownership="Owned the specialty-therapy access module end-to-end.",
-                self_desc_productivity="Delivered research and slides ahead of deadline consistently.",
-                self_desc_communication="Clear MOMs and structured updates throughout the half.",
-                self_desc_leadership="Coached Neha on research methodology and deck structuring.",
-                self_desc_adaptability="Handled scope changes without losing pace.",
-                self_desc_time_management="Managed multiple research streams simultaneously.",
-                self_stars=4,
-                mentor_comment_ownership="Strong module ownership and quality.",
-                mentor_comment_productivity="Highly productive; one of the most efficient contributors.",
-                mentor_comment_communication="Precise written updates; growing verbal confidence.",
-                mentor_comment_leadership="Natural mentor; supported Neha effectively.",
-                mentor_comment_adaptability="Handled scope changes gracefully.",
-                mentor_comment_time_management="Excellent; consistently ahead of schedule.",
-                mentor_stars=4, management_stars=4, final_stars=4,
-                management_comments="Arjun is a high performer tracking well for Senior Consultant.",
+            # FY25 — last year, all completed with published ratings (1=best .. 5=worst)
+            _ar(arjun, priya, "FY25", "completed",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR,
+                mentor_performance_rating=1,
+                management_performance_rating=1,
+                final_performance_rating=1,
+                management_comments="Ready for Senior Consultant — recommend for promotion.",
                 final_rating_enabled=True,
             )
-            _ar(neha, priya, "H1 FY25", "completed",
-                self_desc_ownership="Completed all assigned research and slide tasks reliably.",
-                self_desc_productivity="Steady output quality across the project.",
-                self_desc_communication="Consistent check-ins with Priya; improving confidence.",
-                self_desc_leadership="Taking initiative on smaller research tasks.",
-                self_desc_adaptability="Adapted to new slide formats and research tools.",
-                self_desc_time_management="Met individual deadlines with team support.",
-                self_stars=3,
-                mentor_comment_ownership="Dependable on assigned tasks; building confidence.",
-                mentor_comment_productivity="Consistent output; quality improving each cycle.",
-                mentor_comment_communication="Written is strong; verbal growing.",
-                mentor_comment_leadership="Early initiative; needs encouragement to lead.",
-                mentor_comment_adaptability="Good adaptability to new frameworks.",
-                mentor_comment_time_management="Met deadlines consistently.",
-                mentor_stars=3, management_stars=3, final_stars=3,
-                management_comments="On track as a Consultant; growing steadily.",
+            _ar(neha, priya, "FY25", "completed",
+                self_overall_review=SOLID_SELF, self_performance_rating=2,
+                mentor_overall_review=SOLID_MENTOR,
+                mentor_performance_rating=2,
+                management_performance_rating=2,
+                final_performance_rating=2,
+                management_comments="Tracking toward Senior Consultant.",
                 final_rating_enabled=True,
             )
-            _ar(rahul, david, "H1 FY25", "completed",
-                self_desc_ownership="Owned the data mart ingestion layer with full accountability.",
-                self_desc_productivity="High-quality code and dashboards delivered ahead of schedule.",
-                self_desc_communication="Clear cross-team communications on data dependencies.",
-                self_desc_leadership="Guided Meera on data modeling; ran weekly code reviews.",
-                self_desc_adaptability="Handled changing data requirements without disruption.",
-                self_desc_time_management="Managed the sprint backlog effectively.",
-                self_stars=4,
-                mentor_comment_ownership="Full ownership demonstrated across workstreams.",
-                mentor_comment_productivity="Exceptional; consistently highest quality on the team.",
-                mentor_comment_communication="Structured and accessible to non-technical audiences.",
-                mentor_comment_leadership="Strong mentor to Meera.",
-                mentor_comment_adaptability="Adapts to stack changes without losing pace.",
-                mentor_comment_time_management="Outstanding planning and execution.",
-                mentor_stars=4, management_stars=4, final_stars=4,
-                management_comments="Strong Senior Consultant track.",
+            _ar(rahul, david, "FY25", "completed",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR,
+                mentor_performance_rating=1,
+                management_performance_rating=1,
+                final_performance_rating=1,
+                management_comments="Strong Senior Consultant track — recommend for promotion.",
                 final_rating_enabled=True,
             )
-            _ar(meera, david, "H1 FY25", "completed",
-                self_desc_ownership="Completed assigned data tasks and supported dashboards.",
-                self_desc_productivity="Steady output quality throughout the project.",
-                self_desc_communication="Improving at concise updates and flagging blockers.",
-                self_desc_leadership="Participates in team reviews and knowledge sharing.",
-                self_desc_adaptability="Adapted to new data tools with Rahul's support.",
-                self_desc_time_management="Met assigned deadlines with guidance.",
-                self_stars=3,
-                mentor_comment_ownership="Reliable; building confidence to own larger modules.",
-                mentor_comment_productivity="Good output; accuracy has improved materially.",
-                mentor_comment_communication="Becoming more proactive with status updates.",
-                mentor_comment_leadership="Good participation; developing mentoring instincts.",
-                mentor_comment_adaptability="Handled new tooling transitions well.",
-                mentor_comment_time_management="Growing planning independence.",
-                mentor_stars=3, management_stars=3, final_stars=3,
-                management_comments="Progressing well as a Consultant.",
+            _ar(meera, david, "FY25", "completed",
+                self_overall_review=SOLID_SELF, self_performance_rating=3,
+                mentor_overall_review=SOLID_MENTOR,
+                mentor_performance_rating=3,
+                management_performance_rating=3,
+                final_performance_rating=3,
+                management_comments="Progressing steadily as a Consultant.",
                 final_rating_enabled=True,
             )
-            _ar(ananya, vikram, "H1 FY25", "completed",
-                self_desc_ownership="Led the long-term safety protocol design with scientific accountability.",
-                self_desc_productivity="Delivered study outputs on schedule at a high scientific bar.",
-                self_desc_communication="Presented RWE methodology clearly to client and internal stakeholders.",
-                self_desc_leadership="Coached Karan on study design fundamentals.",
-                self_desc_adaptability="Adapted to changing client data requirements mid-study.",
-                self_desc_time_management="Managed multi-site coordination timelines effectively.",
-                self_stars=4,
-                mentor_comment_ownership="Full accountability on a complex study.",
-                mentor_comment_productivity="Minimal rework required across any deliverable.",
-                mentor_comment_communication="Confident with clinical and client stakeholders.",
-                mentor_comment_leadership="Significantly improved Karan's study design capability.",
-                mentor_comment_adaptability="Maintains scientific integrity through changes.",
-                mentor_comment_time_management="Multi-site timelines managed without issues.",
-                mentor_stars=4, management_stars=4, final_stars=4,
-                management_comments="Strongest RWE contributor; Senior Consultant track.",
+            _ar(ananya, vikram, "FY25", "completed",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR,
+                mentor_performance_rating=1,
+                management_performance_rating=1,
+                final_performance_rating=1,
+                management_comments="Recommend for Senior Consultant with Manager-track consideration.",
                 final_rating_enabled=True,
             )
-            _ar(karan, vikram, "H1 FY25", "completed",
-                self_desc_ownership="Completed literature review and data collection tasks as assigned.",
-                self_desc_productivity="Consistent research output with improving quality.",
-                self_desc_communication="Structured research summaries.",
-                self_desc_leadership="Participating more actively in team discussions.",
-                self_desc_adaptability="Adapted to new literature databases and research tools.",
-                self_desc_time_management="Met deadlines with guidance.",
-                self_stars=3,
-                mentor_comment_ownership="Dependable; building initiative for broader ownership.",
-                mentor_comment_productivity="Steady; accuracy improved notably.",
-                mentor_comment_communication="Good written; verbal confidence growing.",
-                mentor_comment_leadership="Growing participation; needs encouragement.",
-                mentor_comment_adaptability="Good at learning new tools.",
-                mentor_comment_time_management="Consistent; improving at proactive planning.",
-                mentor_stars=3, management_stars=3, final_stars=3,
+            _ar(karan, vikram, "FY25", "completed",
+                self_overall_review=SOLID_SELF, self_performance_rating=3,
+                mentor_overall_review=SOLID_MENTOR,
+                mentor_performance_rating=3,
+                management_performance_rating=3,
+                final_performance_rating=3,
                 management_comments="Solid Consultant progressing steadily in RWE.",
                 final_rating_enabled=True,
             )
             db.commit()
 
-            # H2 FY25 — mixed
-            _ar(arjun, priya, "H2 FY25", "completed",
-                self_desc_ownership="Managed two modules simultaneously while supporting Neha's growth.",
-                self_desc_productivity="Introduced team tracking improvements; quality stayed high.",
-                self_desc_communication="Leading internal discussions confidently.",
-                self_desc_leadership="Mentored Neha and Karan on research methodology.",
-                self_desc_adaptability="Handled mid-project scope expansion without disruption.",
-                self_desc_time_management="Zero misses; proactive risk flagging.",
-                self_stars=4,
-                mentor_comment_ownership="Exceeds expectations consistently.",
-                mentor_comment_productivity="Top-quartile output quality and quantity.",
-                mentor_comment_communication="Excellent in stakeholder presentations.",
-                mentor_comment_leadership="Team looks to him for guidance.",
-                mentor_comment_adaptability="Thrives in ambiguity.",
-                mentor_comment_time_management="Plan-ahead mindset evident.",
-                mentor_stars=4, management_stars=4, final_stars=4,
-                management_comments="Ready for Senior Consultant — recommend for promotion.",
-                final_rating_enabled=True,
+            # FY26 — current cycle, mixed workflow states
+            _ar(arjun, priya, "FY26", "pending_management",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR,
+                mentor_performance_rating=2,
             )
-            _ar(neha, priya, "H2 FY25", "completed",
-                self_desc_ownership="Took on broader research and slide responsibilities.",
-                self_desc_productivity="Noticeable jump in output quality and independence.",
-                self_desc_communication="More confident in team and client communications.",
-                self_desc_leadership="Starting to support newer members.",
-                self_desc_adaptability="Adapted to new formats and feedback quickly.",
-                self_desc_time_management="Consistently met deadlines.",
-                self_stars=4,
-                mentor_comment_ownership="Strong improvement in ownership.",
-                mentor_comment_productivity="Efficiency gains visible.",
-                mentor_comment_communication="More proactive in team settings.",
-                mentor_comment_leadership="Supporting junior members now.",
-                mentor_comment_adaptability="Quick to incorporate feedback.",
-                mentor_comment_time_management="Improved independence.",
-                mentor_stars=4, management_stars=4, final_stars=4,
-                management_comments="Tracking toward Senior Consultant.",
-                final_rating_enabled=True,
+            _ar(neha, priya, "FY26", "pending_mentor",
+                self_overall_review=STRONG_SELF, self_performance_rating=2,
             )
-            _ar(rahul, david, "H2 FY25", "pending_mentor",
-                self_desc_ownership="Led architecture decisions and multi-stream delivery with full accountability.",
-                self_desc_productivity="Outstanding delivery quality; sprint planning lifted team velocity.",
-                self_desc_communication="Executive-level clarity on technical decisions.",
-                self_desc_leadership="Ran weekly coaching sessions with Meera.",
-                self_desc_adaptability="Handled major architectural changes without disruption.",
-                self_desc_time_management="Zero delivery misses.",
-                self_stars=5,
+            _ar(rahul, david, "FY26", "draft",
+                self_overall_review="Owning platform architecture evolution with cross-team coordination.",
             )
-            _ar(meera, david, "H2 FY25", "pending_management",
-                self_desc_ownership="Took on more complete module ownership with growing confidence.",
-                self_desc_productivity="Improved code quality and delivery speed significantly.",
-                self_desc_communication="More proactive updates.",
-                self_desc_leadership="Participating in code reviews.",
-                self_desc_adaptability="Adapted to new architectural requirements.",
-                self_desc_time_management="Consistently met sprint deadlines.",
-                self_stars=4,
-                mentor_comment_ownership="Clear step-up in H2.",
-                mentor_comment_productivity="Improved code quality and pace.",
-                mentor_comment_communication="Structured communications.",
-                mentor_comment_leadership="Engaged in team reviews.",
-                mentor_comment_adaptability="Good at adapting to feedback.",
-                mentor_comment_time_management="Improving at self-planning.",
-                mentor_stars=4,
+            _ar(meera, david, "FY26", "pending_mentor",
+                self_overall_review=SOLID_SELF, self_performance_rating=3,
             )
-            _ar(ananya, vikram, "H2 FY25", "completed",
-                self_desc_ownership="Led the cardiology interim reads and payer evidence synthesis.",
-                self_desc_productivity="Top-tier scientific outputs with minimal rework.",
-                self_desc_communication="Strong with clinical stakeholders; received specific praise.",
-                self_desc_leadership="Mentored Karan and coached strategy team on RWE concepts.",
-                self_desc_adaptability="Managed protocol changes and multi-site complexity well.",
-                self_desc_time_management="Exceptional multi-project planning.",
-                self_stars=5,
-                mentor_comment_ownership="Most accountable team member.",
-                mentor_comment_productivity="Consistently best-in-class.",
-                mentor_comment_communication="Builds strong client relationships.",
-                mentor_comment_leadership="Elevated Karan's capability significantly.",
-                mentor_comment_adaptability="Handles complexity with calm rigor.",
-                mentor_comment_time_management="Flawless multi-stakeholder management.",
-                mentor_stars=5, management_stars=5, final_stars=5,
-                management_comments="Recommend for Senior Consultant with Manager-track consideration.",
-                final_rating_enabled=True,
+            _ar(ananya, vikram, "FY26", "pending_mentor",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
             )
-            _ar(karan, vikram, "H2 FY25", "draft",
-                self_desc_ownership="Expanded into broader literature review and data collection tasks.",
-                self_desc_productivity="Research depth improving throughout the cycle.",
-            )
+            # karan intentionally has no FY26 review — exercises the "Start Self-Review" CTA
             db.commit()
 
-            # H1 FY26 (current)
-            _ar(neha, priya, "H1 FY26", "pending_mentor",
-                self_desc_ownership="Broader ownership with more independent project management.",
-                self_desc_productivity="Introducing process improvements in slide workflow.",
-                self_desc_communication="Leading client-facing communications confidently.",
-                self_desc_leadership="Actively mentoring junior researchers.",
-                self_desc_adaptability="Adapting well to cross-functional demands.",
-                self_desc_time_management="Proactive planning across multiple projects.",
-                self_stars=4,
-            )
-            _ar(arjun, priya, "H1 FY26", "draft",
-                self_desc_ownership="Leading multiple access modules with full ownership.",
-                self_desc_productivity="Strategic depth across deliverables is growing.",
-            )
-            _ar(rahul, david, "H1 FY26", "draft",
-                self_desc_ownership="Owning platform architecture evolution with cross-team coordination.",
-                self_desc_productivity="Strong delivery across multiple technical workstreams.",
-            )
-            db.commit()
-
-            print("  [+] Created Annual Reviews: H1 FY25 (completed), H2 FY25 (mixed), H1 FY26 (in-progress)")
+            print("  [+] Created Annual Reviews: FY25 (all completed), FY26 (mixed states)")
         else:
             print("  [~] Healthark Annual Reviews already exist, skipping...")
 

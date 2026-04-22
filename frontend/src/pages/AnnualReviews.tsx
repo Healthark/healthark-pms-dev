@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { SelfAppraisalTab } from "../components/reviews/SelfAppraisalTab";
-import { MenteeReviewTab } from "../components/reviews/MenteeReviewTab";
 import { TeamReviewTab } from "../components/reviews/TeamReviewTab";
+import { formatFyLabel } from "../utils/fy";
 
-type ActiveTab = "my" | "mentee" | "team";
+type ActiveTab = "my" | "team";
 
 export function AnnualReviews() {
   const { user } = useAuth();
@@ -14,8 +14,7 @@ export function AnnualReviews() {
   const isMentor = user?.has_mentees ?? false;
 
   const fyLabel = settings?.active_cycle_name
-    ? settings.active_cycle_name.split(" ").find((t) => t.startsWith("FY")) ??
-      settings.active_cycle_name
+    ? formatFyLabel(settings.active_cycle_name)
     : null;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
@@ -41,7 +40,8 @@ export function AnnualReviews() {
             )}
           </h1>
           <p className="mt-0.5 text-sm text-text-muted">
-            Self-appraise, receive mentor feedback, and view your final rating.
+            Complete your annual review, receive mentor feedback, and view your
+            final rating.
           </p>
         </div>
       </div>
@@ -57,28 +57,18 @@ export function AnnualReviews() {
             My Review
           </button>
           {isMentor && (
-            <>
-              <button
-                type="button"
-                className={tabCls("mentee")}
-                onClick={() => setActiveTab("mentee")}
-              >
-                Mentee Review
-              </button>
-              <button
-                type="button"
-                className={tabCls("team")}
-                onClick={() => setActiveTab("team")}
-              >
-                Team Review
-              </button>
-            </>
+            <button
+              type="button"
+              className={tabCls("team")}
+              onClick={() => setActiveTab("team")}
+            >
+              Team Review
+            </button>
           )}
         </div>
 
         <div className="p-5">
           {activeTab === "my" && <SelfAppraisalTab />}
-          {activeTab === "mentee" && isMentor && <MenteeReviewTab />}
           {activeTab === "team" && isMentor && <TeamReviewTab />}
         </div>
       </div>

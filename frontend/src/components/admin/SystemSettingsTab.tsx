@@ -10,6 +10,8 @@ interface SystemSettingsTabProps {
   // Annual review controls
   readonly annualReviewsEnabled: boolean;
   readonly onAnnualReviewsEnabledChange: (val: boolean) => void;
+  readonly annualReviewFinalRatingVisible: boolean;
+  readonly onAnnualReviewFinalRatingVisibleChange: (val: boolean) => void;
   // Goal access controls
   readonly yearlyGoalsEditEnabled: boolean;
   readonly onYearlyGoalsEditEnabledChange: (val: boolean) => void;
@@ -79,6 +81,8 @@ export function SystemSettingsTab({
   onFiscalStartMonthChange,
   annualReviewsEnabled,
   onAnnualReviewsEnabledChange,
+  annualReviewFinalRatingVisible,
+  onAnnualReviewFinalRatingVisibleChange,
   yearlyGoalsEditEnabled,
   onYearlyGoalsEditEnabledChange,
   finalRatingVisible,
@@ -104,9 +108,15 @@ export function SystemSettingsTab({
             <div className="divide-y divide-border/60">
               <ToggleRow
                 label="Enable Annual Reviews"
-                description="When on, the Annual Reviews module is active and employees can submit self-appraisals."
+                description="When on, the Annual Reviews module is active and employees can submit self-reviews."
                 checked={annualReviewsEnabled}
                 onChange={onAnnualReviewsEnabledChange}
+              />
+              <ToggleRow
+                label="Show Ratings on Annual Reviews"
+                description="When on, the Ratings column is visible on Mentee/Team Review tabs and final ratings are revealed to employees once published."
+                checked={annualReviewFinalRatingVisible}
+                onChange={onAnnualReviewFinalRatingVisibleChange}
               />
             </div>
           </div>

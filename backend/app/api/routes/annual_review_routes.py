@@ -5,10 +5,11 @@ Endpoints:
     ── Stage 1: Employee ──
     POST  /annual-reviews/self              → Create + submit self-appraisal
     PATCH /annual-reviews/{id}/draft        → Save draft (partial, no status change)
-    GET   /annual-reviews/mine              → Get current user's review for active cycle
+    GET   /annual-reviews/mine              → Active-cycle review (404 if none)
+    GET   /annual-reviews/mine/history      → All reviews owned by current user
 
     ── Stage 2: Mentor ──
-    GET   /annual-reviews/mentees           → List reviews pending mentor evaluation
+    GET   /annual-reviews/mentees           → Reviews for mentor's direct mentees
     PATCH /annual-reviews/{id}/mentor-eval  → Submit mentor evaluation
 
     ── Stage 3: Management ──
@@ -18,17 +19,23 @@ Endpoints:
     ── Shared ──
     GET   /annual-reviews/{id}              → Get single review by ID
 
-Security Layers Applied:
+Security Layers:
     Layer 1 — Authentication:     CurrentUser dependency
     Layer 2 — Tenant Isolation:   All queries filter by org_id
-    Layer 3 — Role Authorization: Admin endpoints gated (Mentors use relationship checks)
+    Layer 3 — Role Authorization: Admin endpoints gated
     Layer 4 — Ownership:          Stage-specific identity checks
+    Layer 5 — Visibility Gate:    final_performance_rating is hidden from the
+                                   employee unless BOTH the per-row
+                                   final_rating_enabled AND the org-wide
+                                   annual_review_final_rating_visible flags
+                                   are True.
 """
 
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import DbSession, CurrentUser
+from app.core.cycle_utils import extract_fy_label
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
@@ -46,19 +53,26 @@ router = APIRouter()
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
-def _get_active_cycle(db: DbSession, org_id: int) -> str:
-    """Return the admin-configured active cycle name from SystemSettings."""
+def _get_settings(db: DbSession, org_id: int) -> SystemSettings:
     settings = db.query(SystemSettings).filter(
         SystemSettings.org_id == org_id
     ).first()
-
     if not settings or not settings.active_cycle_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active performance cycle configured. Contact your HR administrator.",
         )
+    return settings
 
-    return settings.active_cycle_name
+
+def _get_active_cycle(db: DbSession, org_id: int) -> str:
+    """
+    Annual reviews are always yearly regardless of the org's cadence, so we
+    strip any H1/H2/Q1–Q4 prefix and return just the fiscal-year label
+    (e.g. "H1 FY26" → "FY26"). This also enforces the one-review-per-year
+    rule that the UI and unique index depend on.
+    """
+    return extract_fy_label(_get_settings(db, org_id).active_cycle_name)
 
 
 def _require_admin(current_user: User) -> None:
@@ -67,6 +81,21 @@ def _require_admin(current_user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can perform this action.",
         )
+
+
+def _strip_private_ratings(review: AnnualReview, final_visible: bool) -> None:
+    """
+    Mutates `review` in-place to hide ratings an employee shouldn't see yet.
+    The mentor_performance_rating and management_performance_rating are always
+    hidden from the employee. The final_performance_rating is only shown when
+    the per-row final_rating_enabled AND the org-wide visibility flag are both
+    on.
+    """
+    review.mentor_performance_rating = None
+    review.management_performance_rating = None
+    if not (review.final_rating_enabled and final_visible):
+        review.final_performance_rating = None
+        review.management_comments = None
 
 
 # =====================================================================
@@ -82,47 +111,35 @@ def create_self_appraisal(
     """
     Create and submit the employee's self-appraisal.
 
-    This is a one-shot operation: the review is created with all 6
-    competency descriptions + self_stars, and the status immediately
-    moves to PENDING_MENTOR. The employee cannot edit after submission.
+    One-shot: the review is created with all 8 competency descriptions plus
+    self_performance_rating, and the status moves to PENDING_MENTOR. The
+    employee cannot edit after submission.
 
-    The cycle_name is stamped from the active SystemSettings — the
-    employee cannot choose which cycle to submit for.
+    cycle_name is stamped from SystemSettings — the employee cannot pick.
     """
     cycle_name = _get_active_cycle(db, current_user.org_id)
 
-    # Guard: one review per user per cycle
     existing = db.query(AnnualReview).filter(
         AnnualReview.org_id == current_user.org_id,
         AnnualReview.user_id == current_user.id,
         AnnualReview.cycle_name == cycle_name,
     ).first()
-
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"You have already submitted a self-appraisal for {cycle_name}.",
+            detail=f"You have already submitted a self-review for {cycle_name}.",
         )
 
-    # Resolve the employee's assigned mentor
     mentor_id = current_user.mentor_id
-
     review = AnnualReview(
         org_id=current_user.org_id,
         user_id=current_user.id,
         mentor_id=mentor_id,
         cycle_name=cycle_name,
         status=ReviewStatus.PENDING_MENTOR.value,
-        # Stage 1 fields
-        self_desc_ownership=payload.self_desc_ownership,
-        self_desc_productivity=payload.self_desc_productivity,
-        self_desc_communication=payload.self_desc_communication,
-        self_desc_leadership=payload.self_desc_leadership,
-        self_desc_adaptability=payload.self_desc_adaptability,
-        self_desc_time_management=payload.self_desc_time_management,
-        self_stars=payload.self_stars,
+        self_overall_review=payload.self_overall_review,
+        self_performance_rating=payload.self_performance_rating,
     )
-
     db.add(review)
     db.commit()
     db.refresh(review)
@@ -136,19 +153,14 @@ def save_draft(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """
-    Save a partial draft — employee can fill in competencies one at a time.
-    Only works while the review is in DRAFT status.
-    """
+    """Save a partial draft. Only works while status is DRAFT."""
     review = db.query(AnnualReview).filter(
         AnnualReview.id == review_id,
         AnnualReview.org_id == current_user.org_id,
         AnnualReview.user_id == current_user.id,
     ).first()
-
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
-
     if review.status != ReviewStatus.DRAFT.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -169,34 +181,49 @@ def get_my_review(
     current_user: CurrentUser,
 ):
     """
-    Get the current user's annual review for the active cycle.
-    Returns 404 if no review exists yet (employee hasn't started).
+    Current user's review for the active cycle. 404 if not started yet.
+    Ratings are filtered per the visibility rules above.
     """
-    cycle_name = _get_active_cycle(db, current_user.org_id)
-
+    settings = _get_settings(db, current_user.org_id)
+    cycle_name = extract_fy_label(settings.active_cycle_name)
     review = db.query(AnnualReview).filter(
         AnnualReview.org_id == current_user.org_id,
         AnnualReview.user_id == current_user.id,
         AnnualReview.cycle_name == cycle_name,
     ).first()
-
     if not review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No annual review found for the current cycle.",
         )
 
-    # If the review is completed but not published, hide mentor/management data
-    # from the employee until final_rating_enabled is True
-    if review.user_id == current_user.id and not review.final_rating_enabled:
-        if review.status in (ReviewStatus.PENDING_MANAGEMENT.value, ReviewStatus.COMPLETED.value):
-            # Employee can see their own self-descriptions but not mentor scores yet
-            review.mentor_stars = None
-            review.management_stars = None
-            review.final_stars = None
-            review.management_comments = None
-
+    _strip_private_ratings(review, settings.annual_review_final_rating_visible)
     return review
+
+
+@router.get("/mine/history", response_model=List[AnnualReviewResponse])
+def get_my_review_history(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    All annual reviews owned by the current user, sorted newest-first.
+    Used by the "My Review" tab to show past cycles alongside the current one.
+    Ratings are filtered per visibility rules.
+    """
+    settings = _get_settings(db, current_user.org_id)
+    reviews = (
+        db.query(AnnualReview)
+        .filter(
+            AnnualReview.org_id == current_user.org_id,
+            AnnualReview.user_id == current_user.id,
+        )
+        .order_by(AnnualReview.created_at.desc())
+        .all()
+    )
+    for r in reviews:
+        _strip_private_ratings(r, settings.annual_review_final_rating_visible)
+    return reviews
 
 
 # =====================================================================
@@ -209,11 +236,12 @@ def get_mentee_reviews(
     current_user: CurrentUser,
 ):
     """
-    List all reviews for the current user's direct mentees across all
-    cycles and statuses (DRAFT and above). Each row is enriched with
-    employee_name / department / designation so the Mentee Review and
-    Team Review tabs can render without additional lookups.
+    All reviews for the current user's direct mentees across every cycle/status.
+    Each row is enriched with employee_name / department / designation.
+    Final ratings are nulled when the org-wide visibility flag is off so the
+    Mentee Review tab can conditionally hide the Ratings column.
     """
+    settings = _get_settings(db, current_user.org_id)
     reviews = (
         db.query(AnnualReview)
         .filter(
@@ -232,8 +260,12 @@ def get_mentee_reviews(
 
     rows: list[MenteeAnnualReview] = []
     for r in reviews:
-        u = users.get(r.user_id)
         base = AnnualReviewResponse.model_validate(r).model_dump()
+        if not settings.annual_review_final_rating_visible:
+            base["final_performance_rating"] = None
+            base["management_performance_rating"] = None
+            base["management_comments"] = None
+        u = users.get(r.user_id)
         rows.append(MenteeAnnualReview(
             **base,
             employee_name=u.full_name if u else f"Employee #{r.user_id}",
@@ -241,7 +273,6 @@ def get_mentee_reviews(
             department=u.department.name if u and u.department else None,
             designation=u.designation.name if u and u.designation else None,
         ))
-
     return rows
 
 
@@ -252,41 +283,27 @@ def submit_mentor_evaluation(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """
-    Mentor submits their evaluation for a mentee's self-appraisal.
-    Status advances from PENDING_MENTOR → PENDING_MANAGEMENT.
-    """
+    """Mentor submits their evaluation. Status: PENDING_MENTOR → PENDING_MANAGEMENT."""
     review = db.query(AnnualReview).filter(
         AnnualReview.id == review_id,
         AnnualReview.org_id == current_user.org_id,
     ).first()
-
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
-
     if review.status != ReviewStatus.PENDING_MENTOR.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This review is not in the mentor evaluation stage.",
         )
-
-    # Verify the caller is the assigned mentor
     if review.mentor_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the assigned mentor for this review.",
         )
 
-    # Write mentor columns
-    review.mentor_comment_ownership = payload.mentor_comment_ownership
-    review.mentor_comment_productivity = payload.mentor_comment_productivity
-    review.mentor_comment_communication = payload.mentor_comment_communication
-    review.mentor_comment_leadership = payload.mentor_comment_leadership
-    review.mentor_comment_adaptability = payload.mentor_comment_adaptability
-    review.mentor_comment_time_management = payload.mentor_comment_time_management
-    review.mentor_stars = payload.mentor_stars
+    review.mentor_overall_review = payload.mentor_overall_review
+    review.mentor_performance_rating = payload.mentor_performance_rating
 
-    # Advance status
     review.status = ReviewStatus.PENDING_MANAGEMENT.value
 
     db.commit()
@@ -304,10 +321,8 @@ def get_calibration_grid(
     current_user: CurrentUser,
 ):
     """
-    Return all reviews for the active cycle in a simplified grid format
-    for HR calibration. Only accessible by Admin role.
-
-    Shows: employee name, department, designation, self/mentor/final stars.
+    All reviews in pending_management + completed for the active cycle,
+    shaped into a simplified grid row. Admin-only.
     """
     _require_admin(current_user)
     cycle_name = _get_active_cycle(db, current_user.org_id)
@@ -326,7 +341,6 @@ def get_calibration_grid(
         .all()
     )
 
-    # Build name/dept/desig map from users
     user_ids = [r.user_id for r in reviews]
     users = {
         u.id: u
@@ -342,14 +356,13 @@ def get_calibration_grid(
             employee_name=u.full_name if u else "Unknown",
             department=u.department.name if u and u.department else None,
             designation=u.designation.name if u and u.designation else None,
-            self_stars=r.self_stars,
-            mentor_stars=r.mentor_stars,
-            management_stars=r.management_stars,
-            final_stars=r.final_stars,
+            self_performance_rating=r.self_performance_rating,
+            mentor_performance_rating=r.mentor_performance_rating,
+            management_performance_rating=r.management_performance_rating,
+            final_performance_rating=r.final_performance_rating,
             status=r.status,
             final_rating_enabled=r.final_rating_enabled,
         ))
-
     return rows
 
 
@@ -361,12 +374,9 @@ def finalize_review(
     current_user: CurrentUser,
 ):
     """
-    HR Admin sets the final rating and publishes the review.
-
-    When final_rating_enabled flips to True:
-    - Status changes to COMPLETED
-    - The employee can now see all scores (self, mentor, final)
-    - The review is permanently locked
+    HR sets the final rating and publishes. Review is locked after this.
+    Note: publishing sets final_rating_enabled=True but the employee will only
+    see the rating if the org-wide visibility flag is also on.
     """
     _require_admin(current_user)
 
@@ -374,18 +384,16 @@ def finalize_review(
         AnnualReview.id == review_id,
         AnnualReview.org_id == current_user.org_id,
     ).first()
-
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
-
     if review.status != ReviewStatus.PENDING_MANAGEMENT.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only reviews in the management stage can be finalized.",
         )
 
-    review.management_stars = payload.management_stars
-    review.final_stars = payload.final_stars
+    review.management_performance_rating = payload.management_performance_rating
+    review.final_performance_rating = payload.final_performance_rating
     review.management_comments = payload.management_comments
     review.final_rating_enabled = True
     review.status = ReviewStatus.COMPLETED.value
@@ -406,20 +414,19 @@ def get_review(
     current_user: CurrentUser,
 ):
     """
-    Get a single review by ID. Access control:
-    - Employees can see their own review (with score visibility rules)
+    Single review by ID. Access control:
+    - Employees can see their own review (with visibility rules applied)
     - Mentors can see reviews assigned to them
     - Admins can see any review in their org
     """
+    settings = _get_settings(db, current_user.org_id)
     review = db.query(AnnualReview).filter(
         AnnualReview.id == review_id,
         AnnualReview.org_id == current_user.org_id,
     ).first()
-
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
 
-    # Access check
     is_owner = review.user_id == current_user.id
     is_mentor = review.mentor_id == current_user.id
     is_admin = current_user.role == "Admin"
@@ -430,11 +437,7 @@ def get_review(
             detail="You do not have access to this review.",
         )
 
-    # Hide mentor/management scores from the employee until published
-    if is_owner and not is_admin and not review.final_rating_enabled:
-        review.mentor_stars = None
-        review.management_stars = None
-        review.final_stars = None
-        review.management_comments = None
+    if is_owner and not is_admin:
+        _strip_private_ratings(review, settings.annual_review_final_rating_visible)
 
     return review

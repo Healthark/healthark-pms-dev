@@ -315,6 +315,7 @@ def get_admin_settings(
         yearly_goals_final_rating_visible=settings.yearly_goals_final_rating_visible,
         project_ratings_visible=settings.project_ratings_visible,
         annual_reviews_enabled=settings.annual_reviews_enabled,
+        annual_review_final_rating_visible=settings.annual_review_final_rating_visible,
         updated_at=settings.updated_at,
     )
 
@@ -357,6 +358,8 @@ def update_admin_settings(
         settings.project_ratings_visible = settings_in.project_ratings_visible
     if settings_in.annual_reviews_enabled is not None:
         settings.annual_reviews_enabled = settings_in.annual_reviews_enabled
+    if settings_in.annual_review_final_rating_visible is not None:
+        settings.annual_review_final_rating_visible = settings_in.annual_review_final_rating_visible
 
     # Recompute the cycle label from the (possibly updated) cadence + fiscal month
     settings.active_cycle_name = get_current_cycle_info(
@@ -380,6 +383,7 @@ def update_admin_settings(
         yearly_goals_final_rating_visible=settings.yearly_goals_final_rating_visible,
         project_ratings_visible=settings.project_ratings_visible,
         annual_reviews_enabled=settings.annual_reviews_enabled,
+        annual_review_final_rating_visible=settings.annual_review_final_rating_visible,
         updated_at=settings.updated_at,
     )
 

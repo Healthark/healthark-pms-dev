@@ -52,6 +52,7 @@ export default function AdminPanel() {
   const [yearlyGoalsEditEnabled, setYearlyGoalsEditEnabled] = useState(false);
   const [finalRatingVisible, setFinalRatingVisible] = useState(false);
   const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
+  const [annualReviewFinalRatingVisible, setAnnualReviewFinalRatingVisible] = useState(false);
 
   const { refreshSettings } = useSystemSettings();
   // ── Bootstrap ─────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ export default function AdminPanel() {
       setYearlyGoalsEditEnabled(settingsData.yearly_goals_edit_enabled ?? false);
       setFinalRatingVisible(settingsData.yearly_goals_final_rating_visible ?? false);
       setProjectRatingsVisible(settingsData.project_ratings_visible ?? false);
+      setAnnualReviewFinalRatingVisible(settingsData.annual_review_final_rating_visible ?? false);
     } catch {
       // Errors handled per-operation below
     } finally {
@@ -165,6 +167,7 @@ export default function AdminPanel() {
         yearly_goals_edit_enabled: yearlyGoalsEditEnabled,
         yearly_goals_final_rating_visible: finalRatingVisible,
         project_ratings_visible: projectRatingsVisible,
+        annual_review_final_rating_visible: annualReviewFinalRatingVisible,
       };
       await adminService.updateSettings(payload);
       // Re-fetch from DB so local state always reflects what was actually persisted.
@@ -176,6 +179,7 @@ export default function AdminPanel() {
       setYearlyGoalsEditEnabled(fresh.yearly_goals_edit_enabled ?? false);
       setFinalRatingVisible(fresh.yearly_goals_final_rating_visible ?? false);
       setProjectRatingsVisible(fresh.project_ratings_visible ?? false);
+      setAnnualReviewFinalRatingVisible(fresh.annual_review_final_rating_visible ?? false);
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
       await refreshSettings();
@@ -290,6 +294,8 @@ export default function AdminPanel() {
             onFinalRatingVisibleChange={setFinalRatingVisible}
             projectRatingsVisible={projectRatingsVisible}
             onProjectRatingsVisibleChange={setProjectRatingsVisible}
+            annualReviewFinalRatingVisible={annualReviewFinalRatingVisible}
+            onAnnualReviewFinalRatingVisibleChange={setAnnualReviewFinalRatingVisible}
             onSave={handleSaveSettings}
             isSaving={isSaving}
             settingsSaved={settingsSaved}

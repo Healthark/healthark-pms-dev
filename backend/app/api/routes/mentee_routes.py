@@ -115,8 +115,8 @@ def _build_review_status(active_review: AnnualReview | None) -> MenteeReviewStat
         review_id=active_review.id,
         cycle_name=active_review.cycle_name,
         status=active_review.status,
-        mentor_stars=active_review.mentor_stars,
-        final_stars=active_review.final_stars if active_review.final_rating_enabled else None,
+        mentor_performance_rating=active_review.mentor_performance_rating,
+        final_performance_rating=active_review.final_performance_rating if active_review.final_rating_enabled else None,
     )
 
 

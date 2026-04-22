@@ -31,6 +31,7 @@ export interface SystemSettingsResponse {
   yearly_goals_final_rating_visible: boolean;
   project_ratings_visible: boolean;
   annual_reviews_enabled: boolean;
+  annual_review_final_rating_visible: boolean;
   updated_by_id: number | null;
   created_at: string;
   updated_at: string | null;
@@ -60,6 +61,7 @@ export interface SystemSettingsUpdate {
   yearly_goals_final_rating_visible?: boolean;
   project_ratings_visible?: boolean;
   annual_reviews_enabled?: boolean;
+  annual_review_final_rating_visible?: boolean;
 }
 
 // ── Service Object ──────────────────────────────────────────────────

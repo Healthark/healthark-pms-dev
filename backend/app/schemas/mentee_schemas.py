@@ -39,9 +39,10 @@ class MenteeReviewStatus(BaseModel):
     cycle_name: Optional[str] = None
     status: Optional[str] = None
     # Stage 2 output — only present once the mentor has evaluated.
-    mentor_stars: Optional[int] = None
-    # Stage 3 output — only visible after HR publishes.
-    final_stars: Optional[int] = None
+    mentor_performance_rating: Optional[int] = None
+    # Stage 3 output — only visible after HR publishes AND the org-wide
+    # annual_review_final_rating_visible flag is on.
+    final_performance_rating: Optional[int] = None
 
 
 class MenteeProjectsStats(BaseModel):

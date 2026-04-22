@@ -2,10 +2,14 @@
  * annual-review.service.ts — API Contract for the 3-Stage Appraisal.
  *
  * Covers:
- *   Stage 1: Employee self-appraisal (create, draft save, get mine)
+ *   Stage 1: Employee self-review (create, draft save, get mine, get history)
  *   Stage 2: Mentor evaluation (get mentees, submit eval)
  *   Stage 3: Management calibration (get grid, finalize)
  *   Shared:  Get single review by ID
+ *
+ * Each stage captures a single free-text overall review plus a 1–5
+ * performance rating (1 = beyond expectations … 5 = did not achieve goals,
+ * same guide as Project Review).
  */
 
 import apiClient from "./api.client";
@@ -28,27 +32,17 @@ export interface AnnualReview {
   cycle_name: string;
   status: ReviewStatus;
 
-  // Stage 1
-  self_desc_ownership: string | null;
-  self_desc_productivity: string | null;
-  self_desc_communication: string | null;
-  self_desc_leadership: string | null;
-  self_desc_adaptability: string | null;
-  self_desc_time_management: string | null;
-  self_stars: number | null;
+  // Stage 1 — employee self-review
+  self_overall_review: string | null;
+  self_performance_rating: number | null;
 
-  // Stage 2
-  mentor_comment_ownership: string | null;
-  mentor_comment_productivity: string | null;
-  mentor_comment_communication: string | null;
-  mentor_comment_leadership: string | null;
-  mentor_comment_adaptability: string | null;
-  mentor_comment_time_management: string | null;
-  mentor_stars: number | null;
+  // Stage 2 — mentor evaluation
+  mentor_overall_review: string | null;
+  mentor_performance_rating: number | null;
 
-  // Stage 3
-  management_stars: number | null;
-  final_stars: number | null;
+  // Stage 3 — management calibration
+  management_performance_rating: number | null;
+  final_performance_rating: number | null;
   management_comments: string | null;
   final_rating_enabled: boolean;
 
@@ -69,10 +63,10 @@ export interface CalibrationRow {
   employee_name: string;
   department: string | null;
   designation: string | null;
-  self_stars: number | null;
-  mentor_stars: number | null;
-  management_stars: number | null;
-  final_stars: number | null;
+  self_performance_rating: number | null;
+  mentor_performance_rating: number | null;
+  management_performance_rating: number | null;
+  final_performance_rating: number | null;
   status: ReviewStatus;
   final_rating_enabled: boolean;
 }
@@ -80,38 +74,20 @@ export interface CalibrationRow {
 // ── Request Payload Types ───────────────────────────────────────────
 
 export interface SelfAppraisalPayload {
-  self_desc_ownership: string;
-  self_desc_productivity: string;
-  self_desc_communication: string;
-  self_desc_leadership: string;
-  self_desc_adaptability: string;
-  self_desc_time_management: string;
-  self_stars: number;
+  self_overall_review: string;
+  self_performance_rating: number;
 }
 
-export interface SelfAppraisalDraftPayload {
-  self_desc_ownership?: string;
-  self_desc_productivity?: string;
-  self_desc_communication?: string;
-  self_desc_leadership?: string;
-  self_desc_adaptability?: string;
-  self_desc_time_management?: string;
-  self_stars?: number;
-}
+export type SelfAppraisalDraftPayload = Partial<SelfAppraisalPayload>;
 
 export interface MentorEvalPayload {
-  mentor_comment_ownership: string;
-  mentor_comment_productivity: string;
-  mentor_comment_communication: string;
-  mentor_comment_leadership: string;
-  mentor_comment_adaptability: string;
-  mentor_comment_time_management: string;
-  mentor_stars: number;
+  mentor_overall_review: string;
+  mentor_performance_rating: number;
 }
 
 export interface ManagementFinalizePayload {
-  management_stars?: number | null;
-  final_stars: number;
+  management_performance_rating?: number | null;
+  final_performance_rating: number;
   management_comments?: string | null;
 }
 
@@ -119,7 +95,6 @@ export interface ManagementFinalizePayload {
 
 export const annualReviewService = {
   // ── Stage 1: Employee ───────────────────────────────────────────
-  /** Submit the full self-appraisal (creates the review + advances to pending_mentor). */
   submitSelfAppraisal: async (
     payload: SelfAppraisalPayload,
   ): Promise<AnnualReview> => {
@@ -130,7 +105,6 @@ export const annualReviewService = {
     return res.data;
   },
 
-  /** Save a partial draft (no status change). */
   saveDraft: async (
     reviewId: number,
     payload: SelfAppraisalDraftPayload,
@@ -142,14 +116,20 @@ export const annualReviewService = {
     return res.data;
   },
 
-  /** Get the current user's review for the active cycle. */
   getMyReview: async (): Promise<AnnualReview> => {
     const res = await apiClient.get<AnnualReview>("/annual-reviews/mine");
     return res.data;
   },
 
+  /** Full history of the current user's reviews across cycles, newest-first. */
+  getMyReviewHistory: async (): Promise<AnnualReview[]> => {
+    const res = await apiClient.get<AnnualReview[]>(
+      "/annual-reviews/mine/history",
+    );
+    return res.data;
+  },
+
   // ── Stage 2: Mentor ─────────────────────────────────────────────
-  /** Get all reviews for the current mentor's direct mentees (any status). */
   getMenteeReviews: async (): Promise<MenteeAnnualReview[]> => {
     const res = await apiClient.get<MenteeAnnualReview[]>(
       "/annual-reviews/mentees",
@@ -157,7 +137,6 @@ export const annualReviewService = {
     return res.data;
   },
 
-  /** Submit the mentor evaluation (advances to pending_management). */
   submitMentorEval: async (
     reviewId: number,
     payload: MentorEvalPayload,
@@ -170,7 +149,6 @@ export const annualReviewService = {
   },
 
   // ── Stage 3: Management ─────────────────────────────────────────
-  /** Get the calibration grid (all reviews in pending_management + completed). */
   getCalibrationGrid: async (): Promise<CalibrationRow[]> => {
     const res = await apiClient.get<CalibrationRow[]>(
       "/annual-reviews/calibration",
@@ -178,7 +156,6 @@ export const annualReviewService = {
     return res.data;
   },
 
-  /** Finalize and publish a review (advances to completed). */
   finalizeReview: async (
     reviewId: number,
     payload: ManagementFinalizePayload,
@@ -191,7 +168,6 @@ export const annualReviewService = {
   },
 
   // ── Shared ──────────────────────────────────────────────────────
-  /** Get a single review by ID (access-controlled on the backend). */
   getReview: async (reviewId: number): Promise<AnnualReview> => {
     const res = await apiClient.get<AnnualReview>(
       `/annual-reviews/${reviewId}`,
