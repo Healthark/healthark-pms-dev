@@ -1,6 +1,7 @@
-import { Search, AlertTriangle, ArrowUpDown } from "lucide-react";
+import { Search, AlertTriangle, ArrowUpDown, LayoutGrid, Table2 } from "lucide-react";
 
 export type MenteeSortKey = "name" | "designation" | "pending";
+export type MenteeViewMode = "grid" | "table";
 
 interface MenteeToolbarProps {
   readonly search: string;
@@ -10,6 +11,8 @@ interface MenteeToolbarProps {
   readonly sortKey: MenteeSortKey;
   readonly onSortChange: (value: MenteeSortKey) => void;
   readonly totalPendingActions: number;
+  readonly viewMode: MenteeViewMode;
+  readonly onViewModeChange: (value: MenteeViewMode) => void;
 }
 
 export function MenteeToolbar({
@@ -20,7 +23,15 @@ export function MenteeToolbar({
   sortKey,
   onSortChange,
   totalPendingActions,
+  viewMode,
+  onViewModeChange,
 }: MenteeToolbarProps) {
+  const viewBtnCls = (mode: MenteeViewMode) =>
+    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+      viewMode === mode
+        ? "bg-brand/10 text-brand"
+        : "text-text-muted hover:bg-slate-100"
+    }`;
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {/* Left: search */}
@@ -38,7 +49,7 @@ export function MenteeToolbar({
         />
       </div>
 
-      {/* Right: filter + sort */}
+      {/* Right: filter + sort + view toggle */}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -77,6 +88,23 @@ export function MenteeToolbar({
             <option value="designation">Designation</option>
             <option value="pending">Pending actions</option>
           </select>
+        </div>
+
+        <div className="flex h-9 items-center gap-1 rounded-md border border-border bg-surface p-0.5">
+          <button
+            type="button"
+            className={viewBtnCls("grid")}
+            onClick={() => onViewModeChange("grid")}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> Cards
+          </button>
+          <button
+            type="button"
+            className={viewBtnCls("table")}
+            onClick={() => onViewModeChange("table")}
+          >
+            <Table2 className="h-3.5 w-3.5" aria-hidden="true" /> Table
+          </button>
         </div>
       </div>
     </div>

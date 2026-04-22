@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { MenteeCard } from "../components/mentees/MenteeCard";
+import { MenteeTable } from "../components/mentees/MenteeTable";
 import {
   MenteeToolbar,
   type MenteeSortKey,
+  type MenteeViewMode,
 } from "../components/mentees/MenteeToolbar";
 import {
   menteeService,
@@ -34,6 +36,7 @@ export function MyMentees() {
   const [search, setSearch] = useState("");
   const [onlyPending, setOnlyPending] = useState(false);
   const [sortKey, setSortKey] = useState<MenteeSortKey>("name");
+  const [viewMode, setViewMode] = useState<MenteeViewMode>("grid");
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +117,8 @@ export function MyMentees() {
           sortKey={sortKey}
           onSortChange={setSortKey}
           totalPendingActions={totalPendingActions}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
         />
       )}
 
@@ -141,11 +146,15 @@ export function MyMentees() {
       )}
 
       {!isLoading && visibleMentees.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleMentees.map((m) => (
-            <MenteeCard key={m.user_id} mentee={m} />
-          ))}
-        </div>
+        viewMode === "grid" ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {visibleMentees.map((m) => (
+              <MenteeCard key={m.user_id} mentee={m} />
+            ))}
+          </div>
+        ) : (
+          <MenteeTable mentees={visibleMentees} />
+        )
       )}
     </div>
   );

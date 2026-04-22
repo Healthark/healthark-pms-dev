@@ -127,13 +127,6 @@ export function MenteeCard({ mentee }: MenteeCardProps) {
                   mentee.projects.pending_reviews_count === 1 ? "" : "s"
                 } pending`
           }
-          rightSlot={
-            mentee.projects.latest_performance_group !== null ? (
-              <span className="rounded-md bg-brand-light px-1.5 py-0.5 text-[11px] font-semibold text-brand">
-                PG {mentee.projects.latest_performance_group}
-              </span>
-            ) : null
-          }
         />
       </div>
 
