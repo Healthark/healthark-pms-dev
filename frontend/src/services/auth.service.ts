@@ -1,12 +1,11 @@
 import apiClient from "./api.client";
 
 /**
- * Mirrors the backend's TokenResponse schema exactly.
- * `features` is the authoritative list of modules this org has licensed.
+ * Live auth claims — mirrors backend SessionResponse. Same fields as the
+ * login response minus the token itself, so they can refresh on app mount
+ * without issuing a new JWT.
  */
-export interface AuthResponse {
-  access_token: string;
-  token_type: string;
+export interface SessionClaims {
   user_id: number;
   full_name: string;
   role: string;
@@ -15,10 +14,18 @@ export interface AuthResponse {
   // True when at least one active user reports to this user via mentor_id.
   // Drives mentor-only UI (Team Goals tab, etc.) regardless of role.
   has_mentees: boolean;
-  // False only for CEO/founders with no mentor assigned. Yearly goal creation
-  // is disabled for them because the approval workflow needs a mentor.
+  // False for CEO/founders (no mentor) or when the mentor has been
+  // soft-deleted. Yearly goal creation is disabled in either case.
   has_mentor: boolean;
+  // True when an admin just reset this user's password to a temporary one.
+  // The frontend gates all protected routes to /change-password until cleared.
+  must_change_password: boolean;
 }
+
+// After C12 the JWT lives in an HttpOnly cookie and is NEVER surfaced to JS.
+// The login response body is just the session claims — same shape as
+// /auth/session, which is why AuthResponse is a simple alias now.
+export type AuthResponse = SessionClaims;
 
 export const authService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
@@ -38,8 +45,18 @@ export const authService = {
     return response.data;
   },
 
-  logout: (): void => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+  getSession: async (): Promise<SessionClaims> => {
+    const response = await apiClient.get<SessionClaims>("/auth/session");
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    // Clears the HttpOnly access + csrf cookies on the server. Local
+    // state (the cached `user` claims) is cleared by AuthProvider.logout().
+    try {
+      await apiClient.post("/auth/logout");
+    } catch {
+      /* best effort — local cleanup still runs */
+    }
   },
 };

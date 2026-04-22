@@ -84,6 +84,19 @@ class UserUpdate(BaseModel):
     mentor_id: Optional[int] = None
 
 
+class PasswordResetResponse(BaseModel):
+    """Returned to the admin once, immediately after resetting a user's password.
+
+    The temporary password is shown in the admin UI exactly once — the admin
+    reads it out to the user, who is then forced to change it on next login.
+    It is NEVER stored anywhere except as a hash on the user's row.
+    """
+    user_id: int
+    full_name: str
+    email: str
+    temporary_password: str
+
+
 # ── Admin Settings (Simplified View) ─────────────────────────────────
 
 class AdminSettingsResponse(BaseModel):

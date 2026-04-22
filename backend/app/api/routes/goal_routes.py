@@ -178,6 +178,22 @@ def create_goal(
             ),
         )
 
+    # Even if mentor_id is set, the FK can point at a soft-deleted user when
+    # admin deactivates a mentor without reassigning their mentees. That
+    # routes approval to a dead account — block here with the same message.
+    mentor_is_live = db.query(User.id).filter(
+        User.id == target_manager_id,
+        User.is_deleted == False,  # noqa: E712
+    ).first() is not None
+    if not mentor_is_live:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The assigned mentor is no longer active. "
+                "Contact an admin to reassign a mentor before creating goals."
+            ),
+        )
+
     # ── Gate check + cycle stamping for yearly goals ───────────────────
     cycle_name: Optional[str] = None
     if goal_in.goal_type == GoalType.YEARLY:

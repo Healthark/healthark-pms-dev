@@ -80,8 +80,10 @@ def change_password(
             detail="New password must be different from your current password.",
         )
 
-    # 3. Hash and persist
+    # 3. Hash and persist. Also clear the admin-reset flag so subsequent
+    # logins don't force the user back into the change-password screen.
     current_user.password_hash = get_password_hash(request.new_password)
+    current_user.must_change_password = False
     db.commit()
 
     return {"message": "Password updated successfully."}

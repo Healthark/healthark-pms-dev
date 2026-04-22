@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Mail, Lock, Loader2, Building2 } from "lucide-react";
 import { authService } from "../services/auth.service";
 import { useAuth } from "../hooks/useAuth";
@@ -16,8 +16,18 @@ interface ApiErrorResponse {
   };
 }
 
-function isApiError(error: unknown): error is ApiErrorResponse {
-  return typeof error === "object" && error !== null && "response" in error;
+// Narrow: the error looks like an axios error AND the backend sent a plain
+// string `detail`. FastAPI 422 returns `detail` as an array of objects —
+// those callers should fall through to the generic connection-error copy
+// rather than rendering [object Object].
+function isApiError(
+  error: unknown,
+): error is ApiErrorResponse & { response: { data: { detail: string } } } {
+  if (typeof error !== "object" || error === null || !("response" in error)) {
+    return false;
+  }
+  const detail = (error as ApiErrorResponse).response?.data?.detail;
+  return typeof detail === "string";
 }
 
 const TENANT_ASSETS = {
@@ -41,9 +51,15 @@ const TENANT_ASSETS = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+type LocationState = { from?: { pathname?: string } };
+
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, login } = useAuth();
+
+  const intendedPath =
+    (location.state as LocationState | null)?.from?.pathname ?? "/dashboard";
 
   const [activeTenant, setActiveTenant] = useState<Tenant>("healthark");
   const [email, setEmail] = useState("");
@@ -55,6 +71,11 @@ export function Login() {
    * Pre-Auth Theming: Inject the theme based on the selected tab.
    */
   useEffect(() => {
+    // When the auth guard below redirects, this effect is a no-op — the
+    // component unmounts immediately. Running the hook unconditionally keeps
+    // hook order stable across renders (React Rules of Hooks).
+    if (user) return;
+
     document.documentElement.setAttribute("data-theme", activeTenant);
 
     let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
@@ -63,7 +84,7 @@ export function Login() {
       favicon.rel = "icon";
       document.head.appendChild(favicon);
     }
-    
+
     if (activeTenant === "miltenyi") {
       favicon.href = "/miltenyi-biotech-small.svg";
       document.title = "Miltenyi Biotec PMS";
@@ -72,16 +93,14 @@ export function Login() {
       document.title = "HealthArk PMS";
     }
 
-  }, [activeTenant]);
+  }, [activeTenant, user]);
 
-  /**
-   * Auth Guard: Redirect if already authenticated.
-   */
-  useEffect(() => {
-    if (user) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [user, navigate]);
+  // Synchronous redirect for already-authenticated users — avoids the
+  // single-frame flash of the login form that useEffect-based redirects cause.
+  // Kept AFTER all hooks so hook order stays stable across renders.
+  if (user) {
+    return <Navigate to={intendedPath} replace />;
+  }
 
   const handleLogin = async (
     e: React.FormEvent<HTMLFormElement>,
@@ -93,11 +112,10 @@ export function Login() {
     try {
       const data = await authService.login(email, password);
       login(data);
+      navigate(intendedPath, { replace: true });
     } catch (err: unknown) {
       const message = isApiError(err)
-        ? typeof err.response?.data?.detail === "string"
-          ? err.response.data.detail
-          : "Please fill in all required fields."
+        ? err.response.data.detail
         : "Connection to server failed. Please try again.";
 
       setError(message);

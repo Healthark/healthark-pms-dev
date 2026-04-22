@@ -1,4 +1,4 @@
-import { Search, Pencil, UserX } from "lucide-react";
+import { Search, Pencil, UserX, KeyRound } from "lucide-react";
 import type { UserResponse } from "../../services/admin.service";
 import { StatusBadge } from "./StatusBadge";
 
@@ -9,6 +9,7 @@ interface UsersTabProps {
   readonly onSearchChange: (query: string) => void;
   readonly onEdit: (user: UserResponse) => void;
   readonly onDeactivate: (user: UserResponse) => void;
+  readonly onResetPassword: (user: UserResponse) => void;
 }
 
 const TABLE_HEADERS = [
@@ -28,6 +29,7 @@ export function UsersTab({
   onSearchChange,
   onEdit,
   onDeactivate,
+  onResetPassword,
 }: UsersTabProps) {
   const filtered = users.filter((u) => {
     const q = searchQuery.toLowerCase();
@@ -134,6 +136,16 @@ export function UsersTab({
                         >
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </button>
+                        {!user.is_deleted && (
+                          <button
+                            type="button"
+                            onClick={() => onResetPassword(user)}
+                            title="Reset password"
+                            className="rounded-md p-1.5 text-text-muted hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                          >
+                            <KeyRound className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
                         {!user.is_deleted && (
                           <button
                             type="button"

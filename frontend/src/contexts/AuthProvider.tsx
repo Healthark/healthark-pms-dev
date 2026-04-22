@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import { AuthContext, type AuthContextType } from "./AuthContext";
-import type { AuthResponse } from "../services/auth.service";
+import { authService, type AuthResponse } from "../services/auth.service";
 
 // Maps outside the component and acts as source of truth
 const THEME_MAP: Record<number, string> = {
@@ -32,39 +32,99 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
   /**
    * Lazy initializer: runs exactly once on mount.
-   * Starting state from localStorage synchronously prevents a cascading
-   * render cycle where the app flashes the login page for authenticated users.
+   * After C12 the JWT lives in an HttpOnly cookie that JS cannot read, so
+   * "am I logged in?" is no longer derivable synchronously. We hydrate the
+   * cached claims from localStorage (so the UI can skip the login flash for
+   * likely-authenticated users) and let the `refreshSession` effect below
+   * confirm against the server. If the cookie is gone/expired, /auth/session
+   * 401s, the axios interceptor runs forceLogout(), and the user state here
+   * gets cleared via the storage event.
    */
   const [user, setUser] = useState<AuthResponse | null>(() => {
     try {
       const savedUser = localStorage.getItem("user");
-      const token = localStorage.getItem("token");
-      if (savedUser && token) {
+      if (savedUser) {
         return JSON.parse(savedUser) as AuthResponse;
       }
     } catch {
-      // Corrupt storage — clear it and force re-login
       localStorage.removeItem("user");
-      localStorage.removeItem("token");
     }
     return null;
   });
 
   /**
-   * Persist session data and update state atomically.
-   * Post-login navigation is handled by a useEffect watching `user` in the
-   * consuming component — never imperatively here.
+   * Persist session claims and update state atomically. The token is NOT
+   * stored here — it lives in an HttpOnly cookie the browser attaches on
+   * every request automatically. Post-login navigation is handled by the
+   * consuming component (Login.tsx watches `user`).
    */
   const login = useCallback((data: AuthResponse): void => {
-    localStorage.setItem("token", data.access_token);
     localStorage.setItem("user", JSON.stringify(data));
     setUser(data);
   }, []);
 
   const logout = useCallback((): void => {
-    localStorage.removeItem("token");
+    // Clear the server-side cookies first (fire-and-forget — local cleanup
+    // still runs even if the network call fails).
+    void authService.logout();
     localStorage.removeItem("user");
     setUser(null);
+  }, []);
+
+  /**
+   * Re-pull live auth claims and merge them into state + localStorage. Used
+   * on app mount and exposed via the context so consumers can force a
+   * refresh after actions that change claims (e.g. self-service password
+   * change clears `must_change_password`).
+   *
+   * No token-presence check — we can't read the HttpOnly cookie. Instead we
+   * always ask the server; a 401 tells us the session is dead and the axios
+   * interceptor's forceLogout() wipes local state. That makes this call the
+   * authoritative bootstrap even for "fresh tab" users whose localStorage
+   * has stale claims from a previous logged-in session.
+   */
+  const refreshSession = useCallback(async (): Promise<void> => {
+    try {
+      const claims = await authService.getSession();
+      setUser((prev) => ({ ...(prev ?? {}), ...claims } as AuthResponse));
+      const saved = JSON.parse(localStorage.getItem("user") ?? "null");
+      localStorage.setItem(
+        "user",
+        JSON.stringify({ ...(saved ?? {}), ...claims }),
+      );
+    } catch {
+      /* 401/403 handled by the axios interceptor (forceLogout); other errors
+         leave cached claims alone so a flaky network doesn't kick the user out */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
+
+  /**
+   * Multi-tab session sync. When another tab logs out (or logs in as a
+   * different user), the `user` key changes in localStorage — the `storage`
+   * event fires in *other* tabs. Mirror the change here so the whole
+   * browser stays on one session. (We no longer store `token`; the browser
+   * already shares HttpOnly cookies across tabs of the same origin.)
+   */
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key !== "user" && e.key !== null) return;
+      const savedUser = localStorage.getItem("user");
+      if (!savedUser) {
+        setUser(null);
+        return;
+      }
+      try {
+        setUser(JSON.parse(savedUser) as AuthResponse);
+      } catch {
+        setUser(null);
+      }
+    };
+    globalThis.addEventListener("storage", handler);
+    return () => globalThis.removeEventListener("storage", handler);
   }, []);
 
   /**
@@ -108,8 +168,8 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
    * useCallback on each function ensures the deps array stays stable.
    */
   const value = useMemo<AuthContextType>(
-    () => ({ user, isAuthenticated, login, logout, hasFeature }),
-    [user, isAuthenticated, login, logout, hasFeature],
+    () => ({ user, isAuthenticated, login, logout, hasFeature, refreshSession }),
+    [user, isAuthenticated, login, logout, hasFeature, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.csrf import CSRFMiddleware
 from app.api.routes import auth_routes
 from app.api.routes import goal_routes
 from app.api.routes import admin_routes
@@ -25,6 +26,12 @@ origins = [
     "http://localhost:5173",
     "http://localhost:3000",
 ]
+
+# Starlette executes middleware in reverse registration order on the request
+# phase — the LAST add_middleware call is the outermost layer. CORS must be
+# outermost so browser preflight OPTIONS requests are answered before the
+# CSRF check runs (an OPTIONS without X-CSRF-Token would otherwise 403).
+app.add_middleware(CSRFMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

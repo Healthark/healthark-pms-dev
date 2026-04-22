@@ -18,7 +18,9 @@ import { AnnualReviews } from "./pages/AnnualReviews";
 import { ProjectReviews } from "./pages/ProjectReviews";
 import { MyMentees } from "./pages/MyMentees";
 import { MenteeDetail } from "./pages/MenteeDetail";
+import { ChangePassword } from "./pages/ChangePassword";
 import { PageTitleProvider } from "./contexts/PageTitleProvider";
+import { useAuth } from "./hooks/useAuth";
 
 /**
  * AppShell renders the persistent chrome (Sidebar + Topbar) around all
@@ -40,6 +42,16 @@ function AppShell() {
   );
 }
 
+/**
+ * Auth wrapper for /change-password — kept out of ProtectedRoute so it
+ * doesn't trigger the must_change_password redirect loop. We still require
+ * authentication: unauthenticated users get bounced to /login.
+ */
+function RequireAuth({ children }: Readonly<{ children: React.ReactNode }>) {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -47,6 +59,19 @@ export default function App() {
         {/* Public */}
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
+
+        {/*
+          Forced change-password screen. Authenticated but deliberately OUTSIDE
+          ProtectedRoute so the must_change_password redirect doesn't loop.
+        */}
+        <Route
+          path="/change-password"
+          element={
+            <RequireAuth>
+              <ChangePassword />
+            </RequireAuth>
+          }
+        />
 
         {/* Stage 1 — must be authenticated */}
         <Route element={<ProtectedRoute />}>
