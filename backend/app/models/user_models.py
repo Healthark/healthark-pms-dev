@@ -28,6 +28,10 @@ class User(Base):
     # The frontend gates the app until the user chooses a new password, and
     # the self-service change-password endpoint clears it on success.
     must_change_password = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Sub-role flag — always implies role == "Admin". Gates the Management Review tab
+    # and the associated finalize/override actions. Set via seed.py for Founders + Amol;
+    # in the UI, new-user creation does not expose this (admin-managed only).
+    is_management = Column(Boolean, nullable=False, default=False, server_default="false")
     is_deleted = Column(Boolean, default=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Users, Settings, FolderOpen, BarChart2 } from "lucide-react";
+import {
+  UserPlus, Users, Settings, FolderOpen, BarChart2, ShieldCheck,
+} from "lucide-react";
 
 import {
   adminService,
@@ -21,10 +23,17 @@ import { UserModal } from "../components/admin/UserModal";
 import { DeactivateModal } from "../components/admin/DeactivateModal";
 import { ResetPasswordModal } from "../components/admin/ResetPasswordModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
+import { ManagementReviewTab } from "../components/admin/ManagementReviewTab";
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import { useAuth } from "../hooks/useAuth";
 
 
-type ActiveTab = "users" | "projects" | "reviews" | "settings";
+type ActiveTab =
+  | "users"
+  | "projects"
+  | "reviews"
+  | "management_review"
+  | "settings";
 
 export default function AdminPanel() {
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -62,6 +71,11 @@ export default function AdminPanel() {
   const [annualReviewFinalRatingVisible, setAnnualReviewFinalRatingVisible] = useState(false);
 
   const { refreshSettings } = useSystemSettings();
+  const { user } = useAuth();
+  // Sub-role gate. The backend also enforces this on every management
+  // endpoint, so this is purely a UI affordance.
+  const canSeeManagementReview =
+    user?.role === "Admin" && user?.is_management === true;
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -282,6 +296,16 @@ export default function AdminPanel() {
             <BarChart2 className="h-4 w-4" aria-hidden="true" />
             Reviews
           </button>
+          {canSeeManagementReview && (
+            <button
+              type="button"
+              className={tabCls("management_review")}
+              onClick={() => setActiveTab("management_review")}
+            >
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              Management Review
+            </button>
+          )}
           <button
             type="button"
             className={tabCls("settings")}
@@ -310,6 +334,10 @@ export default function AdminPanel() {
           <div className="p-5">
             <ManagementTab />
           </div>
+        )}
+
+        {activeTab === "management_review" && canSeeManagementReview && (
+          <ManagementReviewTab />
         )}
 
         {activeTab === "settings" && (
