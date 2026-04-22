@@ -1,31 +1,21 @@
 /**
- * SelfAppraisalTab.tsx — "My Review" list for the logged-in user.
+ * SelfReviewTab.tsx — "My Review" list for the logged-in user.
  *
- * Layout mirrors Yearly Goals (My Goals tab): a toolbar with search + year
- * filter + Card/Table view toggle, then a list of reviews across every cycle
- * the user has participated in. The active cycle slot shows a "Start Self
- * Appraisal" CTA until the user submits; past cycles are read-only.
- *
- * Submission is one-shot: POST /annual-reviews/self which creates the review
- * at pending_mentor status. There is no draft-edit UX in this tab — draft
- * rows that came from the seed or a partial save appear read-only.
+ * Presentational: receives the review history from the parent page and renders
+ * a toolbar (search + year filter + card/table toggle) over the list. The
+ * "Start Self-Review" action lives in the AnnualReviews page header so it
+ * stays reachable regardless of list state; this tab only shows the
+ * read-only empty state when the user has no reviews at all.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import {
-  Eye, LayoutGrid, Loader2, Plus, Search, Table2, UserCircle,
+  Eye, LayoutGrid, Loader2, Search, Table2, UserCircle,
   ClipboardCheck,
 } from "lucide-react";
-import {
-  annualReviewService,
-  type AnnualReview,
-  type SelfAppraisalPayload,
-} from "../../services/annual-review.service";
-import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { getErrorMessage } from "../../utils/errors";
+import type { AnnualReview } from "../../services/annual-review.service";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
-import { SelfAppraisalFormModal } from "./SelfAppraisalFormModal";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
@@ -98,19 +88,9 @@ function SelfReviewCard({
   );
 }
 
-// ── Empty / active-cycle CTA ───────────────────────────────────────
+// ── Empty state (only when the user has zero reviews in DB) ─────────
 
-function StartAppraisalCTA({
-  cycleName,
-  onStart,
-  disabled,
-  disabledReason,
-}: {
-  readonly cycleName: string;
-  readonly onStart: () => void;
-  readonly disabled: boolean;
-  readonly disabledReason?: string;
-}) {
+function NoReviewsEmptyState() {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center">
       <ClipboardCheck
@@ -118,23 +98,12 @@ function StartAppraisalCTA({
         aria-hidden="true"
       />
       <p className="font-display text-base font-medium text-text-main">
-        No self-review submitted for {formatFyLabel(cycleName)}
+        No self-reviews yet
       </p>
       <p className="mt-1 text-sm text-text-muted max-w-sm">
-        {disabled
-          ? (disabledReason ?? "Self-review submissions are currently closed.")
-          : "Reflect on your performance across 8 core competencies and submit when ready."}
+        Reflect on your performance across 8 core competencies and submit when
+        ready.
       </p>
-      {!disabled && (
-        <button
-          type="button"
-          onClick={onStart}
-          className="mt-4 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Start Self-Review
-        </button>
-      )}
     </div>
   );
 }
@@ -150,54 +119,18 @@ function LoadingState() {
 
 // ── Main ────────────────────────────────────────────────────────────
 
-export function SelfAppraisalTab() {
-  const { settings } = useSystemSettings();
-  const activeCycle = settings?.active_cycle_name ?? "";
-  const submissionsOpen = settings?.reviews_submission_open ?? false;
+interface SelfReviewTabProps {
+  readonly reviews: readonly AnnualReview[];
+  readonly isLoading: boolean;
+}
 
-  const [reviews, setReviews] = useState<AnnualReview[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
-  const [showForm, setShowForm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formError, setFormError] = useState("");
-
   const [viewTarget, setViewTarget] = useState<AnnualReview | null>(null);
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setReviews(await annualReviewService.getMyReviewHistory());
-    } catch {
-      /* stays empty */
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const hasCurrent = reviews.some((r) => r.cycle_name === activeCycle);
-
-  const handleSubmit = async (payload: SelfAppraisalPayload) => {
-    setIsSaving(true);
-    setFormError("");
-    try {
-      const created = await annualReviewService.submitSelfAppraisal(payload);
-      setReviews((prev) => [created, ...prev]);
-      setShowForm(false);
-    } catch (err) {
-      setFormError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const availableYears = Array.from(
     new Set(reviews.map((r) => extractFyToken(r.cycle_name))),
@@ -229,81 +162,68 @@ export function SelfAppraisalTab() {
 
   if (isLoading) return <LoadingState />;
 
+  if (reviews.length === 0) return <NoReviewsEmptyState />;
+
   return (
     <div className="space-y-4">
-      {/* Current-cycle prompt */}
-      {activeCycle && !hasCurrent && (
-        <StartAppraisalCTA
-          cycleName={activeCycle}
-          onStart={() => {
-            setFormError("");
-            setShowForm(true);
-          }}
-          disabled={!submissionsOpen}
-          disabledReason="Self-review submissions are currently closed. Check back when HR opens the window."
-        />
-      )}
-
-      {/* Toolbar — only when there is some history to filter */}
-      {reviews.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search by cycle…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-              />
-            </div>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
-              <button
-                type="button"
-                className={viewBtnCls("grid")}
-                onClick={() => setViewMode("grid")}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" /> Cards
-              </button>
-              <button
-                type="button"
-                className={viewBtnCls("table")}
-                onClick={() => setViewMode("table")}
-              >
-                <Table2 className="h-3.5 w-3.5" /> Table
-              </button>
-            </div>
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by cycle…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+            />
           </div>
-
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor="self-review-year-filter"
-                className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-              >
-                Year
-              </label>
-              <select
-                id="self-review-year-filter"
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-                className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
-              >
-                <option value="all">All Years</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>
-                    {formatFyLabel(y)}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+            <button
+              type="button"
+              className={viewBtnCls("grid")}
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Cards
+            </button>
+            <button
+              type="button"
+              className={viewBtnCls("table")}
+              onClick={() => setViewMode("table")}
+            >
+              <Table2 className="h-3.5 w-3.5" /> Table
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Content — empty state is covered by the CTA above */}
-      {reviews.length === 0 ? null : filtered.length === 0 ? (
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="self-review-year-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Year
+            </label>
+            <select
+              id="self-review-year-filter"
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+            >
+              <option value="all">All Years</option>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {formatFyLabel(y)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
           <UserCircle
             className="h-10 w-10 text-text-muted mb-3"
@@ -397,20 +317,6 @@ export function SelfAppraisalTab() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {/* Form modal (current cycle only) */}
-      {showForm && activeCycle && (
-        <SelfAppraisalFormModal
-          cycleName={activeCycle}
-          onSubmit={handleSubmit}
-          onClose={() => {
-            setShowForm(false);
-            setFormError("");
-          }}
-          isSaving={isSaving}
-          error={formError}
-        />
       )}
 
       {/* Read-only detail modal */}

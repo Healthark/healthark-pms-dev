@@ -21,7 +21,7 @@ function reviewShortLabel(review: MenteeSummary["review"]): string {
   const label = (() => {
     switch (review.status) {
       case "draft":
-        return "Self-appraisal";
+        return "Self-review";
       case "pending_mentor":
         return "Pending review";
       case "pending_management":

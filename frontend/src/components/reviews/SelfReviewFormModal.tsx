@@ -1,28 +1,28 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Send, X } from "lucide-react";
-import type { SelfAppraisalPayload } from "../../services/annual-review.service";
+import type { SelfReviewPayload } from "../../services/annual-review.service";
 import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
 import { formatFyLabel } from "../../utils/fy";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
-interface SelfAppraisalFormModalProps {
+interface SelfReviewFormModalProps {
   readonly cycleName: string;
-  readonly onSubmit: (payload: SelfAppraisalPayload) => Promise<void>;
+  readonly onSubmit: (payload: SelfReviewPayload) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
   readonly error: string;
 }
 
-export function SelfAppraisalFormModal({
+export function SelfReviewFormModal({
   cycleName,
   onSubmit,
   onClose,
   isSaving,
   error,
-}: SelfAppraisalFormModalProps) {
+}: SelfReviewFormModalProps) {
   const [overallReview, setOverallReview] = useState("");
   const [rating, setRating] = useState<number | "">("");
 

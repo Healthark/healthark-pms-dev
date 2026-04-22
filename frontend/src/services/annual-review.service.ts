@@ -1,5 +1,5 @@
 /**
- * annual-review.service.ts — API Contract for the 3-Stage Appraisal.
+ * annual-review.service.ts — API Contract for the 3-Stage Review.
  *
  * Covers:
  *   Stage 1: Employee self-review (create, draft save, get mine, get history)
@@ -73,12 +73,12 @@ export interface CalibrationRow {
 
 // ── Request Payload Types ───────────────────────────────────────────
 
-export interface SelfAppraisalPayload {
+export interface SelfReviewPayload {
   self_overall_review: string;
   self_performance_rating: number;
 }
 
-export type SelfAppraisalDraftPayload = Partial<SelfAppraisalPayload>;
+export type SelfReviewDraftPayload = Partial<SelfReviewPayload>;
 
 export interface MentorEvalPayload {
   mentor_overall_review: string;
@@ -95,8 +95,8 @@ export interface ManagementFinalizePayload {
 
 export const annualReviewService = {
   // ── Stage 1: Employee ───────────────────────────────────────────
-  submitSelfAppraisal: async (
-    payload: SelfAppraisalPayload,
+  submitSelfReview: async (
+    payload: SelfReviewPayload,
   ): Promise<AnnualReview> => {
     const res = await apiClient.post<AnnualReview>(
       "/annual-reviews/self",
@@ -107,7 +107,7 @@ export const annualReviewService = {
 
   saveDraft: async (
     reviewId: number,
-    payload: SelfAppraisalDraftPayload,
+    payload: SelfReviewDraftPayload,
   ): Promise<AnnualReview> => {
     const res = await apiClient.patch<AnnualReview>(
       `/annual-reviews/${reviewId}/draft`,
