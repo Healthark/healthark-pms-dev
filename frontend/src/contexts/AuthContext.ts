@@ -15,6 +15,13 @@ export interface AuthContextType {
    * Usage: hasFeature("goals"), hasFeature("mentoring")
    */
   hasFeature: (feature: string) => boolean;
+  /**
+   * Re-pull the live auth claims (role, features, mentor/mentee flags,
+   * must_change_password). Call after any action that changes one of those
+   * (e.g. right after the user successfully changes their password so the
+   * admin-reset gate lifts).
+   */
+  refreshSession: () => Promise<void>;
 }
 
 // Undefined sentinel forces consumers through the useAuth hook,

@@ -10,6 +10,7 @@ import {
   type DesignationBrief,
   type SystemSettings,
   type AdminSettingsUpdatePayload,
+  type PasswordResetResponse,
 } from "../services/admin.service";
 import type { CycleType } from "../services/system-settings.service";
 import { getErrorMessage } from "../utils/errors";
@@ -18,6 +19,7 @@ import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
 import { DeactivateModal } from "../components/admin/DeactivateModal";
+import { ResetPasswordModal } from "../components/admin/ResetPasswordModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 
@@ -40,6 +42,11 @@ export default function AdminPanel() {
   const [deactivateTarget, setDeactivateTarget] = useState<UserResponse | null>(
     null,
   );
+  const [resetTarget, setResetTarget] = useState<UserResponse | null>(null);
+  const [resetResult, setResetResult] = useState<PasswordResetResponse | null>(
+    null,
+  );
+  const [resetError, setResetError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -132,6 +139,31 @@ export default function AdminPanel() {
       closeUserModal();
     } catch (err) {
       setModalError(getErrorMessage(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openResetModal = (u: UserResponse) => {
+    setResetTarget(u);
+    setResetResult(null);
+    setResetError("");
+  };
+  const closeResetModal = () => {
+    setResetTarget(null);
+    setResetResult(null);
+    setResetError("");
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetTarget) return;
+    setIsSaving(true);
+    setResetError("");
+    try {
+      const result = await adminService.resetUserPassword(resetTarget.id);
+      setResetResult(result);
+    } catch (err) {
+      setResetError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
@@ -268,6 +300,7 @@ export default function AdminPanel() {
             onSearchChange={setSearchQuery}
             onEdit={openEditModal}
             onDeactivate={setDeactivateTarget}
+            onResetPassword={openResetModal}
           />
         )}
 
@@ -323,6 +356,17 @@ export default function AdminPanel() {
           onConfirm={handleDeactivate}
           onClose={() => setDeactivateTarget(null)}
           isSaving={isSaving}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onConfirm={handleResetPassword}
+          onClose={closeResetModal}
+          isSaving={isSaving}
+          error={resetError}
+          result={resetResult}
         />
       )}
     </div>

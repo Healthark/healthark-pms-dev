@@ -18,6 +18,8 @@ Security Layers Applied (ALL endpoints):
     Layer 4 — Ownership:        Not applicable (Admin operates on all org data)
 """
 
+import secrets
+import string
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
@@ -37,7 +39,17 @@ from app.schemas.admin_schemas import (
     UserUpdate,
     AdminSettingsResponse,
     AdminSettingsUpdate,
+    PasswordResetResponse,
 )
+
+
+_TEMP_PASSWORD_ALPHABET = string.ascii_letters + string.digits
+
+
+def _generate_temp_password(length: int = 12) -> str:
+    """Crypto-random temp password using `secrets.choice`. Letters+digits only
+    to avoid ambiguous shell-escape characters when the admin relays it."""
+    return "".join(secrets.choice(_TEMP_PASSWORD_ALPHABET) for _ in range(length))
 
 router = APIRouter()
 
@@ -192,6 +204,62 @@ def update_user(
 
     # Return with eagerly loaded relationships
     return _load_user_with_relations(db, user.id)
+
+
+@router.post("/users/{user_id}/reset-password", response_model=PasswordResetResponse)
+def reset_user_password(
+    user_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Generate a random temporary password for a user and return it to the admin
+    exactly once.
+
+    The user's `must_change_password` flag is set so the app will force them
+    into the change-password screen on their next authenticated request. The
+    plaintext temp password is NEVER persisted — only its bcrypt hash lands
+    in the database. If the admin loses it, they just click reset again.
+
+    Admins cannot reset their own password via this endpoint — they must use
+    the self-service change-password flow so their session stays valid.
+    """
+    _require_admin(current_user)
+
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.org_id == current_user.org_id,
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reset the password of a deactivated user.",
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use the profile page's change-password form to reset your own password.",
+        )
+
+    temp_password = _generate_temp_password()
+    user.password_hash = get_password_hash(temp_password)
+    user.must_change_password = True
+    db.commit()
+
+    return PasswordResetResponse(
+        user_id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        temporary_password=temp_password,
+    )
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

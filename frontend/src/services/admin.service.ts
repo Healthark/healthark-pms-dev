@@ -32,6 +32,13 @@ export interface UserResponse {
   designation: DesignationBrief | null;
 }
 
+export interface PasswordResetResponse {
+  user_id: number;
+  full_name: string;
+  email: string;
+  temporary_password: string;
+}
+
 export interface SystemSettings {
   id: number;
   org_id: number;
@@ -113,6 +120,13 @@ export const adminService = {
 
   deactivateUser: async (userId: number): Promise<void> => {
     await apiClient.delete(`/admin/users/${userId}`);
+  },
+
+  resetUserPassword: async (userId: number): Promise<PasswordResetResponse> => {
+    const res = await apiClient.post<PasswordResetResponse>(
+      `/admin/users/${userId}/reset-password`,
+    );
+    return res.data;
   },
 
   // Reference data (for form dropdowns)

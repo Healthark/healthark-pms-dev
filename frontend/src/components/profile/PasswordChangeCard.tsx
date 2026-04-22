@@ -12,6 +12,7 @@
 import { useState, useCallback } from "react";
 import { Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { profileService } from "../../services/profile.service";
+import { useAuth } from "../../hooks/useAuth";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand pr-10";
@@ -83,6 +84,8 @@ function PasswordInput({
 }
 
 export function PasswordChangeCard() {
+  const { refreshSession } = useAuth();
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -117,12 +120,16 @@ export function PasswordChangeCard() {
       setNewPassword("");
       setConfirmPassword("");
       setSuccess(true);
+
+      // Refresh session so must_change_password flips to false immediately,
+      // lifting the /change-password gate for admin-reset users.
+      void refreshSession();
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
-  }, [currentPassword, newPassword]);
+  }, [currentPassword, newPassword, refreshSession]);
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
