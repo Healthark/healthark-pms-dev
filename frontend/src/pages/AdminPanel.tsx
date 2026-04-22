@@ -19,6 +19,7 @@ import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
 import { DeactivateModal } from "../components/admin/DeactivateModal";
+import { ReactivateModal } from "../components/admin/ReactivateModal";
 import { ResetPasswordModal } from "../components/admin/ResetPasswordModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { useSystemSettings } from "../hooks/useSystemSettings";
@@ -40,6 +41,9 @@ export default function AdminPanel() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<UserResponse | null>(
+    null,
+  );
+  const [reactivateTarget, setReactivateTarget] = useState<UserResponse | null>(
     null,
   );
   const [resetTarget, setResetTarget] = useState<UserResponse | null>(null);
@@ -187,6 +191,20 @@ export default function AdminPanel() {
     }
   };
 
+  const handleReactivate = async () => {
+    if (!reactivateTarget) return;
+    setIsSaving(true);
+    try {
+      const updated = await adminService.reactivateUser(reactivateTarget.id);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      setReactivateTarget(null);
+    } catch {
+      // Modal stays open — user can retry
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // ── Settings handler ──────────────────────────────────────────────────────
   const handleSaveSettings = async () => {
     setIsSaving(true);
@@ -300,6 +318,7 @@ export default function AdminPanel() {
             onSearchChange={setSearchQuery}
             onEdit={openEditModal}
             onDeactivate={setDeactivateTarget}
+            onReactivate={setReactivateTarget}
             onResetPassword={openResetModal}
           />
         )}
@@ -355,6 +374,15 @@ export default function AdminPanel() {
           user={deactivateTarget}
           onConfirm={handleDeactivate}
           onClose={() => setDeactivateTarget(null)}
+          isSaving={isSaving}
+        />
+      )}
+
+      {reactivateTarget && (
+        <ReactivateModal
+          user={reactivateTarget}
+          onConfirm={handleReactivate}
+          onClose={() => setReactivateTarget(null)}
           isSaving={isSaving}
         />
       )}
