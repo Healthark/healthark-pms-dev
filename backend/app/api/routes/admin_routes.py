@@ -262,6 +262,45 @@ def reset_user_password(
     )
 
 
+@router.post("/users/{user_id}/reactivate", response_model=UserResponse)
+def reactivate_user(
+    user_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Reverse a soft-delete (set is_deleted = False).
+
+    The user's historical password, mentor assignment, reviews, and goals
+    are preserved — reactivation just flips the access flag. They can log
+    in with their old password immediately. If admin wants a clean slate,
+    they should follow up with a password reset.
+    """
+    _require_admin(current_user)
+
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.org_id == current_user.org_id,
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if not user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This user is already active.",
+        )
+
+    user.is_deleted = False
+    db.commit()
+
+    return _load_user_with_relations(db, user.id)
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_user(
     user_id: int,

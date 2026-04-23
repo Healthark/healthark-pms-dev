@@ -1,4 +1,4 @@
-import { Search, Pencil, UserX, KeyRound } from "lucide-react";
+import { Search, Pencil, UserX, UserCheck, KeyRound } from "lucide-react";
 import type { UserResponse } from "../../services/admin.service";
 import { StatusBadge } from "./StatusBadge";
 
@@ -9,6 +9,7 @@ interface UsersTabProps {
   readonly onSearchChange: (query: string) => void;
   readonly onEdit: (user: UserResponse) => void;
   readonly onDeactivate: (user: UserResponse) => void;
+  readonly onReactivate: (user: UserResponse) => void;
   readonly onResetPassword: (user: UserResponse) => void;
 }
 
@@ -29,6 +30,7 @@ export function UsersTab({
   onSearchChange,
   onEdit,
   onDeactivate,
+  onReactivate,
   onResetPassword,
 }: UsersTabProps) {
   const filtered = users.filter((u) => {
@@ -154,6 +156,16 @@ export function UsersTab({
                             className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
                           >
                             <UserX className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                        {user.is_deleted && (
+                          <button
+                            type="button"
+                            onClick={() => onReactivate(user)}
+                            title="Reactivate user"
+                            className="rounded-md p-1.5 text-text-muted hover:bg-green-50 hover:text-green-600 transition-colors"
+                          >
+                            <UserCheck className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>

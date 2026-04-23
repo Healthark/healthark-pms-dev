@@ -22,6 +22,8 @@ import {
   type ApprovalStatus,
 } from "../../services/goal.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
 
 interface CriteriaChecklistProps {
   readonly criteria: Criterion[];
@@ -82,39 +84,39 @@ function CriterionRow({
   const [showProof, setShowProof] = useState(false);
   const [proofText, setProofText] = useState(criterion.proof_comments ?? "");
   const [proofSaving, setProofSaving] = useState(false);
-  const [error, setError] = useState("");
+  const toast = useToast();
+  const snackbar = useSnackbar();
 
   const handleToggle = useCallback(async () => {
     if (!canToggle || isToggling) return;
     setIsToggling(true);
-    setError("");
     try {
       const updated = await goalService.updateCriterion(criterion.id, {
         is_completed: !criterion.is_completed,
       });
       onUpdate(updated);
     } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      snackbar.error(getErrorMessage(err));
     } finally {
       setIsToggling(false);
     }
-  }, [canToggle, isToggling, criterion, onUpdate]);
+  }, [canToggle, isToggling, criterion, onUpdate, snackbar]);
 
   const handleSaveProof = useCallback(async () => {
     setProofSaving(true);
-    setError("");
     try {
       const updated = await goalService.updateCriterion(criterion.id, {
         proof_comments: proofText.trim() || null,
       });
       onUpdate(updated);
       setShowProof(false);
+      toast.success("Evidence saved.");
     } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      snackbar.error(getErrorMessage(err));
     } finally {
       setProofSaving(false);
     }
-  }, [criterion.id, proofText, onUpdate]);
+  }, [criterion.id, proofText, onUpdate, toast, snackbar]);
 
   return (
     <li className="space-y-1.5">
@@ -192,7 +194,6 @@ function CriterionRow({
       {/* Proof input area */}
       {showProof && (
         <div className="ml-6.5 pl-0.5 space-y-2">
-          {error && <p className="text-xs text-red-600">{error}</p>}
           <textarea
             rows={2}
             value={proofText}

@@ -23,6 +23,7 @@ import {
   type PerformanceGroup,
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useToast } from "../../hooks/useToast";
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -351,6 +352,7 @@ function EvalCard({
 // ── Tab Component ───────────────────────────────────────────────────
 
 export function EvaluationsTab() {
+  const toast = useToast();
   const [primaryReviews, setPrimaryReviews] = useState<ProjectReviewResponse[]>([]);
   const [secondaryReviews, setSecondaryReviews] = useState<ProjectReviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -399,6 +401,7 @@ export function EvaluationsTab() {
       await projectReviewService.submitPrimaryEval(reviewId, payload);
       setPrimaryReviews((prev) => prev.filter((r) => r.id !== reviewId));
       closeModal();
+      toast.success("Primary evaluation submitted.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -413,6 +416,7 @@ export function EvaluationsTab() {
       await projectReviewService.submitSecondaryPeerEval(reviewId, payload);
       setSecondaryReviews((prev) => prev.filter((r) => r.id !== reviewId));
       closeModal();
+      toast.success("Impact statement submitted.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     } finally {

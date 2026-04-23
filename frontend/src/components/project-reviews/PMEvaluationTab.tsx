@@ -21,6 +21,7 @@ import {
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { EvalModal } from "./EvalModal";
@@ -153,6 +154,7 @@ export function PMEvaluationTab() {
   const currentUserId = user?.user_id;
   const { settings } = useSystemSettings();
   const activeCycle = settings?.active_cycle_name ?? null;
+  const toast = useToast();
 
   const [pmCards, setPmCards] = useState<PMPendingReviewCard[]>([]);
   const [secReviews, setSecReviews] = useState<ProjectReviewResponse[]>([]);
@@ -294,13 +296,16 @@ export function PMEvaluationTab() {
     try {
       if (isEditMode && evalTarget.review_id != null) {
         await projectReviewService.updateReview(evalTarget.review_id, payload);
+        closeModal();
+        toast.success("Evaluation updated.");
       } else {
         await projectReviewService.submitPMEvaluation(evalTarget.project_id, evalTarget.user_id!, payload);
         setPmCards((prev) => prev.map((c) =>
           c.project_id === evalTarget.project_id && c.user_id === evalTarget.user_id ? { ...c, review_status: "reviewed" } : c
         ));
+        closeModal();
+        toast.success("Evaluation submitted.");
       }
-      closeModal();
     } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsSaving(false); }
   };
 
@@ -314,6 +319,7 @@ export function PMEvaluationTab() {
       }
       await loadData();
       closeModal();
+      toast.success("Impact statement saved.");
     } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsSaving(false); }
   };
 

@@ -10,9 +10,11 @@
  */
 
 import { useState, useCallback } from "react";
-import { Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Lock, Eye, EyeOff } from "lucide-react";
 import { profileService } from "../../services/profile.service";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand pr-10";
@@ -85,14 +87,14 @@ function PasswordInput({
 
 export function PasswordChangeCard() {
   const { refreshSession } = useAuth();
+  const toast = useToast();
+  const snackbar = useSnackbar();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
 
   // ── Client-Side Validation ──────────────────────────────────────
   const mismatch =
@@ -105,8 +107,6 @@ export function PasswordChangeCard() {
     !isSaving;
 
   const handleSubmit = useCallback(async () => {
-    setError("");
-    setSuccess(false);
     setIsSaving(true);
 
     try {
@@ -115,21 +115,20 @@ export function PasswordChangeCard() {
         new_password: newPassword,
       });
 
-      // Clear form and show success
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setSuccess(true);
+      toast.success("Password updated.");
 
       // Refresh session so must_change_password flips to false immediately,
       // lifting the /change-password gate for admin-reset users.
       void refreshSession();
     } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      snackbar.error(getErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
-  }, [currentPassword, newPassword, refreshSession]);
+  }, [currentPassword, newPassword, refreshSession, toast, snackbar]);
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
@@ -149,30 +148,11 @@ export function PasswordChangeCard() {
       </div>
 
       <div className="max-w-sm space-y-4">
-        {/* Error banner */}
-        {error && (
-          <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
-            {error}
-          </p>
-        )}
-
-        {/* Success banner */}
-        {success && (
-          <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2.5 text-sm text-green-700">
-            <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Password updated successfully.
-          </div>
-        )}
-
         <PasswordInput
           id="current-password"
           label="Current Password"
           value={currentPassword}
-          onChange={(v) => {
-            setCurrentPassword(v);
-            setError("");
-            setSuccess(false);
-          }}
+          onChange={setCurrentPassword}
           placeholder="Enter your current password"
         />
 
@@ -180,11 +160,7 @@ export function PasswordChangeCard() {
           id="new-password"
           label="New Password"
           value={newPassword}
-          onChange={(v) => {
-            setNewPassword(v);
-            setError("");
-            setSuccess(false);
-          }}
+          onChange={setNewPassword}
           placeholder="Min. 8 characters"
         />
 
@@ -198,11 +174,7 @@ export function PasswordChangeCard() {
           id="confirm-password"
           label="Confirm New Password"
           value={confirmPassword}
-          onChange={(v) => {
-            setConfirmPassword(v);
-            setError("");
-            setSuccess(false);
-          }}
+          onChange={setConfirmPassword}
           placeholder="Re-enter your new password"
         />
 

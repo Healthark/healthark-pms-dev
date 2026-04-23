@@ -20,11 +20,13 @@ import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
-import { DeactivateModal } from "../components/admin/DeactivateModal";
-import { ResetPasswordModal } from "../components/admin/ResetPasswordModal";
+import { TempPasswordRevealModal } from "../components/admin/TempPasswordRevealModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { ManagementReviewTab } from "../components/admin/ManagementReviewTab";
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import { useToast } from "../hooks/useToast";
+import { useSnackbar } from "../hooks/useSnackbar";
+import { useConfirm } from "../hooks/useConfirm";
 import { useAuth } from "../hooks/useAuth";
 
 
@@ -48,18 +50,11 @@ export default function AdminPanel() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
-  const [deactivateTarget, setDeactivateTarget] = useState<UserResponse | null>(
-    null,
-  );
-  const [resetTarget, setResetTarget] = useState<UserResponse | null>(null);
   const [resetResult, setResetResult] = useState<PasswordResetResponse | null>(
     null,
   );
-  const [resetError, setResetError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
-  const [settingsSaved, setSettingsSaved] = useState(false);
-  const [settingsSaveError, setSettingsSaveError] = useState("");
 
   // Settings form state
   const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
@@ -71,6 +66,10 @@ export default function AdminPanel() {
   const [annualReviewFinalRatingVisible, setAnnualReviewFinalRatingVisible] = useState(false);
 
   const { refreshSettings } = useSystemSettings();
+  const toast = useToast();
+  const snackbar = useSnackbar();
+  const confirm = useConfirm();
+
   const { user } = useAuth();
   // Sub-role gate. The backend also enforces this on every management
   // endpoint, so this is purely a UI affordance.
@@ -144,13 +143,16 @@ export default function AdminPanel() {
         setUsers((prev) =>
           prev.map((u) => (u.id === updated.id ? updated : u)),
         );
+        closeUserModal();
+        toast.success(`${updated.full_name} updated.`);
       } else {
         const created = await adminService.createUser(
           payload as UserCreatePayload,
         );
         setUsers((prev) => [created, ...prev]);
+        closeUserModal();
+        toast.success(`${created.full_name} created.`);
       }
-      closeUserModal();
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -158,53 +160,65 @@ export default function AdminPanel() {
     }
   };
 
-  const openResetModal = (u: UserResponse) => {
-    setResetTarget(u);
-    setResetResult(null);
-    setResetError("");
-  };
-  const closeResetModal = () => {
-    setResetTarget(null);
-    setResetResult(null);
-    setResetError("");
-  };
+  const handleResetPassword = async (user: UserResponse) => {
+    const ok = await confirm({
+      title: "Reset password?",
+      message: `Generate a new temporary password for ${user.full_name}? Their current password will be invalidated immediately.`,
+      variant: "warning",
+      confirmText: "Reset password",
+    });
+    if (!ok) return;
 
-  const handleResetPassword = async () => {
-    if (!resetTarget) return;
-    setIsSaving(true);
-    setResetError("");
     try {
-      const result = await adminService.resetUserPassword(resetTarget.id);
+      const result = await adminService.resetUserPassword(user.id);
+      // Opens the reveal modal. Temp password is shown exactly once.
       setResetResult(result);
     } catch (err) {
-      setResetError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
+      snackbar.error(getErrorMessage(err));
     }
   };
 
-  const handleDeactivate = async () => {
-    if (!deactivateTarget) return;
-    setIsSaving(true);
+  const handleDeactivate = async (user: UserResponse) => {
+    const ok = await confirm({
+      title: "Deactivate user?",
+      message: `Deactivate ${user.full_name}? They will no longer be able to log in. This can be reversed by reactivating the user.`,
+      variant: "danger",
+      confirmText: "Deactivate",
+    });
+    if (!ok) return;
+
     try {
-      await adminService.deactivateUser(deactivateTarget.id);
+      await adminService.deactivateUser(user.id);
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === deactivateTarget.id ? { ...u, is_deleted: true } : u,
-        ),
+        prev.map((u) => (u.id === user.id ? { ...u, is_deleted: true } : u)),
       );
-      setDeactivateTarget(null);
-    } catch {
-      // Modal stays open — user can retry
-    } finally {
-      setIsSaving(false);
+      toast.success(`${user.full_name} deactivated.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
+    }
+  };
+
+  const handleReactivate = async (user: UserResponse) => {
+    const ok = await confirm({
+      title: "Reactivate user?",
+      message: `Reactivate ${user.full_name}? They will regain access immediately using their previous password. Historical goals, reviews, and mentor assignment are preserved.`,
+      variant: "default",
+      confirmText: "Reactivate",
+    });
+    if (!ok) return;
+
+    try {
+      const updated = await adminService.reactivateUser(user.id);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      toast.success(`${updated.full_name} reactivated.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
     }
   };
 
   // ── Settings handler ──────────────────────────────────────────────────────
   const handleSaveSettings = async () => {
     setIsSaving(true);
-    setSettingsSaveError("");
     try {
       const payload: AdminSettingsUpdatePayload = {
         cycle_type: cycleType,
@@ -226,11 +240,10 @@ export default function AdminPanel() {
       setFinalRatingVisible(fresh.yearly_goals_final_rating_visible ?? false);
       setProjectRatingsVisible(fresh.project_ratings_visible ?? false);
       setAnnualReviewFinalRatingVisible(fresh.annual_review_final_rating_visible ?? false);
-      setSettingsSaved(true);
-      setTimeout(() => setSettingsSaved(false), 3000);
       await refreshSettings();
+      toast.success("Configuration saved.");
     } catch (err) {
-      setSettingsSaveError(getErrorMessage(err));
+      snackbar.error(getErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
@@ -323,8 +336,9 @@ export default function AdminPanel() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onEdit={openEditModal}
-            onDeactivate={setDeactivateTarget}
-            onResetPassword={openResetModal}
+            onDeactivate={handleDeactivate}
+            onReactivate={handleReactivate}
+            onResetPassword={handleResetPassword}
           />
         )}
 
@@ -359,8 +373,6 @@ export default function AdminPanel() {
             onAnnualReviewFinalRatingVisibleChange={setAnnualReviewFinalRatingVisible}
             onSave={handleSaveSettings}
             isSaving={isSaving}
-            settingsSaved={settingsSaved}
-            saveError={settingsSaveError}
           />
         )}
       </div>
@@ -378,23 +390,10 @@ export default function AdminPanel() {
         error={modalError}
       />
 
-      {deactivateTarget && (
-        <DeactivateModal
-          user={deactivateTarget}
-          onConfirm={handleDeactivate}
-          onClose={() => setDeactivateTarget(null)}
-          isSaving={isSaving}
-        />
-      )}
-
-      {resetTarget && (
-        <ResetPasswordModal
-          user={resetTarget}
-          onConfirm={handleResetPassword}
-          onClose={closeResetModal}
-          isSaving={isSaving}
-          error={resetError}
+      {resetResult && (
+        <TempPasswordRevealModal
           result={resetResult}
+          onClose={() => setResetResult(null)}
         />
       )}
     </div>

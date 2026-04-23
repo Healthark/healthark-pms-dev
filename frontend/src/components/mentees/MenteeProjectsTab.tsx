@@ -21,6 +21,7 @@ import {
 import type { MenteeProjectAssignment } from "../../services/mentee.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { EvalModal, type EvalModalCard } from "../project-reviews/EvalModal";
@@ -259,6 +260,7 @@ export function MenteeProjectsTab({
 }: MenteeProjectsTabProps) {
   const { user } = useAuth();
   const currentUserId = user?.user_id ?? null;
+  const toast = useToast();
 
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
@@ -406,8 +408,9 @@ export function MenteeProjectsTab({
     setIsSaving(true);
     setModalError("");
     try {
-      if (evalMode === "edit" && evalTarget.review_id != null) {
-        await projectReviewService.updateReview(evalTarget.review_id, payload);
+      const isEdit = evalMode === "edit" && evalTarget.review_id != null;
+      if (isEdit) {
+        await projectReviewService.updateReview(evalTarget.review_id!, payload);
       } else {
         await projectReviewService.submitPMEvaluation(
           evalTarget.project_id,
@@ -417,6 +420,7 @@ export function MenteeProjectsTab({
       }
       onReload();
       closeEval();
+      toast.success(isEdit ? "Evaluation updated." : "Evaluation submitted.");
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -443,6 +447,7 @@ export function MenteeProjectsTab({
       }
       onReload();
       closeImpact();
+      toast.success(mine ? "Impact statement updated." : "Impact statement submitted.");
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {

@@ -122,6 +122,13 @@ export const adminService = {
     await apiClient.delete(`/admin/users/${userId}`);
   },
 
+  reactivateUser: async (userId: number): Promise<UserResponse> => {
+    const res = await apiClient.post<UserResponse>(
+      `/admin/users/${userId}/reactivate`,
+    );
+    return res.data;
+  },
+
   resetUserPassword: async (userId: number): Promise<PasswordResetResponse> => {
     const res = await apiClient.post<PasswordResetResponse>(
       `/admin/users/${userId}/reset-password`,

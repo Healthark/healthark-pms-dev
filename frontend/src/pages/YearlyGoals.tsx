@@ -17,6 +17,8 @@ import {
 } from "../services/goal.service";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import { useToast } from "../hooks/useToast";
+import { useSnackbar } from "../hooks/useSnackbar";
 import { getErrorMessage } from "../utils/errors";
 import { YearlyGoalCard } from "../components/goals/YearlyGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
@@ -134,6 +136,8 @@ function GoalSkeleton() {
 export function YearlyGoals() {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
+  const toast = useToast();
+  const snackbar = useSnackbar();
 
   // A user is treated as a "mentor" purely based on whether other users
   // report to them via mentor_id — role is not the authority here.
@@ -213,14 +217,17 @@ export function YearlyGoals() {
         setGoals((prev) =>
           prev.map((g) => (g.id === updated.id ? updated : g)),
         );
+        closeModal();
+        toast.success("Goal updated.");
       } else {
         const created = await goalService.createGoal({
           ...(payload as GoalCreatePayload),
           goal_type: "yearly",
         });
         setGoals((prev) => [created, ...prev]);
+        closeModal();
+        toast.success("Goal created.");
       }
-      closeModal();
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -233,8 +240,9 @@ export function YearlyGoals() {
     try {
       const updated = await goalService.submitGoal(goal.id);
       setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
-    } catch {
-      /* goal stays in draft — user can retry */
+      toast.success("Goal submitted for review.");
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
     }
   };
 
@@ -266,6 +274,7 @@ export function YearlyGoals() {
         prev.map((g) => (g.id === updated.id ? updated : g)),
       );
       closeSelfReview();
+      toast.success("Self-review submitted.");
     } catch (err) {
       setSelfReviewError(getErrorMessage(err));
     } finally {
