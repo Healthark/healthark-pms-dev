@@ -19,8 +19,14 @@ interface ProtectedRouteProps {
  * Four-stage guard:
  *   Stage 1 — Authentication:          No valid session → /login
  *   Stage 2 — Forced password change:  must_change_password is true → /change-password
- *   Stage 3 — Feature Gate:            Feature not enabled for this org → /unauthorized
- *   Stage 4 — Role Gate:               User role not in allowed list → /unauthorized
+ *   Stage 3 — Feature Gate:            Feature not enabled for this org → fallback
+ *   Stage 4 — Role Gate:               User role not in allowed list → fallback
+ *
+ * Fallback is /dashboard when the user has the dashboard feature (their
+ * legitimate home), and /unauthorized only when they don't — i.e. a
+ * genuinely locked-out account with no home to send them to. This avoids
+ * the "login → unauthorized" flow that happens when a stale intendedPath
+ * gets replayed after a forced re-login.
  *
  * We preserve `location` in state so Login.tsx can redirect back after
  * successful authentication (the "intended destination" pattern).
@@ -43,12 +49,17 @@ export function ProtectedRoute({
     return <Navigate to="/change-password" replace />;
   }
 
+  // Using hasFeature("dashboard") here (not features.length > 0) avoids a
+  // redirect loop: if we sent dashboard-less users to /dashboard, its own
+  // feature gate would bounce them right back.
+  const fallback = hasFeature("dashboard") ? "/dashboard" : "/unauthorized";
+
   if (requiredFeature && !hasFeature(requiredFeature)) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to={fallback} replace />;
   }
 
   if (requiredRole && !requiredRole.includes(user?.role ?? "")) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to={fallback} replace />;
   }
 
   return <Outlet />;
