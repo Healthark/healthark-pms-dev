@@ -101,8 +101,7 @@ function NoReviewsEmptyState() {
         No self-reviews yet
       </p>
       <p className="mt-1 text-sm text-text-muted max-w-sm">
-        Reflect on your performance across 8 core competencies and submit when
-        ready.
+        Reflect on your performance and submit when ready.
       </p>
     </div>
   );

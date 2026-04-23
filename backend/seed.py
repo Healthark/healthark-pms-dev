@@ -1,23 +1,14 @@
 """
 seed.py — Deterministic dev seed.
 
-Regenerated after the following model changes:
-  - Goal.status (progress status) removed.
-  - GoalSelfReview introduced as a separate table keyed by (goal_id, cycle_half).
-  - Goal.manager_name exposed via property for the Mentor column.
-
-Users, departments, designations, system settings, and role expectations are
-preserved from prior seeds — so existing login credentials keep working.
-Projects and all downstream artifacts (project reviews, annual reviews,
-yearly goals, self-reviews) are refreshed with a new portfolio
-(PRJ-101..PRJ-104) so testers can see this run produced the new data.
-
 Accounts (all passwords: password123):
-  Healthark Admin: admin@healthark.com
-  Mentors:         priya@ / david@ / vikram@healthark.com
-  Mentees:         arjun@, neha@ (→ priya),
-                   rahul@, meera@ (→ david),
-                   ananya@, karan@ (→ vikram)
+  Healthark Admin:  admin@healthark.com  (Sarah Admin)
+  New Admins:       amol@, founder1@, founder2@healthark.com
+  Mentors (→ Sarah): priya@, david@, vikram@healthark.com
+  Priya's mentees:  arjun@, neha@healthark.com
+  David's mentees:  rahul@, meera@healthark.com
+  Vikram's mentees: ananya@, karan@healthark.com
+  Amol's mentees:   riya@, tej@healthark.com
 
 Run:
   python seed.py
@@ -54,12 +45,8 @@ def seed_database():
                 name="Healthark",
                 domain="healthark.com",
                 enabled_features=[
-                    "dashboard",
-                    "goals",
-                    "project_reviews",
-                    "annual_reviews",
-                    "mentoring",
-                    "admin",
+                    "dashboard", "goals", "project_reviews",
+                    "annual_reviews", "mentoring", "admin",
                 ],
             )
             db.add(org)
@@ -75,12 +62,8 @@ def seed_database():
                 name="Miltenyi",
                 domain="miltenyi.com",
                 enabled_features=[
-                    "dashboard",
-                    "goals",
-                    "project_reviews",
-                    "annual_reviews",
-                    "mentoring",
-                    "admin",
+                    "dashboard", "goals", "project_reviews",
+                    "annual_reviews", "mentoring", "admin",
                 ],
             )
             db.add(miltenyi_org)
@@ -100,12 +83,12 @@ def seed_database():
             dept_rwe       = Department(org_id=org.id, name="RWE")
             dept_marketing = Department(org_id=org.id, name="Marketing")
 
-            desig_consultant        = Designation(org_id=org.id, name="Consultant",          level=1)
-            desig_senior_consultant = Designation(org_id=org.id, name="Senior Consultant",   level=2)
-            desig_manager           = Designation(org_id=org.id, name="Manager",             level=3)
-            desig_senior_manager    = Designation(org_id=org.id, name="Senior Manager",      level=4)
-            desig_associate_director = Designation(org_id=org.id, name="Associate Director", level=5)
-            desig_director          = Designation(org_id=org.id, name="Director",            level=6)
+            desig_consultant         = Designation(org_id=org.id, name="Consultant",          level=1)
+            desig_senior_consultant  = Designation(org_id=org.id, name="Senior Consultant",   level=2)
+            desig_manager            = Designation(org_id=org.id, name="Manager",             level=3)
+            desig_senior_manager     = Designation(org_id=org.id, name="Senior Manager",      level=4)
+            desig_associate_director = Designation(org_id=org.id, name="Associate Director",  level=5)
+            desig_director           = Designation(org_id=org.id, name="Director",            level=6)
 
             db.add_all([
                 dept_strategy, dept_idt, dept_rwe, dept_marketing,
@@ -166,60 +149,202 @@ def seed_database():
             db.refresh(admin_user)
             print("  [+] Created: admin@healthark.com")
 
-            priya = User(org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_manager.id,
-                         employee_code="EMP-101", full_name="Priya Sharma", email="priya@healthark.com",
-                         role="Staff", password_hash=pw)
+            # Mentors — all report to Sarah
+            priya = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_manager.id,
+                employee_code="EMP-101", full_name="Priya Sharma", email="priya@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=admin_user.id,
+            )
             db.add(priya)
             db.commit()
             db.refresh(priya)
 
-            arjun = User(org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_consultant.id,
-                         employee_code="EMP-102", full_name="Arjun Patel", email="arjun@healthark.com",
-                         role="Staff", mentor_id=priya.id, password_hash=pw)
-            neha  = User(org_id=org.id, department_id=dept_strategy.id, designation_id=desig_consultant.id,
-                         employee_code="EMP-103", full_name="Neha Gupta", email="neha@healthark.com",
-                         role="Staff", mentor_id=priya.id, password_hash=pw)
-            david = User(org_id=org.id, department_id=dept_idt.id, designation_id=desig_manager.id,
-                         employee_code="EMP-201", full_name="David Miller", email="david@healthark.com",
-                         role="Staff", password_hash=pw)
+            arjun = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_consultant.id,
+                employee_code="EMP-102", full_name="Arjun Patel", email="arjun@healthark.com",
+                role="Staff", mentor_id=priya.id, password_hash=pw,
+            )
+            neha = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_consultant.id,
+                employee_code="EMP-103", full_name="Neha Gupta", email="neha@healthark.com",
+                role="Staff", mentor_id=priya.id, password_hash=pw,
+            )
+            david = User(
+                org_id=org.id, department_id=dept_idt.id, designation_id=desig_manager.id,
+                employee_code="EMP-201", full_name="David Miller", email="david@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=admin_user.id,
+            )
             db.add_all([arjun, neha, david])
             db.commit()
             db.refresh(david)
 
-            rahul = User(org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_consultant.id,
-                         employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.com",
-                         role="Staff", mentor_id=david.id, password_hash=pw)
-            meera = User(org_id=org.id, department_id=dept_idt.id, designation_id=desig_consultant.id,
-                         employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.com",
-                         role="Staff", mentor_id=david.id, password_hash=pw)
-            vikram = User(org_id=org.id, department_id=dept_rwe.id, designation_id=desig_manager.id,
-                          employee_code="EMP-301", full_name="Vikram Singh", email="vikram@healthark.com",
-                          role="Staff", password_hash=pw)
+            rahul = User(
+                org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_consultant.id,
+                employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.com",
+                role="Staff", mentor_id=david.id, password_hash=pw,
+            )
+            meera = User(
+                org_id=org.id, department_id=dept_idt.id, designation_id=desig_consultant.id,
+                employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.com",
+                role="Staff", mentor_id=david.id, password_hash=pw,
+            )
+            vikram = User(
+                org_id=org.id, department_id=dept_rwe.id, designation_id=desig_manager.id,
+                employee_code="EMP-301", full_name="Vikram Singh", email="vikram@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=admin_user.id,
+            )
             db.add_all([rahul, meera, vikram])
             db.commit()
             db.refresh(vikram)
 
-            ananya = User(org_id=org.id, department_id=dept_rwe.id, designation_id=desig_senior_consultant.id,
-                          employee_code="EMP-302", full_name="Ananya Reddy", email="ananya@healthark.com",
-                          role="Staff", mentor_id=vikram.id, password_hash=pw)
-            karan  = User(org_id=org.id, department_id=dept_rwe.id, designation_id=desig_consultant.id,
-                          employee_code="EMP-303", full_name="Karan Mehta", email="karan@healthark.com",
-                          role="Staff", mentor_id=vikram.id, password_hash=pw)
+            ananya = User(
+                org_id=org.id, department_id=dept_rwe.id, designation_id=desig_senior_consultant.id,
+                employee_code="EMP-302", full_name="Ananya Reddy", email="ananya@healthark.com",
+                role="Staff", mentor_id=vikram.id, password_hash=pw,
+            )
+            karan = User(
+                org_id=org.id, department_id=dept_rwe.id, designation_id=desig_consultant.id,
+                employee_code="EMP-303", full_name="Karan Mehta", email="karan@healthark.com",
+                role="Staff", mentor_id=vikram.id, password_hash=pw,
+            )
             db.add_all([ananya, karan])
             db.commit()
-            print("  [+] Created Healthark staff users")
+
+            # New Admin users — report to Sarah.
+            # is_management=True marks the sub-role that gates the
+            # Management Review tab (Amol + Founders).
+            amol = User(
+                org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
+                employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.com",
+                role="Admin", password_hash=pw, mentor_id=admin_user.id,
+                is_management=True,
+            )
+            db.add(amol)
+            db.commit()
+            db.refresh(amol)
+
+            founder1 = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
+                employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.com",
+                role="Admin", password_hash=pw, mentor_id=admin_user.id,
+                is_management=True,
+            )
+            founder2 = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
+                employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.com",
+                role="Admin", password_hash=pw, mentor_id=admin_user.id,
+                is_management=True,
+            )
+            db.add_all([founder1, founder2])
+            db.commit()
+            db.refresh(founder1)
+            db.refresh(founder2)
+
+            # Amol's mentees — Marketing staff
+            riya = User(
+                org_id=org.id, department_id=dept_marketing.id, designation_id=desig_consultant.id,
+                employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=amol.id,
+            )
+            tej = User(
+                org_id=org.id, department_id=dept_marketing.id, designation_id=desig_senior_consultant.id,
+                employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=amol.id,
+            )
+            db.add_all([riya, tej])
+            db.commit()
+            print("  [+] Created Healthark staff users (incl. Amol, Founder1, Founder2, Riya, Tej)")
 
         else:
             print("  [~] Healthark users already exist, resolving references...")
-            priya  = db.query(User).filter_by(org_id=org.id, email="priya@healthark.com").first()
-            arjun  = db.query(User).filter_by(org_id=org.id, email="arjun@healthark.com").first()
-            neha   = db.query(User).filter_by(org_id=org.id, email="neha@healthark.com").first()
-            david  = db.query(User).filter_by(org_id=org.id, email="david@healthark.com").first()
-            rahul  = db.query(User).filter_by(org_id=org.id, email="rahul@healthark.com").first()
-            meera  = db.query(User).filter_by(org_id=org.id, email="meera@healthark.com").first()
-            vikram = db.query(User).filter_by(org_id=org.id, email="vikram@healthark.com").first()
-            ananya = db.query(User).filter_by(org_id=org.id, email="ananya@healthark.com").first()
-            karan  = db.query(User).filter_by(org_id=org.id, email="karan@healthark.com").first()
+            priya   = db.query(User).filter_by(org_id=org.id, email="priya@healthark.com").first()
+            arjun   = db.query(User).filter_by(org_id=org.id, email="arjun@healthark.com").first()
+            neha    = db.query(User).filter_by(org_id=org.id, email="neha@healthark.com").first()
+            david   = db.query(User).filter_by(org_id=org.id, email="david@healthark.com").first()
+            rahul   = db.query(User).filter_by(org_id=org.id, email="rahul@healthark.com").first()
+            meera   = db.query(User).filter_by(org_id=org.id, email="meera@healthark.com").first()
+            vikram  = db.query(User).filter_by(org_id=org.id, email="vikram@healthark.com").first()
+            ananya  = db.query(User).filter_by(org_id=org.id, email="ananya@healthark.com").first()
+            karan   = db.query(User).filter_by(org_id=org.id, email="karan@healthark.com").first()
+            amol    = db.query(User).filter_by(org_id=org.id, email="amol@healthark.com").first()
+            founder1 = db.query(User).filter_by(org_id=org.id, email="founder1@healthark.com").first()
+            founder2 = db.query(User).filter_by(org_id=org.id, email="founder2@healthark.com").first()
+            riya    = db.query(User).filter_by(org_id=org.id, email="riya@healthark.com").first()
+            tej     = db.query(User).filter_by(org_id=org.id, email="tej@healthark.com").first()
+
+        # Ensure new users exist for existing DBs seeded before this update
+        if not amol:
+            amol = User(
+                org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
+                employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.com",
+                role="Admin", password_hash=pw, mentor_id=admin_user.id,
+                is_management=True,
+            )
+            db.add(amol)
+            db.commit()
+            db.refresh(amol)
+            print("  [+] Created: amol@healthark.com")
+
+        if not founder1:
+            founder1 = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
+                employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.com",
+                role="Admin", password_hash=pw, mentor_id=admin_user.id,
+                is_management=True,
+            )
+            db.add(founder1)
+            db.commit()
+            db.refresh(founder1)
+            print("  [+] Created: founder1@healthark.com")
+
+        if not founder2:
+            founder2 = User(
+                org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
+                employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.com",
+                role="Admin", password_hash=pw, mentor_id=admin_user.id,
+                is_management=True,
+            )
+            db.add(founder2)
+            db.commit()
+            db.refresh(founder2)
+            print("  [+] Created: founder2@healthark.com")
+
+        if not riya:
+            riya = User(
+                org_id=org.id, department_id=dept_marketing.id, designation_id=desig_consultant.id,
+                employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=amol.id,
+            )
+            db.add(riya)
+            db.commit()
+            db.refresh(riya)
+            print("  [+] Created: riya@healthark.com")
+
+        if not tej:
+            tej = User(
+                org_id=org.id, department_id=dept_marketing.id, designation_id=desig_senior_consultant.id,
+                employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.com",
+                role="Staff", password_hash=pw, mentor_id=amol.id,
+            )
+            db.add(tej)
+            db.commit()
+            db.refresh(tej)
+            print("  [+] Created: tej@healthark.com")
+
+        # Fix any users without a mentor (anyone without one gets Sarah)
+        for _u, _m in [
+            (priya, admin_user), (david, admin_user), (vikram, admin_user),
+            (amol, admin_user), (founder1, admin_user), (founder2, admin_user),
+            (riya, amol), (tej, amol),
+        ]:
+            if _u and _m and not _u.mentor_id:
+                _u.mentor_id = _m.id
+
+        # Backfill is_management for pre-existing seed rows (idempotent).
+        for _mgmt_user in (amol, founder1, founder2):
+            if _mgmt_user and not _mgmt_user.is_management:
+                _mgmt_user.is_management = True
+        db.commit()
 
         # ================================================================== #
         # 4. USERS — Miltenyi                                                 #
@@ -247,41 +372,47 @@ def seed_database():
             bob_lead = User(
                 org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_lead.id,
                 employee_code="MIL-101", full_name="Bob Builder", email="bob@miltenyi.com",
-                role="Staff", password_hash=pw,
+                role="Staff", password_hash=pw, mentor_id=alice_admin.id,
             )
             db.add(bob_lead)
             db.commit()
             db.refresh(bob_lead)
 
-            charlie = User(org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_sr_scientist.id,
-                           employee_code="MIL-102", full_name="Charlie Chemist", email="charlie@miltenyi.com",
-                           role="Staff", mentor_id=bob_lead.id, password_hash=pw)
-            dana = User(org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_scientist.id,
-                        employee_code="MIL-103", full_name="Dana DNA", email="dana@miltenyi.com",
-                        role="Staff", mentor_id=bob_lead.id, password_hash=pw)
+            charlie = User(
+                org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_sr_scientist.id,
+                employee_code="MIL-102", full_name="Charlie Chemist", email="charlie@miltenyi.com",
+                role="Staff", mentor_id=bob_lead.id, password_hash=pw,
+            )
+            dana = User(
+                org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_scientist.id,
+                employee_code="MIL-103", full_name="Dana DNA", email="dana@miltenyi.com",
+                role="Staff", mentor_id=bob_lead.id, password_hash=pw,
+            )
             evan_mfg = User(
                 org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_lead.id,
                 employee_code="MIL-201", full_name="Evan Engineer", email="evan@miltenyi.com",
-                role="Staff", password_hash=pw,
+                role="Staff", password_hash=pw, mentor_id=alice_admin.id,
             )
             db.add_all([charlie, dana, evan_mfg])
             db.commit()
             db.refresh(evan_mfg)
 
-            fiona = User(org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_scientist.id,
-                         employee_code="MIL-202", full_name="Fiona Factory", email="fiona@miltenyi.com",
-                         role="Staff", mentor_id=evan_mfg.id, password_hash=pw)
+            fiona = User(
+                org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_scientist.id,
+                employee_code="MIL-202", full_name="Fiona Factory", email="fiona@miltenyi.com",
+                role="Staff", mentor_id=evan_mfg.id, password_hash=pw,
+            )
             db.add(fiona)
             db.commit()
             print("  [+] Created Miltenyi staff users")
         else:
             print("  [~] Miltenyi users already exist, skipping...")
             alice_admin = db.query(User).filter_by(org_id=miltenyi_org.id, email="admin@miltenyi.com").first()
-            bob_lead = db.query(User).filter_by(org_id=miltenyi_org.id, email="bob@miltenyi.com").first()
-            charlie = db.query(User).filter_by(org_id=miltenyi_org.id, email="charlie@miltenyi.com").first()
-            dana = db.query(User).filter_by(org_id=miltenyi_org.id, email="dana@miltenyi.com").first()
-            evan_mfg = db.query(User).filter_by(org_id=miltenyi_org.id, email="evan@miltenyi.com").first()
-            fiona = db.query(User).filter_by(org_id=miltenyi_org.id, email="fiona@miltenyi.com").first()
+            bob_lead    = db.query(User).filter_by(org_id=miltenyi_org.id, email="bob@miltenyi.com").first()
+            charlie     = db.query(User).filter_by(org_id=miltenyi_org.id, email="charlie@miltenyi.com").first()
+            dana        = db.query(User).filter_by(org_id=miltenyi_org.id, email="dana@miltenyi.com").first()
+            evan_mfg    = db.query(User).filter_by(org_id=miltenyi_org.id, email="evan@miltenyi.com").first()
+            fiona       = db.query(User).filter_by(org_id=miltenyi_org.id, email="fiona@miltenyi.com").first()
 
         # ================================================================== #
         # 5. SYSTEM SETTINGS                                                  #
@@ -320,10 +451,11 @@ def seed_database():
             print("  [~] Miltenyi system settings already exist, skipping...")
 
         # ================================================================== #
-        # 6. PROJECTS — refreshed portfolio (PRJ-101..PRJ-104)                #
+        # 6. PROJECTS                                                         #
         # ================================================================== #
 
-        if db.query(Project).filter(Project.org_id == org.id).count() == 0 and priya and david and vikram:
+        if db.query(Project).filter(Project.org_id == org.id, Project.project_code == "PRJ-101").count() == 0 \
+                and priya and david and vikram:
 
             proj_specialty = Project(
                 org_id=org.id, project_code="PRJ-101",
@@ -334,10 +466,9 @@ def seed_database():
             )
             db.add(proj_specialty)
             db.flush()
-
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=priya.id,  assignment_role=desig_senior_manager.name,    department_id=dept_strategy.id, evaluator_type="Primary",  assigned_date=date(2025, 1, 20)))
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=arjun.id,  assignment_role=desig_senior_consultant.name, department_id=dept_strategy.id, evaluator_type=None,       assigned_date=date(2025, 1, 20)))
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=neha.id,   assignment_role=desig_consultant.name,        department_id=dept_strategy.id, evaluator_type=None,       assigned_date=date(2025, 2, 3)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=priya.id,  assignment_role=desig_senior_manager.name,    department_id=dept_strategy.id, evaluator_type="Primary",   assigned_date=date(2025, 1, 20)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=arjun.id,  assignment_role=desig_senior_consultant.name, department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 1, 20)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=neha.id,   assignment_role=desig_consultant.name,        department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,      evaluator_type="Secondary", assigned_date=date(2025, 1, 25)))
             db.commit()
 
@@ -350,7 +481,6 @@ def seed_database():
             )
             db.add(proj_trial)
             db.flush()
-
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,  evaluator_type="Primary",   assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=rahul.id,  assignment_role=desig_senior_consultant.name, department_id=dept_idt.id,  evaluator_type=None,        assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=meera.id,  assignment_role=desig_consultant.name,        department_id=dept_idt.id,  evaluator_type=None,        assigned_date=date(2025, 2, 17)))
@@ -366,7 +496,6 @@ def seed_database():
             )
             db.add(proj_safety)
             db.flush()
-
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_safety.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,      evaluator_type="Primary",  assigned_date=date(2025, 3, 10)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_safety.id, user_id=ananya.id, assignment_role=desig_senior_consultant.name, department_id=dept_rwe.id,      evaluator_type=None,       assigned_date=date(2025, 3, 10)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_safety.id, user_id=karan.id,  assignment_role=desig_consultant.name,        department_id=dept_rwe.id,      evaluator_type=None,       assigned_date=date(2025, 3, 20)))
@@ -382,7 +511,6 @@ def seed_database():
             )
             db.add(proj_payer)
             db.flush()
-
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=priya.id,  assignment_role=desig_senior_manager.name,    department_id=dept_strategy.id, evaluator_type="Primary",   assigned_date=date(2025, 4, 7)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=rahul.id,  assignment_role="Data Lead",                  department_id=dept_idt.id,      evaluator_type=None,        assigned_date=date(2025, 4, 7)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=ananya.id, assignment_role="RWE Lead",                   department_id=dept_rwe.id,      evaluator_type=None,        assigned_date=date(2025, 4, 7)))
@@ -390,9 +518,31 @@ def seed_database():
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,      evaluator_type="Secondary", assigned_date=date(2025, 4, 10)))
             db.commit()
 
-            print("  [+] Created Projects for Healthark (PRJ-101..PRJ-104)")
+            print("  [+] Created Projects PRJ-101..PRJ-104")
         else:
-            print("  [~] Healthark Projects already exist, skipping...")
+            print("  [~] Healthark Projects PRJ-101..PRJ-104 already exist, skipping...")
+
+        # PRJ-105 — Marketing Analytics Platform (Amol's project)
+        proj_marketing = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-105").first()
+        if not proj_marketing and amol and riya and tej:
+            proj_marketing = Project(
+                org_id=org.id, project_code="PRJ-105",
+                name="Healthark Marketing Analytics Platform",
+                description="Build internal KPI dashboards and campaign performance analytics to support business development and client acquisition.",
+                start_date=date(2025, 5, 1), expected_end_date=date(2025, 12, 31),
+                reports_to_id=amol.id,
+            )
+            db.add(proj_marketing)
+            db.flush()
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_marketing.id, user_id=amol.id, assignment_role=desig_director.name,          department_id=dept_marketing.id, evaluator_type="Primary", assigned_date=date(2025, 5, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_marketing.id, user_id=riya.id, assignment_role=desig_consultant.name,        department_id=dept_marketing.id, evaluator_type=None,      assigned_date=date(2025, 5, 1)))
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_marketing.id, user_id=tej.id,  assignment_role=desig_senior_consultant.name, department_id=dept_marketing.id, evaluator_type=None,      assigned_date=date(2025, 5, 1)))
+            db.commit()
+            print("  [+] Created Project PRJ-105 (Marketing Analytics Platform)")
+        else:
+            if proj_marketing:
+                print("  [~] PRJ-105 already exists, skipping...")
+            proj_marketing = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-105").first()
 
         if db.query(Project).filter(Project.org_id == miltenyi_org.id).count() == 0 and bob_lead and evan_mfg:
 
@@ -405,7 +555,6 @@ def seed_database():
             )
             db.add(proj_cell)
             db.flush()
-
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_cell.id, user_id=bob_lead.id, assignment_role=desig_lead.name,         department_id=dept_rnd.id, evaluator_type="Primary", assigned_date=date(2025, 1, 15)))
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_cell.id, user_id=charlie.id,  assignment_role=desig_sr_scientist.name, department_id=dept_rnd.id, evaluator_type=None,      assigned_date=date(2025, 1, 22)))
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_cell.id, user_id=dana.id,     assignment_role=desig_scientist.name,    department_id=dept_rnd.id, evaluator_type=None,      assigned_date=date(2025, 2, 1)))
@@ -420,7 +569,6 @@ def seed_database():
             )
             db.add(proj_macs)
             db.flush()
-
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=evan_mfg.id, assignment_role=desig_lead.name,      department_id=dept_mfg.id, evaluator_type="Primary",   assigned_date=date(2025, 3, 5)))
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=fiona.id,    assignment_role=desig_scientist.name, department_id=dept_mfg.id, evaluator_type=None,        assigned_date=date(2025, 3, 5)))
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=bob_lead.id, assignment_role="R&D Liaison",        department_id=dept_rnd.id, evaluator_type="Secondary", assigned_date=date(2025, 3, 18)))
@@ -431,7 +579,7 @@ def seed_database():
             print("  [~] Miltenyi Projects already exist, skipping...")
 
         # ================================================================== #
-        # 7. ROLE EXPECTATIONS (data dictionary — unchanged)                  #
+        # 7. ROLE EXPECTATIONS                                                #
         # ================================================================== #
 
         EXPECTATIONS_DATA = {
@@ -553,7 +701,7 @@ def seed_database():
             print("  [~] Healthark Role expectations already exist, skipping...")
 
         # ================================================================== #
-        # 8. PROJECT REVIEWS — fresh set against the new portfolio            #
+        # 8. PROJECT REVIEWS                                                  #
         # ================================================================== #
 
         proj_specialty = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-101").first()
@@ -562,6 +710,8 @@ def seed_database():
         proj_payer     = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-104").first()
 
         def _pr(user, project, reviewer, cycle, status, pg=None, impact=None, **comments):
+            if not project:
+                return
             if not db.query(ProjectReview).filter_by(
                 org_id=org.id, user_id=user.id, project_id=project.id, cycle=cycle,
             ).first():
@@ -585,7 +735,7 @@ def seed_database():
         if db.query(ProjectReview).filter(ProjectReview.org_id == org.id).count() == 0 \
                 and proj_specialty and proj_trial and proj_safety and proj_payer:
 
-            # ── H1 FY25 — Specialty Therapy Launch + Trial Data Mart all reviewed
+            # ── H1 FY25 ────────────────────────────────────────────────────
             _pr(arjun, proj_specialty, priya, "H1 FY25", "reviewed", pg="4",
                 impact="Arjun led the payer landscape assessment with strong analytical depth across 4 markets.",
                 comment_task_execution="Structured the market assessment framework end-to-end.",
@@ -662,7 +812,6 @@ def seed_database():
             )
             db.commit()
 
-            # Cross-functional payer evidence (PRJ-104) - reviewed
             _pr(rahul, proj_payer, priya, "H1 FY25", "reviewed", pg="4",
                 impact="Rahul's data integration was a cornerstone of the payer evidence package.",
                 comment_task_execution="Delivered the data harmonization layer across strategy, RWE, and IDT.",
@@ -702,7 +851,7 @@ def seed_database():
             if neha_pay_h1:   _pre(neha_pay_h1.id,   vikram, "Neha was a reliable contributor across cross-functional workstreams.")
             db.commit()
 
-            # ── H2 FY25 — mixed ────────────────────────────────────────────
+            # ── H2 FY25 ────────────────────────────────────────────────────
             _pr(arjun, proj_specialty, priya, "H2 FY25", "reviewed", pg="4",
                 impact="Arjun took broader coordination responsibility across the launch portfolio.",
                 comment_task_execution="Structured research gaps proactively without prompting.",
@@ -774,7 +923,7 @@ def seed_database():
             _pr(neha, proj_payer, priya, "H2 FY25", "pending")
             db.commit()
 
-            # ── H1 FY26 (current) — mostly pending ─────────────────────────
+            # ── H1 FY26 (current) ──────────────────────────────────────────
             _pr(ananya, proj_safety, vikram, "H1 FY26", "pending")
             _pr(karan,  proj_safety, vikram, "H1 FY26", "pending")
             _pr(rahul,  proj_payer,  priya,  "H1 FY26", "pending")
@@ -782,16 +931,64 @@ def seed_database():
             _pr(neha,   proj_payer,  priya,  "H1 FY26", "pending")
             db.commit()
 
-            print("  [+] Created Project Reviews across H1 FY25 (reviewed), H2 FY25 (mixed), H1 FY26 (pending)")
+            print("  [+] Created Project Reviews: PRJ-101..PRJ-104 across H1 FY25, H2 FY25, H1 FY26")
         else:
             print("  [~] Healthark Project Reviews already exist, skipping...")
+
+        # PRJ-105 reviews for Riya and Tej (idempotent — uses _pr which checks existence)
+        if proj_marketing and riya and tej and amol:
+            _pr(riya, proj_marketing, amol, "H1 FY25", "reviewed", pg="3",
+                impact="Riya contributed solid research and data gathering across the analytics platform build.",
+                comment_task_execution="Completed research and data analysis tasks reliably with guidance.",
+                comment_ownership="Dependable on assigned modules; building proactive instincts.",
+                comment_project_management="Following plans well; communicating status clearly.",
+                comment_client_deliverables="Well-formatted reports with improving consistency.",
+                comment_communication="Clear written updates; growing verbal confidence.",
+                comment_mentoring="Active participant and quick learner in team sessions.",
+                comment_competency_skills="Building foundational marketing analytics knowledge.",
+            )
+            _pr(tej, proj_marketing, amol, "H1 FY25", "reviewed", pg="4",
+                impact="Tej led the dashboard design and independently built the campaign performance module.",
+                comment_task_execution="Structured analytics tasks independently with strong methodology.",
+                comment_ownership="Owned the dashboard workstream end-to-end with minimal guidance.",
+                comment_project_management="Proactive on timelines and cross-team coordination.",
+                comment_client_deliverables="Dashboard outputs were clean, insightful, and stakeholder-ready.",
+                comment_communication="Translated analytics findings clearly for non-technical stakeholders.",
+                comment_mentoring="Supported Riya on data modeling fundamentals.",
+                comment_competency_skills="Strong in BI tooling and marketing analytics.",
+            )
+            db.commit()
+
+            _pr(riya, proj_marketing, amol, "H2 FY25", "reviewed", pg="4",
+                impact="Riya took on broader ownership in H2, driving the reporting automation workstream.",
+                comment_task_execution="Structuring tasks more independently with less guidance.",
+                comment_ownership="Stepped up to own the reporting automation module.",
+                comment_project_management="Improved on proactive status updates and deadline management.",
+                comment_client_deliverables="Visible quality improvement in analytics outputs.",
+                comment_communication="More confident in team discussions and stakeholder updates.",
+                comment_mentoring="Supporting newer joiners on tooling onboarding.",
+                comment_competency_skills="Growing rapidly in marketing analytics and BI tools.",
+            )
+            _pr(tej, proj_marketing, amol, "H2 FY25", "reviewed", pg="4",
+                impact="Tej delivered the full KPI framework and led client-facing dashboard rollout.",
+                comment_task_execution="Led the full KPI framework design with strong analytical depth.",
+                comment_ownership="End-to-end ownership of the dashboard rollout with zero misses.",
+                comment_project_management="Excellent cross-team coordination and early risk flagging.",
+                comment_client_deliverables="Dashboards were praised by leadership for clarity.",
+                comment_communication="Executive-level clarity in presenting analytics insights.",
+                comment_mentoring="Ran structured analytics sessions for the team.",
+                comment_competency_skills="Senior Consultant trajectory in marketing analytics.",
+            )
+            db.commit()
+
+            _pr(riya, proj_marketing, amol, "H1 FY26", "pending")
+            _pr(tej,  proj_marketing, amol, "H1 FY26", "pending")
+            db.commit()
+            print("  [+] Ensured PRJ-105 Project Reviews for Riya and Tej")
 
         # ================================================================== #
         # 9. ANNUAL REVIEWS                                                   #
         # ================================================================== #
-
-        # Performance rating scale: 1 = Performed beyond expectations,
-        # 5 = Did not achieve goals. (Same guide as Project Reviews.)
 
         def _ar(user, mentor, cycle, status, **fields):
             if not db.query(AnnualReview).filter_by(
@@ -803,8 +1000,6 @@ def seed_database():
                     cycle_name=cycle, status=status, **fields,
                 ))
 
-        # Shared narrative packs — one overall self-review + one overall
-        # mentor review per tier, keeps the seed readable.
         STRONG_SELF = (
             "Owned the full workstream end-to-end with clear accountability. "
             "Delivered client-ready artifacts with minimal rework, structured "
@@ -831,70 +1026,130 @@ def seed_database():
             "becoming more proactive. Planning independence is growing and "
             "early mentoring instincts are starting to show."
         )
+        DIRECTOR_SELF = (
+            "Led multiple workstreams and practice initiatives in parallel. "
+            "Maintained full accountability across client engagements, coached "
+            "the team on strategic thinking and delivery standards, and drove "
+            "firm-level initiatives on business development and knowledge management."
+        )
+        DIRECTOR_MENTOR = (
+            "Exceptional leadership across all dimensions. Drives outcomes for "
+            "clients and the firm simultaneously, builds team capability "
+            "proactively, and maintains very high standards on every deliverable. "
+            "A clear role model for the practice."
+        )
 
         if db.query(AnnualReview).filter(AnnualReview.org_id == org.id).count() == 0:
-            # FY25 — last year, all completed with published ratings (1=best .. 5=worst)
+            # ── FY25 — all completed ───────────────────────────────────────
+            # Mentees
             _ar(arjun, priya, "FY25", "completed",
                 self_overall_review=STRONG_SELF, self_performance_rating=1,
-                mentor_overall_review=STRONG_MENTOR,
-                mentor_performance_rating=1,
-                management_performance_rating=1,
-                final_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
                 management_comments="Ready for Senior Consultant — recommend for promotion.",
                 final_rating_enabled=True,
             )
             _ar(neha, priya, "FY25", "completed",
                 self_overall_review=SOLID_SELF, self_performance_rating=2,
-                mentor_overall_review=SOLID_MENTOR,
-                mentor_performance_rating=2,
-                management_performance_rating=2,
-                final_performance_rating=2,
+                mentor_overall_review=SOLID_MENTOR, mentor_performance_rating=2,
+                management_performance_rating=2, final_performance_rating=2,
                 management_comments="Tracking toward Senior Consultant.",
                 final_rating_enabled=True,
             )
             _ar(rahul, david, "FY25", "completed",
                 self_overall_review=STRONG_SELF, self_performance_rating=1,
-                mentor_overall_review=STRONG_MENTOR,
-                mentor_performance_rating=1,
-                management_performance_rating=1,
-                final_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
                 management_comments="Strong Senior Consultant track — recommend for promotion.",
                 final_rating_enabled=True,
             )
             _ar(meera, david, "FY25", "completed",
                 self_overall_review=SOLID_SELF, self_performance_rating=3,
-                mentor_overall_review=SOLID_MENTOR,
-                mentor_performance_rating=3,
-                management_performance_rating=3,
-                final_performance_rating=3,
+                mentor_overall_review=SOLID_MENTOR, mentor_performance_rating=3,
+                management_performance_rating=3, final_performance_rating=3,
                 management_comments="Progressing steadily as a Consultant.",
                 final_rating_enabled=True,
             )
             _ar(ananya, vikram, "FY25", "completed",
                 self_overall_review=STRONG_SELF, self_performance_rating=1,
-                mentor_overall_review=STRONG_MENTOR,
-                mentor_performance_rating=1,
-                management_performance_rating=1,
-                final_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
                 management_comments="Recommend for Senior Consultant with Manager-track consideration.",
                 final_rating_enabled=True,
             )
             _ar(karan, vikram, "FY25", "completed",
                 self_overall_review=SOLID_SELF, self_performance_rating=3,
-                mentor_overall_review=SOLID_MENTOR,
-                mentor_performance_rating=3,
-                management_performance_rating=3,
-                final_performance_rating=3,
+                mentor_overall_review=SOLID_MENTOR, mentor_performance_rating=3,
+                management_performance_rating=3, final_performance_rating=3,
                 management_comments="Solid Consultant progressing steadily in RWE.",
+                final_rating_enabled=True,
+            )
+            # Mentors (report to Sarah)
+            _ar(priya, admin_user, "FY25", "completed",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
+                management_comments="Exceptional strategic leadership. Strong candidate for Director track.",
+                final_rating_enabled=True,
+            )
+            _ar(david, admin_user, "FY25", "completed",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
+                management_comments="Outstanding technology leadership. Practice growth contribution is exemplary.",
+                final_rating_enabled=True,
+            )
+            _ar(vikram, admin_user, "FY25", "completed",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=2,
+                mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=2,
+                management_performance_rating=2, final_performance_rating=2,
+                management_comments="Strong RWE methodology leadership. Continue expanding cross-practice influence.",
+                final_rating_enabled=True,
+            )
+            # New Admin users (mentees of Sarah)
+            _ar(amol, admin_user, "FY25", "completed",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
+                management_comments="Exceptional marketing and business development contribution.",
+                final_rating_enabled=True,
+            )
+            _ar(founder1, admin_user, "FY25", "completed",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
+                management_comments="Strong strategic vision and organizational leadership.",
+                final_rating_enabled=True,
+            )
+            _ar(founder2, admin_user, "FY25", "completed",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
+                management_comments="Excellent operational leadership and cross-functional impact.",
+                final_rating_enabled=True,
+            )
+            # Amol's mentees
+            _ar(riya, amol, "FY25", "completed",
+                self_overall_review=SOLID_SELF, self_performance_rating=2,
+                mentor_overall_review=SOLID_MENTOR, mentor_performance_rating=2,
+                management_performance_rating=2, final_performance_rating=2,
+                management_comments="Good early contribution. Marketing analytics fundamentals are solid.",
+                final_rating_enabled=True,
+            )
+            _ar(tej, amol, "FY25", "completed",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
+                mentor_overall_review=STRONG_MENTOR, mentor_performance_rating=1,
+                management_performance_rating=1, final_performance_rating=1,
+                management_comments="Strong analytics leadership. Senior Consultant track.",
                 final_rating_enabled=True,
             )
             db.commit()
 
-            # FY26 — current cycle, mixed workflow states
+            # ── FY26 — current cycle, mixed states ─────────────────────────
+            # Mentees
             _ar(arjun, priya, "FY26", "pending_management",
                 self_overall_review=STRONG_SELF, self_performance_rating=1,
-                mentor_overall_review=STRONG_MENTOR,
-                mentor_performance_rating=2,
+                mentor_overall_review=STRONG_MENTOR, mentor_performance_rating=2,
             )
             _ar(neha, priya, "FY26", "pending_mentor",
                 self_overall_review=STRONG_SELF, self_performance_rating=2,
@@ -908,211 +1163,369 @@ def seed_database():
             _ar(ananya, vikram, "FY26", "pending_mentor",
                 self_overall_review=STRONG_SELF, self_performance_rating=1,
             )
-            # karan intentionally has no FY26 review — exercises the "Start Self-Review" CTA
+            # karan — no FY26 review yet (exercises "Start Self-Review" CTA)
+            # Mentors
+            _ar(priya, admin_user, "FY26", "pending_mentor",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+            )
+            _ar(david, admin_user, "FY26", "pending_mentor",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+            )
+            _ar(vikram, admin_user, "FY26", "draft",
+                self_overall_review="Leading RWE practice expansion and multi-site study governance.",
+            )
+            # New Admins
+            _ar(amol, admin_user, "FY26", "pending_mentor",
+                self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+            )
+            _ar(founder1, admin_user, "FY26", "draft",
+                self_overall_review="Driving strategic partnerships and organizational growth.",
+            )
+            _ar(founder2, admin_user, "FY26", "draft",
+                self_overall_review="Leading operational excellence and innovation pipeline.",
+            )
+            # Amol's mentees
+            _ar(riya, amol, "FY26", "pending_mentor",
+                self_overall_review=SOLID_SELF, self_performance_rating=2,
+            )
+            _ar(tej, amol, "FY26", "pending_mentor",
+                self_overall_review=STRONG_SELF, self_performance_rating=1,
+            )
             db.commit()
 
             print("  [+] Created Annual Reviews: FY25 (all completed), FY26 (mixed states)")
         else:
-            print("  [~] Healthark Annual Reviews already exist, skipping...")
+            # For existing DBs — add missing reviews for new users only
+            for _u, _m in [(priya, admin_user), (david, admin_user), (vikram, admin_user),
+                           (amol, admin_user), (founder1, admin_user), (founder2, admin_user),
+                           (riya, amol), (tej, amol)]:
+                if _u and _m:
+                    _ar(_u, _m, "FY25", "completed",
+                        self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                        mentor_overall_review=DIRECTOR_MENTOR, mentor_performance_rating=1,
+                        management_performance_rating=1, final_performance_rating=1,
+                        management_comments="Strong performance across all dimensions.",
+                        final_rating_enabled=True,
+                    )
+                    _ar(_u, _m, "FY26", "pending_mentor",
+                        self_overall_review=DIRECTOR_SELF, self_performance_rating=1,
+                    )
+            db.commit()
+            print("  [~] Healthark Annual Reviews already exist — ensured new users covered.")
 
         # ================================================================== #
         # 10. YEARLY GOALS + PER-HALF SELF REVIEWS                            #
         # ================================================================== #
-        #
-        # Key test scenarios seeded below for the new Self-Review (H1/H2) flow:
-        #   - Approved goals with BOTH H1 & H2 self-reviews submitted
-        #   - Approved goals with only H1 submitted (H2 still "Not Submitted")
-        #   - Approved goals with NO self-reviews yet (fresh)
-        #   - Draft + submitted + changes_requested states for the full workflow
-        # ================================================================== #
 
         SELF_REVIEW_DEFAULT = {
-            "self_desc_task_execution":
-                "Delivered all key tasks against the goal with disciplined execution and consistent quality checks.",
-            "self_desc_ownership":
-                "Took end-to-end ownership of the goal with proactive status updates and risk flagging.",
-            "self_desc_client_deliverables":
-                "Produced client-ready outputs that required minimal iteration post-review.",
-            "self_desc_communication":
-                "Maintained clear internal and stakeholder communications throughout the cycle.",
-            "self_desc_project_management":
-                "Tracked milestones and dependencies with a well-maintained plan and early risk escalation.",
-            "self_desc_mentoring":
-                "Supported teammates informally on methodology and tooling while working on this goal.",
-            "self_desc_firm_growth":
-                "Contributions from this goal fed into reusable playbooks and strengthened the firm's capability in this area.",
-            "self_desc_competency_skills":
-                "Noticeably strengthened applicable skills — measurable on the scope and complexity handled independently.",
+            "self_desc_task_execution":     "Delivered all key tasks against the goal with disciplined execution and consistent quality checks.",
+            "self_desc_ownership":          "Took end-to-end ownership of the goal with proactive status updates and risk flagging.",
+            "self_desc_client_deliverables":"Produced client-ready outputs that required minimal iteration post-review.",
+            "self_desc_communication":      "Maintained clear internal and stakeholder communications throughout the cycle.",
+            "self_desc_project_management": "Tracked milestones and dependencies with a well-maintained plan and early risk escalation.",
+            "self_desc_mentoring":          "Supported teammates informally on methodology and tooling while working on this goal.",
+            "self_desc_firm_growth":        "Contributions from this goal fed into reusable playbooks and strengthened the firm's capability.",
+            "self_desc_competency_skills":  "Noticeably strengthened applicable skills — measurable on the scope and complexity handled independently.",
         }
 
-        def _goal(
-            user, manager, title, desc,
-            approval, cycle_name, fy_year,
-            progress_notes=None, manager_feedback=None,
-            self_reviewed_halves=(),
-        ):
-            """
-            Insert a yearly goal and (optionally) attached H1 / H2 self-reviews.
-            `self_reviewed_halves` — iterable of ("H1", "H2") to attach a review for.
-            Review content is the default boilerplate above (good enough for UI testing).
-            """
+        def _goal(user, manager, title, desc, approval, cycle_name, fy_year,
+                  progress_notes=None, manager_feedback=None, self_reviewed_halves=()):
             if db.query(Goal).filter_by(
                 org_id=org.id, user_id=user.id, title=title, cycle_name=cycle_name,
             ).first():
                 return
-
             approved_at = (
-                datetime(fy_year, 4, 20, tzinfo=timezone.utc)
-                if approval == "approved" else None
+                datetime(fy_year, 4, 20, tzinfo=timezone.utc) if approval == "approved" else None
             )
-
             g = Goal(
                 org_id=org.id, user_id=user.id,
                 manager_id=manager.id if manager else None,
                 title=title, description=desc,
-                goal_type="yearly",
-                cycle_name=cycle_name,
+                goal_type="yearly", cycle_name=cycle_name,
                 approval_status=approval,
                 progress_notes=progress_notes,
                 manager_feedback=manager_feedback,
                 approved_at=approved_at,
             )
             db.add(g)
-            db.flush()  # get g.id for the self-review FK
-
+            db.flush()
             for half in self_reviewed_halves:
                 db.add(GoalSelfReview(
-                    goal_id=g.id,
-                    org_id=org.id,
-                    cycle_half=half,
-                    **SELF_REVIEW_DEFAULT,
+                    goal_id=g.id, org_id=org.id, cycle_half=half, **SELF_REVIEW_DEFAULT,
                 ))
 
         if db.query(Goal).filter(Goal.org_id == org.id).count() == 0:
 
-            # ── Arjun (mentee of Priya) — full spread of scenarios ──────────
-            # FY 2025 approved goal with BOTH H1 + H2 self-reviews
-            _goal(arjun, priya,
-                  "Specialty Therapy Access Framework",
+            # ── Arjun ──────────────────────────────────────────────────────
+            _goal(arjun, priya, "Specialty Therapy Access Framework",
                   "Build and socialize a reusable specialty-therapy access framework across 4 priority EU markets.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Framework built and reused on 2 subsequent engagements. Client feedback positive.",
                   self_reviewed_halves=("H1", "H2"))
-            # FY 2025 approved goal with ONLY H1 self-review
-            _goal(arjun, priya,
-                  "Healthcare Financial Modeling Capability",
+            _goal(arjun, priya, "Healthcare Financial Modeling Capability",
                   "Complete a structured financial-modeling course and apply it to an active project.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Course done; bottom-up forecast model applied to PRJ-101.",
                   self_reviewed_halves=("H1",))
-            # FY 2026 approved — NO self-reviews yet (fresh test case)
-            _goal(arjun, priya,
-                  "PM-Level Ownership on Payer Evidence Portfolio",
+            _goal(arjun, priya, "PM-Level Ownership on Payer Evidence Portfolio",
                   "Step into a PM-equivalent role on PRJ-104 with full delivery and client accountability.",
                   approval="approved", cycle_name="H1 2026", fy_year=2026,
-                  progress_notes="Running the tracker and client comms independently. On track.",
-                  self_reviewed_halves=())
-            # FY 2026 draft
-            _goal(arjun, priya,
-                  "Build Proposal Development Capability",
+                  progress_notes="Running the tracker and client comms independently. On track.")
+            _goal(arjun, priya, "Build Proposal Development Capability",
                   "Lead or co-lead at least one client proposal end-to-end in FY 2026.",
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
-            # FY 2026 submitted (awaiting Priya's approval)
-            _goal(arjun, priya,
-                  "Senior-Level Storyboarding Mastery",
+            _goal(arjun, priya, "Senior-Level Storyboarding Mastery",
                   "Independently craft full client deck storyboards with compelling narratives and minimal review rounds.",
                   approval="submitted", cycle_name="H1 2026", fy_year=2026)
 
-            # ── Neha (mentee of Priya) ──────────────────────────────────────
-            _goal(neha, priya,
-                  "Independently Lead a Research Module",
+            # ── Neha ───────────────────────────────────────────────────────
+            _goal(neha, priya, "Independently Lead a Research Module",
                   "Own and deliver a complete research module on a live project with minimal supervision.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Led competitive landscape module on PRJ-101. Delivered on time with positive feedback.",
                   self_reviewed_halves=("H1", "H2"))
-            _goal(neha, priya,
-                  "Lead a Complete Client Workstream Independently",
+            _goal(neha, priya, "Lead a Complete Client Workstream Independently",
                   "Own end-to-end delivery of a client workstream with minimal supervision in FY 2026.",
                   approval="approved", cycle_name="H1 2026", fy_year=2026,
                   progress_notes="Leading the competitor benchmarking workstream independently.",
                   self_reviewed_halves=("H1",))
-            # Changes-requested case (mentor asked for revisions)
-            _goal(neha, priya,
-                  "Author Firm Thought Leadership Piece",
+            _goal(neha, priya, "Author Firm Thought Leadership Piece",
                   "Research, draft, and publish a firm-branded thought-leadership article on specialty access.",
                   approval="changes_requested", cycle_name="H1 2026", fy_year=2026,
                   manager_feedback="Scope is too broad — narrow to 1 therapy area and define a clearer success metric.")
 
-            # ── Rahul (mentee of David) ─────────────────────────────────────
-            _goal(rahul, david,
-                  "Clinical Trial Data Mart Modernization (Tech Lead)",
+            # ── Rahul ──────────────────────────────────────────────────────
+            _goal(rahul, david, "Clinical Trial Data Mart Modernization (Tech Lead)",
                   "Lead the technical architecture and delivery of the trial data mart modernization.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Architecture approved by ARB. Delivered 2 weeks ahead of schedule.",
                   self_reviewed_halves=("H1", "H2"))
-            _goal(rahul, david,
-                  "Mentor Meera on Data Engineering Fundamentals",
+            _goal(rahul, david, "Mentor Meera on Data Engineering Fundamentals",
                   "Run bi-weekly coaching sessions with Meera to build her data engineering capability.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Ran 10 coaching sessions. Meera now independently owns an ETL module.",
                   self_reviewed_halves=("H1",))
-            # FY 2026 approved — no self-reviews yet
-            _goal(rahul, david,
-                  "Introduce Agile Delivery Framework to IDT",
+            _goal(rahul, david, "Introduce Agile Delivery Framework to IDT",
                   "Design and roll out an Agile sprint framework that improves delivery predictability for the practice.",
                   approval="approved", cycle_name="H1 2026", fy_year=2026,
-                  progress_notes="Sprint framework piloted. Team velocity up ~25%.",
-                  self_reviewed_halves=())
+                  progress_notes="Sprint framework piloted. Team velocity up ~25%.")
 
-            # ── Meera (mentee of David) ─────────────────────────────────────
-            _goal(meera, david,
-                  "First Independent Analytics Module",
+            # ── Meera ──────────────────────────────────────────────────────
+            _goal(meera, david, "First Independent Analytics Module",
                   "Own an analytics module end-to-end on an active project.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Completed the data cleansing and visualization module for PRJ-102 with minimal guidance.",
                   self_reviewed_halves=("H1",))
-            _goal(meera, david,
-                  "End-to-End Feature Delivery on Trial Data Mart",
+            _goal(meera, david, "End-to-End Feature Delivery on Trial Data Mart",
                   "Take full-cycle ownership of a feature from requirements to production deployment.",
                   approval="submitted", cycle_name="H1 2026", fy_year=2026)
 
-            # ── Ananya (mentee of Vikram) ───────────────────────────────────
-            _goal(ananya, vikram,
-                  "Long-Term Safety Study Protocol Lead",
+            # ── Ananya ─────────────────────────────────────────────────────
+            _goal(ananya, vikram, "Long-Term Safety Study Protocol Lead",
                   "Lead protocol design and documentation for the long-term safety RWE study.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Protocol designed and submitted. IRB approved. Study launched.",
                   self_reviewed_halves=("H1", "H2"))
-            # FY 2026 approved — no self-reviews yet
-            _goal(ananya, vikram,
-                  "Firm-Wide RWE Knowledge Session",
+            _goal(ananya, vikram, "Firm-Wide RWE Knowledge Session",
                   "Organize and present a firm-wide knowledge session on chronic-therapy RWE best practices.",
                   approval="approved", cycle_name="H1 2026", fy_year=2026,
-                  progress_notes="Session scheduled. Deck 80% complete.",
-                  self_reviewed_halves=())
+                  progress_notes="Session scheduled. Deck 80% complete.")
 
-            # ── Karan (mentee of Vikram) ────────────────────────────────────
-            _goal(karan, vikram,
-                  "Cardiovascular RWE Literature Review Capability",
+            # ── Karan ──────────────────────────────────────────────────────
+            _goal(karan, vikram, "Cardiovascular RWE Literature Review Capability",
                   "Conduct structured literature reviews and synthesize findings for the cardiology outcomes study.",
                   approval="approved", cycle_name="H1 2025", fy_year=2025,
                   progress_notes="Completed systematic review of 150+ papers. Summary integrated into protocol.",
                   self_reviewed_halves=("H1",))
-            _goal(karan, vikram,
-                  "Statistical Analysis for Long-Term Safety Study",
+            _goal(karan, vikram, "Statistical Analysis for Long-Term Safety Study",
                   "Own the complete statistical analysis for the long-term safety RWE study in FY 2026.",
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
-            _goal(karan, vikram,
-                  "Client Presentation Readiness",
+            _goal(karan, vikram, "Client Presentation Readiness",
                   "Present study design updates to the client sponsor at least twice in FY 2026.",
                   approval="submitted", cycle_name="H1 2026", fy_year=2026)
 
-            db.commit()
-            print("  [+] Created Healthark Yearly Goals + H1/H2 Self Reviews")
-        else:
-            print("  [~] Healthark Goals already exist, skipping...")
+            # ── Priya (mentor, now also mentee of Sarah) ───────────────────
+            _goal(priya, admin_user, "Healthcare Strategy Practice Growth",
+                  "Grow the strategy practice headcount by 20% and increase billable utilization across the team.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Headcount target achieved. Utilization up 18% — near target.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(priya, admin_user, "Cross-Practice Collaboration Framework",
+                  "Design and roll out a collaboration framework linking Strategy, IDT, and RWE practices.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026,
+                  progress_notes="Framework drafted and piloted on PRJ-104. Rolling out firm-wide.")
+            _goal(priya, admin_user, "Senior Manager Development Goals",
+                  "Complete executive leadership program and apply learnings to team management.",
+                  approval="draft", cycle_name="H1 2026", fy_year=2026)
 
-        # Miltenyi yearly goals — minimal, just enough to test the flow
+            # ── David ──────────────────────────────────────────────────────
+            _goal(david, admin_user, "IDT Platform Excellence Program",
+                  "Establish coding standards, peer review processes, and delivery metrics for the IDT practice.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Standards published. Code review cadence established. Defect rate down 30%.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(david, admin_user, "Technology Leadership Initiative",
+                  "Publish two thought leadership pieces on data platform modernization and lead one external talk.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026,
+                  progress_notes="First article published. External talk confirmed for Q2 FY26.")
+            _goal(david, admin_user, "IDT Talent Pipeline",
+                  "Build a structured campus hiring and onboarding pipeline for IDT consultants.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+
+            # ── Vikram ─────────────────────────────────────────────────────
+            _goal(vikram, admin_user, "RWE Center of Excellence",
+                  "Establish a RWE center of excellence with standardized methodologies and reusable study templates.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="CoE launched. 3 study templates published and reused across 2 engagements.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(vikram, admin_user, "Regulatory Insights Program",
+                  "Build a regulatory insights tracker and publish quarterly briefs for the RWE practice.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+            _goal(vikram, admin_user, "RWE Talent Development",
+                  "Design and run a structured RWE capability building program for Consultants and Senior Consultants.",
+                  approval="draft", cycle_name="H1 2026", fy_year=2026)
+
+            # ── Amol ───────────────────────────────────────────────────────
+            _goal(amol, admin_user, "Marketing Analytics Platform Launch",
+                  "Build and launch the internal marketing analytics platform (PRJ-105) with full adoption.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Platform launched. 85% team adoption in first month.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(amol, admin_user, "Go-To-Market Strategy for New Practice Areas",
+                  "Develop and execute GTM strategy for two new service offerings in FY 2026.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026,
+                  progress_notes="GTM strategy for both offerings finalized. Pipeline conversations underway.",
+                  self_reviewed_halves=("H1",))
+            _goal(amol, admin_user, "Client Engagement Excellence Program",
+                  "Implement a structured client feedback loop and NPS tracking across all active engagements.",
+                  approval="draft", cycle_name="H1 2026", fy_year=2026)
+
+            # ── Founder1 (Rohan) ───────────────────────────────────────────
+            _goal(founder1, admin_user, "Strategic Partnerships Program",
+                  "Establish three strategic partnerships with academic and industry organizations.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Two partnerships signed. Third in final negotiation.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(founder1, admin_user, "Organizational Growth Initiative",
+                  "Lead organizational design review and implement updated structure for scale.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026,
+                  progress_notes="Org design review completed. New structure rollout in progress.")
+            _goal(founder1, admin_user, "Investor Relations Framework",
+                  "Build a structured IR framework including quarterly updates and stakeholder reporting.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+
+            # ── Founder2 (Nisha) ───────────────────────────────────────────
+            _goal(founder2, admin_user, "Operational Excellence Program",
+                  "Implement process standardization across all operational functions to improve efficiency by 25%.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Process standardization complete. Efficiency improvement measured at 22%.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(founder2, admin_user, "Innovation Pipeline 2026",
+                  "Build and manage an innovation pipeline with at least 5 new service ideas evaluated per half.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+            _goal(founder2, admin_user, "Culture and Engagement Initiative",
+                  "Design and launch a structured employee engagement and culture program.",
+                  approval="draft", cycle_name="H1 2026", fy_year=2026)
+
+            # ── Riya ───────────────────────────────────────────────────────
+            _goal(riya, amol, "Marketing Research Fundamentals",
+                  "Build core marketing research skills and apply them independently on PRJ-105.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Completed core research modules and contributed reporting automation on PRJ-105.",
+                  self_reviewed_halves=("H1",))
+            _goal(riya, amol, "Brand Analytics Dashboard",
+                  "Own the brand performance analytics dashboard end-to-end.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+            _goal(riya, amol, "Client Acquisition Research",
+                  "Conduct structured research on target client segments for business development.",
+                  approval="draft", cycle_name="H1 2026", fy_year=2026)
+
+            # ── Tej ────────────────────────────────────────────────────────
+            _goal(tej, amol, "Digital Analytics Framework",
+                  "Design and implement the digital analytics framework for the marketing platform.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Framework implemented. Dashboard KPIs adopted by leadership.",
+                  self_reviewed_halves=("H1", "H2"))
+            _goal(tej, amol, "Campaign Performance Reporting",
+                  "Build automated campaign performance reporting with real-time dashboards.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026,
+                  progress_notes="Reporting pipeline live. Weekly automated reports running.")
+            _goal(tej, amol, "Analytics Capability Building",
+                  "Lead internal analytics upskilling sessions for the marketing team.",
+                  approval="draft", cycle_name="H1 2026", fy_year=2026)
+
+            db.commit()
+            print("  [+] Created Healthark Yearly Goals + H1/H2 Self Reviews (all users)")
+        else:
+            # Idempotent add for new users — _goal checks existence before inserting
+            _goal(priya, admin_user, "Healthcare Strategy Practice Growth",
+                  "Grow the strategy practice headcount by 20% and increase billable utilization.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Headcount target achieved.", self_reviewed_halves=("H1", "H2"))
+            _goal(priya, admin_user, "Cross-Practice Collaboration Framework",
+                  "Design and roll out a collaboration framework linking Strategy, IDT, and RWE practices.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(david, admin_user, "IDT Platform Excellence Program",
+                  "Establish coding standards, peer review processes, and delivery metrics for the IDT practice.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Standards published.", self_reviewed_halves=("H1", "H2"))
+            _goal(david, admin_user, "Technology Leadership Initiative",
+                  "Publish thought leadership pieces and lead an external talk.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(vikram, admin_user, "RWE Center of Excellence",
+                  "Establish a RWE center of excellence with standardized methodologies.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="CoE launched.", self_reviewed_halves=("H1", "H2"))
+            _goal(vikram, admin_user, "Regulatory Insights Program",
+                  "Build a regulatory insights tracker and publish quarterly briefs.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(amol, admin_user, "Marketing Analytics Platform Launch",
+                  "Build and launch the internal marketing analytics platform.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Platform launched.", self_reviewed_halves=("H1", "H2"))
+            _goal(amol, admin_user, "Go-To-Market Strategy for New Practice Areas",
+                  "Develop and execute GTM strategy for two new service offerings.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(founder1, admin_user, "Strategic Partnerships Program",
+                  "Establish three strategic partnerships with academic and industry organizations.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Two partnerships signed.", self_reviewed_halves=("H1", "H2"))
+            _goal(founder1, admin_user, "Organizational Growth Initiative",
+                  "Lead organizational design review and implement updated structure.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(founder2, admin_user, "Operational Excellence Program",
+                  "Implement process standardization across all operational functions.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Process standardization complete.", self_reviewed_halves=("H1", "H2"))
+            _goal(founder2, admin_user, "Innovation Pipeline 2026",
+                  "Build and manage an innovation pipeline with new service ideas.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(riya, amol, "Marketing Research Fundamentals",
+                  "Build core marketing research skills and apply them independently.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Completed core research modules.", self_reviewed_halves=("H1",))
+            _goal(riya, amol, "Brand Analytics Dashboard",
+                  "Own the brand performance analytics dashboard end-to-end.",
+                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+
+            _goal(tej, amol, "Digital Analytics Framework",
+                  "Design and implement the digital analytics framework.",
+                  approval="approved", cycle_name="H1 2025", fy_year=2025,
+                  progress_notes="Framework implemented.", self_reviewed_halves=("H1", "H2"))
+            _goal(tej, amol, "Campaign Performance Reporting",
+                  "Build automated campaign performance reporting.",
+                  approval="approved", cycle_name="H1 2026", fy_year=2026)
+
+            db.commit()
+            print("  [~] Healthark Goals exist — ensured new users (Priya/David/Vikram/Amol/Founders/Riya/Tej) covered.")
+
+        # Miltenyi yearly goals
         if db.query(Goal).filter(Goal.org_id == miltenyi_org.id).count() == 0:
 
             def _mil_goal(user, manager, title, desc, approval, cycle_name, fy_year,
@@ -1122,8 +1535,7 @@ def seed_database():
                 ).first():
                     return
                 approved_at = (
-                    datetime(fy_year, 4, 20, tzinfo=timezone.utc)
-                    if approval == "approved" else None
+                    datetime(fy_year, 4, 20, tzinfo=timezone.utc) if approval == "approved" else None
                 )
                 g = Goal(
                     org_id=miltenyi_org.id, user_id=user.id,
@@ -1143,20 +1555,16 @@ def seed_database():
                         cycle_half=half, **SELF_REVIEW_DEFAULT,
                     ))
 
-            _mil_goal(charlie, bob_lead,
-                      "CAR-T Workflow Automation Module",
+            _mil_goal(charlie, bob_lead, "CAR-T Workflow Automation Module",
                       "Own the automation of the upstream CAR-T processing workflow on the new instrument.",
                       approval="approved", cycle_name="H1 2025", fy_year=2025,
                       progress_notes="Module deployed. Cycle time reduced by ~30%.",
                       self_reviewed_halves=("H1", "H2"))
-            _mil_goal(dana, bob_lead,
-                      "Assay Validation for Next-Gen CAR-T",
+            _mil_goal(dana, bob_lead, "Assay Validation for Next-Gen CAR-T",
                       "Design and run validation assays for the next-gen CAR-T platform.",
                       approval="approved", cycle_name="H1 2026", fy_year=2026,
-                      progress_notes="Validation assays underway; first read scheduled.",
-                      self_reviewed_halves=())
-            _mil_goal(fiona, evan_mfg,
-                      "MACS Quant Scale-Up Documentation",
+                      progress_notes="Validation assays underway; first read scheduled.")
+            _mil_goal(fiona, evan_mfg, "MACS Quant Scale-Up Documentation",
                       "Author the scale-up documentation package for the new MACS Quant platform.",
                       approval="submitted", cycle_name="H1 2026", fy_year=2026)
 
@@ -1173,28 +1581,29 @@ def seed_database():
         print("Database seeding completed successfully!")
         print("=" * 60)
         print("\n--- HEALTHARK Accounts (all passwords: password123) ---")
-        print("  ADMIN:    admin@healthark.com    Sarah Admin     (Admin)")
-        print("  STRATEGY: priya@healthark.com    Priya Sharma    (mentors Arjun + Neha, PM on PRJ-101 + PRJ-104)")
-        print("            arjun@healthark.com    Arjun Patel     (mentor: Priya)")
-        print("            neha@healthark.com     Neha Gupta      (mentor: Priya)")
-        print("  IDT:      david@healthark.com    David Miller    (mentors Rahul + Meera, PM on PRJ-102)")
-        print("            rahul@healthark.com    Rahul Verma     (mentor: David)")
-        print("            meera@healthark.com    Meera Joshi     (mentor: David)")
-        print("  RWE:      vikram@healthark.com   Vikram Singh    (mentors Ananya + Karan, PM on PRJ-103)")
-        print("            ananya@healthark.com   Ananya Reddy    (mentor: Vikram)")
-        print("            karan@healthark.com    Karan Mehta     (mentor: Vikram)")
+        print("  ADMIN:    admin@healthark.com     Sarah Admin      (Admin, no mentor — top of hierarchy)")
+        print("  ADMIN:    amol@healthark.com      Amol Kulkarni    (Admin, mentor: Sarah, mentors Riya + Tej)")
+        print("  ADMIN:    founder1@healthark.com  Rohan Desai      (Admin, mentor: Sarah)")
+        print("  ADMIN:    founder2@healthark.com  Nisha Patel      (Admin, mentor: Sarah)")
+        print("  STRATEGY: priya@healthark.com     Priya Sharma     (mentor: Sarah, mentors Arjun + Neha)")
+        print("            arjun@healthark.com     Arjun Patel      (mentor: Priya)")
+        print("            neha@healthark.com      Neha Gupta       (mentor: Priya)")
+        print("  IDT:      david@healthark.com     David Miller     (mentor: Sarah, mentors Rahul + Meera)")
+        print("            rahul@healthark.com     Rahul Verma      (mentor: David)")
+        print("            meera@healthark.com     Meera Joshi      (mentor: David)")
+        print("  RWE:      vikram@healthark.com    Vikram Singh     (mentor: Sarah, mentors Ananya + Karan)")
+        print("            ananya@healthark.com    Ananya Reddy     (mentor: Vikram)")
+        print("            karan@healthark.com     Karan Mehta      (mentor: Vikram)")
+        print("  MARKETING:riya@healthark.com      Riya Kapoor      (mentor: Amol)")
+        print("            tej@healthark.com       Tej Nair         (mentor: Amol)")
         print()
         print("--- MILTENYI Accounts (Quarterly Cycle | all passwords: password123) ---")
-        print("  ADMIN:    admin@miltenyi.com     Alice Admin     (Admin)")
-        print("  R&D:      bob@miltenyi.com       Bob Builder     (mentors Charlie + Dana)")
-        print("            charlie@miltenyi.com   Charlie Chemist (mentor: Bob)")
-        print("            dana@miltenyi.com      Dana DNA        (mentor: Bob)")
-        print("  MFG:      evan@miltenyi.com      Evan Engineer   (mentors Fiona)")
-        print("            fiona@miltenyi.com     Fiona Factory   (mentor: Evan)")
-        print()
-        print("Self-Review (H1 / H2) test cases to try:")
-        print("  * Login as arjun@healthark.com — 5 goals with a spread of self-review states.")
-        print("  * Login as priya@healthark.com — open Team Goals, click the H1/H2 menu to view mentee submissions.")
+        print("  ADMIN:    admin@miltenyi.com      Alice Admin      (Admin)")
+        print("  R&D:      bob@miltenyi.com        Bob Builder      (mentor: Alice, mentors Charlie + Dana)")
+        print("            charlie@miltenyi.com    Charlie Chemist  (mentor: Bob)")
+        print("            dana@miltenyi.com       Dana DNA         (mentor: Bob)")
+        print("  MFG:      evan@miltenyi.com       Evan Engineer    (mentor: Alice, mentors Fiona)")
+        print("            fiona@miltenyi.com      Fiona Factory    (mentor: Evan)")
         print()
 
     except Exception as e:

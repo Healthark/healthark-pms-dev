@@ -44,6 +44,7 @@ from app.schemas.annual_review_schemas import (
     SelfAppraisalDraft,
     MentorEvalUpdate,
     ManagementFinalize,
+    ManagementRatingUpdate,
     AnnualReviewResponse,
     CalibrationRow,
     MenteeAnnualReview,
@@ -83,17 +84,35 @@ def _require_admin(current_user: User) -> None:
         )
 
 
+def _require_management(current_user: User) -> None:
+    """Management sub-role — always paired with Admin. Gates the Management
+    Review tab's read/write endpoints so that regular admins (HR ops) cannot
+    set or override management ratings."""
+    if current_user.role != "Admin" or not bool(current_user.is_management):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only management users can perform this action.",
+        )
+
+
 def _strip_private_ratings(review: AnnualReview, final_visible: bool) -> None:
     """
     Mutates `review` in-place to hide ratings an employee shouldn't see yet.
-    The mentor_performance_rating and management_performance_rating are always
-    hidden from the employee. The final_performance_rating is only shown when
-    the per-row final_rating_enabled AND the org-wide visibility flag are both
-    on.
+
+    User-side display rule: final_performance_rating in the response is
+    synthesized as management_performance_rating ?? mentor_performance_rating
+    — the stored final_performance_rating column (HR's legacy override path)
+    is not surfaced. The fallback is still strictly gated by the per-row
+    final_rating_enabled AND the org-wide visibility flag so unfinalized
+    reviews never leak.
     """
+    mgmt = review.management_performance_rating
+    mentor = review.mentor_performance_rating
     review.mentor_performance_rating = None
     review.management_performance_rating = None
-    if not (review.final_rating_enabled and final_visible):
+    if review.final_rating_enabled and final_visible:
+        review.final_performance_rating = mgmt if mgmt is not None else mentor
+    else:
         review.final_performance_rating = None
         review.management_comments = None
 
@@ -322,9 +341,9 @@ def get_calibration_grid(
 ):
     """
     All reviews in pending_management + completed for the active cycle,
-    shaped into a simplified grid row. Admin-only.
+    shaped into a simplified grid row. Management-only.
     """
-    _require_admin(current_user)
+    _require_management(current_user)
     cycle_name = _get_active_cycle(db, current_user.org_id)
 
     reviews = (
@@ -341,19 +360,27 @@ def get_calibration_grid(
         .all()
     )
 
-    user_ids = [r.user_id for r in reviews]
-    users = {
+    # Preload employees + mentors in a single round-trip. Mentors come from
+    # review.mentor_id (the one captured at self-review time) rather than
+    # user.mentor_id to keep the grid consistent with the review snapshot.
+    user_ids = {r.user_id for r in reviews}
+    mentor_ids = {r.mentor_id for r in reviews if r.mentor_id is not None}
+    all_ids = list(user_ids | mentor_ids)
+    users_by_id = {
         u.id: u
-        for u in db.query(User).filter(User.id.in_(user_ids)).all()
-    } if user_ids else {}
+        for u in db.query(User).filter(User.id.in_(all_ids)).all()
+    } if all_ids else {}
 
     rows: list[CalibrationRow] = []
     for r in reviews:
-        u = users.get(r.user_id)
+        u = users_by_id.get(r.user_id)
+        m = users_by_id.get(r.mentor_id) if r.mentor_id else None
         rows.append(CalibrationRow(
             review_id=r.id,
             user_id=r.user_id,
             employee_name=u.full_name if u else "Unknown",
+            employee_email=u.email if u else None,
+            mentor_name=m.full_name if m else None,
             department=u.department.name if u and u.department else None,
             designation=u.designation.name if u and u.designation else None,
             self_performance_rating=r.self_performance_rating,
@@ -378,7 +405,7 @@ def finalize_review(
     Note: publishing sets final_rating_enabled=True but the employee will only
     see the rating if the org-wide visibility flag is also on.
     """
-    _require_admin(current_user)
+    _require_management(current_user)
 
     review = db.query(AnnualReview).filter(
         AnnualReview.id == review_id,
@@ -397,6 +424,50 @@ def finalize_review(
     review.management_comments = payload.management_comments
     review.final_rating_enabled = True
     review.status = ReviewStatus.COMPLETED.value
+
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+@router.patch("/{review_id}/management-rating", response_model=AnnualReviewResponse)
+def set_management_rating(
+    review_id: int,
+    payload: ManagementRatingUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Management-only inline action from the Management Review tab.
+
+    Sets (or updates) management_performance_rating and unlocks the per-row
+    final_rating_enabled flag so the user-side fallback
+    (management ?? mentor) becomes visible — still subject to the org-wide
+    annual_review_final_rating_visible gate.
+
+    Unlike /finalize, this does NOT require a final_performance_rating and
+    does NOT transition status, so management can adjust ratings multiple
+    times during calibration.
+    """
+    _require_management(current_user)
+
+    review = db.query(AnnualReview).filter(
+        AnnualReview.id == review_id,
+        AnnualReview.org_id == current_user.org_id,
+    ).first()
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
+    if review.status not in (
+        ReviewStatus.PENDING_MANAGEMENT.value,
+        ReviewStatus.COMPLETED.value,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Management rating can only be set after mentor evaluation is submitted.",
+        )
+
+    review.management_performance_rating = payload.management_performance_rating
+    review.final_rating_enabled = True
 
     db.commit()
     db.refresh(review)

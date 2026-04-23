@@ -61,6 +61,8 @@ export interface CalibrationRow {
   review_id: number;
   user_id: number;
   employee_name: string;
+  employee_email: string | null;
+  mentor_name: string | null;
   department: string | null;
   designation: string | null;
   self_performance_rating: number | null;
@@ -69,6 +71,10 @@ export interface CalibrationRow {
   final_performance_rating: number | null;
   status: ReviewStatus;
   final_rating_enabled: boolean;
+}
+
+export interface ManagementRatingPayload {
+  management_performance_rating: number;
 }
 
 // ── Request Payload Types ───────────────────────────────────────────
@@ -162,6 +168,19 @@ export const annualReviewService = {
   ): Promise<AnnualReview> => {
     const res = await apiClient.patch<AnnualReview>(
       `/annual-reviews/${reviewId}/finalize`,
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Lightweight inline action from the Management Review tab — sets only
+   * management_performance_rating and unlocks the per-row visibility flag. */
+  setManagementRating: async (
+    reviewId: number,
+    payload: ManagementRatingPayload,
+  ): Promise<AnnualReview> => {
+    const res = await apiClient.patch<AnnualReview>(
+      `/annual-reviews/${reviewId}/management-rating`,
       payload,
     );
     return res.data;

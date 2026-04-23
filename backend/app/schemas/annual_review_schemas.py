@@ -66,6 +66,16 @@ class ManagementFinalize(BaseModel):
     management_comments: Optional[str] = None
 
 
+class ManagementRatingUpdate(BaseModel):
+    """
+    Lightweight payload for the Management Review tab's inline rating
+    action. Sets only management_performance_rating and unlocks the
+    per-row visibility flag so the user-side fallback
+    (management ?? mentor) becomes visible.
+    """
+    management_performance_rating: int = Field(..., ge=1, le=5)
+
+
 # ── Response Schemas ─────────────────────────────────────────────────
 
 class AnnualReviewResponse(BaseModel):
@@ -103,6 +113,8 @@ class CalibrationRow(BaseModel):
     review_id: int
     user_id: int
     employee_name: str
+    employee_email: Optional[str] = None
+    mentor_name: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     self_performance_rating: Optional[int] = None
