@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import {
-  Eye, LayoutGrid, Loader2, Search, Table2, UserCircle,
+  Eye, LayoutGrid, Loader2, Lock, Search, Table2, UserCircle,
   ClipboardCheck,
 } from "lucide-react";
 import type { AnnualReview } from "../../services/annual-review.service";
@@ -20,6 +20,15 @@ import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
+
+function FinalRatingHiddenBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-text-muted/60">
+      <Lock className="h-3 w-3" aria-hidden="true" /> Hidden
+    </span>
+  );
+}
 
 type ViewMode = "grid" | "table";
 type SortKey = "cycle_name" | "status" | "self_performance_rating";
@@ -38,9 +47,11 @@ const SORT_CONFIG: Record<
 function SelfReviewCard({
   review,
   onView,
+  finalRatingVisible,
 }: {
   readonly review: AnnualReview;
   readonly onView: (r: AnnualReview) => void;
+  readonly finalRatingVisible: boolean;
 }) {
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3">
@@ -68,12 +79,14 @@ function SelfReviewCard({
           <span className="text-text-muted">Self</span>
           <PerformanceRatingBadge value={review.self_performance_rating} />
         </div>
-        {review.final_performance_rating != null && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-text-muted">Final</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-text-muted">Final</span>
+          {finalRatingVisible ? (
             <PerformanceRatingBadge value={review.final_performance_rating} />
-          </div>
-        )}
+          ) : (
+            <FinalRatingHiddenBadge />
+          )}
+        </div>
       </div>
 
       <button
@@ -124,6 +137,10 @@ interface SelfReviewTabProps {
 }
 
 export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
+  const { settings } = useSystemSettings();
+  const finalRatingVisible =
+    settings?.annual_review_final_rating_visible ?? false;
+
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [yearFilter, setYearFilter] = useState<string>("all");
@@ -238,7 +255,12 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {sorted.map((r) => (
-            <SelfReviewCard key={r.id} review={r} onView={setViewTarget} />
+            <SelfReviewCard
+              key={r.id}
+              review={r}
+              onView={setViewTarget}
+              finalRatingVisible={finalRatingVisible}
+            />
           ))}
         </div>
       ) : (
@@ -298,9 +320,13 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <PerformanceRatingBadge
-                      value={r.final_performance_rating}
-                    />
+                    {finalRatingVisible ? (
+                      <PerformanceRatingBadge
+                        value={r.final_performance_rating}
+                      />
+                    ) : (
+                      <FinalRatingHiddenBadge />
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <button

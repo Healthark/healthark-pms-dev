@@ -11,8 +11,15 @@
  * lets management set/override the management rating inline via a modal.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { Eye, Loader2, Pencil, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Eye,
+  Loader2,
+  Pencil,
+  Search,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import {
   annualReviewService,
   type CalibrationRow,
@@ -23,17 +30,33 @@ import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
 import { getErrorMessage } from "../../utils/errors";
 
 type RatingValue = number | "";
+type StatusFilter = "all" | "pending" | "rated";
 
 interface EditTarget {
   readonly row: CalibrationRow;
   readonly draft: RatingValue;
 }
 
+const TABLE_HEADERS = [
+  "User",
+  "Email",
+  "Mentor",
+  "Department",
+  "Self Review",
+  "Mentor Review",
+  "Management Rating",
+  "Actions",
+];
+
 export function ManagementReviewTab() {
   const [rows, setRows] = useState<CalibrationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+
   const [searchQuery, setSearchQuery] = useState("");
+  const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [mentorFilter, setMentorFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [viewReviewId, setViewReviewId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
@@ -56,7 +79,28 @@ export function ManagementReviewTab() {
     void load();
   }, [load]);
 
+  const availableDepts = useMemo(
+    () =>
+      Array.from(
+        new Set(rows.map((r) => r.department).filter((d): d is string => !!d)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [rows],
+  );
+
+  const availableMentors = useMemo(
+    () =>
+      Array.from(
+        new Set(rows.map((r) => r.mentor_name).filter((m): m is string => !!m)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [rows],
+  );
+
   const filtered = rows.filter((r) => {
+    if (deptFilter !== "all" && (r.department ?? "") !== deptFilter) return false;
+    if (mentorFilter !== "all" && (r.mentor_name ?? "") !== mentorFilter) return false;
+    if (statusFilter === "pending" && r.management_performance_rating != null) return false;
+    if (statusFilter === "rated" && r.management_performance_rating == null) return false;
+
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -106,108 +150,164 @@ export function ManagementReviewTab() {
   }
 
   return (
-    <div className="p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-base font-semibold text-text-main">
-            Management Review
-          </h2>
-          <p className="mt-0.5 text-xs text-text-muted">
-            Set or override the final management rating for reviews that have
-            cleared mentor evaluation.
-          </p>
-        </div>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+    <div>
+      {/* Toolbar */}
+      <div className="border-b border-border px-5 py-4 flex flex-col gap-3">
+        <div className="relative max-w-sm">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
+            aria-hidden="true"
+          />
           <input
-            type="text"
+            type="search"
             placeholder="Search name, email, mentor…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] outline-none focus:border-brand"
+            className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            aria-label="Search management reviews"
           />
+        </div>
+
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="mgmt-review-dept-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Dept
+            </label>
+            <select
+              id="mgmt-review-dept-filter"
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
+            >
+              <option value="all">All Depts</option>
+              {availableDepts.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="mgmt-review-mentor-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Mentor
+            </label>
+            <select
+              id="mgmt-review-mentor-filter"
+              value={mentorFilter}
+              onChange={(e) => setMentorFilter(e.target.value)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+            >
+              <option value="all">All Mentors</option>
+              {availableMentors.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="mgmt-review-status-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Status
+            </label>
+            <select
+              id="mgmt-review-status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="rated">Rated</option>
+            </select>
+          </div>
         </div>
       </div>
 
+      {/* Table / Empty state */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center">
-          <p className="text-sm text-text-muted">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <ShieldCheck
+            className="h-10 w-10 text-text-muted mb-3"
+            aria-hidden="true"
+          />
+          <p className="font-display text-base font-medium text-text-main">
             {rows.length === 0
-              ? "No reviews have reached the management stage yet."
-              : "No reviews match this search."}
+              ? "No reviews yet"
+              : "No reviews match your filters"}
+          </p>
+          <p className="mt-1 text-sm text-text-muted">
+            {rows.length === 0
+              ? "Reviews appear here once they clear the mentor evaluation stage."
+              : "Try a different search term or adjust your filters."}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-[13px]">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-border">
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  User
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Email
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Mentor
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Department
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Self Review
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Mentor Review
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Management Rating
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Actions
-                </th>
+              <tr className="border-b border-border bg-slate-50 text-left">
+                {TABLE_HEADERS.map((h) => (
+                  <th
+                    key={h}
+                    className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/50">
+            <tbody className="divide-y divide-border">
               {filtered.map((r) => (
                 <tr
                   key={r.review_id}
-                  className="hover:bg-slate-50/60 transition-colors"
+                  className="transition-colors hover:bg-slate-50"
                 >
-                  <td className="px-4 py-3 font-medium text-text-main">
+                  <td className="px-5 py-3.5 font-medium text-text-main">
                     {r.employee_name}
                   </td>
-                  <td className="px-4 py-3 text-text-muted">
+                  <td className="px-5 py-3.5 text-text-muted">
                     {r.employee_email ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-text-muted">
+                  <td className="px-5 py-3.5 text-text-muted">
                     {r.mentor_name ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-text-muted">
+                  <td className="px-5 py-3.5 text-text-muted">
                     {r.department ?? "—"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3.5">
                     <PerformanceRatingBadge value={r.self_performance_rating} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3.5">
                     <PerformanceRatingBadge
                       value={r.mentor_performance_rating}
                     />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3.5">
                     <PerformanceRatingBadge
                       value={r.management_performance_rating}
                     />
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setViewReviewId(r.review_id)}
-                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                        title={`View review for ${r.employee_name}`}
+                        className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
                         aria-label={`View review for ${r.employee_name}`}
                       >
-                        <Eye className="h-3 w-3" /> View
+                        <Eye className="h-4 w-4" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -218,13 +318,15 @@ export function ManagementReviewTab() {
                             draft: r.management_performance_rating ?? "",
                           });
                         }}
-                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                        title={
+                          r.management_performance_rating == null
+                            ? "Add management rating"
+                            : "Edit management rating"
+                        }
+                        className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
                         aria-label={`Edit management rating for ${r.employee_name}`}
                       >
-                        <Pencil className="h-3 w-3" />
-                        {r.management_performance_rating == null
-                          ? "Add"
-                          : "Edit"}
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
                   </td>
@@ -251,7 +353,8 @@ export function ManagementReviewTab() {
                   Management Rating
                 </h3>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {editTarget.row.employee_name} · {editTarget.row.department ?? "—"}
+                  {editTarget.row.employee_name} ·{" "}
+                  {editTarget.row.department ?? "—"}
                 </p>
               </div>
               <button
