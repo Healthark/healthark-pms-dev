@@ -30,7 +30,6 @@ from app.models.goal_models import Goal, ApprovalStatus, GoalType
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.goal_self_review_models import GoalSelfReview, SelfReviewCycleHalf
 from app.models.goal_mentor_review_models import GoalMentorReview
-from app.models.goal_notification_models import GoalNotification
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.goal_schemas import (
@@ -40,7 +39,6 @@ from app.schemas.goal_schemas import (
     GoalApprovalUpdate,
     GoalSelfReviewSubmit,
     GoalMentorReviewSubmit,
-    GoalNotifyPayload,
     TeamGoalResponse,
 )
 from app.core.cycle_utils import get_goal_cycle_name
@@ -667,44 +665,3 @@ def submit_goal_mentor_review(
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
 
-@router.post("/{goal_id}/notify", status_code=status.HTTP_204_NO_CONTENT)
-def notify_mentee(
-    goal_id: int,
-    payload: GoalNotifyPayload,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """
-    Mentor sends a structured action-request notification to the goal owner.
-
-    The notification carries a short action_requested label and a longer
-    description; both appear in the mentee's bell-icon dropdown.
-
-    Gate: caller must be the goal owner's assigned mentor.
-    """
-    goal = db.query(Goal).filter(
-        Goal.id == goal_id, Goal.org_id == current_user.org_id
-    ).first()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found.")
-
-    goal_owner = db.query(User).filter(User.id == goal.user_id).first()
-    if not goal_owner or goal_owner.mentor_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the assigned mentor can send notifications for this goal.",
-        )
-
-    notification = GoalNotification(
-        org_id=current_user.org_id,
-        goal_id=goal.id,
-        recipient_id=goal.user_id,
-        sender_id=current_user.id,
-        message=(
-            f'[{payload.action_requested}] {payload.description} '
-            f'— from {current_user.full_name} regarding "{goal.title}"'
-        ),
-    )
-    db.add(notification)
-    db.commit()
-    return None

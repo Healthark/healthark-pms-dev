@@ -1,4 +1,4 @@
-import { Bell, UserCircle, Check, RotateCcw, Link } from "lucide-react";
+import { UserCircle, Check, RotateCcw, Link } from "lucide-react";
 import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
@@ -12,7 +12,6 @@ interface TeamGoalCardProps {
     goal: TeamGoal,
     cycleHalf: SelfReviewCycleHalf,
   ) => void;
-  readonly onNotify: (goal: TeamGoal) => void;
   readonly isActing: boolean;
 }
 
@@ -21,7 +20,6 @@ export function TeamGoalCard({
   onApprove,
   onRequestChanges,
   onViewSelfReview,
-  onNotify,
   isActing,
 }: TeamGoalCardProps) {
   const isSubmitted = goal.approval_status === "submitted";
@@ -71,17 +69,8 @@ export function TeamGoalCard({
         <ApprovalStatusBadge status={goal.approval_status} />
       </div>
 
-      {/* Footer: Notify (left) + workflow actions (right) */}
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
-        <button
-          type="button"
-          onClick={() => onNotify(goal)}
-          title="Send an action request to the mentee"
-          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand hover:border-brand/30 transition-colors"
-        >
-          <Bell className="h-3.5 w-3.5" aria-hidden="true" /> Notify
-        </button>
-
+      {/* Footer: workflow actions */}
+      <div className="flex items-center justify-end gap-2 pt-1 border-t border-border">
         {isSubmitted && (
           <div className="flex items-center gap-2">
             <button

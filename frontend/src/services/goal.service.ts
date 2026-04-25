@@ -207,13 +207,6 @@ export const goalService = {
     return res.data;
   },
 
-  notifyMentee: async (
-    goalId: number,
-    payload: { action_requested: string; description: string },
-  ): Promise<void> => {
-    await apiClient.post(`/goals/${goalId}/notify`, payload);
-  },
-
   // ── Employee — Criteria ─────────────────────────────────────────
   addCriterion: async (
     goalId: number,

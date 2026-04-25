@@ -11,9 +11,6 @@ import {
   RotateCcw,
   Link as LinkIcon,
   MessageSquare,
-  Bell,
-  Send,
-  Loader2,
 } from "lucide-react";
 import {
   goalService,
@@ -121,126 +118,6 @@ function FeedbackModal({
 }
 
 // ---------------------------------------------------------------------------
-// NotifyModal — structured action-request notification to the mentee
-// ---------------------------------------------------------------------------
-
-interface NotifyModalProps {
-  readonly goal: TeamGoal;
-  readonly onSend: (actionRequested: string, description: string) => Promise<void>;
-  readonly onClose: () => void;
-  readonly isSaving: boolean;
-  readonly error: string;
-}
-
-function NotifyModal({
-  goal,
-  onSend,
-  onClose,
-  isSaving,
-  error,
-}: NotifyModalProps) {
-  const [actionRequested, setActionRequested] = useState("");
-  const [description, setDescription] = useState("");
-  const canSend = actionRequested.trim().length > 0 && description.trim().length > 0;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="notify-modal-title"
-    >
-      <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
-        {/* Header */}
-        <div className="border-b border-border px-6 py-4">
-          <div className="flex items-center gap-2 mb-0.5">
-            <Bell className="h-4 w-4 text-brand shrink-0" aria-hidden="true" />
-            <h2
-              id="notify-modal-title"
-              className="font-display text-base font-semibold text-text-main"
-            >
-              Notify Mentee
-            </h2>
-          </div>
-          <p className="text-sm text-text-muted">
-            Send an action request to{" "}
-            <strong>{goal.owner_name}</strong> for &ldquo;{goal.title}&rdquo;.
-          </p>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 py-5 space-y-4">
-          {error && (
-            <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
-              {error}
-            </p>
-          )}
-
-          <div>
-            <label
-              htmlFor="action-requested"
-              className="block text-xs font-semibold text-text-main mb-1"
-            >
-              Action Requested *
-            </label>
-            <input
-              id="action-requested"
-              type="text"
-              value={actionRequested}
-              onChange={(e) => setActionRequested(e.target.value)}
-              placeholder="e.g. Please submit your H1 self-review"
-              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="notify-description"
-              className="block text-xs font-semibold text-text-main mb-1"
-            >
-              Description *
-            </label>
-            <textarea
-              id="notify-description"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Provide additional context or instructions for the mentee."
-              className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onSend(actionRequested.trim(), description.trim())}
-            disabled={isSaving || !canSend}
-            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Send className="h-4 w-4" aria-hidden="true" />
-            )}
-            {isSaving ? "Sending…" : "Send Notification"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Filter config
 // ---------------------------------------------------------------------------
 
@@ -322,38 +199,6 @@ export function TeamGoalsTab() {
   const closeViewSelfReview = () => {
     setViewSelfReviewGoal(null);
     setViewSelfReviewCycle(null);
-  };
-
-  // Notify modal state
-  const [notifyTarget, setNotifyTarget] = useState<TeamGoal | null>(null);
-  const [isNotifySaving, setIsNotifySaving] = useState(false);
-  const [notifyError, setNotifyError] = useState("");
-
-  const openNotifyModal = (goal: TeamGoal) => {
-    setNotifyError("");
-    setNotifyTarget(goal);
-  };
-  const closeNotifyModal = () => {
-    setNotifyTarget(null);
-    setNotifyError("");
-  };
-
-  const handleNotifySend = async (actionRequested: string, description: string) => {
-    if (!notifyTarget) return;
-    setIsNotifySaving(true);
-    setNotifyError("");
-    try {
-      await goalService.notifyMentee(notifyTarget.id, {
-        action_requested: actionRequested,
-        description,
-      });
-      closeNotifyModal();
-      toast.success("Mentee notified.");
-    } catch (err) {
-      setNotifyError(getErrorMessage(err));
-    } finally {
-      setIsNotifySaving(false);
-    }
   };
 
   const loadGoals = useCallback(async () => {
@@ -568,7 +413,6 @@ export function TeamGoalsTab() {
                 setFeedbackTarget(g);
               }}
               onViewSelfReview={openViewSelfReview}
-              onNotify={openNotifyModal}
               isActing={isActing}
             />
           ))}
@@ -593,9 +437,6 @@ export function TeamGoalsTab() {
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Actions
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Notify
                 </th>
               </tr>
             </thead>
@@ -698,26 +539,12 @@ export function TeamGoalsTab() {
                         </div>
                       </td>
 
-                      {/* Notify column — opens structured action-request popup */}
-                      <td
-                        className="px-4 py-3"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => openNotifyModal(goal)}
-                          title="Send an action request to the mentee"
-                          className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand hover:border-brand/30 transition-colors"
-                        >
-                          <Bell className="h-3 w-3" /> Notify
-                        </button>
-                      </td>
                     </tr>
 
-                    {/* Expanded detail row — colSpan covers all 6 columns */}
+                    {/* Expanded detail row — colSpan covers all 5 columns */}
                     {isExpanded && (
                       <tr className="bg-brand/5">
-                        <td colSpan={6} className="px-10 py-4">
+                        <td colSpan={5} className="px-10 py-4">
                           <div className="space-y-3 max-w-2xl">
                             {goal.description && (
                               <p className="text-sm text-text-muted">
@@ -791,16 +618,6 @@ export function TeamGoalsTab() {
         readOnly
       />
 
-      {/* Notify modal — structured action-request to mentee */}
-      {notifyTarget && (
-        <NotifyModal
-          goal={notifyTarget}
-          onSend={handleNotifySend}
-          onClose={closeNotifyModal}
-          isSaving={isNotifySaving}
-          error={notifyError}
-        />
-      )}
     </div>
   );
 }

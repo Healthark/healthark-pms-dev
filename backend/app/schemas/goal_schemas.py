@@ -97,16 +97,6 @@ class GoalApprovalUpdate(BaseModel):
     feedback: Optional[str] = None
 
 
-class GoalNotifyPayload(BaseModel):
-    """
-    Payload for the mentor → mentee Notify action.
-    action_requested: short label for what the mentor needs (e.g. "Please submit self-review").
-    description: longer explanation visible in the mentee's notification bell.
-    """
-    action_requested: str = Field(..., min_length=1, max_length=200)
-    description:      str = Field(..., min_length=1)
-
-
 class GoalMentorReviewSubmit(BaseModel):
     """
     Payload the mentor submits when reviewing a mentee's self-review for one
