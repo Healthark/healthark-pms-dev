@@ -2,7 +2,13 @@
  * GoalSelfReviewModal.tsx — Owner's (or mentor-view) reflection form for
  * a single half (H1 / H2) of an approved annual goal.
  *
- * - Opens from the My Goals H1/H2 cycle dropdown.  When the matching
+ * Form shape mirrors the Annual Review self-appraisal: one freeform
+ * paragraph capturing the reflection. Above the textarea, two collapsible
+ * panels surface the role expectations for **Firm Growth** and **Competency
+ * & Skills** as a reference rubric, fetched from /users/me/expectations
+ * for the current user's department × designation.
+ *
+ * - Opens from the My Goals H1/H2 cycle dropdown. When the matching
  *   self-review already exists, the modal renders read-only.
  * - The mentor also opens this modal (via readOnly=true) to view what
  *   the mentee submitted — they cannot edit or submit.
@@ -13,103 +19,44 @@ import { createPortal } from "react-dom";
 import { ClipboardCheck, Send, Loader2, X } from "lucide-react";
 import type {
   Goal,
-  GoalSelfReview,
   GoalSelfReviewPayload,
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
+import {
+  profileService,
+  type UserRoleExpectation,
+} from "../../services/profile.service";
+import type { RoleExpectation } from "../../services/project-review.service";
+import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
-
-// ── Competency schema — matches backend self_desc_* columns ─────────
-
-const COMPETENCIES = [
-  {
-    key: "task_execution",
-    label: "Task Execution & Problem Solving",
-    placeholder:
-      "Describe how you executed on this goal, the problems you solved, and the quality of your delivery.",
-  },
-  {
-    key: "ownership",
-    label: "Ownership & Accountability",
-    placeholder:
-      "Describe how you took ownership of this goal end-to-end and the accountability you demonstrated.",
-  },
-  {
-    key: "client_deliverables",
-    label: "Building Client-Ready Deliverables",
-    placeholder:
-      "Describe the client-ready deliverables you produced while working on this goal.",
-  },
-  {
-    key: "communication",
-    label: "Communication & Stakeholder Management",
-    placeholder:
-      "Describe how you communicated progress, managed expectations, and engaged stakeholders.",
-  },
-  {
-    key: "project_management",
-    label: "Project Management and Risk Mitigation",
-    placeholder:
-      "Describe how you planned, tracked timelines, and mitigated risks for this goal.",
-  },
-  {
-    key: "mentoring",
-    label: "Mentoring and Team Development",
-    placeholder:
-      "Describe how you mentored teammates or contributed to team development through this goal.",
-  },
-  {
-    key: "firm_growth",
-    label: "Firm Growth",
-    placeholder:
-      "Describe how your work on this goal contributed to firm growth — new capabilities, client relationships, or revenue.",
-  },
-  {
-    key: "competency_skills",
-    label: "Competency and Skills",
-    placeholder:
-      "Describe the competencies and skills you built or demonstrated while delivering this goal.",
-  },
-] as const;
-
-type CompetencyKey = (typeof COMPETENCIES)[number]["key"];
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
-
-// ── Helpers ─────────────────────────────────────────────────────────
-
-function emptyForm(): Record<CompetencyKey, string> {
-  return {
-    task_execution: "",
-    ownership: "",
-    client_deliverables: "",
-    communication: "",
-    project_management: "",
-    mentoring: "",
-    firm_growth: "",
-    competency_skills: "",
-  };
-}
-
-function readFromReview(review: GoalSelfReview): Record<CompetencyKey, string> {
-  return {
-    task_execution: review.self_desc_task_execution,
-    ownership: review.self_desc_ownership,
-    client_deliverables: review.self_desc_client_deliverables,
-    communication: review.self_desc_communication,
-    project_management: review.self_desc_project_management,
-    mentoring: review.self_desc_mentoring,
-    firm_growth: review.self_desc_firm_growth,
-    competency_skills: review.self_desc_competency_skills,
-  };
-}
 
 function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
   // "H1 FY 2026-27" / "H2 FY 2026-27" — stable across grid/table/mentor views.
   return goal.fy_year
     ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}`
     : cycleHalf;
+}
+
+/** Adapt the /users/me/expectations payload into the shape ExpectationPanel
+ *  expects (it shares its interface with the Project Review forms). */
+function asRoleExpectation(u: UserRoleExpectation | null): RoleExpectation | null {
+  if (!u) return null;
+  return {
+    id: 0,
+    department_name: u.department_name ?? "",
+    designation_name: u.designation_name ?? "",
+    exp_task_execution: u.exp_task_execution,
+    exp_ownership: u.exp_ownership,
+    exp_project_management: u.exp_project_management,
+    exp_client_deliverables: u.exp_client_deliverables,
+    exp_communication: u.exp_communication,
+    exp_mentoring: u.exp_mentoring,
+    exp_firm_growth: u.exp_firm_growth,
+    exp_competency_skills: u.exp_competency_skills,
+  };
 }
 
 // ── Props ───────────────────────────────────────────────────────────
@@ -148,43 +95,47 @@ export function GoalSelfReviewModal({
 
   const isLocked = readOnly || existing !== null;
 
-  const [form, setForm] = useState<Record<CompetencyKey, string>>(emptyForm);
+  const [overall, setOverall] = useState("");
+  const [expectation, setExpectation] = useState<UserRoleExpectation | null>(null);
 
-  // Re-seed the form whenever the modal opens on a different (goal, half).
-  // Driven by an effect so parent state changes are respected immediately.
+  // Re-seed the textarea whenever the modal opens on a different (goal, half).
   useEffect(() => {
     if (!isOpen) return;
-    setForm(existing ? readFromReview(existing) : emptyForm());
-    // existing is recomputed from props every render; the identity check
-    // on goal.id + cycleHalf is what matters here.
+    setOverall(existing ? existing.self_overall_review : "");
   }, [isOpen, goal?.id, cycleHalf, existing]);
+
+  // Fetch the current user's resolved role expectations once the modal opens.
+  // The modal is for a self-review, so the panels surface the *self* user's
+  // role rubric. Background fetch — UI shouldn't block on it.
+  useEffect(() => {
+    if (!isOpen || expectation) return;
+    let cancelled = false;
+    profileService
+      .getMyExpectations()
+      .then((exp) => {
+        if (!cancelled) setExpectation(exp);
+      })
+      .catch(() => {
+        // Non-fatal: panels just won't render. The modal still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, expectation]);
 
   if (!isOpen || !goal || !cycleHalf) return null;
 
-  const setField = (key: CompetencyKey, value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  const allFilled = COMPETENCIES.every((c) => form[c.key].trim().length > 0);
+  const allFilled = overall.trim().length > 0;
 
   const handleSubmit = async () => {
-    const payload: GoalSelfReviewPayload = {
-      self_desc_task_execution: form.task_execution.trim(),
-      self_desc_ownership: form.ownership.trim(),
-      self_desc_client_deliverables: form.client_deliverables.trim(),
-      self_desc_communication: form.communication.trim(),
-      self_desc_project_management: form.project_management.trim(),
-      self_desc_mentoring: form.mentoring.trim(),
-      self_desc_firm_growth: form.firm_growth.trim(),
-      self_desc_competency_skills: form.competency_skills.trim(),
-    };
-    await onSubmit(cycleHalf, payload);
+    await onSubmit(cycleHalf, { self_overall_review: overall.trim() });
   };
 
-  const title = readOnly
-    ? `Self Review · ${cycleLabel(goal, cycleHalf)}`
-    : existing
-    ? `Self Review · ${cycleLabel(goal, cycleHalf)} (Submitted)`
-    : `Self Review · ${cycleLabel(goal, cycleHalf)}`;
+  const title = `Self Review · ${cycleLabel(goal, cycleHalf)}${
+    existing && !readOnly ? " (Submitted)" : ""
+  }`;
+
+  const expectationForPanel = asRoleExpectation(expectation);
 
   return createPortal(
     <div
@@ -224,55 +175,81 @@ export function GoalSelfReviewModal({
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto px-6 py-5 space-y-5">
+        <div className="overflow-y-auto px-6 py-5 space-y-4">
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
               {error}
             </p>
           )}
 
+          {/* Role-expectation reference panels */}
+          {expectationForPanel && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                Refer to your role expectations
+              </p>
+              <div>
+                <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                  Firm Growth
+                </p>
+                <ExpectationPanel
+                  expectation={expectationForPanel}
+                  expKey="exp_firm_growth"
+                />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                  Competency &amp; Skills
+                </p>
+                <ExpectationPanel
+                  expectation={expectationForPanel}
+                  expKey="exp_competency_skills"
+                />
+              </div>
+            </div>
+          )}
+
           {!isLocked && (
             <p className="text-xs text-text-muted">
               Reflect on your delivery against this goal for{" "}
-              <strong>{cycleLabel(goal, cycleHalf)}</strong> across all 8
-              competencies. Once submitted, your mentor will review your
-              self-assessment for this half.
+              <strong>{cycleLabel(goal, cycleHalf)}</strong> in a single
+              paragraph. Use the role expectations above as a guide. Once
+              submitted, your mentor will review this entry.
             </p>
           )}
 
           {readOnly && !existing && (
             <p className="rounded-lg bg-slate-50 border border-border px-4 py-3 text-sm text-text-muted">
-              The mentee has not yet submitted their self-review for this
-              half.
+              The mentee has not yet submitted their self-review for this half.
             </p>
           )}
 
-          {(isLocked ? existing !== null : true) &&
-            COMPETENCIES.map((comp, idx) => (
-              <div key={comp.key}>
-                <label
-                  htmlFor={`goal-self-${comp.key}`}
-                  className="block text-xs font-semibold text-text-main mb-1"
-                >
-                  {idx + 1}. {comp.label}
-                  {!isLocked && " *"}
-                </label>
-                {isLocked ? (
-                  <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap">
-                    {form[comp.key] || "—"}
-                  </div>
-                ) : (
-                  <textarea
-                    id={`goal-self-${comp.key}`}
-                    rows={4}
-                    className={INPUT_CLS}
-                    value={form[comp.key]}
-                    onChange={(e) => setField(comp.key, e.target.value)}
-                    placeholder={comp.placeholder}
-                  />
-                )}
-              </div>
-            ))}
+          {/* Single freeform paragraph */}
+          {(isLocked ? existing !== null : true) && (
+            <div>
+              <label
+                htmlFor="goal-self-overall"
+                className="block text-xs font-semibold text-text-main mb-1"
+              >
+                Self Review
+                {!isLocked && " *"}
+              </label>
+              {isLocked ? (
+                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                  {overall || "—"}
+                </div>
+              ) : (
+                <textarea
+                  id="goal-self-overall"
+                  rows={10}
+                  className={INPUT_CLS}
+                  value={overall}
+                  onChange={(e) => setOverall(e.target.value)}
+                  placeholder="Reflect on your delivery this half — what you accomplished, the impact, where you grew, and where you'd like further input."
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -280,7 +257,7 @@ export function GoalSelfReviewModal({
           <p className="text-xs text-text-muted">
             {isLocked
               ? "Self-review is locked once submitted."
-              : "All 8 reflections are required."}
+              : "Single paragraph required."}
           </p>
           <div className="flex items-center gap-3">
             <button

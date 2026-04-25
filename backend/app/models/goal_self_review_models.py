@@ -57,15 +57,11 @@ class GoalSelfReview(Base):
         nullable=False,
     )
 
-    # 8 competency responses — all required at submission time.
-    self_desc_task_execution      = Column(Text, nullable=False)
-    self_desc_ownership           = Column(Text, nullable=False)
-    self_desc_client_deliverables = Column(Text, nullable=False)
-    self_desc_communication       = Column(Text, nullable=False)
-    self_desc_project_management  = Column(Text, nullable=False)
-    self_desc_mentoring           = Column(Text, nullable=False)
-    self_desc_firm_growth         = Column(Text, nullable=False)
-    self_desc_competency_skills   = Column(Text, nullable=False)
+    # Single freeform paragraph capturing the employee's reflection on
+    # their delivery for this half. Replaces the previous 8 per-competency
+    # textareas — Firm Growth and Competency & Skills role expectations
+    # are surfaced as a reference panel on the form instead.
+    self_overall_review = Column(Text, nullable=False)
 
     __table_args__ = (
         # A goal can have at most one submission per half.  Enforcing at

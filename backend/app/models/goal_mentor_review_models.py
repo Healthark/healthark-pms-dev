@@ -2,7 +2,9 @@
 GoalMentorReview Model — Mentor's per-half assessment of a mentee's self-review.
 
 After a mentee submits their self-review for H1 or H2, their assigned mentor
-fills in a corresponding mentor review covering the same 8 competencies.
+fills in a single freeform paragraph reflecting on the mentee's delivery
+that half. Firm Growth and Competency & Skills role expectations are
+surfaced on the form as reference, not as separate input fields.
 
 Relationship:
     Goal 1 ─ 0..2 ─ GoalMentorReview   (keyed by cycle_half, same as GoalSelfReview)
@@ -44,15 +46,9 @@ class GoalMentorReview(Base):
         nullable=False,
     )
 
-    # 8 mentor comment fields — mirror the 8 self_desc_* columns on GoalSelfReview.
-    mentor_comment_task_execution      = Column(Text, nullable=False)
-    mentor_comment_ownership           = Column(Text, nullable=False)
-    mentor_comment_client_deliverables = Column(Text, nullable=False)
-    mentor_comment_communication       = Column(Text, nullable=False)
-    mentor_comment_project_management  = Column(Text, nullable=False)
-    mentor_comment_mentoring           = Column(Text, nullable=False)
-    mentor_comment_firm_growth         = Column(Text, nullable=False)
-    mentor_comment_competency_skills   = Column(Text, nullable=False)
+    # Single freeform paragraph mirroring the mentee's self-review shape.
+    # Replaces the previous 8 per-competency mentor_comment_* columns.
+    mentor_overall_review = Column(Text, nullable=False)
 
     __table_args__ = (
         Index(

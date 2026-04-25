@@ -62,14 +62,8 @@ export interface GoalSelfReview {
   goal_id: number;
   cycle_half: SelfReviewCycleHalf;
   submitted_at: string;
-  self_desc_task_execution: string;
-  self_desc_ownership: string;
-  self_desc_client_deliverables: string;
-  self_desc_communication: string;
-  self_desc_project_management: string;
-  self_desc_mentoring: string;
-  self_desc_firm_growth: string;
-  self_desc_competency_skills: string;
+  /** Single freeform paragraph, mirrors the Annual Review self-appraisal shape. */
+  self_overall_review: string;
 }
 
 /**
@@ -82,25 +76,13 @@ export interface GoalMentorReview {
   goal_id: number;
   cycle_half: SelfReviewCycleHalf;
   submitted_at: string;
-  mentor_comment_task_execution: string;
-  mentor_comment_ownership: string;
-  mentor_comment_client_deliverables: string;
-  mentor_comment_communication: string;
-  mentor_comment_project_management: string;
-  mentor_comment_mentoring: string;
-  mentor_comment_firm_growth: string;
-  mentor_comment_competency_skills: string;
+  /** Single freeform paragraph; the form surfaces Firm Growth and Competency
+   *  & Skills role expectations as reference panels rather than separate fields. */
+  mentor_overall_review: string;
 }
 
 export interface GoalMentorReviewPayload {
-  mentor_comment_task_execution: string;
-  mentor_comment_ownership: string;
-  mentor_comment_client_deliverables: string;
-  mentor_comment_communication: string;
-  mentor_comment_project_management: string;
-  mentor_comment_mentoring: string;
-  mentor_comment_firm_growth: string;
-  mentor_comment_competency_skills: string;
+  mentor_overall_review: string;
 }
 
 export interface Goal {
@@ -133,19 +115,16 @@ export interface Goal {
 }
 
 export interface GoalSelfReviewPayload {
-  self_desc_task_execution: string;
-  self_desc_ownership: string;
-  self_desc_client_deliverables: string;
-  self_desc_communication: string;
-  self_desc_project_management: string;
-  self_desc_mentoring: string;
-  self_desc_firm_growth: string;
-  self_desc_competency_skills: string;
+  self_overall_review: string;
 }
 
 /** Extended type for the manager's Team Goals view */
 export interface TeamGoal extends Goal {
   owner_name: string;
+  /** Owner's department / designation — used by the mentor-review modal to
+   *  match the right RoleExpectation row without an extra fetch. */
+  owner_department_name: string | null;
+  owner_designation_name: string | null;
 }
 
 export interface GoalCreatePayload {

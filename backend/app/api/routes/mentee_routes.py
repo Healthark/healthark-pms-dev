@@ -301,7 +301,8 @@ def get_mentee_detail(
     annual_goals = (
         db.query(Goal)
         .options(
-            joinedload(Goal.owner),
+            joinedload(Goal.owner).joinedload(User.department),
+            joinedload(Goal.owner).joinedload(User.designation),
             joinedload(Goal.manager),
             joinedload(Goal.criteria),
         )
@@ -313,9 +314,23 @@ def get_mentee_detail(
         .order_by(Goal.created_at.desc())
         .all()
     )
-    # Inject owner_name for TeamGoalResponse. Mirrors goal_routes._list_team_goals.
+    # Inject owner_name + owner_department_name + owner_designation_name for
+    # TeamGoalResponse. Mirrors goal_routes.list_team_goals so the mentor
+    # review modal can match the right RoleExpectation row.
+    mentee_dept_name = mentee.department.name if mentee.department else None
+    mentee_desig_name = mentee.designation.name if mentee.designation else None
     for g in annual_goals:
         g.owner_name = g.owner.full_name if g.owner else mentee.full_name
+        g.owner_department_name = (
+            g.owner.department.name
+            if g.owner and g.owner.department
+            else mentee_dept_name
+        )
+        g.owner_designation_name = (
+            g.owner.designation.name
+            if g.owner and g.owner.designation
+            else mentee_desig_name
+        )
 
     # Goals tab hides DRAFT for the mentor — but stats should reflect the
     # full footprint. Split into two lists.
