@@ -265,7 +265,11 @@ def list_team_goals(
     query = (
         db.query(Goal)
         .options(
-            joinedload(Goal.owner),
+            # eager-load the owner + their department/designation so we can
+            # inject those onto each row for the mentor-review modal to match
+            # the right RoleExpectation without a follow-up request.
+            joinedload(Goal.owner).joinedload(User.department),
+            joinedload(Goal.owner).joinedload(User.designation),
             joinedload(Goal.manager),
             joinedload(Goal.criteria),
         )
@@ -283,10 +287,17 @@ def list_team_goals(
 
     goals = query.order_by(Goal.created_at.desc()).all()
 
-    # Inject owner_name onto each ORM object so TeamGoalResponse.from_attributes
-    # can read it as a plain attribute (Pydantic from_attributes mode).
+    # Inject owner_name + owner_department_name + owner_designation_name onto
+    # each ORM object so TeamGoalResponse.from_attributes can read them as
+    # plain attributes (Pydantic from_attributes mode).
     for g in goals:
         g.owner_name = g.owner.full_name if g.owner else "Unknown"
+        g.owner_department_name = (
+            g.owner.department.name if g.owner and g.owner.department else None
+        )
+        g.owner_designation_name = (
+            g.owner.designation.name if g.owner and g.owner.designation else None
+        )
 
     return goals
 
@@ -581,14 +592,7 @@ def submit_goal_self_review(
         goal_id=goal.id,
         org_id=current_user.org_id,
         cycle_half=cycle_half.value,
-        self_desc_task_execution      = payload.self_desc_task_execution,
-        self_desc_ownership           = payload.self_desc_ownership,
-        self_desc_client_deliverables = payload.self_desc_client_deliverables,
-        self_desc_communication       = payload.self_desc_communication,
-        self_desc_project_management  = payload.self_desc_project_management,
-        self_desc_mentoring           = payload.self_desc_mentoring,
-        self_desc_firm_growth         = payload.self_desc_firm_growth,
-        self_desc_competency_skills   = payload.self_desc_competency_skills,
+        self_overall_review=payload.self_overall_review,
     )
     db.add(review)
     db.commit()
@@ -656,14 +660,7 @@ def submit_goal_mentor_review(
         goal_id=goal.id,
         org_id=current_user.org_id,
         cycle_half=cycle_half.value,
-        mentor_comment_task_execution      = payload.mentor_comment_task_execution,
-        mentor_comment_ownership           = payload.mentor_comment_ownership,
-        mentor_comment_client_deliverables = payload.mentor_comment_client_deliverables,
-        mentor_comment_communication       = payload.mentor_comment_communication,
-        mentor_comment_project_management  = payload.mentor_comment_project_management,
-        mentor_comment_mentoring           = payload.mentor_comment_mentoring,
-        mentor_comment_firm_growth         = payload.mentor_comment_firm_growth,
-        mentor_comment_competency_skills   = payload.mentor_comment_competency_skills,
+        mentor_overall_review=payload.mentor_overall_review,
     )
     db.add(mentor_review)
     db.commit()

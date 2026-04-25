@@ -101,6 +101,7 @@ export interface RoleExpectation {
   exp_client_deliverables: string | null;
   exp_communication: string | null;
   exp_mentoring: string | null;
+  exp_firm_growth: string | null;
   exp_competency_skills: string | null;
 }
 

@@ -170,6 +170,7 @@ class RoleExpectationResponse(BaseModel):
     exp_client_deliverables: Optional[str] = None
     exp_communication: Optional[str] = None
     exp_mentoring: Optional[str] = None
+    exp_firm_growth: Optional[str] = None
     exp_competency_skills: Optional[str] = None
 
 

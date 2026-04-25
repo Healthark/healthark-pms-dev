@@ -342,6 +342,7 @@ def get_role_expectations(
             exp_client_deliverables=exp.exp_client_deliverables,
             exp_communication=exp.exp_communication,
             exp_mentoring=exp.exp_mentoring,
+            exp_firm_growth=exp.exp_firm_growth,
             exp_competency_skills=exp.exp_competency_skills,
         ))
 

@@ -112,15 +112,11 @@ class GoalMentorReviewSubmit(BaseModel):
     Payload the mentor submits when reviewing a mentee's self-review for one
     fiscal-year half.  cycle_half comes from the URL path param, not the body.
     One-shot per (goal_id, cycle_half) — enforced at DB level.
+
+    Single freeform paragraph; the form surfaces Firm Growth and Competency &
+    Skills role expectations as reference panels rather than separate fields.
     """
-    mentor_comment_task_execution:      str = Field(..., min_length=1)
-    mentor_comment_ownership:           str = Field(..., min_length=1)
-    mentor_comment_client_deliverables: str = Field(..., min_length=1)
-    mentor_comment_communication:       str = Field(..., min_length=1)
-    mentor_comment_project_management:  str = Field(..., min_length=1)
-    mentor_comment_mentoring:           str = Field(..., min_length=1)
-    mentor_comment_firm_growth:         str = Field(..., min_length=1)
-    mentor_comment_competency_skills:   str = Field(..., min_length=1)
+    mentor_overall_review: str = Field(..., min_length=1, max_length=10000)
 
 
 class GoalMentorReviewResponse(BaseModel):
@@ -129,14 +125,7 @@ class GoalMentorReviewResponse(BaseModel):
     goal_id: int
     cycle_half: SelfReviewCycleHalf
     submitted_at: datetime
-    mentor_comment_task_execution:      str
-    mentor_comment_ownership:           str
-    mentor_comment_client_deliverables: str
-    mentor_comment_communication:       str
-    mentor_comment_project_management:  str
-    mentor_comment_mentoring:           str
-    mentor_comment_firm_growth:         str
-    mentor_comment_competency_skills:   str
+    mentor_overall_review: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -149,15 +138,12 @@ class GoalSelfReviewSubmit(BaseModel):
 
     Each submission is one-shot — once persisted for a given
     (goal_id, cycle_half) it cannot be re-submitted.
+
+    Single freeform paragraph mirroring the Annual Review's self-appraisal
+    shape; Firm Growth and Competency & Skills role expectations are surfaced
+    on the form as reference panels.
     """
-    self_desc_task_execution:      str = Field(..., min_length=1)
-    self_desc_ownership:           str = Field(..., min_length=1)
-    self_desc_client_deliverables: str = Field(..., min_length=1)
-    self_desc_communication:       str = Field(..., min_length=1)
-    self_desc_project_management:  str = Field(..., min_length=1)
-    self_desc_mentoring:           str = Field(..., min_length=1)
-    self_desc_firm_growth:         str = Field(..., min_length=1)
-    self_desc_competency_skills:   str = Field(..., min_length=1)
+    self_overall_review: str = Field(..., min_length=1, max_length=10000)
 
 
 class GoalSelfReviewResponse(BaseModel):
@@ -169,14 +155,7 @@ class GoalSelfReviewResponse(BaseModel):
     goal_id: int
     cycle_half: SelfReviewCycleHalf
     submitted_at: datetime
-    self_desc_task_execution:      str
-    self_desc_ownership:           str
-    self_desc_client_deliverables: str
-    self_desc_communication:       str
-    self_desc_project_management:  str
-    self_desc_mentoring:           str
-    self_desc_firm_growth:         str
-    self_desc_competency_skills:   str
+    self_overall_review: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -253,3 +232,7 @@ class GoalResponse(GoalBase):
 class TeamGoalResponse(GoalResponse):
     """Extended response for the manager's Team Goals view."""
     owner_name: str
+    # Owner's department / designation — exposed so the mentor-review modal
+    # can match the right RoleExpectation row without a second round-trip.
+    owner_department_name: Optional[str] = None
+    owner_designation_name: Optional[str] = None

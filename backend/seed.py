@@ -628,6 +628,7 @@ def seed_database():
                     "exp_communication": "Drafts clear and concise meeting notes and written updates.",
                     "exp_project_management": "Conducts deep secondary research and takes ownership of specific sector research.",
                     "exp_mentoring": "Encourages team building and performs peer reviews.",
+                    "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm",
                     "exp_competency_skills": "Builds foundational knowledge in a specific sector or domain.",
                 },
                 "Senior Consultant": {
@@ -637,6 +638,7 @@ def seed_database():
                     "exp_communication": "Leads internal discussions and co-leads client readouts.",
                     "exp_project_management": "Develops project management plans and structures research effectively.",
                     "exp_mentoring": "Provides guidance to junior team members on project tasks.",
+                    "exp_firm_growth": "Leads a firm initiative | Contribute to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Plays a major role in finalising proposals | Owns knowledge management at the end of the project (structured research uploads, key documents etc.) to facilitate firm knowledge build-up | Supports the recruitment efforts and drives interviews / other activities when required with some leadership team",
                     "exp_competency_skills": "Leads a firm initiative and develops deeper industry expertise.",
                 },
                 "Manager": {
@@ -646,6 +648,7 @@ def seed_database():
                     "exp_communication": "Leads client discussions, readouts, and critical meetings independently.",
                     "exp_project_management": "Takes end-to-end ownership of projects or large workstreams.",
                     "exp_mentoring": "Coaches team members on advanced skills and career development.",
+                    "exp_firm_growth": "Identifies opportunities for process improvements and efficiency | Supports organisation growth and continuously identifies areas for upskilling team/practice (encourages people to undertake development activities, makes required resources available) | Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Creates an environment to enable others to be creative, agile, innovative and value quality (gives space to team members working on a project to think of approach, delegating instead of hand-holding every time) | Plays a leadership role within their firm, sometimes leading a new initiative or a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc.) | Leads proposals independently with minimal guidance from the leadership | Supports recruitment activities; trains and retains top talent while fostering a culture of collaboration and continuous learning",
                     "exp_competency_skills": "Identifies opportunities for process improvements and leads proposals.",
                 },
             },
@@ -657,6 +660,7 @@ def seed_database():
                     "exp_client_deliverables": "Produces quality code and deliverables with no major defects.",
                     "exp_communication": "Drafts clear meeting notes and written communications.",
                     "exp_mentoring": "Encourages team building and knowledge sharing.",
+                    "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm | Contribute to Eminence and Excellence activities to grow the service offering for their respective practice area",
                     "exp_competency_skills": "Proficient in assigned technology area and produces quality code on time.",
                 },
                 "Senior Consultant": {
@@ -666,6 +670,7 @@ def seed_database():
                     "exp_client_deliverables": "Reviews code and leverages expertise to produce high-quality deliverables.",
                     "exp_communication": "Leads internal discussions and manages client relationships.",
                     "exp_mentoring": "Provides guidance to junior team members and leads coaching.",
+                    "exp_firm_growth": "Plays a leadership role within the team; is the face of the organization / leadership team to junior team members | Participates in new proposals / SoW creation | Leads and owns Eminence and Excellence activities to grow the service offering for their respective practice area | Participates in screening and hiring of new members in the organization",
                     "exp_competency_skills": "Leads technical eminence and demonstrates SME capability.",
                 },
                 "Manager": {
@@ -675,6 +680,7 @@ def seed_database():
                     "exp_client_deliverables": "Reviews and ensures final deliverables are free from defects.",
                     "exp_communication": "Leads client discussions and builds strong stakeholder relationships.",
                     "exp_mentoring": "Develops junior team members through structured coaching.",
+                    "exp_firm_growth": "Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Operates with full independence, managing projects and anticipating client needs | Identifies opportunities for process improvements and efficiency | Plays a leadership role within their firm, sometimes leading a new initiative or a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc.) | Leads proposals independently with minimal guidance from the leadership | Supports recruitment activities | Recruits, trains, and retains top talent while fostering a culture of collaboration and continuous learning",
                     "exp_competency_skills": "Acts as role model and drives process improvements.",
                 },
             },
@@ -686,6 +692,7 @@ def seed_database():
                     "exp_communication": "Drafts clear research summaries and meeting notes.",
                     "exp_client_deliverables": "Produces accurate, well-formatted RWE outputs.",
                     "exp_mentoring": "Encourages team building and participates actively.",
+                    "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm",
                     "exp_competency_skills": "Proficient in project-specific RWE concepts.",
                 },
                 "Senior Consultant": {
@@ -695,6 +702,7 @@ def seed_database():
                     "exp_communication": "Independently interacts with clients and leads workstreams.",
                     "exp_client_deliverables": "Produces contextual, high-quality RWE deliverables.",
                     "exp_mentoring": "Demonstrates maturity in coaching junior team members.",
+                    "exp_firm_growth": "Plays a leadership role within the team; is the face of the organization / leadership team to junior team members | Contributes to pitching for different projects and proposal development; able to identify small-scale opportunities for cross-sell or up-sell within existing client projects | Participates in / leads firm initiatives | Contributes to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Helps in interviewing / recruiting new talent to the practice",
                     "exp_competency_skills": "Is a Subject Matter Expert in one RWE vertical.",
                 },
                 "Manager": {
@@ -704,6 +712,7 @@ def seed_database():
                     "exp_communication": "Leads client and clinical stakeholder discussions.",
                     "exp_client_deliverables": "Ensures final RWE deliverables are publication-quality.",
                     "exp_mentoring": "Coaches team members and leads knowledge building.",
+                    "exp_firm_growth": "Plays a leadership role within the firm; acts as a role model by fostering a positive culture and encouraging teamwork within the organisation | Drives initiatives that enhance the firm's service offerings and expand its market presence | Leads proposal development for new projects and opportunities | Contributes to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Demonstrates responsibility for review and action where required | Recruits, trains, and retains top talent while fostering a culture of collaboration and continuous learning",
                     "exp_competency_skills": "Thought leader in RWE methodology and scientific rigor.",
                 },
             },
@@ -729,6 +738,7 @@ def seed_database():
                         exp_client_deliverables=competencies.get("exp_client_deliverables", ""),
                         exp_communication=competencies.get("exp_communication", ""),
                         exp_mentoring=competencies.get("exp_mentoring", ""),
+                        exp_firm_growth=competencies.get("exp_firm_growth", ""),
                         exp_competency_skills=competencies.get("exp_competency_skills", ""),
                     ))
                     added_count += 1
@@ -1254,16 +1264,16 @@ def seed_database():
         # 10. ANNUAL GOALS + PER-HALF SELF REVIEWS                            #
         # ================================================================== #
 
-        SELF_REVIEW_DEFAULT = {
-            "self_desc_task_execution":     "Delivered all key tasks against the goal with disciplined execution and consistent quality checks.",
-            "self_desc_ownership":          "Took end-to-end ownership of the goal with proactive status updates and risk flagging.",
-            "self_desc_client_deliverables":"Produced client-ready outputs that required minimal iteration post-review.",
-            "self_desc_communication":      "Maintained clear internal and stakeholder communications throughout the cycle.",
-            "self_desc_project_management": "Tracked milestones and dependencies with a well-maintained plan and early risk escalation.",
-            "self_desc_mentoring":          "Supported teammates informally on methodology and tooling while working on this goal.",
-            "self_desc_firm_growth":        "Contributions from this goal fed into reusable playbooks and strengthened the firm's capability.",
-            "self_desc_competency_skills":  "Noticeably strengthened applicable skills — measurable on the scope and complexity handled independently.",
-        }
+        SELF_REVIEW_DEFAULT = (
+            "Delivered all key tasks against the goal with disciplined execution and "
+            "consistent quality checks. Took end-to-end ownership with proactive status "
+            "updates and risk flagging, producing client-ready outputs that required "
+            "minimal iteration post-review. Tracked milestones and dependencies with a "
+            "well-maintained plan and early risk escalation, and supported teammates "
+            "informally on methodology and tooling. The work fed into reusable playbooks "
+            "and noticeably strengthened applicable skills — measurable on the scope and "
+            "complexity handled independently."
+        )
 
         def _goal(user, manager, title, desc, approval, cycle_name, fy_year,
                   progress_notes=None, manager_feedback=None, self_reviewed_halves=()):
@@ -1288,7 +1298,10 @@ def seed_database():
             db.flush()
             for half in self_reviewed_halves:
                 db.add(GoalSelfReview(
-                    goal_id=g.id, org_id=org.id, cycle_half=half, **SELF_REVIEW_DEFAULT,
+                    goal_id=g.id,
+                    org_id=org.id,
+                    cycle_half=half,
+                    self_overall_review=SELF_REVIEW_DEFAULT,
                 ))
 
         if db.query(Goal).filter(Goal.org_id == org.id).count() == 0:
@@ -1588,8 +1601,10 @@ def seed_database():
                 db.flush()
                 for half in self_reviewed_halves:
                     db.add(GoalSelfReview(
-                        goal_id=g.id, org_id=miltenyi_org.id,
-                        cycle_half=half, **SELF_REVIEW_DEFAULT,
+                        goal_id=g.id,
+                        org_id=miltenyi_org.id,
+                        cycle_half=half,
+                        self_overall_review=SELF_REVIEW_DEFAULT,
                     ))
 
             _mil_goal(charlie, bob_lead, "CAR-T Workflow Automation Module",

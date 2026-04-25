@@ -1,112 +1,58 @@
 /**
  * GoalMentorReviewModal.tsx — Split-panel modal for mentor review of a mentee's
- * self-review.
+ * self-review, simplified to a single paragraph each side.
  *
  * Layout:
- *   Left panel  — read-only display of the mentee's 8 self-review answers.
- *   Right panel — mentor fills their 8 comment fields (or views them read-only
- *                 when a mentor review already exists).
- *
- * The modal is wider than the normal self-review modal (max-w-5xl) to give both
- * panels breathing room.  Each panel scrolls independently.
+ *   Top (full-width)  — collapsible role-expectation panels for Firm Growth
+ *                       and Competency & Skills, scoped to the mentee's
+ *                       (goal owner's) department × designation.
+ *   Left panel        — read-only display of the mentee's self-review paragraph.
+ *   Right panel       — mentor fills a single paragraph (or views read-only
+ *                       when a mentor review already exists for this half).
  */
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ClipboardCheck, Send, Loader2, X, User, MessageSquarePlus } from "lucide-react";
+import {
+  ClipboardCheck,
+  Send,
+  Loader2,
+  X,
+  User,
+  MessageSquarePlus,
+} from "lucide-react";
 import type {
   Goal,
-  GoalSelfReview,
-  GoalMentorReview,
   GoalMentorReviewPayload,
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
+import {
+  projectReviewService,
+  type RoleExpectation,
+} from "../../services/project-review.service";
+import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
 
-// ── Competency schema ────────────────────────────────────────────────
-
-const COMPETENCIES = [
-  {
-    key: "task_execution",
-    label: "Task Execution & Problem Solving",
-  },
-  {
-    key: "ownership",
-    label: "Ownership & Accountability",
-  },
-  {
-    key: "client_deliverables",
-    label: "Building Client-Ready Deliverables",
-  },
-  {
-    key: "communication",
-    label: "Communication & Stakeholder Management",
-  },
-  {
-    key: "project_management",
-    label: "Project Management and Risk Mitigation",
-  },
-  {
-    key: "mentoring",
-    label: "Mentoring and Team Development",
-  },
-  {
-    key: "firm_growth",
-    label: "Firm Growth",
-  },
-  {
-    key: "competency_skills",
-    label: "Competency and Skills",
-  },
-] as const;
-
-type CompetencyKey = (typeof COMPETENCIES)[number]["key"];
-
-// ── Helpers ─────────────────────────────────────────────────────────
-
-function emptyMentorForm(): Record<CompetencyKey, string> {
-  return {
-    task_execution: "",
-    ownership: "",
-    client_deliverables: "",
-    communication: "",
-    project_management: "",
-    mentoring: "",
-    firm_growth: "",
-    competency_skills: "",
-  };
-}
-
-function selfReviewValue(sr: GoalSelfReview, key: CompetencyKey): string {
-  const map: Record<CompetencyKey, keyof GoalSelfReview> = {
-    task_execution:      "self_desc_task_execution",
-    ownership:           "self_desc_ownership",
-    client_deliverables: "self_desc_client_deliverables",
-    communication:       "self_desc_communication",
-    project_management:  "self_desc_project_management",
-    mentoring:           "self_desc_mentoring",
-    firm_growth:         "self_desc_firm_growth",
-    competency_skills:   "self_desc_competency_skills",
-  };
-  return sr[map[key]] as string;
-}
-
-function mentorReviewValue(mr: GoalMentorReview, key: CompetencyKey): string {
-  const map: Record<CompetencyKey, keyof GoalMentorReview> = {
-    task_execution:      "mentor_comment_task_execution",
-    ownership:           "mentor_comment_ownership",
-    client_deliverables: "mentor_comment_client_deliverables",
-    communication:       "mentor_comment_communication",
-    project_management:  "mentor_comment_project_management",
-    mentoring:           "mentor_comment_mentoring",
-    firm_growth:         "mentor_comment_firm_growth",
-    competency_skills:   "mentor_comment_competency_skills",
-  };
-  return mr[map[key]] as string;
-}
+const TEXTAREA_CLS =
+  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
   return goal.fy_year ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}` : cycleHalf;
+}
+
+/** Pull the goal owner's department/designation off the runtime object. The
+ *  modal's prop type is `Goal` for backwards compatibility; in practice the
+ *  callers (TeamReviewTab, MenteeGoalsTab) pass `TeamGoal`, which carries
+ *  these two fields. Falls back gracefully when not present. */
+function getOwnerRole(goal: Goal): { dept: string | null; desig: string | null } {
+  const t = goal as Goal & {
+    owner_department_name?: string | null;
+    owner_designation_name?: string | null;
+  };
+  return {
+    dept: t.owner_department_name ?? null,
+    desig: t.owner_designation_name ?? null,
+  };
 }
 
 // ── Props ────────────────────────────────────────────────────────────
@@ -147,45 +93,50 @@ export function GoalMentorReviewModal({
 
   const isReadOnly = existingMentorReview !== null;
 
-  const [form, setForm] = useState<Record<CompetencyKey, string>>(emptyMentorForm);
+  const [overall, setOverall] = useState("");
+  const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
 
+  // Re-seed the textarea whenever the modal opens on a different (goal, half).
   useEffect(() => {
     if (!isOpen) return;
-    if (existingMentorReview) {
-      setForm({
-        task_execution:      mentorReviewValue(existingMentorReview, "task_execution"),
-        ownership:           mentorReviewValue(existingMentorReview, "ownership"),
-        client_deliverables: mentorReviewValue(existingMentorReview, "client_deliverables"),
-        communication:       mentorReviewValue(existingMentorReview, "communication"),
-        project_management:  mentorReviewValue(existingMentorReview, "project_management"),
-        mentoring:           mentorReviewValue(existingMentorReview, "mentoring"),
-        firm_growth:         mentorReviewValue(existingMentorReview, "firm_growth"),
-        competency_skills:   mentorReviewValue(existingMentorReview, "competency_skills"),
+    setOverall(
+      existingMentorReview ? existingMentorReview.mentor_overall_review : "",
+    );
+  }, [isOpen, goal?.id, cycleHalf, existingMentorReview]);
+
+  // Fetch role-expectation rows once when the modal first opens. The org
+  // typically only has 9 of these; cache once and filter client-side by
+  // the owner's department + designation.
+  useEffect(() => {
+    if (!isOpen || expectations.length > 0) return;
+    let cancelled = false;
+    projectReviewService
+      .getRoleExpectations()
+      .then((rows) => {
+        if (!cancelled) setExpectations(rows);
+      })
+      .catch(() => {
+        // Non-fatal — panels just won't render.
       });
-    } else {
-      setForm(emptyMentorForm());
-    }
-  }, [isOpen, goal?.id, cycleHalf]);  // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, expectations.length]);
 
   if (!isOpen || !goal || !cycleHalf) return null;
 
-  const setField = (key: CompetencyKey, value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const { dept, desig } = getOwnerRole(goal);
+  const ownerExpectation: RoleExpectation | null =
+    dept && desig
+      ? expectations.find(
+          (e) => e.department_name === dept && e.designation_name === desig,
+        ) ?? null
+      : null;
 
-  const allFilled = COMPETENCIES.every((c) => form[c.key].trim().length > 0);
+  const allFilled = overall.trim().length > 0;
 
   const handleSubmit = async () => {
-    const payload: GoalMentorReviewPayload = {
-      mentor_comment_task_execution:      form.task_execution.trim(),
-      mentor_comment_ownership:           form.ownership.trim(),
-      mentor_comment_client_deliverables: form.client_deliverables.trim(),
-      mentor_comment_communication:       form.communication.trim(),
-      mentor_comment_project_management:  form.project_management.trim(),
-      mentor_comment_mentoring:           form.mentoring.trim(),
-      mentor_comment_firm_growth:         form.firm_growth.trim(),
-      mentor_comment_competency_skills:   form.competency_skills.trim(),
-    };
-    await onSubmit(cycleHalf, payload);
+    await onSubmit(cycleHalf, { mentor_overall_review: overall.trim() });
   };
 
   const label = cycleLabel(goal, cycleHalf);
@@ -227,9 +178,36 @@ export function GoalMentorReviewModal({
           </button>
         </div>
 
+        {/* ── Role-expectation reference panels (above the split) ── */}
+        {ownerExpectation && (
+          <div className="border-b border-border bg-blue-50/30 px-6 py-3 space-y-2 shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              Mentee role expectations
+            </p>
+            <div>
+              <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                Firm Growth
+              </p>
+              <ExpectationPanel
+                expectation={ownerExpectation}
+                expKey="exp_firm_growth"
+              />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                Competency &amp; Skills
+              </p>
+              <ExpectationPanel
+                expectation={ownerExpectation}
+                expKey="exp_competency_skills"
+              />
+            </div>
+          </div>
+        )}
+
         {/* ── Body — two-panel layout ── */}
         <div className="flex flex-1 overflow-hidden min-h-0">
-          {/* Left: Mentee self-review (read-only) */}
+          {/* Left: Mentee self-review (read-only paragraph) */}
           <div className="w-1/2 border-r border-border flex flex-col overflow-hidden">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-slate-50/80 shrink-0">
               <User className="h-4 w-4 text-text-muted" aria-hidden="true" />
@@ -237,22 +215,15 @@ export function GoalMentorReviewModal({
                 Mentee Self Review
               </span>
             </div>
-            <div className="overflow-y-auto px-5 py-4 space-y-4">
+            <div className="overflow-y-auto px-5 py-4">
               {selfReview === null ? (
                 <div className="rounded-lg border border-border bg-slate-50 px-4 py-6 text-center text-sm text-text-muted">
                   The mentee has not submitted their self-review for this half yet.
                 </div>
               ) : (
-                COMPETENCIES.map((comp, idx) => (
-                  <div key={comp.key}>
-                    <p className="text-xs font-semibold text-text-main mb-1">
-                      {idx + 1}. {comp.label}
-                    </p>
-                    <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
-                      {selfReviewValue(selfReview, comp.key) || "—"}
-                    </div>
-                  </div>
-                ))
+                <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                  {selfReview.self_overall_review || "—"}
+                </div>
               )}
             </div>
           </div>
@@ -270,7 +241,7 @@ export function GoalMentorReviewModal({
                 </span>
               )}
             </div>
-            <div className="overflow-y-auto px-5 py-4 space-y-4">
+            <div className="overflow-y-auto px-5 py-4 space-y-3">
               {error && (
                 <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
                   {error}
@@ -279,36 +250,36 @@ export function GoalMentorReviewModal({
 
               {selfReview === null && !isReadOnly && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                  You can only submit a mentor review once the mentee has submitted their self-review.
+                  You can only submit a mentor review once the mentee has
+                  submitted their self-review.
                 </div>
               )}
 
-              {(selfReview !== null || isReadOnly) &&
-                COMPETENCIES.map((comp, idx) => (
-                  <div key={comp.key}>
-                    <label
-                      htmlFor={`mentor-${comp.key}`}
-                      className="block text-xs font-semibold text-text-main mb-1"
-                    >
-                      {idx + 1}. {comp.label}
-                      {!isReadOnly && " *"}
-                    </label>
-                    {isReadOnly ? (
-                      <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
-                        {form[comp.key] || "—"}
-                      </div>
-                    ) : (
-                      <textarea
-                        id={`mentor-${comp.key}`}
-                        rows={3}
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none"
-                        value={form[comp.key]}
-                        onChange={(e) => setField(comp.key, e.target.value)}
-                        placeholder={`Your assessment of the mentee's ${comp.label.toLowerCase()}…`}
-                      />
-                    )}
-                  </div>
-                ))}
+              {(selfReview !== null || isReadOnly) && (
+                <div>
+                  <label
+                    htmlFor="mentor-overall"
+                    className="block text-xs font-semibold text-text-main mb-1"
+                  >
+                    Your Review
+                    {!isReadOnly && " *"}
+                  </label>
+                  {isReadOnly ? (
+                    <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                      {overall || "—"}
+                    </div>
+                  ) : (
+                    <textarea
+                      id="mentor-overall"
+                      rows={12}
+                      className={TEXTAREA_CLS}
+                      value={overall}
+                      onChange={(e) => setOverall(e.target.value)}
+                      placeholder="Your assessment of the mentee's delivery this half — what was strong, where to grow, and how it ties into Firm Growth and Competency & Skills (see expectations above)."
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -319,8 +290,8 @@ export function GoalMentorReviewModal({
             {isReadOnly
               ? "Mentor review is locked once submitted."
               : selfReview === null
-              ? "Waiting for mentee self-review."
-              : "All 8 comments are required."}
+                ? "Waiting for mentee self-review."
+                : "Single paragraph required."}
           </p>
           <div className="flex items-center gap-3">
             <button

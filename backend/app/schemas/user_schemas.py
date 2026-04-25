@@ -57,4 +57,5 @@ class UserRoleExpectationResponse(BaseModel):
     exp_client_deliverables: str
     exp_communication: str
     exp_mentoring: str
+    exp_firm_growth: str
     exp_competency_skills: str
