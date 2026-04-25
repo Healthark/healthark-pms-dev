@@ -12,7 +12,7 @@ import { NotificationDropdown } from "../components/layout/NotificationDropdown"
 
 /**
  * Derives a breadcrumb from the current URL path.
- * e.g. "/yearly-goals"     → ["Yearly Goals"]
+ * e.g. "/annual-goals"     → ["Annual Goals"]
  *      "/my-mentees/3"     → ["My Mentees", "3"]         (last replaced by override if set)
  *      "/"                 → ["Dashboard"]
  */

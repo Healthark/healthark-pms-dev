@@ -1,7 +1,7 @@
 /**
  * CriteriaChecklist.tsx — Interactive Key Results Tracker (Story 3.3).
  *
- * Displayed inside the yearly goal cards/rows for goals that have criteria. Behavior changes
+ * Displayed inside the annual goal cards/rows for goals that have criteria. Behavior changes
  * based on the goal's approval_status:
  *
  *   - Draft / Submitted:     Read-only list (no checkboxes)

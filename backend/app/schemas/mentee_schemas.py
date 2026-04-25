@@ -6,7 +6,7 @@ MenteeDetail inherits it and adds the full nested goal, review, and
 project lists used by the /my-mentees/:id detail page.
 
 Pending-action counting (what drives the "Needs my attention" filter):
-    - Yearly goals in SUBMITTED approval_status                (awaiting approval)
+    - Annual goals in SUBMITTED approval_status                (awaiting approval)
     - Active-cycle AnnualReview in PENDING_MENTOR status       (awaiting eval)
 """
 
@@ -23,13 +23,13 @@ from app.schemas.project_review_schemas import ProjectReviewResponse
 # =====================================================================
 
 class MenteeGoalsStats(BaseModel):
-    """Yearly-goal counts + average criteria-progress for a single mentee."""
+    """Annual-goal counts + average criteria-progress for a single mentee."""
     total: int
     approved: int
     submitted: int
     draft: int
     changes_requested: int
-    # Average of progress_percent across APPROVED yearly goals. 0 when none.
+    # Average of progress_percent across APPROVED annual goals. 0 when none.
     avg_progress_percent: int
 
 

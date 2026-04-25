@@ -75,7 +75,7 @@ export interface MenteeSummary {
   goals: MenteeGoalsStats;
   review: MenteeReviewStatus;
   projects: MenteeProjectsStats;
-  /** Submitted yearly goals + PENDING_MENTOR review — drives the amber strip. */
+  /** Submitted annual goals + PENDING_MENTOR review — drives the amber strip. */
   pending_actions_count: number;
 }
 

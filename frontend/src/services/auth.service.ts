@@ -15,7 +15,7 @@ export interface SessionClaims {
   // Drives mentor-only UI (Team Goals tab, etc.) regardless of role.
   has_mentees: boolean;
   // False for CEO/founders (no mentor) or when the mentor has been
-  // soft-deleted. Yearly goal creation is disabled in either case.
+  // soft-deleted. Annual goal creation is disabled in either case.
   has_mentor: boolean;
   // True when an admin just reset this user's password to a temporary one.
   // The frontend gates all protected routes to /change-password until cleared.

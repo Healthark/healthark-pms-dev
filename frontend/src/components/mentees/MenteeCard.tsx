@@ -100,7 +100,7 @@ export function MenteeCard({ mentee }: MenteeCardProps) {
           label="Goals"
           value={
             mentee.goals.total === 0
-              ? "No yearly goals yet"
+              ? "No annual goals yet"
               : `${mentee.goals.approved}/${mentee.goals.total} approved · ${mentee.goals.avg_progress_percent}% avg`
           }
         />

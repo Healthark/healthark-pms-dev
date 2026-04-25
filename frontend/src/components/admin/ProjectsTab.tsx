@@ -3,8 +3,9 @@
  *
  * Changes:
  *   - Removed allocated hours column
- *   - Shows expected end date
- *   - Shows "Reports To" column (PM's senior reviewer)
+ *   - Shows end date (column header label "End Date"; backend field stays expected_end_date)
+ *   - Shows "PM" column (Primary evaluator on the project)
+ *   - Shows "PM Reports To" column (PM's senior reviewer)
  *
  * Placement: src/components/admin/ProjectsTab.tsx
  */
@@ -35,8 +36,9 @@ const TABLE_HEADERS = [
   "Project",
   "Code",
   "Start",
-  "Expected End",
-  "Reports To",
+  "End Date",
+  "PM",
+  "PM Reports To",
   "Members",
   "Actions",
 ];
@@ -204,6 +206,9 @@ export function ProjectsTab() {
                   </td>
                   <td className="px-5 py-3.5 text-text-muted">
                     {formatDate(project.expected_end_date)}
+                  </td>
+                  <td className="px-5 py-3.5 text-text-muted">
+                    {project.pm_name ?? "—"}
                   </td>
                   <td className="px-5 py-3.5 text-text-muted">
                     {project.reports_to_name ?? "—"}

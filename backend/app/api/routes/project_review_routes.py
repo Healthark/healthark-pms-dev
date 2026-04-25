@@ -480,20 +480,22 @@ def get_secondary_evaluation_queue(
     Only `status == reviewed` rows are returned — secondaries write
     impact AFTER the PM has evaluated.
     """
-    secondary_assignments = (
-        db.query(ProjectAssignment)
+    # Secondary evaluator is now a project-level field (Project.secondary_evaluator_id),
+    # not a per-member ProjectAssignment row.
+    secondary_projects = (
+        db.query(Project.id)
         .filter(
-            ProjectAssignment.org_id == current_user.org_id,
-            ProjectAssignment.user_id == current_user.id,
-            ProjectAssignment.evaluator_type == "Secondary",
+            Project.org_id == current_user.org_id,
+            Project.secondary_evaluator_id == current_user.id,
+            Project.is_deleted == False,  # noqa: E712
         )
         .all()
     )
 
-    if not secondary_assignments:
+    if not secondary_projects:
         return []
 
-    project_ids = [a.project_id for a in secondary_assignments]
+    project_ids = [pid for (pid,) in secondary_projects]
 
     reviews = (
         db.query(ProjectReview)
@@ -531,18 +533,17 @@ def submit_secondary_evaluation(
             detail="Reviewed project review not found.",
         )
 
-    # Verify caller is Secondary on this project
-    assignment = db.query(ProjectAssignment).filter(
-        ProjectAssignment.org_id == current_user.org_id,
-        ProjectAssignment.project_id == review.project_id,
-        ProjectAssignment.user_id == current_user.id,
-        ProjectAssignment.evaluator_type == "Secondary",
+    # Verify caller is the project's Secondary evaluator (project-level field).
+    project = db.query(Project).filter(
+        Project.id == review.project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
     ).first()
 
-    if not assignment:
+    if not project or project.secondary_evaluator_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not a Secondary evaluator for this project.",
+            detail="You are not the Secondary evaluator for this project.",
         )
 
     if review.user_id == current_user.id:

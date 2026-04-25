@@ -4,9 +4,12 @@
  * Changes:
  *   - Removed allocated_hours
  *   - expected_end_date instead of end_date
- *   - Added reports_to_id/reports_to_name on Project
+ *   - Added reports_to_id/reports_to_name on Project (required on create)
+ *   - Added pm_id/pm_name on Project (Primary evaluator, resolved server-side)
+ *   - Added secondary_evaluator_id/secondary_evaluator_name on Project (single,
+ *     project-level Secondary; replaces multi-row Secondary assignments)
  *   - Added department_id/department_name on Assignment
- *   - Evaluator types: Primary | Secondary | null (no Peer)
+ *   - Assignment.evaluator_type: "Primary" | null only
  */
 
 import apiClient from "./api.client";
@@ -30,14 +33,14 @@ export interface AssignmentCreatePayload {
   user_id: number;
   assignment_role?: string | null;
   department_id?: number | null;
-  evaluator_type?: string | null;
+  evaluator_type?: "Primary" | null;
   assigned_date?: string | null;
 }
 
 export interface AssignmentUpdatePayload {
   assignment_role?: string | null;
   department_id?: number | null;
-  evaluator_type?: string | null;
+  evaluator_type?: "Primary" | null;
   assigned_date?: string | null;
 }
 
@@ -51,6 +54,10 @@ export interface ProjectResponse {
   expected_end_date: string | null;
   reports_to_id: number | null;
   reports_to_name: string | null;
+  pm_id: number | null;
+  pm_name: string | null;
+  secondary_evaluator_id: number | null;
+  secondary_evaluator_name: string | null;
   is_deleted: boolean;
   created_at: string;
   updated_at: string | null;
@@ -67,8 +74,11 @@ export interface ProjectCreatePayload {
   description?: string | null;
   start_date?: string | null;
   expected_end_date?: string | null;
-  reports_to_id?: number | null;
-  assignments?: AssignmentCreatePayload[];
+  // Required by the backend Pydantic validator.
+  reports_to_id: number;
+  secondary_evaluator_id?: number | null;
+  // Must contain exactly one entry with evaluator_type === "Primary".
+  assignments: AssignmentCreatePayload[];
 }
 
 export interface ProjectUpdatePayload {
@@ -78,6 +88,7 @@ export interface ProjectUpdatePayload {
   start_date?: string | null;
   expected_end_date?: string | null;
   reports_to_id?: number | null;
+  secondary_evaluator_id?: number | null;
 }
 
 // ── Service ─────────────────────────────────────────────────────────

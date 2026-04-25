@@ -16,6 +16,7 @@ interface UsersTabProps {
 const TABLE_HEADERS = [
   "Employee",
   "Email",
+  "Phone",
   "Mentor",
   "Department",
   "Designation",
@@ -86,7 +87,7 @@ export function UsersTab({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-5 py-10 text-center text-text-muted"
                   >
                     No users found.
@@ -115,6 +116,9 @@ export function UsersTab({
                     </td>
                     <td className="px-5 py-3.5 text-text-muted">
                       {user.email}
+                    </td>
+                    <td className="px-5 py-3.5 text-text-muted">
+                      {user.phone ?? "—"}
                     </td>
                     <td className="px-5 py-3.5 text-text-muted">
                       {users.find((u) => u.id === user.mentor_id)?.full_name ?? "—"}

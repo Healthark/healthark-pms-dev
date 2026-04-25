@@ -31,7 +31,7 @@ def _build_session(user: User, db: Session) -> dict:
 
     # `has_mentor` is true only when the mentor pointer actually resolves to
     # an active user — a dangling FK to a soft-deleted mentor must not gate
-    # yearly-goal creation open.
+    # annual-goal creation open.
     has_mentor = False
     if user.mentor_id is not None:
         has_mentor = db.query(User.id).filter(

@@ -142,6 +142,7 @@ def seed_database():
             admin_user = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
                 employee_code="EMP-000", full_name="Sarah Admin", email="admin@healthark.com",
+                phone="+91 98765 00000",
                 role="Admin", password_hash=pw,
             )
             db.add(admin_user)
@@ -153,6 +154,7 @@ def seed_database():
             priya = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_manager.id,
                 employee_code="EMP-101", full_name="Priya Sharma", email="priya@healthark.com",
+                phone="+91 98765 10101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
             )
             db.add(priya)
@@ -162,16 +164,19 @@ def seed_database():
             arjun = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_consultant.id,
                 employee_code="EMP-102", full_name="Arjun Patel", email="arjun@healthark.com",
+                phone="+91 98765 10102",
                 role="Staff", mentor_id=priya.id, password_hash=pw,
             )
             neha = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_consultant.id,
                 employee_code="EMP-103", full_name="Neha Gupta", email="neha@healthark.com",
+                phone="+91 98765 10103",
                 role="Staff", mentor_id=priya.id, password_hash=pw,
             )
             david = User(
                 org_id=org.id, department_id=dept_idt.id, designation_id=desig_manager.id,
                 employee_code="EMP-201", full_name="David Miller", email="david@healthark.com",
+                phone="+91 98765 20101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
             )
             db.add_all([arjun, neha, david])
@@ -181,16 +186,19 @@ def seed_database():
             rahul = User(
                 org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_consultant.id,
                 employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.com",
+                phone="+91 98765 20102",
                 role="Staff", mentor_id=david.id, password_hash=pw,
             )
             meera = User(
                 org_id=org.id, department_id=dept_idt.id, designation_id=desig_consultant.id,
                 employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.com",
+                phone="+91 98765 20103",
                 role="Staff", mentor_id=david.id, password_hash=pw,
             )
             vikram = User(
                 org_id=org.id, department_id=dept_rwe.id, designation_id=desig_manager.id,
                 employee_code="EMP-301", full_name="Vikram Singh", email="vikram@healthark.com",
+                phone="+91 98765 30101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
             )
             db.add_all([rahul, meera, vikram])
@@ -200,11 +208,13 @@ def seed_database():
             ananya = User(
                 org_id=org.id, department_id=dept_rwe.id, designation_id=desig_senior_consultant.id,
                 employee_code="EMP-302", full_name="Ananya Reddy", email="ananya@healthark.com",
+                phone="+91 98765 30102",
                 role="Staff", mentor_id=vikram.id, password_hash=pw,
             )
             karan = User(
                 org_id=org.id, department_id=dept_rwe.id, designation_id=desig_consultant.id,
                 employee_code="EMP-303", full_name="Karan Mehta", email="karan@healthark.com",
+                phone="+91 98765 30103",
                 role="Staff", mentor_id=vikram.id, password_hash=pw,
             )
             db.add_all([ananya, karan])
@@ -216,6 +226,7 @@ def seed_database():
             amol = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
                 employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.com",
+                phone="+91 98765 00400",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
@@ -226,12 +237,14 @@ def seed_database():
             founder1 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
                 employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.com",
+                phone="+91 98765 00401",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
             founder2 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
                 employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.com",
+                phone="+91 98765 00402",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
@@ -244,11 +257,13 @@ def seed_database():
             riya = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_consultant.id,
                 employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.com",
+                phone="+91 98765 40101",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             tej = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_senior_consultant.id,
                 employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.com",
+                phone="+91 98765 40102",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             db.add_all([riya, tej])
@@ -277,6 +292,7 @@ def seed_database():
             amol = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
                 employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.com",
+                phone="+91 98765 00400",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
@@ -289,6 +305,7 @@ def seed_database():
             founder1 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
                 employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.com",
+                phone="+91 98765 00401",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
@@ -301,6 +318,7 @@ def seed_database():
             founder2 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
                 employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.com",
+                phone="+91 98765 00402",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
@@ -313,6 +331,7 @@ def seed_database():
             riya = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_consultant.id,
                 employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.com",
+                phone="+91 98765 40101",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             db.add(riya)
@@ -324,6 +343,7 @@ def seed_database():
             tej = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_senior_consultant.id,
                 employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.com",
+                phone="+91 98765 40102",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             db.add(tej)
@@ -363,6 +383,7 @@ def seed_database():
             alice_admin = User(
                 org_id=miltenyi_org.id, department_id=dept_com.id, designation_id=desig_dir.id,
                 employee_code="MIL-000", full_name="Alice Admin", email="admin@miltenyi.com",
+                phone="+49 30 1234 0000",
                 role="Admin", password_hash=pw,
             )
             db.add(alice_admin)
@@ -372,6 +393,7 @@ def seed_database():
             bob_lead = User(
                 org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_lead.id,
                 employee_code="MIL-101", full_name="Bob Builder", email="bob@miltenyi.com",
+                phone="+49 30 1234 1011",
                 role="Staff", password_hash=pw, mentor_id=alice_admin.id,
             )
             db.add(bob_lead)
@@ -381,16 +403,19 @@ def seed_database():
             charlie = User(
                 org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_sr_scientist.id,
                 employee_code="MIL-102", full_name="Charlie Chemist", email="charlie@miltenyi.com",
+                phone="+49 30 1234 1012",
                 role="Staff", mentor_id=bob_lead.id, password_hash=pw,
             )
             dana = User(
                 org_id=miltenyi_org.id, department_id=dept_rnd.id, designation_id=desig_scientist.id,
                 employee_code="MIL-103", full_name="Dana DNA", email="dana@miltenyi.com",
+                phone="+49 30 1234 1013",
                 role="Staff", mentor_id=bob_lead.id, password_hash=pw,
             )
             evan_mfg = User(
                 org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_lead.id,
                 employee_code="MIL-201", full_name="Evan Engineer", email="evan@miltenyi.com",
+                phone="+49 30 1234 2011",
                 role="Staff", password_hash=pw, mentor_id=alice_admin.id,
             )
             db.add_all([charlie, dana, evan_mfg])
@@ -400,6 +425,7 @@ def seed_database():
             fiona = User(
                 org_id=miltenyi_org.id, department_id=dept_mfg.id, designation_id=desig_scientist.id,
                 employee_code="MIL-202", full_name="Fiona Factory", email="fiona@miltenyi.com",
+                phone="+49 30 1234 2012",
                 role="Staff", mentor_id=evan_mfg.id, password_hash=pw,
             )
             db.add(fiona)
@@ -426,7 +452,7 @@ def seed_database():
                 fiscal_start_month=4,
                 goals_submission_open=True,
                 reviews_submission_open=True,
-                yearly_goals_edit_enabled=True,
+                annual_goals_edit_enabled=True,
                 updated_by_id=admin_user.id,
             ))
             db.commit()
@@ -442,7 +468,7 @@ def seed_database():
                 fiscal_start_month=4,
                 goals_submission_open=True,
                 reviews_submission_open=True,
-                yearly_goals_edit_enabled=True,
+                annual_goals_edit_enabled=True,
                 updated_by_id=alice_admin.id,
             ))
             db.commit()
@@ -463,13 +489,15 @@ def seed_database():
                 description="Launch-readiness diagnostic across access, evidence, and commercial ops for a specialty therapy in 4 markets.",
                 start_date=date(2025, 1, 20), expected_end_date=date(2025, 7, 31),
                 reports_to_id=admin_user.id,
+                secondary_evaluator_id=david.id,
             )
             db.add(proj_specialty)
             db.flush()
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=priya.id,  assignment_role=desig_senior_manager.name,    department_id=dept_strategy.id, evaluator_type="Primary",   assigned_date=date(2025, 1, 20)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=arjun.id,  assignment_role=desig_senior_consultant.name, department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 1, 20)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=neha.id,   assignment_role=desig_consultant.name,        department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 2, 3)))
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,      evaluator_type="Secondary", assigned_date=date(2025, 1, 25)))
+            # David is also a project member alongside being the Secondary evaluator.
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,      evaluator_type=None,        assigned_date=date(2025, 1, 25)))
             db.commit()
 
             proj_trial = Project(
@@ -478,13 +506,15 @@ def seed_database():
                 description="Re-architect the clinical trial data mart into a unified analytics platform with harmonized schemas.",
                 start_date=date(2025, 2, 3), expected_end_date=date(2025, 9, 15),
                 reports_to_id=admin_user.id,
+                secondary_evaluator_id=vikram.id,
             )
             db.add(proj_trial)
             db.flush()
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,  evaluator_type="Primary",   assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=rahul.id,  assignment_role=desig_senior_consultant.name, department_id=dept_idt.id,  evaluator_type=None,        assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=meera.id,  assignment_role=desig_consultant.name,        department_id=dept_idt.id,  evaluator_type=None,        assigned_date=date(2025, 2, 17)))
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,  evaluator_type="Secondary", assigned_date=date(2025, 2, 10)))
+            # Vikram is the Secondary evaluator (project-level) but also a member here.
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,  evaluator_type=None,        assigned_date=date(2025, 2, 10)))
             db.commit()
 
             proj_safety = Project(
@@ -493,6 +523,7 @@ def seed_database():
                 description="Multi-year RWE safety study for a chronic therapy area, with quarterly interim reads.",
                 start_date=date(2025, 3, 10), expected_end_date=date(2026, 3, 31),
                 reports_to_id=priya.id,
+                secondary_evaluator_id=david.id,
             )
             db.add(proj_safety)
             db.flush()
@@ -508,6 +539,7 @@ def seed_database():
                 description="Cross-functional payer evidence portfolio combining HEOR, RWE, and strategy workstreams for a rare disease launch.",
                 start_date=date(2025, 4, 7), expected_end_date=date(2025, 10, 31),
                 reports_to_id=admin_user.id,
+                secondary_evaluator_id=vikram.id,
             )
             db.add(proj_payer)
             db.flush()
@@ -515,7 +547,8 @@ def seed_database():
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=rahul.id,  assignment_role="Data Lead",                  department_id=dept_idt.id,      evaluator_type=None,        assigned_date=date(2025, 4, 7)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=ananya.id, assignment_role="RWE Lead",                   department_id=dept_rwe.id,      evaluator_type=None,        assigned_date=date(2025, 4, 7)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=neha.id,   assignment_role=desig_consultant.name,        department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 4, 20)))
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,      evaluator_type="Secondary", assigned_date=date(2025, 4, 10)))
+            # Vikram is the Secondary evaluator (project-level) but also a member here.
+            db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,      evaluator_type=None,        assigned_date=date(2025, 4, 10)))
             db.commit()
 
             print("  [+] Created Projects PRJ-101..PRJ-104")
@@ -531,6 +564,7 @@ def seed_database():
                 description="Build internal KPI dashboards and campaign performance analytics to support business development and client acquisition.",
                 start_date=date(2025, 5, 1), expected_end_date=date(2025, 12, 31),
                 reports_to_id=amol.id,
+                secondary_evaluator_id=admin_user.id,
             )
             db.add(proj_marketing)
             db.flush()
@@ -552,6 +586,7 @@ def seed_database():
                 description="Automate end-to-end CAR-T cell processing workflow with new instrumentation.",
                 start_date=date(2025, 1, 15), expected_end_date=date(2025, 8, 15),
                 reports_to_id=alice_admin.id,
+                secondary_evaluator_id=evan_mfg.id,
             )
             db.add(proj_cell)
             db.flush()
@@ -566,12 +601,14 @@ def seed_database():
                 description="Scale manufacturing of the next MACS Quant platform for global rollout.",
                 start_date=date(2025, 3, 5), expected_end_date=date(2025, 11, 30),
                 reports_to_id=alice_admin.id,
+                secondary_evaluator_id=bob_lead.id,
             )
             db.add(proj_macs)
             db.flush()
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=evan_mfg.id, assignment_role=desig_lead.name,      department_id=dept_mfg.id, evaluator_type="Primary",   assigned_date=date(2025, 3, 5)))
             db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=fiona.id,    assignment_role=desig_scientist.name, department_id=dept_mfg.id, evaluator_type=None,        assigned_date=date(2025, 3, 5)))
-            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=bob_lead.id, assignment_role="R&D Liaison",        department_id=dept_rnd.id, evaluator_type="Secondary", assigned_date=date(2025, 3, 18)))
+            # Bob is the Secondary evaluator (project-level) but also a project member.
+            db.add(ProjectAssignment(org_id=miltenyi_org.id, project_id=proj_macs.id, user_id=bob_lead.id, assignment_role="R&D Liaison",        department_id=dept_rnd.id, evaluator_type=None,        assigned_date=date(2025, 3, 18)))
             db.commit()
 
             print("  [+] Created Projects for Miltenyi (MIL-PRJ-101..MIL-PRJ-102)")
@@ -1214,7 +1251,7 @@ def seed_database():
             print("  [~] Healthark Annual Reviews already exist — ensured new users covered.")
 
         # ================================================================== #
-        # 10. YEARLY GOALS + PER-HALF SELF REVIEWS                            #
+        # 10. ANNUAL GOALS + PER-HALF SELF REVIEWS                            #
         # ================================================================== #
 
         SELF_REVIEW_DEFAULT = {
@@ -1241,7 +1278,7 @@ def seed_database():
                 org_id=org.id, user_id=user.id,
                 manager_id=manager.id if manager else None,
                 title=title, description=desc,
-                goal_type="yearly", cycle_name=cycle_name,
+                goal_type="annual", cycle_name=cycle_name,
                 approval_status=approval,
                 progress_notes=progress_notes,
                 manager_feedback=manager_feedback,
@@ -1455,7 +1492,7 @@ def seed_database():
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
 
             db.commit()
-            print("  [+] Created Healthark Yearly Goals + H1/H2 Self Reviews (all users)")
+            print("  [+] Created Healthark Annual Goals + H1/H2 Self Reviews (all users)")
         else:
             # Idempotent add for new users — _goal checks existence before inserting
             _goal(priya, admin_user, "Healthcare Strategy Practice Growth",
@@ -1525,7 +1562,7 @@ def seed_database():
             db.commit()
             print("  [~] Healthark Goals exist — ensured new users (Priya/David/Vikram/Amol/Founders/Riya/Tej) covered.")
 
-        # Miltenyi yearly goals
+        # Miltenyi annual goals
         if db.query(Goal).filter(Goal.org_id == miltenyi_org.id).count() == 0:
 
             def _mil_goal(user, manager, title, desc, approval, cycle_name, fy_year,
@@ -1541,7 +1578,7 @@ def seed_database():
                     org_id=miltenyi_org.id, user_id=user.id,
                     manager_id=manager.id if manager else None,
                     title=title, description=desc,
-                    goal_type="yearly", cycle_name=cycle_name,
+                    goal_type="annual", cycle_name=cycle_name,
                     approval_status=approval,
                     progress_notes=progress_notes,
                     manager_feedback=manager_feedback,
@@ -1569,7 +1606,7 @@ def seed_database():
                       approval="submitted", cycle_name="H1 2026", fy_year=2026)
 
             db.commit()
-            print("  [+] Created Miltenyi Yearly Goals + Self Reviews")
+            print("  [+] Created Miltenyi Annual Goals + Self Reviews")
         else:
             print("  [~] Miltenyi Goals already exist, skipping...")
 

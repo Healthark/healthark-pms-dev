@@ -13,8 +13,8 @@ interface SystemSettingsTabProps {
   readonly annualReviewFinalRatingVisible: boolean;
   readonly onAnnualReviewFinalRatingVisibleChange: (val: boolean) => void;
   // Goal access controls
-  readonly yearlyGoalsEditEnabled: boolean;
-  readonly onYearlyGoalsEditEnabledChange: (val: boolean) => void;
+  readonly annualGoalsEditEnabled: boolean;
+  readonly onAnnualGoalsEditEnabledChange: (val: boolean) => void;
   readonly finalRatingVisible: boolean;
   readonly onFinalRatingVisibleChange: (val: boolean) => void;
   readonly projectRatingsVisible: boolean;
@@ -81,8 +81,8 @@ export function SystemSettingsTab({
   onAnnualReviewsEnabledChange,
   annualReviewFinalRatingVisible,
   onAnnualReviewFinalRatingVisibleChange,
-  yearlyGoalsEditEnabled,
-  onYearlyGoalsEditEnabledChange,
+  annualGoalsEditEnabled,
+  onAnnualGoalsEditEnabledChange,
   finalRatingVisible,
   onFinalRatingVisibleChange,
   projectRatingsVisible,
@@ -126,20 +126,20 @@ export function SystemSettingsTab({
         </h3>
         <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
 
-          {/* Yearly Goal Settings */}
+          {/* Annual Goal Settings */}
           <div className="px-5 py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-              Yearly Goal Settings
+              Annual Goal Settings
             </p>
             <div className="divide-y divide-border/60">
               <ToggleRow
-                label="Edit Access for Yearly Goals"
-                description="When off, no one in the org can create or edit yearly goals."
-                checked={yearlyGoalsEditEnabled}
-                onChange={onYearlyGoalsEditEnabledChange}
+                label="Edit Access for Annual Goals"
+                description="When off, no one in the org can create or edit annual goals."
+                checked={annualGoalsEditEnabled}
+                onChange={onAnnualGoalsEditEnabledChange}
               />
               <ToggleRow
-                label="View Final Rating for Yearly Goals"
+                label="View Final Rating for Annual Goals"
                 description="When on, employees can see their final rating on annual reviews."
                 checked={finalRatingVisible}
                 onChange={onFinalRatingVisibleChange}

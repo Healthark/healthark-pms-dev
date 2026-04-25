@@ -17,7 +17,7 @@ Security Layers Applied:
     Layer 2 — Tenant Isolation: All queries strictly filter by current_user.org_id
     Layer 3 — Role Awareness:   Relationship checks for team/mentee actions
     Layer 4 — Ownership:        Users can only edit their own goals; Mentors can edit mentee goals
-    Layer 5 — Gate Checks:      Yearly goals respect the yearly_goals_edit_enabled flag
+    Layer 5 — Gate Checks:      Annual goals respect the annual_goals_edit_enabled flag
 """
 
 from datetime import datetime, timezone
@@ -79,13 +79,13 @@ def _get_settings(db: DbSession, org_id: int) -> SystemSettings:
     return settings
 
 
-def _assert_yearly_gate_open(settings: SystemSettings) -> None:
-    """Raise 403 when the yearly-goal edit window is closed."""
-    if not settings.yearly_goals_edit_enabled:
+def _assert_annual_gate_open(settings: SystemSettings) -> None:
+    """Raise 403 when the annual-goal edit window is closed."""
+    if not settings.annual_goals_edit_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Yearly goal submissions are currently closed. "
+                "Annual goal submissions are currently closed. "
                 "Please wait for the Admin to open the next submission window."
             ),
         )
@@ -110,7 +110,7 @@ def list_goals(
     makes it impossible to accidentally mix ownership in the "My Goals" UI.
 
     Filtering:
-        goal_type=yearly   — only yearly goals
+        goal_type=annual   — only annual goals
         goal_type=regular  — only regular goals
         (omit goal_type)   — all goals regardless of type
     """
@@ -139,8 +139,8 @@ def create_goal(
     """
     Create a new goal.
 
-    For yearly goals (goal_type="yearly"):
-        - yearly_goals_edit_enabled must be True (Admin gate)
+    For annual goals (goal_type="annual"):
+        - annual_goals_edit_enabled must be True (Admin gate)
         - cycle_name is auto-stamped from the active_cycle_name in settings,
           stripped to the bare FY label ("H1 FY26" → "FY26").  This makes the
           goal permanently queryable by fiscal year even after the cycle rotates.
@@ -194,11 +194,11 @@ def create_goal(
             ),
         )
 
-    # ── Gate check + cycle stamping for yearly goals ───────────────────
+    # ── Gate check + cycle stamping for annual goals ───────────────────
     cycle_name: Optional[str] = None
-    if goal_in.goal_type == GoalType.YEARLY:
+    if goal_in.goal_type == GoalType.ANNUAL:
         settings = _get_settings(db, current_user.org_id)
-        _assert_yearly_gate_open(settings)
+        _assert_annual_gate_open(settings)
         # Stamp the half-yearly cycle at creation time ("H1 2026", "H2 2025").
         # Derived from the wall-clock UTC time so it's always accurate regardless
         # of which active_cycle_name the admin has set.
@@ -244,7 +244,7 @@ def list_team_goals(
     goal_type: Optional[str] = None,
 ):
     """
-    Return yearly goals for all of the current user's direct mentees.
+    Return annual goals for all of the current user's direct mentees.
 
     This is the exclusive data source for the Team Goals tab.  Only the
     assigned mentor sees a mentee's goals — there is no Admin bypass.
@@ -328,8 +328,8 @@ def update_goal(
     """
     Update a goal's properties.
 
-    Additional gate for yearly goals (employees only):
-        yearly_goals_edit_enabled must be True.  Mentors and Admins bypass
+    Additional gate for annual goals (employees only):
+        annual_goals_edit_enabled must be True.  Mentors and Admins bypass
         this check — they can always leave feedback and adjust metadata.
 
     Resets approval_status from CHANGES_REQUESTED → DRAFT when the employee
@@ -356,11 +356,11 @@ def update_goal(
             detail="Approved goals cannot be edited. Contact your mentor.",
         )
 
-    # Gate check: employees cannot edit yearly goals when the window is closed.
+    # Gate check: employees cannot edit annual goals when the window is closed.
     # Managers bypass this — they need access to leave feedback at any time.
-    if goal.goal_type == GoalType.YEARLY.value and not is_manager:
+    if goal.goal_type == GoalType.ANNUAL.value and not is_manager:
         settings = _get_settings(db, current_user.org_id)
-        _assert_yearly_gate_open(settings)
+        _assert_annual_gate_open(settings)
 
     update_data = goal_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -385,7 +385,7 @@ def delete_goal(
     Permanently delete a goal.
 
     Employees can only delete their own DRAFT goals.
-    Yearly-goal employees additionally need yearly_goals_edit_enabled = True.
+    Annual-goal employees additionally need annual_goals_edit_enabled = True.
     Mentors and Admins can delete any goal regardless of state or gate.
     """
     goal = db.query(Goal).filter(
@@ -410,10 +410,10 @@ def delete_goal(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot delete a goal that has already been submitted for approval.",
             )
-        # Gate check for yearly goal deletion (same window logic as create/edit).
-        if goal.goal_type == GoalType.YEARLY.value:
+        # Gate check for annual goal deletion (same window logic as create/edit).
+        if goal.goal_type == GoalType.ANNUAL.value:
             settings = _get_settings(db, current_user.org_id)
-            _assert_yearly_gate_open(settings)
+            _assert_annual_gate_open(settings)
 
     db.delete(goal)
     db.commit()
@@ -433,7 +433,7 @@ def submit_goal(
     """
     Move a goal from DRAFT → SUBMITTED.
 
-    Intentionally has no gate check for yearly_goals_edit_enabled:
+    Intentionally has no gate check for annual_goals_edit_enabled:
     a user who completed their goal before the window closed should
     still be able to submit it for mentor review.
     """

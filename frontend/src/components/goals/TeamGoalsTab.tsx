@@ -358,7 +358,7 @@ export function TeamGoalsTab() {
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await goalService.getTeamGoals("yearly");
+      const data = await goalService.getTeamGoals("annual");
       setGoals(data);
     } catch {
       // Stays empty
@@ -451,10 +451,10 @@ export function TeamGoalsTab() {
       <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
         <Users className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
         <p className="font-display text-base font-medium text-text-main">
-          No yearly goals to review
+          No annual goals to review
         </p>
         <p className="mt-1 text-sm text-text-muted">
-          Your mentees haven't requested approval on any yearly goals yet.
+          Your mentees haven't requested approval on any annual goals yet.
         </p>
       </div>
     );

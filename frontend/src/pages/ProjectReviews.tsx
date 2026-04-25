@@ -594,7 +594,7 @@ export function ProjectReviews() {
     }`;
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-6 pb-10 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6 pb-10 animate-in fade-in duration-500">
 
       {/* ── Page Header ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

@@ -4,7 +4,7 @@ from app.models.system_settings_models import CycleType
 
 def get_goal_cycle_name(created_at: datetime, fiscal_start_month: int = 4) -> str:
     """
-    Derive the half-yearly cycle label for a yearly goal from its creation timestamp.
+    Derive the half-yearly cycle label for an annual goal from its creation timestamp.
 
     Returns "H1 YYYY" or "H2 YYYY" where YYYY is the 4-digit fiscal start year.
 
@@ -27,7 +27,7 @@ def extract_fy_label(cycle_name: str) -> str:
     Extract the bare fiscal-year label from any cycle name.
 
     The active_cycle_name on SystemSettings follows the cadence of the org's
-    review cycle (e.g. "H1 FY26", "Q2 FY26"), but yearly goals belong to a
+    review cycle (e.g. "H1 FY26", "Q2 FY26"), but annual goals belong to a
     full fiscal year, not a half or quarter.  This helper strips the period
     prefix so the goal is stamped with just the year it belongs to.
 

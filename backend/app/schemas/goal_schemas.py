@@ -69,7 +69,7 @@ class GoalCreate(GoalBase):
     # explicitly creates on behalf of a mentee (validated in the route).
     # Intentionally NOT accepted in the body — a body-level user_id would
     # let a caller silently re-home a goal to another user.
-    # "yearly" goals are gate-controlled by yearly_goals_edit_enabled.
+    # "annual" goals are gate-controlled by annual_goals_edit_enabled.
     # "regular" goals follow the normal project-cycle submission rules.
     goal_type: GoalType = GoalType.REGULAR
     # Optional external reference (e.g. Google Drive folder URL).
@@ -191,7 +191,7 @@ class GoalResponse(GoalBase):
     # None when the owner has no mentor (frontend renders "No Mentor Assigned").
     manager_name: Optional[str] = None
     goal_type: str
-    # Bare FY label stamped at creation for yearly goals (e.g. "FY26").
+    # Bare FY label stamped at creation for annual goals (e.g. "FY26").
     # None for regular goals.
     cycle_name: Optional[str] = None
     attachment_url: Optional[str] = None
@@ -224,8 +224,8 @@ class GoalResponse(GoalBase):
     def fy_year(self) -> Optional[int]:
         """
         4-digit fiscal start year extracted from cycle_name ("H1 2026" → 2026).
-        None for regular goals or yearly goals created before this field existed.
-        Used by the frontend Year filter on the Yearly Goals page.
+        None for regular goals or annual goals created before this field existed.
+        Used by the frontend Year filter on the Annual Goals page.
         """
         if not self.cycle_name:
             return None

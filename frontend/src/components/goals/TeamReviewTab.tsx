@@ -224,7 +224,7 @@ export function TeamReviewTab() {
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await goalService.getTeamGoals("yearly");
+      const data = await goalService.getTeamGoals("annual");
       setGoals(
         data.filter(
           (g) =>

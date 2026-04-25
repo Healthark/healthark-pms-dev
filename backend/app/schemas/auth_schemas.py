@@ -19,7 +19,7 @@ class SessionResponse(BaseModel):
     # since mentorship is an FK relationship, not a role attribute.
     has_mentees: bool = False
     # False for CEO/founders (mentor_id IS NULL) OR when the assigned mentor
-    # is soft-deleted. Yearly goal creation is blocked in both cases because
+    # is soft-deleted. Annual goal creation is blocked in both cases because
     # the approval workflow needs a live mentor to route to.
     has_mentor: bool = False
     # True when an admin just reset the user's password. The frontend gates

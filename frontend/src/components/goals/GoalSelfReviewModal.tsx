@@ -1,6 +1,6 @@
 /**
  * GoalSelfReviewModal.tsx — Owner's (or mentor-view) reflection form for
- * a single half (H1 / H2) of an approved yearly goal.
+ * a single half (H1 / H2) of an approved annual goal.
  *
  * - Opens from the My Goals H1/H2 cycle dropdown.  When the matching
  *   self-review already exists, the modal renders read-only.
