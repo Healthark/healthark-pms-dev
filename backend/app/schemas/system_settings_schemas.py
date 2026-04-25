@@ -29,11 +29,11 @@ class SystemSettingsResponse(BaseModel):
     goals_submission_open: bool
     reviews_submission_open: bool
     goals_edit_enabled: bool
-    # True when the Admin has opened the yearly-goal submission window.
+    # True when the Admin has opened the annual-goal submission window.
     # Exposed here so the frontend can show/hide the "Add Goal" button
-    # and disable the edit pencil on draft yearly goals without an extra API call.
-    yearly_goals_edit_enabled: bool
-    yearly_goals_final_rating_visible: bool
+    # and disable the edit pencil on draft annual goals without an extra API call.
+    annual_goals_edit_enabled: bool
+    annual_goals_final_rating_visible: bool
     project_ratings_visible: bool
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
@@ -67,7 +67,7 @@ class SystemSettingsCreate(BaseModel):
     cycle_end_date: Optional[date] = None
     goals_submission_open: bool = False
     reviews_submission_open: bool = False
-    yearly_goals_edit_enabled: bool = False
+    annual_goals_edit_enabled: bool = False
 
 
 # ── Update Schema ────────────────────────────────────────────────────
@@ -92,8 +92,8 @@ class SystemSettingsUpdate(BaseModel):
     goals_submission_open: Optional[bool] = None
     reviews_submission_open: Optional[bool] = None
     goals_edit_enabled: Optional[bool] = None
-    yearly_goals_edit_enabled: Optional[bool] = None
-    yearly_goals_final_rating_visible: Optional[bool] = None
+    annual_goals_edit_enabled: Optional[bool] = None
+    annual_goals_final_rating_visible: Optional[bool] = None
     project_ratings_visible: Optional[bool] = None
     annual_reviews_enabled: Optional[bool] = None
     annual_review_final_rating_visible: Optional[bool] = None

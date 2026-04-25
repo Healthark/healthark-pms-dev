@@ -72,11 +72,11 @@ class SystemSettings(Base):
     # Org-wide toggles surfaced in the Admin Panel's Goal Settings card.
     goals_edit_enabled = Column(Boolean, default=True, nullable=False)
     # Admin opens this gate at the start of each FY to allow employees to
-    # create and edit their yearly goals. Closed by default; must be
-    # explicitly enabled each cycle. Yearly goals are blocked at the API
+    # create and edit their annual goals. Closed by default; must be
+    # explicitly enabled each cycle. Annual goals are blocked at the API
     # layer when this is False — regardless of approval_status.
-    yearly_goals_edit_enabled = Column(Boolean, default=False, nullable=False)
-    yearly_goals_final_rating_visible = Column(Boolean, default=False, nullable=False)
+    annual_goals_edit_enabled = Column(Boolean, default=False, nullable=False)
+    annual_goals_final_rating_visible = Column(Boolean, default=False, nullable=False)
     project_ratings_visible = Column(Boolean, default=False, nullable=False)
     # Admin gate to enable/disable the Annual Reviews module org-wide.
     # When False, the Annual Reviews page is hidden and submissions are blocked.

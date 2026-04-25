@@ -14,7 +14,7 @@ class ApprovalStatus(str, enum.Enum):
 
 class GoalType(str, enum.Enum):
     REGULAR = "regular"
-    YEARLY  = "yearly"
+    ANNUAL  = "annual"
 
 
 class Goal(Base):
@@ -29,10 +29,10 @@ class Goal(Base):
     description = Column(Text, nullable=True)
 
     # Classifies the goal as a full-year objective or a regular project goal.
-    # Yearly goals are created once per FY, gate-controlled by the Admin,
+    # Annual goals are created once per FY, gate-controlled by the Admin,
     # and stamped with a cycle_name ("FY26") at creation time.
     goal_type  = Column(String, nullable=False, default=GoalType.REGULAR.value)
-    # Bare fiscal-year label stamped at creation for yearly goals, e.g. "FY26".
+    # Bare fiscal-year label stamped at creation for annual goals, e.g. "FY26".
     # Null for regular goals. Enables future filtering like "all FY26 goals".
     cycle_name     = Column(String, nullable=True)
     # Optional URL to a Google Drive folder or external reference document.
@@ -57,7 +57,7 @@ class Goal(Base):
 
     __table_args__ = (
         Index("ix_goals_org_user", "org_id", "user_id"),
-        # Supports future filtered queries: "all FY26 yearly goals for this org"
+        # Supports future filtered queries: "all FY26 annual goals for this org"
         Index("ix_goals_org_type_cycle", "org_id", "goal_type", "cycle_name"),
     )
 

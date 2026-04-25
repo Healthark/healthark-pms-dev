@@ -3,7 +3,7 @@ Dashboard Schemas — The Dashboard Page's API Contract.
 
 Goal progress is now tracked entirely through criteria completion —
 there is no separate employee-controlled progress state.  The dashboard
-therefore summarises yearly goals by APPROVAL state, which reflects
+therefore summarises annual goals by APPROVAL state, which reflects
 where the goal sits in the mentor-approval workflow.
 
 All fields default to zero/null so the endpoint always returns a valid
@@ -24,7 +24,7 @@ class DashboardSummary(BaseModel):
     always return all fields regardless of enabled features.
     """
     total_goals: int = 0
-    # Approval-workflow breakdown of the caller's own yearly goals.
+    # Approval-workflow breakdown of the caller's own annual goals.
     draft_goals: int = 0
     submitted_goals: int = 0
     approved_goals: int = 0

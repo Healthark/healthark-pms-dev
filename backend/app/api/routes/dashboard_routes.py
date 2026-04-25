@@ -5,8 +5,8 @@ Endpoint:
     GET /api/v1/dashboard/summary  →  Any authenticated user
 
 Returns aggregated widget data in a single round-trip:
-    - Yearly goal counts broken down by approval state
-    - Criteria-driven completion average across approved yearly goals
+    - Annual goal counts broken down by approval state
+    - Criteria-driven completion average across approved annual goals
     - Active cycle name (for the ActiveCycleWidget)
     - Mentee count (for the MenteesWidget)
 
@@ -45,13 +45,13 @@ def get_dashboard_summary(
 
     active_cycle = settings.active_cycle_name if settings else None
 
-    # ── Yearly Goal Counts by Approval State (single GROUP BY) ───────
+    # ── Annual Goal Counts by Approval State (single GROUP BY) ───────
     approval_rows = (
         db.query(Goal.approval_status, func.count(Goal.id))
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
-            Goal.goal_type == GoalType.YEARLY.value,
+            Goal.goal_type == GoalType.ANNUAL.value,
         )
         .group_by(Goal.approval_status)
         .all()
@@ -64,10 +64,10 @@ def get_dashboard_summary(
     changes_requested_goals = counts.get(ApprovalStatus.CHANGES_REQUESTED.value, 0)
     total_goals             = sum(counts.values())
 
-    # ── Criteria-driven completion across approved yearly goals ─────
+    # ── Criteria-driven completion across approved annual goals ─────
     # Progress is no longer an employee-controlled field — it falls out
     # of (completed criteria / total criteria).  We average this over the
-    # caller's approved yearly goals, because draft/submitted goals don't
+    # caller's approved annual goals, because draft/submitted goals don't
     # have meaningful progress yet.
     criteria_totals = (
         db.query(
@@ -78,7 +78,7 @@ def get_dashboard_summary(
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
-            Goal.goal_type == GoalType.YEARLY.value,
+            Goal.goal_type == GoalType.ANNUAL.value,
             Goal.approval_status == ApprovalStatus.APPROVED.value,
         )
         .one()

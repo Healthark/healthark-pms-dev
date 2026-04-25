@@ -5,8 +5,11 @@ Changes from previous version:
     - Removed allocated_hours from Project
     - Renamed end_date → expected_end_date
     - Added reports_to_id on Project (senior who reviews the PM)
+    - Added secondary_evaluator_id on Project (single project-level secondary
+      evaluator; replaces the old multi-row "Secondary" ProjectAssignment model)
     - Added department_id on ProjectAssignment (auto-filled, editable per project)
     - assignment_role auto-fills from designation but is editable
+    - ProjectAssignment.evaluator_type is now "Primary" or NULL only.
 """
 
 from sqlalchemy import (
@@ -33,6 +36,11 @@ class Project(Base):
     # This is NOT the PM themselves — it's their reporting line for this project.
     reports_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
+    # The single Secondary evaluator for this project. Provides an impact
+    # statement after the PM completes their review. May or may not be a
+    # project member (no ProjectAssignment row required).
+    secondary_evaluator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -44,6 +52,7 @@ class Project(Base):
     # Relationships
     organization = relationship("Organization")
     reports_to = relationship("User", foreign_keys=[reports_to_id])
+    secondary_evaluator = relationship("User", foreign_keys=[secondary_evaluator_id])
     assignments = relationship(
         "ProjectAssignment",
         back_populates="project",
@@ -68,8 +77,9 @@ class ProjectAssignment(Base):
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
 
     # "Primary" = Project Manager who evaluates all other members
-    # "Secondary" = provides impact statement only
-    # null = regular team member
+    # null      = regular team member
+    # The Secondary evaluator is now a project-level field
+    # (Project.secondary_evaluator_id), not a row here.
     evaluator_type = Column(String, nullable=True)
 
     # When this employee was assigned to the project

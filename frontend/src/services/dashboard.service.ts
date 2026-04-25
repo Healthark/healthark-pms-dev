@@ -2,12 +2,12 @@ import apiClient from "./api.client";
 
 export interface DashboardSummary {
   total_goals: number;
-  // Approval-workflow breakdown of the caller's yearly goals
+  // Approval-workflow breakdown of the caller's annual goals
   draft_goals: number;
   submitted_goals: number;
   approved_goals: number;
   changes_requested_goals: number;
-  // Criteria-driven completion average across approved yearly goals (0–100)
+  // Criteria-driven completion average across approved annual goals (0–100)
   completion_percent: number;
   active_cycle: string | null;
   mentee_count: number;

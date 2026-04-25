@@ -47,7 +47,7 @@ export function GoalsWidget({ summary }: GoalsWidgetProps) {
           </div>
           <div>
             <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
-              Yearly Goals
+              Annual Goals
             </p>
             <p className="font-display text-2xl font-semibold text-text-main leading-tight">
               {total_goals}
@@ -102,7 +102,7 @@ export function GoalsWidget({ summary }: GoalsWidgetProps) {
 
       {/* CTA */}
       <Link
-        to="/yearly-goals"
+        to="/annual-goals"
         className="flex items-center gap-1 text-xs font-medium text-brand hover:underline mt-auto"
       >
         View all goals <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

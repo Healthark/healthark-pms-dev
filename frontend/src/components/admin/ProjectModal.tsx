@@ -4,17 +4,20 @@
  * Changes:
  *   - Removed allocated hours
  *   - expected_end_date instead of end_date
- *   - Added "Reports To" dropdown (senior who reviews the PM)
- *   - Assignment rows now include Department dropdown
+ *   - "PM Reports To" is a typeable searchable combobox (required)
+ *   - "Secondary Evaluator" is a typeable searchable combobox (optional,
+ *     project-level — replaces per-member Secondary)
+ *   - Members have a single "PM" checkbox (max one across the project);
+ *     no more Primary/Secondary dropdown on each row
+ *   - Assignment rows include Department dropdown
  *   - Assignment role auto-fills from user's designation when selected
- *   - Evaluator types: Primary | Secondary only
  *
  * Placement: src/components/admin/ProjectModal.tsx
  */
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, X, Loader2, UserPlus, Trash2 } from "lucide-react";
+import { X, Loader2, UserPlus, Trash2 } from "lucide-react";
 import {
   projectService,
   type ProjectDetail,
@@ -30,11 +33,11 @@ import {
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
+import { UserCombobox } from "../common/UserCombobox";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
-const EVALUATOR_TYPES = ["", "Primary", "Secondary"] as const;
 
 interface ProjectModalProps {
   readonly projectId: number | null;
@@ -48,7 +51,7 @@ interface DraftAssignment {
   user_id: string;
   assignment_role: string;
   department_id: string;
-  evaluator_type: string;
+  is_pm: boolean;
   assigned_date: string;
 }
 
@@ -77,7 +80,8 @@ export function ProjectModal({
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [expectedEndDate, setExpectedEndDate] = useState("");
-  const [reportsToId, setReportsToId] = useState("");
+  const [reportsToId, setReportsToId] = useState<number | null>(null);
+  const [secondaryEvaluatorId, setSecondaryEvaluatorId] = useState<number | null>(null);
 
   // ── Reference Data ──────────────────────────────────────────────
   const [departments, setDepartments] = useState<DepartmentBrief[]>([]);
@@ -123,7 +127,8 @@ export function ProjectModal({
         setDescription(detail.description ?? "");
         setStartDate(toDateInput(detail.start_date));
         setExpectedEndDate(toDateInput(detail.expected_end_date));
-        setReportsToId(detail.reports_to_id?.toString() ?? "");
+        setReportsToId(detail.reports_to_id ?? null);
+        setSecondaryEvaluatorId(detail.secondary_evaluator_id ?? null);
         setExistingAssignments(detail.assignments);
       })
       .catch((err: unknown) => setError(getErrorMessage(err)))
@@ -139,15 +144,33 @@ export function ProjectModal({
         user_id: "",
         assignment_role: "",
         department_id: "",
-        evaluator_type: "",
+        is_pm: false,
         assigned_date: "",
       },
     ]);
   };
 
-  const updateDraft = (id: string, field: keyof DraftAssignment, value: string) => {
+  const updateDraft = <K extends keyof DraftAssignment>(
+    id: string,
+    field: K,
+    value: DraftAssignment[K],
+  ) => {
     setDraftAssignments((prev) =>
       prev.map((a) => (a.tempId === id ? { ...a, [field]: value } : a)),
+    );
+  };
+
+  /** Toggle PM flag on a draft. At most one draft can be PM at a time;
+   *  also blocked if an existing assignment is already PM. */
+  const toggleDraftPm = (id: string) => {
+    setDraftAssignments((prev) =>
+      prev.map((a) =>
+        a.tempId === id
+          ? { ...a, is_pm: !a.is_pm }
+          : a.is_pm
+            ? { ...a, is_pm: false }
+            : a,
+      ),
     );
   };
 
@@ -160,12 +183,9 @@ export function ProjectModal({
     const selectedUser = users.find((u) => u.id === Number(userId));
     if (!selectedUser) return;
 
-    // Auto-fill department from user's department
     if (selectedUser.department_id) {
       updateDraft(draftId, "department_id", selectedUser.department_id.toString());
     }
-
-    // Auto-fill role from user's designation
     if (selectedUser.designation) {
       updateDraft(draftId, "assignment_role", selectedUser.designation.name);
     }
@@ -190,12 +210,40 @@ export function ProjectModal({
     ...draftAssignments.filter((a) => a.user_id).map((a) => Number(a.user_id)),
   ]);
 
-  const hasPrimary =
-    existingAssignments.some((a) => a.evaluator_type === "Primary") ||
-    draftAssignments.some((a) => a.evaluator_type === "Primary");
+  const existingPrimary = existingAssignments.find((a) => a.evaluator_type === "Primary") ?? null;
+  const draftPrimary = draftAssignments.find((a) => a.is_pm) ?? null;
+  const hasPrimary = !!existingPrimary || !!draftPrimary;
+
+  // Validation requirements (for create + final save):
+  //   - PM checked on exactly one member
+  //   - reports_to_id set
+  //   - reports_to_id != PM (a PM cannot review themselves)
+  //   - secondary_evaluator_id != PM (no self-review)
+  const pmUserId = existingPrimary?.user_id ?? (draftPrimary && draftPrimary.user_id ? Number(draftPrimary.user_id) : null);
+  const reportsToConflict = pmUserId !== null && reportsToId === pmUserId;
+  const secondaryConflict = pmUserId !== null && secondaryEvaluatorId === pmUserId;
+
+  const validationError =
+    !projectCode.trim()
+      ? "Project Code is required."
+      : !name.trim()
+        ? "Project Name is required."
+        : !isEditing && !hasPrimary
+          ? "Mark exactly one member as PM."
+          : !isEditing && reportsToId === null
+            ? "PM Reports To is required."
+            : reportsToConflict
+              ? "PM Reports To must be a different user than the PM."
+              : secondaryConflict
+                ? "Secondary Evaluator must be a different user than the PM."
+                : null;
 
   // ── Submit ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setIsSaving(true);
     setError("");
 
@@ -207,7 +255,8 @@ export function ProjectModal({
           description: description || null,
           start_date: startDate || null,
           expected_end_date: expectedEndDate || null,
-          reports_to_id: reportsToId ? Number(reportsToId) : null,
+          reports_to_id: reportsToId,
+          secondary_evaluator_id: secondaryEvaluatorId,
         });
 
         for (const draft of draftAssignments) {
@@ -216,7 +265,7 @@ export function ProjectModal({
             user_id: Number(draft.user_id),
             assignment_role: draft.assignment_role || null,
             department_id: draft.department_id ? Number(draft.department_id) : null,
-            evaluator_type: draft.evaluator_type || null,
+            evaluator_type: draft.is_pm ? "Primary" : null,
             assigned_date: draft.assigned_date || null,
           });
         }
@@ -227,17 +276,19 @@ export function ProjectModal({
             user_id: Number(a.user_id),
             assignment_role: a.assignment_role || null,
             department_id: a.department_id ? Number(a.department_id) : null,
-            evaluator_type: a.evaluator_type || null,
+            evaluator_type: a.is_pm ? "Primary" : null,
             assigned_date: a.assigned_date || null,
           }));
 
+        // reports_to_id is required by backend; validation above guarantees non-null here.
         await projectService.createProject({
           project_code: projectCode,
           name,
           description: description || null,
           start_date: startDate || null,
           expected_end_date: expectedEndDate || null,
-          reports_to_id: reportsToId ? Number(reportsToId) : null,
+          reports_to_id: reportsToId as number,
+          secondary_evaluator_id: secondaryEvaluatorId,
           assignments,
         });
       }
@@ -251,7 +302,7 @@ export function ProjectModal({
     }
   };
 
-  const canSubmit = projectCode.trim() && name.trim() && !isSaving;
+  const canSubmit = !validationError && !isSaving;
 
   return createPortal(
     <div
@@ -309,24 +360,34 @@ export function ProjectModal({
                 <textarea id="proj-desc" rows={2} className={`${INPUT_CLS} resize-none`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of the project scope…" />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="proj-start" className={LABEL_CLS}>Start Date</label>
                   <input id="proj-start" type="date" className={INPUT_CLS} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </div>
                 <div>
-                  <label htmlFor="proj-end" className={LABEL_CLS}>Expected End Date</label>
+                  <label htmlFor="proj-end" className={LABEL_CLS}>End Date</label>
                   <input id="proj-end" type="date" className={INPUT_CLS} value={expectedEndDate} onChange={(e) => setExpectedEndDate(e.target.value)} />
                 </div>
-                <div>
-                  <label htmlFor="proj-reports" className={LABEL_CLS}>PM Reports To</label>
-                  <select id="proj-reports" className={INPUT_CLS} value={reportsToId} onChange={(e) => setReportsToId(e.target.value)}>
-                    <option value="">— None —</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
-                    ))}
-                  </select>
-                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <UserCombobox
+                  users={users}
+                  value={reportsToId}
+                  onChange={setReportsToId}
+                  label="PM Reports To"
+                  required
+                  excludeIds={pmUserId !== null ? [pmUserId] : undefined}
+                />
+                <UserCombobox
+                  users={users}
+                  value={secondaryEvaluatorId}
+                  onChange={setSecondaryEvaluatorId}
+                  label="Secondary Evaluator"
+                  placeholder="Optional — can be added later"
+                  excludeIds={pmUserId !== null ? [pmUserId] : undefined}
+                />
               </div>
 
               {/* ── Team Members ───────────────────────────────── */}
@@ -351,8 +412,8 @@ export function ProjectModal({
                     {a.department_name && (
                       <span className="text-xs text-text-muted shrink-0">{a.department_name}</span>
                     )}
-                    {a.evaluator_type && (
-                      <span className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand shrink-0">{a.evaluator_type}</span>
+                    {a.evaluator_type === "Primary" && (
+                      <span className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand shrink-0">PM</span>
                     )}
                     {a.assigned_date && (
                       <span className="text-xs text-text-muted shrink-0">Joined: {a.assigned_date}</span>
@@ -364,7 +425,17 @@ export function ProjectModal({
                 ))}
 
                 {/* Draft Assignments */}
-                {draftAssignments.map((draft) => (
+                {draftAssignments.map((draft) => {
+                  const pmDisabled =
+                    !draft.is_pm && (!!existingPrimary || !draft.user_id);
+                  const pmDisabledReason = !draft.is_pm
+                    ? existingPrimary
+                      ? `PM already set: ${existingPrimary.user_name}. Remove that member first.`
+                      : !draft.user_id
+                        ? "Pick an employee first."
+                        : null
+                    : null;
+                  return (
                   <div key={draft.tempId} className="rounded-lg border border-border p-3 space-y-2">
                     <div className="grid grid-cols-12 gap-2 items-end">
                       {/* Employee — 4 cols */}
@@ -414,25 +485,28 @@ export function ProjectModal({
                         </select>
                       </div>
 
-                      {/* Evaluator — 2 cols */}
+                      {/* PM checkbox — 2 cols. Exactly one member can be PM. */}
                       <div className="col-span-2">
-                        <label className={LABEL_CLS}>Evaluator</label>
-                        <select
-                          className={INPUT_CLS}
-                          value={draft.evaluator_type}
-                          onChange={(e) => updateDraft(draft.tempId, "evaluator_type", e.target.value)}
+                        <label className={LABEL_CLS}>PM</label>
+                        <label
+                          className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-sm ${
+                            pmDisabled
+                              ? "border-border bg-slate-50 text-text-muted cursor-not-allowed"
+                              : draft.is_pm
+                                ? "border-brand bg-brand-light text-brand cursor-pointer"
+                                : "border-border bg-white text-text-main cursor-pointer hover:bg-slate-50"
+                          }`}
+                          title={pmDisabledReason ?? undefined}
                         >
-                          <option value="">None</option>
-                          {EVALUATOR_TYPES.filter((t) => t !== "").map((t) => (
-                            <option
-                              key={t}
-                              value={t}
-                              disabled={t === "Primary" && hasPrimary && draft.evaluator_type !== "Primary"}
-                            >
-                              {t}{t === "Primary" && hasPrimary && draft.evaluator_type !== "Primary" ? " (taken)" : ""}
-                            </option>
-                          ))}
-                        </select>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-brand"
+                            checked={draft.is_pm}
+                            disabled={pmDisabled}
+                            onChange={() => toggleDraftPm(draft.tempId)}
+                          />
+                          <span>is PM</span>
+                        </label>
                       </div>
 
                       {/* Remove — 1 col */}
@@ -456,7 +530,8 @@ export function ProjectModal({
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 {existingAssignments.length === 0 && draftAssignments.length === 0 && (
                   <p className="text-xs text-text-muted italic text-center py-3">

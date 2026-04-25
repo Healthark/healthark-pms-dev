@@ -17,7 +17,7 @@ export type ApprovalStatus =
   | "submitted"
   | "approved"
   | "changes_requested";
-export type GoalType = "regular" | "yearly";
+export type GoalType = "regular" | "annual";
 /** Which half of the fiscal year a self-review covers. */
 export type SelfReviewCycleHalf = "H1" | "H2";
 

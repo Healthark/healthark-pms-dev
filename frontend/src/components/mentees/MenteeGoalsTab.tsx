@@ -243,10 +243,10 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
       <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center">
         <Target className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
         <p className="font-display text-sm font-medium text-text-main">
-          No yearly goals to review
+          No annual goals to review
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          {menteeName} hasn't requested approval on any yearly goals yet.
+          {menteeName} hasn't requested approval on any annual goals yet.
         </p>
       </div>
     );

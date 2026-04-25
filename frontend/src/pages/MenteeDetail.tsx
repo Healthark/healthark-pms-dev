@@ -22,7 +22,7 @@ type TabKey = "profile" | "goals" | "review" | "projects";
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string; icon: typeof UserCircle }> = [
   { key: "profile", label: "Profile", icon: UserCircle },
-  { key: "goals", label: "Yearly Goals", icon: Target },
+  { key: "goals", label: "Annual Goals", icon: Target },
   { key: "review", label: "Annual Review", icon: FileText },
   { key: "projects", label: "Projects", icon: Briefcase },
 ];

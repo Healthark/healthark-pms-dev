@@ -20,7 +20,7 @@ import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
 import { getErrorMessage } from "../utils/errors";
-import { YearlyGoalCard } from "../components/goals/YearlyGoalCard";
+import { AnnualGoalCard } from "../components/goals/AnnualGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { GoalSelfReviewModal } from "../components/goals/GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "../components/goals/SelfReviewCycleMenu";
@@ -133,7 +133,7 @@ function GoalSkeleton() {
 // Page
 // ---------------------------------------------------------------------------
 
-export function YearlyGoals() {
+export function AnnualGoals() {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
   const toast = useToast();
@@ -143,7 +143,7 @@ export function YearlyGoals() {
   // report to them via mentor_id — role is not the authority here.
   // The backend populates has_mentees on the login response.
   const isMentor = user?.has_mentees ?? false;
-  const yearlyGoalsEditEnabled = settings?.yearly_goals_edit_enabled ?? false;
+  const annualGoalsEditEnabled = settings?.annual_goals_edit_enabled ?? false;
 
   // Extract bare FY label ("H1 FY26" → "FY26") for the page header.
   const fyLabel = settings?.active_cycle_name
@@ -175,7 +175,7 @@ export function YearlyGoals() {
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
     try {
-      setGoals(await goalService.getMyGoals("yearly"));
+      setGoals(await goalService.getMyGoals("annual"));
     } catch {
       /* stays empty */
     } finally {
@@ -222,7 +222,7 @@ export function YearlyGoals() {
       } else {
         const created = await goalService.createGoal({
           ...(payload as GoalCreatePayload),
-          goal_type: "yearly",
+          goal_type: "annual",
         });
         setGoals((prev) => [created, ...prev]);
         closeModal();
@@ -342,7 +342,7 @@ export function YearlyGoals() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-xl font-semibold text-text-main">
-            Yearly Goals
+            Annual Goals
             {fyLabel && (
               <span className="ml-2 text-sm font-normal text-text-muted">
                 · {fyLabel}
@@ -360,7 +360,7 @@ export function YearlyGoals() {
               <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               No mentor assigned — goal creation is disabled.
             </div>
-          ) : yearlyGoalsEditEnabled ? (
+          ) : annualGoalsEditEnabled ? (
             <button
               type="button"
               onClick={openAdd}
@@ -477,27 +477,27 @@ export function YearlyGoals() {
               ) : goals.length === 0 ? (
                 <EmptyState
                   onAdd={openAdd}
-                  editGateOpen={yearlyGoalsEditEnabled}
+                  editGateOpen={annualGoalsEditEnabled}
                   hasFilter={false}
                 />
               ) : filteredGoals.length === 0 ? (
                 <EmptyState
                   onAdd={openAdd}
-                  editGateOpen={yearlyGoalsEditEnabled}
+                  editGateOpen={annualGoalsEditEnabled}
                   hasFilter={true}
                 />
               ) : viewMode === "grid" ? (
                 /* ── Card / Grid View ── */
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {sortedGoals.map((goal) => (
-                    <YearlyGoalCard
+                    <AnnualGoalCard
                       key={goal.id}
                       goal={goal}
                       onEdit={openEdit}
                       onSubmit={handleSubmit}
                       onSelfReview={(g, half) => openSelfReview(g, half)}
                       onCriterionUpdate={handleCriterionUpdate}
-                      editGateOpen={yearlyGoalsEditEnabled}
+                      editGateOpen={annualGoalsEditEnabled}
                     />
                   ))}
                 </div>
@@ -527,7 +527,7 @@ export function YearlyGoals() {
                         const isExpanded = expandedGoalId === goal.id;
                         const isDraft = goal.approval_status === "draft";
                         const isChangesRequired = goal.approval_status === "changes_requested";
-                        const canEdit = (isDraft || isChangesRequired) && yearlyGoalsEditEnabled;
+                        const canEdit = (isDraft || isChangesRequired) && annualGoalsEditEnabled;
                         const canSubmit = isDraft || isChangesRequired;
 
                         return (

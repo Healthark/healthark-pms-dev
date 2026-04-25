@@ -26,9 +26,9 @@ export interface SystemSettingsResponse {
   goals_submission_open: boolean;
   reviews_submission_open: boolean;
   goals_edit_enabled: boolean;
-  /** True when the Admin has opened the yearly-goal submission window. */
-  yearly_goals_edit_enabled: boolean;
-  yearly_goals_final_rating_visible: boolean;
+  /** True when the Admin has opened the annual-goal submission window. */
+  annual_goals_edit_enabled: boolean;
+  annual_goals_final_rating_visible: boolean;
   project_ratings_visible: boolean;
   annual_reviews_enabled: boolean;
   annual_review_final_rating_visible: boolean;
@@ -45,7 +45,7 @@ export interface SystemSettingsCreate {
   cycle_end_date?: string | null;
   goals_submission_open?: boolean;
   reviews_submission_open?: boolean;
-  yearly_goals_edit_enabled?: boolean;
+  annual_goals_edit_enabled?: boolean;
 }
 
 export interface SystemSettingsUpdate {
@@ -57,8 +57,8 @@ export interface SystemSettingsUpdate {
   goals_submission_open?: boolean;
   reviews_submission_open?: boolean;
   goals_edit_enabled?: boolean;
-  yearly_goals_edit_enabled?: boolean;
-  yearly_goals_final_rating_visible?: boolean;
+  annual_goals_edit_enabled?: boolean;
+  annual_goals_final_rating_visible?: boolean;
   project_ratings_visible?: boolean;
   annual_reviews_enabled?: boolean;
   annual_review_final_rating_visible?: boolean;

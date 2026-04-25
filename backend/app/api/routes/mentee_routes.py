@@ -27,7 +27,7 @@ from app.api.routes.project_review_routes import _build_review_response
 from app.core.cycle_utils import get_current_cycle_info
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.goal_models import Goal, GoalType, ApprovalStatus
-from app.models.project_models import ProjectAssignment
+from app.models.project_models import Project, ProjectAssignment
 from app.models.project_review_models import ProjectReview, ProjectReviewStatus
 from app.models.system_settings_models import SystemSettings, CycleType
 from app.models.user_models import User
@@ -78,13 +78,13 @@ def _list_mentees(db: DbSession, mentor: User) -> list[User]:
     )
 
 
-def _build_goal_stats(yearly_goals: list[Goal]) -> MenteeGoalsStats:
-    """Roll up yearly-goal counts + progress for a single mentee."""
+def _build_goal_stats(annual_goals: list[Goal]) -> MenteeGoalsStats:
+    """Roll up annual-goal counts + progress for a single mentee."""
     counts = {s.value: 0 for s in ApprovalStatus}
-    for g in yearly_goals:
+    for g in annual_goals:
         counts[g.approval_status] = counts.get(g.approval_status, 0) + 1
 
-    approved_goals = [g for g in yearly_goals if g.approval_status == ApprovalStatus.APPROVED.value]
+    approved_goals = [g for g in annual_goals if g.approval_status == ApprovalStatus.APPROVED.value]
     if approved_goals:
         progress_values: list[int] = []
         for g in approved_goals:
@@ -98,7 +98,7 @@ def _build_goal_stats(yearly_goals: list[Goal]) -> MenteeGoalsStats:
         avg = 0
 
     return MenteeGoalsStats(
-        total=len(yearly_goals),
+        total=len(annual_goals),
         approved=counts[ApprovalStatus.APPROVED.value],
         submitted=counts[ApprovalStatus.SUBMITTED.value],
         draft=counts[ApprovalStatus.DRAFT.value],
@@ -148,12 +148,12 @@ def _build_project_stats(
 
 def _compose_summary(
     user: User,
-    yearly_goals: list[Goal],
+    annual_goals: list[Goal],
     active_review: AnnualReview | None,
     assignments: list[ProjectAssignment],
     reviews: list[ProjectReview],
 ) -> MenteeSummary:
-    goals = _build_goal_stats(yearly_goals)
+    goals = _build_goal_stats(annual_goals)
     review = _build_review_status(active_review)
     projects = _build_project_stats(assignments, reviews)
 
@@ -203,18 +203,18 @@ def list_mentee_summaries(
 
     # One query each for goals, reviews, assignments, project reviews —
     # then bucket by user_id in Python. Avoids N+1s across the mentee list.
-    yearly_goals_all = (
+    annual_goals_all = (
         db.query(Goal)
         .options(joinedload(Goal.criteria))
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
-            Goal.goal_type == GoalType.YEARLY.value,
+            Goal.goal_type == GoalType.ANNUAL.value,
         )
         .all()
     )
     goals_by_user: dict[int, list[Goal]] = {uid: [] for uid in mentee_ids}
-    for g in yearly_goals_all:
+    for g in annual_goals_all:
         goals_by_user[g.user_id].append(g)
 
     active_reviews = (
@@ -256,7 +256,7 @@ def list_mentee_summaries(
     return [
         _compose_summary(
             user=u,
-            yearly_goals=goals_by_user[u.id],
+            annual_goals=goals_by_user[u.id],
             active_review=review_by_user.get(u.id),
             assignments=assignments_by_user[u.id],
             reviews=project_reviews_by_user[u.id],
@@ -297,8 +297,8 @@ def get_mentee_detail(
 
     active_cycle = _get_active_cycle(db, current_user.org_id)
 
-    # Yearly goals for this mentee (drives stats + goals tab).
-    yearly_goals = (
+    # Annual goals for this mentee (drives stats + goals tab).
+    annual_goals = (
         db.query(Goal)
         .options(
             joinedload(Goal.owner),
@@ -308,18 +308,18 @@ def get_mentee_detail(
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id == mentee_id,
-            Goal.goal_type == GoalType.YEARLY.value,
+            Goal.goal_type == GoalType.ANNUAL.value,
         )
         .order_by(Goal.created_at.desc())
         .all()
     )
     # Inject owner_name for TeamGoalResponse. Mirrors goal_routes._list_team_goals.
-    for g in yearly_goals:
+    for g in annual_goals:
         g.owner_name = g.owner.full_name if g.owner else mentee.full_name
 
     # Goals tab hides DRAFT for the mentor — but stats should reflect the
     # full footprint. Split into two lists.
-    goals_list = [g for g in yearly_goals if g.approval_status != ApprovalStatus.DRAFT.value]
+    goals_list = [g for g in annual_goals if g.approval_status != ApprovalStatus.DRAFT.value]
 
     # All reviews across all cycles, newest first.
     reviews_list = (
@@ -344,20 +344,39 @@ def get_mentee_detail(
         )
         .all()
     )
-    # Mentor's own evaluator_type on each of the mentee's projects — drives
+    # Mentor's own evaluator role on each of the mentee's projects — drives
     # the Projects tab action buttons (Evaluate / Write Impact / View).
+    # "Primary" comes from the mentor's own ProjectAssignment.evaluator_type.
+    # "Secondary" now comes from the project-level Project.secondary_evaluator_id.
+    mentee_project_ids = [a.project_id for a in assignments] if assignments else []
     mentor_assignments = (
         db.query(ProjectAssignment)
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
-            ProjectAssignment.project_id.in_([a.project_id for a in assignments]) if assignments else False,  # noqa: E712
+            ProjectAssignment.project_id.in_(mentee_project_ids),
         )
         .all()
-    ) if assignments else []
+    ) if mentee_project_ids else []
     mentor_role_by_project: dict[int, Optional[str]] = {
         ma.project_id: ma.evaluator_type for ma in mentor_assignments
     }
+    # Overlay project-level Secondary for projects where the mentor is the
+    # designated Secondary evaluator (Secondary takes priority over None,
+    # but we keep an existing Primary if both somehow apply).
+    if mentee_project_ids:
+        secondary_project_ids = (
+            db.query(Project.id)
+            .filter(
+                Project.org_id == current_user.org_id,
+                Project.id.in_(mentee_project_ids),
+                Project.secondary_evaluator_id == current_user.id,
+            )
+            .all()
+        )
+        for (pid,) in secondary_project_ids:
+            if mentor_role_by_project.get(pid) != "Primary":
+                mentor_role_by_project[pid] = "Secondary"
     project_reviews = (
         db.query(ProjectReview)
         .filter(
@@ -440,7 +459,7 @@ def get_mentee_detail(
 
     summary = _compose_summary(
         user=mentee,
-        yearly_goals=yearly_goals,
+        annual_goals=annual_goals,
         active_review=active_review,
         assignments=assignments,
         reviews=project_reviews,

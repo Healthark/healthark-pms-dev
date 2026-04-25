@@ -10,7 +10,7 @@ import { Sidebar } from "./layouts/Sidebar";
 import { Topbar } from "./layouts/Topbar";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
-import { YearlyGoals } from "./pages/YearlyGoals";
+import { AnnualGoals } from "./pages/AnnualGoals";
 import AdminPanel from "./pages/AdminPanel";
 import { Profile } from "./pages/Profile";
 import Unauthorized from "./pages/Unauthorized";
@@ -81,7 +81,7 @@ export default function App() {
             </Route>
 
             <Route element={<ProtectedRoute requiredFeature="goals" />}>
-              <Route path="/yearly-goals" element={<YearlyGoals />} />
+              <Route path="/annual-goals" element={<AnnualGoals />} />
             </Route>
 
             <Route

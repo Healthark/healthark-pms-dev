@@ -1,7 +1,7 @@
 """
-GoalSelfReview Model — Per-half self-reflection on an approved yearly goal.
+GoalSelfReview Model — Per-half self-reflection on an approved annual goal.
 
-A yearly goal has an FY scope (e.g. FY 2026), and within that FY the
+An annual goal has an FY scope (e.g. FY 2026), and within that FY the
 employee is expected to reflect on their own delivery TWICE: once for
 the first half (H1) and once for the second half (H2).  Each half is a
 separate, one-shot submission captured here.

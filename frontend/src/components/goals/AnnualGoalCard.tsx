@@ -14,24 +14,24 @@ import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 
-interface YearlyGoalCardProps {
+interface AnnualGoalCardProps {
   readonly goal: Goal;
   readonly onEdit: (goal: Goal) => void;
   readonly onSubmit: (goal: Goal) => void;
   readonly onSelfReview: (goal: Goal, cycleHalf: SelfReviewCycleHalf) => void;
   readonly onCriterionUpdate: (goalId: number, updated: Criterion) => void;
-  /** When false, edit is blocked — admin has closed the yearly-goal window. */
+  /** When false, edit is blocked — admin has closed the annual-goal window. */
   readonly editGateOpen: boolean;
 }
 
-export function YearlyGoalCard({
+export function AnnualGoalCard({
   goal,
   onEdit,
   onSubmit,
   onSelfReview,
   onCriterionUpdate,
   editGateOpen,
-}: YearlyGoalCardProps) {
+}: AnnualGoalCardProps) {
   const isDraft = goal.approval_status === "draft";
   const isSubmitted = goal.approval_status === "submitted";
   const isChangesRequired = goal.approval_status === "changes_requested";
