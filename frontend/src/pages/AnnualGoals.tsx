@@ -30,6 +30,7 @@ import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
+import { formatFyYearSpan } from "../utils/fy";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -449,7 +450,7 @@ export function AnnualGoals() {
                       >
                         <option value="all">All Years</option>
                         {availableYears.map((y) => (
-                          <option key={y} value={y}>FY {y}</option>
+                          <option key={y} value={y}>{formatFyYearSpan(y)}</option>
                         ))}
                       </select>
                     </div>
@@ -557,7 +558,7 @@ export function AnnualGoals() {
                               <td className="px-4 py-3">
                                 {goal.fy_year ? (
                                   <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-                                    FY {goal.fy_year}
+                                    {formatFyYearSpan(goal.fy_year)}
                                   </span>
                                 ) : (
                                   <span className="text-[12px] text-text-muted">—</span>

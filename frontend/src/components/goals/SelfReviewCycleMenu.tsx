@@ -24,6 +24,7 @@ import {
   Eye,
 } from "lucide-react";
 import type { Goal, SelfReviewCycleHalf } from "../../services/goal.service";
+import { formatFyYearSpan } from "../../utils/fy";
 
 interface SelfReviewCycleMenuProps {
   readonly goal: Goal;
@@ -37,7 +38,7 @@ const MENU_WIDTH = 224; // Tailwind w-56
 const MENU_GAP = 4;
 
 function cycleLabel(goal: Goal, half: SelfReviewCycleHalf): string {
-  return goal.fy_year ? `${half} FY ${goal.fy_year}` : half;
+  return goal.fy_year ? `${half} ${formatFyYearSpan(goal.fy_year)}` : half;
 }
 
 export function SelfReviewCycleMenu({

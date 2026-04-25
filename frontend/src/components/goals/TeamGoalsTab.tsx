@@ -31,6 +31,7 @@ import { GoalSelfReviewModal } from "./GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { formatFyYearSpan } from "../../utils/fy";
 
 // ---------------------------------------------------------------------------
 // FeedbackModal — "Request Changes" portal
@@ -639,7 +640,7 @@ export function TeamGoalsTab() {
                       <td className="px-4 py-3">
                         {goal.fy_year ? (
                           <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-                            FY {goal.fy_year}
+                            {formatFyYearSpan(goal.fy_year)}
                           </span>
                         ) : (
                           <span className="text-[12px] text-text-muted">—</span>

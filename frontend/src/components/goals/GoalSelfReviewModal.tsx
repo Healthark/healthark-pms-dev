@@ -17,6 +17,7 @@ import type {
   GoalSelfReviewPayload,
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
+import { formatFyYearSpan } from "../../utils/fy";
 
 // ── Competency schema — matches backend self_desc_* columns ─────────
 
@@ -105,9 +106,9 @@ function readFromReview(review: GoalSelfReview): Record<CompetencyKey, string> {
 }
 
 function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
-  // "H1 FY 2026" / "H2 FY 2026" — stable across grid/table/mentor views.
+  // "H1 FY 2026-27" / "H2 FY 2026-27" — stable across grid/table/mentor views.
   return goal.fy_year
-    ? `${cycleHalf} FY ${goal.fy_year}`
+    ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}`
     : cycleHalf;
 }
 

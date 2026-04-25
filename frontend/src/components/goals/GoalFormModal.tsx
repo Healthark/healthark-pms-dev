@@ -170,7 +170,7 @@ export function GoalFormModal({
           {/* Title */}
           <div>
             <label htmlFor="goal-title" className={LABEL_CLS}>
-              Objective (Title) *
+              Goal Title *
             </label>
             <input
               id="goal-title"
@@ -184,7 +184,7 @@ export function GoalFormModal({
           {/* Description */}
           <div>
             <label htmlFor="goal-desc" className={LABEL_CLS}>
-              Description
+              Goal Description *
             </label>
             <textarea
               id="goal-desc"
@@ -294,7 +294,7 @@ export function GoalFormModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSaving || !form.title.trim()}
+            disabled={isSaving || !form.title.trim() || !form.description.trim()}
             className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isSaving ? "Saving…" : isEditing ? "Save Changes" : "Add Goal"}

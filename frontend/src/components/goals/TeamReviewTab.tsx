@@ -24,6 +24,7 @@ import { getErrorMessage } from "../../utils/errors";
 import { GoalMentorReviewModal } from "./GoalMentorReviewModal";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { formatFyYearSpan } from "../../utils/fy";
 
 // ── Types & sort config ───────────────────────────────────────────────
 
@@ -115,7 +116,7 @@ function ReviewGoalCard({
         </div>
         {goal.fy_year && (
           <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-            FY {goal.fy_year}
+            {formatFyYearSpan(goal.fy_year)}
           </span>
         )}
       </div>
@@ -339,7 +340,7 @@ export function TeamReviewTab() {
               <option value="all">All Years</option>
               {availableYears.map((y) => (
                 <option key={y} value={y}>
-                  FY {y}
+                  {formatFyYearSpan(y)}
                 </option>
               ))}
             </select>
@@ -403,7 +404,7 @@ export function TeamReviewTab() {
                   <td className="px-4 py-3">
                     {goal.fy_year ? (
                       <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-                        FY {goal.fy_year}
+                        {formatFyYearSpan(goal.fy_year)}
                       </span>
                     ) : (
                       <span className="text-[12px] text-text-muted">—</span>

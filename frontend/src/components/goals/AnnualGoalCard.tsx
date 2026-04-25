@@ -13,6 +13,7 @@ import type {
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
+import { formatFyYearSpan } from "../../utils/fy";
 
 interface AnnualGoalCardProps {
   readonly goal: Goal;
@@ -53,7 +54,7 @@ export function AnnualGoalCard({
         <div className="flex items-center gap-1.5">
           {goal.fy_year && (
             <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-              FY {goal.fy_year}
+              {formatFyYearSpan(goal.fy_year)}
             </span>
           )}
           {canEdit && (

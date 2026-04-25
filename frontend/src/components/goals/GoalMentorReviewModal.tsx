@@ -21,6 +21,7 @@ import type {
   GoalMentorReviewPayload,
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
+import { formatFyYearSpan } from "../../utils/fy";
 
 // ── Competency schema ────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ function mentorReviewValue(mr: GoalMentorReview, key: CompetencyKey): string {
 }
 
 function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
-  return goal.fy_year ? `${cycleHalf} FY ${goal.fy_year}` : cycleHalf;
+  return goal.fy_year ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}` : cycleHalf;
 }
 
 // ── Props ────────────────────────────────────────────────────────────

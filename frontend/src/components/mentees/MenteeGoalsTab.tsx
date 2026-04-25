@@ -18,6 +18,7 @@ import {
   type SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import { getErrorMessage } from "../../utils/errors";
+import { formatFyYearSpan } from "../../utils/fy";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { TeamGoalCard } from "../goals/TeamGoalCard";
@@ -429,7 +430,7 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
                       <td className="px-4 py-3">
                         {goal.fy_year ? (
                           <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-                            FY {goal.fy_year}
+                            {formatFyYearSpan(goal.fy_year)}
                           </span>
                         ) : (
                           <span className="text-[12px] text-text-muted">—</span>

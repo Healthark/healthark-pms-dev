@@ -39,3 +39,14 @@ export function formatFyLabel(cycleName: string): string {
   const year = digits.length === 2 ? `20${digits}` : digits;
   return `FY ${year}`;
 }
+
+/**
+ * Render a 4-digit fiscal start year as the spanning span label.
+ *   2026 → "FY 2026-27"
+ *   1999 → "FY 1999-00"
+ * Used for goal cards/tables that store the FY as a number rather than a token.
+ */
+export function formatFyYearSpan(year: number): string {
+  const next = (year + 1) % 100;
+  return `FY ${year}-${next.toString().padStart(2, "0")}`;
+}

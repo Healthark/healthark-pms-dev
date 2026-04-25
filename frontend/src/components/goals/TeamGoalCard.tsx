@@ -2,6 +2,7 @@ import { Bell, UserCircle, Check, RotateCcw, Link } from "lucide-react";
 import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
+import { formatFyYearSpan } from "../../utils/fy";
 
 interface TeamGoalCardProps {
   readonly goal: TeamGoal;
@@ -37,7 +38,7 @@ export function TeamGoalCard({
         </div>
         {goal.fy_year && (
           <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
-            FY {goal.fy_year}
+            {formatFyYearSpan(goal.fy_year)}
           </span>
         )}
       </div>
