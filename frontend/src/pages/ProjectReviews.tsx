@@ -46,6 +46,7 @@ type ViewMode = "grid" | "table";
 type MyReviewsSortKey =
   | "project_name"
   | "project_code"
+  | "department_name"
   | "pm_name"
   | "cycle"
   | "review_status"
@@ -54,6 +55,7 @@ type MyReviewsSortKey =
 const MY_REVIEWS_SORT_CONFIG: Record<MyReviewsSortKey, { kind: SortKind; get: (c: MyProjectCard) => unknown }> = {
   project_name:      { kind: "alpha",   get: (c) => c.project_name },
   project_code:      { kind: "natural", get: (c) => c.project_code },
+  department_name:   { kind: "alpha",   get: (c) => c.department_name },
   pm_name:           { kind: "alpha",   get: (c) => c.pm_name },
   cycle:             { kind: "cycle",   get: (c) => c.cycle },
   review_status:     { kind: "alpha",   get: (c) => c.review_status },
@@ -399,7 +401,7 @@ function TableExpandedRow({
   if (card.review_status !== "reviewed") {
     return (
       <tr>
-        <td colSpan={6} className="px-5 py-6 text-center text-sm text-text-muted bg-slate-50/50">
+        <td colSpan={7} className="px-5 py-6 text-center text-sm text-text-muted bg-slate-50/50">
           <Clock className="h-5 w-5 text-amber-500 mx-auto mb-2" />
           Evaluation pending — awaiting PM review.
         </td>
@@ -410,7 +412,7 @@ function TableExpandedRow({
   if (isFetching) {
     return (
       <tr>
-        <td colSpan={6} className="px-5 py-6 text-center bg-slate-50/50">
+        <td colSpan={7} className="px-5 py-6 text-center bg-slate-50/50">
           <Loader2 className="h-5 w-5 animate-spin text-brand mx-auto" />
         </td>
       </tr>
@@ -420,7 +422,7 @@ function TableExpandedRow({
   if (error || !reviewDetails) {
     return (
       <tr>
-        <td colSpan={6} className="px-5 py-4 text-center text-sm text-red-600 bg-red-50/30">
+        <td colSpan={7} className="px-5 py-4 text-center text-sm text-red-600 bg-red-50/30">
           {error || "No data available"}
         </td>
       </tr>
@@ -429,7 +431,7 @@ function TableExpandedRow({
 
   return (
     <tr>
-      <td colSpan={6} className="p-0">
+      <td colSpan={7} className="p-0">
         <div className="border-t border-brand/10 bg-slate-50/40 px-5 py-5 animate-in slide-in-from-top-1 fade-in duration-200">
           <div className="flex flex-col gap-4">
             {/* Rating bar */}
@@ -506,6 +508,7 @@ export function ProjectReviews() {
   const [pmFilter, setPmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
   const [sort, setSort] = useState<SortState<MyReviewsSortKey> | null>(null);
 
   const [cards, setCards] = useState<MyProjectCard[]>([]);
@@ -544,6 +547,7 @@ export function ProjectReviews() {
 
   const availablePMs = Array.from(new Set(cards.map((c) => c.pm_name).filter(Boolean) as string[]));
   const availableDepts = Array.from(new Set(cards.map((c) => c.department_name).filter(Boolean) as string[]));
+  const availableProjects = Array.from(new Set(cards.map((c) => c.project_name))).sort();
 
   // Apply all filters
   const filteredCards = cards.filter((c) => {
@@ -551,6 +555,7 @@ export function ProjectReviews() {
     if (pmFilter !== "all" && c.pm_name !== pmFilter) return false;
     if (statusFilter !== "all" && c.review_status !== statusFilter) return false;
     if (deptFilter !== "all" && c.department_name !== deptFilter) return false;
+    if (projectFilter !== "all" && c.project_name !== projectFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchesName = c.project_name.toLowerCase().includes(q);
@@ -577,7 +582,7 @@ export function ProjectReviews() {
   useEffect(() => {
     setSelectedCardKey(null);
     setExpandedRowKey(null);
-  }, [selectedCycle, pmFilter, statusFilter, deptFilter, searchQuery]);
+  }, [selectedCycle, pmFilter, statusFilter, deptFilter, projectFilter, searchQuery]);
 
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-3 text-[14px] font-semibold border-b-2 transition-all ${
@@ -608,25 +613,6 @@ export function ProjectReviews() {
           </p>
         </div>
 
-        <div className="flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-2 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Active Cycle</span>
-            <div className="mt-0.5 flex items-center gap-1.5 px-1">
-              <CalendarClock className="h-3.5 w-3.5 text-brand shrink-0" aria-hidden="true" />
-              <span className="text-[13px] font-semibold text-text-main">
-                {settings?.active_cycle_name ?? "—"}
-              </span>
-            </div>
-          </div>
-          <div className="h-8 w-px bg-border" />
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Reviews</span>
-            <span className={`mt-1 text-[13px] font-semibold flex items-center gap-1.5 ${settings?.reviews_submission_open ? "text-emerald-600" : "text-text-muted"}`}>
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {settings?.reviews_submission_open ? "Open" : "Closed"}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* ── Main Content Container ── */}
@@ -689,6 +675,20 @@ export function ProjectReviews() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</label>
+                      <select
+                        value={projectFilter}
+                        onChange={(e) => setProjectFilter(e.target.value)}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+                      >
+                        <option value="all">All Projects</option>
+                        {availableProjects.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">PM</label>
                       <select
                         value={pmFilter}
@@ -715,7 +715,7 @@ export function ProjectReviews() {
                       </select>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* <div className="flex items-center gap-2">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Dept</label>
                       <select
                         value={deptFilter}
@@ -727,7 +727,7 @@ export function ProjectReviews() {
                           <option key={d} value={d}>{d}</option>
                         ))}
                       </select>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               )}
@@ -785,6 +785,9 @@ export function ProjectReviews() {
                         <th className="text-left px-4 py-2.5">
                           <SortableHeader label="Code" columnKey="project_code" sort={sort} onSort={setSort} />
                         </th>
+                        <th className="text-left px-4 py-2.5">
+                          <SortableHeader label="Department" columnKey="department_name" sort={sort} onSort={setSort} />
+                        </th>
                         <th className="hidden sm:table-cell text-left px-4 py-2.5">
                           <SortableHeader label="PM" columnKey="pm_name" sort={sort} onSort={setSort} />
                         </th>
@@ -820,6 +823,7 @@ export function ProjectReviews() {
                                 </div>
                               </td>
                               <td className="px-4 py-3 font-mono text-text-muted text-[12px]">{card.project_code}</td>
+                              <td className="px-4 py-3 text-text-muted">{card.department_name ?? "—"}</td>
                               <td className="hidden sm:table-cell px-4 py-3 text-text-muted">{card.pm_name ?? "—"}</td>
                               <td className="px-4 py-3">
                                 <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">

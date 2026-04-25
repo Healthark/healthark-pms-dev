@@ -166,6 +166,7 @@ export function PMEvaluationTab() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   // Cycle filter — defaults to the active cycle so the page UX matches
   // what it was before we expanded the queue across all cycles. Setting
@@ -248,6 +249,7 @@ export function PMEvaluationTab() {
   const availableDepts = Array.from(new Set(unifiedRows.map((r) => r.department_name).filter(Boolean) as string[]));
   const availableEmployees = Array.from(new Set(unifiedRows.map((r) => r.employee_name)));
   const availableCycles = Array.from(new Set(unifiedRows.map((r) => r.cycle).filter((c): c is string => !!c)));
+  const availableProjects = Array.from(new Set(unifiedRows.map((r) => r.project_name))).sort();
 
   // Filters
   const filteredRows = unifiedRows.filter((r) => {
@@ -256,6 +258,7 @@ export function PMEvaluationTab() {
     if (statusFilter === "pending" && r.review_status !== "pending") return false;
     if (statusFilter === "done" && r.review_status === "pending") return false;
     if (deptFilter !== "all" && r.department_name !== deptFilter) return false;
+    if (projectFilter !== "all" && r.project_name !== projectFilter) return false;
     if (employeeFilter !== "all" && r.employee_name !== employeeFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -391,6 +394,16 @@ export function PMEvaluationTab() {
                 className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
                 <option value="all">All Depts</option>
                 {availableDepts.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          )}
+          {availableProjects.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</label>
+              <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}
+                className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer">
+                <option value="all">All Projects</option>
+                {availableProjects.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
           )}
