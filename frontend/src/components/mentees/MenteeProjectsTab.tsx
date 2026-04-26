@@ -26,6 +26,7 @@ import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { EvalModal, type EvalModalCard } from "../project-reviews/EvalModal";
 import { ImpactModal, type ImpactModalRow } from "../project-reviews/ImpactModal";
+import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 
 // ── Local row shape ────────────────────────────────────────────────
 // Built from MenteeProjectAssignment. Carries the minimum the modals need
@@ -225,8 +226,9 @@ function EvalCard({
           </span>
         )}
         {row.performance_group && (
-          <span>
-            Rating: <span className="font-medium text-text-main">{row.performance_group}</span>
+          <span className="inline-flex items-center gap-1.5">
+            Rating:
+            <PerformanceRatingBadge value={Number(row.performance_group)} />
           </span>
         )}
       </div>
@@ -675,13 +677,9 @@ export function MenteeProjectsTab({
                     <StatusBadge status={r.review_status} />
                   </td>
                   <td className="hidden md:table-cell px-4 py-3">
-                    {r.performance_group ? (
-                      <span className="font-medium text-text-main">
-                        {r.performance_group}
-                      </span>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
+                    <PerformanceRatingBadge
+                      value={r.performance_group ? Number(r.performance_group) : null}
+                    />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <ActionButton

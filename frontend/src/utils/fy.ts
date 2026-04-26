@@ -50,3 +50,22 @@ export function formatFyYearSpan(year: number): string {
   const next = (year + 1) % 100;
   return `FY ${year}-${next.toString().padStart(2, "0")}`;
 }
+
+/**
+ * Resolve a cycle/FY token to the 4-digit fiscal start year so it can be
+ * compared against `Goal.fy_year` (which is stored as a number).
+ *   "FY26-27"   → 2026
+ *   "FY26"      → 2026
+ *   "FY2026"    → 2026
+ *   "H1 FY26-27"→ 2026
+ * Returns null when the input has no parseable FY token.
+ */
+export function fyTokenToStartYear(token: string): number | null {
+  const t = extractFyToken(token);
+  const span = /^FY(\d{2})-(\d{2})$/i.exec(t);
+  if (span) return 2000 + Number(span[1]);
+  const single = /^FY(\d{2,4})$/i.exec(t);
+  if (!single) return null;
+  const digits = single[1];
+  return digits.length === 2 ? 2000 + Number(digits) : Number(digits);
+}
