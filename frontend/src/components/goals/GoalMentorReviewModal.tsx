@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   Send,
   Loader2,
+  Save,
   X,
   User,
   MessageSquarePlus,
@@ -52,7 +53,12 @@ interface GoalMentorReviewModalProps {
     cycleHalf: SelfReviewCycleHalf,
     payload: GoalMentorReviewPayload,
   ) => Promise<void>;
+  readonly onSaveDraft?: (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ) => Promise<void>;
   readonly isSaving: boolean;
+  readonly isDraftSaving?: boolean;
   readonly error: string;
 }
 
@@ -64,12 +70,17 @@ export function GoalMentorReviewModal({
   cycleHalf,
   onClose,
   onSubmit,
+  onSaveDraft,
   isSaving,
+  isDraftSaving = false,
   error,
 }: GoalMentorReviewModalProps) {
+  // Use the mentee's submitted self-review (drafts are owner-only).
   const selfReview =
     goal && cycleHalf
-      ? goal.self_reviews.find((sr) => sr.cycle_half === cycleHalf) ?? null
+      ? goal.self_reviews.find(
+          (sr) => sr.cycle_half === cycleHalf && !sr.is_draft,
+        ) ?? null
       : null;
 
   const existingMentorReview =
@@ -77,7 +88,11 @@ export function GoalMentorReviewModal({
       ? goal.mentor_reviews.find((mr) => mr.cycle_half === cycleHalf) ?? null
       : null;
 
-  const isReadOnly = existingMentorReview !== null;
+  // Mentor drafts stay editable; only a final non-draft row locks the modal.
+  const isReadOnly =
+    existingMentorReview !== null && !existingMentorReview.is_draft;
+  const isDraft =
+    existingMentorReview !== null && existingMentorReview.is_draft;
 
   const [overall, setOverall] = useState("");
   const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
@@ -125,10 +140,18 @@ export function GoalMentorReviewModal({
     await onSubmit(cycleHalf, { mentor_overall_review: overall.trim() });
   };
 
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    await onSaveDraft(cycleHalf, { mentor_overall_review: overall });
+  };
+
   const label = cycleLabel(goal, cycleHalf);
-  const title = isReadOnly
-    ? `Mentor Review · ${label} (Submitted)`
-    : `Mentor Review · ${label}`;
+  const titleSuffix = isReadOnly
+    ? " (Submitted)"
+    : isDraft
+      ? " (Draft)"
+      : "";
+  const title = `Mentor Review · ${label}${titleSuffix}`;
 
   return createPortal(
     <div
@@ -277,7 +300,9 @@ export function GoalMentorReviewModal({
               ? "Mentor review is locked once submitted."
               : selfReview === null
                 ? "Waiting for mentee self-review."
-                : "Single paragraph required."}
+                : isDraft
+                  ? "Draft saved — keep editing or submit when ready."
+                  : "Drafts can be saved and edited; submit when ready."}
           </p>
           <div className="flex items-center gap-3">
             <button
@@ -287,11 +312,26 @@ export function GoalMentorReviewModal({
             >
               {isReadOnly ? "Close" : "Cancel"}
             </button>
+            {!isReadOnly && selfReview !== null && onSaveDraft && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSaving || isDraftSaving}
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                {isDraftSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                {isDraftSaving ? "Saving…" : "Save Draft"}
+              </button>
+            )}
             {!isReadOnly && selfReview !== null && (
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSaving || !allFilled}
+                disabled={isSaving || isDraftSaving || !allFilled}
                 className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {isSaving ? (

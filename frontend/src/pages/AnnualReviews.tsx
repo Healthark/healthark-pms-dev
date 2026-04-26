@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
+import { useConfirm } from "../hooks/useConfirm";
 import { SelfReviewTab } from "../components/reviews/SelfReviewTab";
 import { TeamReviewTab } from "../components/reviews/TeamReviewTab";
 import { SelfReviewFormModal } from "../components/reviews/SelfReviewFormModal";
@@ -10,6 +11,7 @@ import {
   annualReviewService,
   type AnnualReview,
   type SelfReviewPayload,
+  type SelfReviewDraftPayload,
 } from "../services/annual-review.service";
 import { getErrorMessage } from "../utils/errors";
 import { formatFyLabel } from "../utils/fy";
@@ -20,6 +22,7 @@ export function AnnualReviews() {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
   const toast = useToast();
+  const confirm = useConfirm();
 
   const isMentor = user?.has_mentees ?? false;
   const activeCycle = settings?.active_cycle_name ?? "";
@@ -36,6 +39,7 @@ export function AnnualReviews() {
 
   const [showForm, setShowForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const load = useCallback(async () => {
@@ -53,22 +57,72 @@ export function AnnualReviews() {
     void load();
   }, [load]);
 
-  const hasCurrent = reviews.some((r) => r.cycle_name === activeCycle);
+  // Lookup the active-cycle row (if any). May be a draft (still editable),
+  // or one of the post-draft statuses (locked).
+  const currentReview =
+    reviews.find((r) => r.cycle_name === activeCycle) ?? null;
+  const isCurrentDraft = currentReview?.status === "draft";
+  // Can open the form when there's no row yet, OR when the existing row
+  // is still a draft. Past-draft statuses lock the modal closed.
   const canStart =
-    !!activeCycle && submissionsOpen && !hasCurrent && !isLoading;
+    !!activeCycle &&
+    submissionsOpen &&
+    (!currentReview || isCurrentDraft) &&
+    !isLoading;
 
   const handleSubmit = async (payload: SelfReviewPayload) => {
+    const ok = await confirm({
+      title: "Submit annual self-review?",
+      message: `Submit your self-review for ${
+        fyLabel ?? "this cycle"
+      }. Once submitted you can't edit your responses, and your mentor will receive it for evaluation.`,
+      variant: "warning",
+      confirmText: "Submit",
+    });
+    if (!ok) return;
     setIsSaving(true);
     setFormError("");
     try {
-      const created = await annualReviewService.submitSelfReview(payload);
-      setReviews((prev) => [created, ...prev]);
+      const saved = await annualReviewService.submitSelfReview(payload);
+      // submitSelfReview can either create a new row or promote a draft;
+      // upsert into local state by id.
+      setReviews((prev) => {
+        const idx = prev.findIndex((r) => r.id === saved.id);
+        if (idx === -1) return [saved, ...prev];
+        const next = prev.slice();
+        next[idx] = saved;
+        return next;
+      });
       setShowForm(false);
       toast.success("Self-review submitted.");
     } catch (err) {
       setFormError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async (payload: SelfReviewDraftPayload) => {
+    setIsDraftSaving(true);
+    setFormError("");
+    try {
+      // First save calls POST /self/draft to create the row; subsequent
+      // saves use PATCH /draft on the existing row.
+      const saved = currentReview
+        ? await annualReviewService.saveDraft(currentReview.id, payload)
+        : await annualReviewService.createSelfDraft(payload);
+      setReviews((prev) => {
+        const idx = prev.findIndex((r) => r.id === saved.id);
+        if (idx === -1) return [saved, ...prev];
+        const next = prev.slice();
+        next[idx] = saved;
+        return next;
+      });
+      toast.success("Draft saved.");
+    } catch (err) {
+      setFormError(getErrorMessage(err));
+    } finally {
+      setIsDraftSaving(false);
     }
   };
 
@@ -107,7 +161,7 @@ export function AnnualReviews() {
             className="shrink-0 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Self-Review
+            {isCurrentDraft ? "Continue Draft" : "Self-Review"}
           </button>
         )}
       </div>
@@ -145,12 +199,15 @@ export function AnnualReviews() {
       {showForm && activeCycle && (
         <SelfReviewFormModal
           cycleName={activeCycle}
+          draft={isCurrentDraft ? currentReview : null}
           onSubmit={handleSubmit}
+          onSaveDraft={handleSaveDraft}
           onClose={() => {
             setShowForm(false);
             setFormError("");
           }}
           isSaving={isSaving}
+          isDraftSaving={isDraftSaving}
           error={formError}
         />
       )}

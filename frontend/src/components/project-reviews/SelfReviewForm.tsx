@@ -22,6 +22,7 @@ import {
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
+import { useConfirm } from "../../hooks/useConfirm";
 
 // ── 8 Competencies ──────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ interface SelfReviewFormProps {
 
 export function SelfReviewForm({ card, onBack }: SelfReviewFormProps) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState<Record<CompetencyKey, string>>({
     task_execution: "",
     ownership: "",
@@ -113,6 +115,13 @@ export function SelfReviewForm({ card, onBack }: SelfReviewFormProps) {
   const allFilled = COMPETENCIES.every((c) => form[c.key].trim().length > 0);
 
   const handleSubmit = async () => {
+    const ok = await confirm({
+      title: "Submit project self-review?",
+      message: `Submit your self-review for ${card.project_name} (${card.project_code}). Once submitted you can't edit it, and your PM will receive it for primary evaluation.`,
+      variant: "warning",
+      confirmText: "Submit Self-Review",
+    });
+    if (!ok) return;
     setIsSaving(true);
     setError("");
     try {

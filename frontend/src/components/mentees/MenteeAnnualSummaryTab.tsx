@@ -28,6 +28,7 @@ import {
   type AnnualReview,
   type MenteeAnnualReview,
   type MentorEvalPayload,
+  type MentorEvalDraftPayload,
   type ReviewStatus,
 } from "../../services/annual-review.service";
 import type { MenteeDetail } from "../../services/mentee.service";
@@ -41,6 +42,7 @@ import type { MenteeProjectAssignment } from "../../services/mentee.service";
 import { EvalModal } from "../reviews/EvalModal";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { useConfirm } from "../../hooks/useConfirm";
 import { getErrorMessage } from "../../utils/errors";
 import {
   extractFyToken,
@@ -438,12 +440,23 @@ export function MenteeAnnualSummaryTab({
   // Eval modal state
   const [evalOpen, setEvalOpen] = useState(false);
   const [evalSaving, setEvalSaving] = useState(false);
+  const [evalDraftSaving, setEvalDraftSaving] = useState(false);
   const [evalError, setEvalError] = useState("");
+  const confirm = useConfirm();
 
   const handleEvalSubmit = async (
     reviewId: number,
     payload: MentorEvalPayload,
   ) => {
+    const ok = await confirm({
+      title: `Submit annual review for ${mentee.full_name}?`,
+      message: `Submit your evaluation for ${mentee.full_name} (${formatFyLabel(
+        selectedFy,
+      )}). Once submitted you can't edit it, and the review is forwarded to management for final calibration.`,
+      variant: "warning",
+      confirmText: "Submit Evaluation",
+    });
+    if (!ok) return;
     setEvalSaving(true);
     setEvalError("");
     try {
@@ -454,6 +467,22 @@ export function MenteeAnnualSummaryTab({
       setEvalError(getErrorMessage(err));
     } finally {
       setEvalSaving(false);
+    }
+  };
+
+  const handleEvalSaveDraft = async (
+    reviewId: number,
+    payload: MentorEvalDraftPayload,
+  ) => {
+    setEvalDraftSaving(true);
+    setEvalError("");
+    try {
+      await annualReviewService.saveMentorDraft(reviewId, payload);
+      onReload();
+    } catch (err) {
+      setEvalError(getErrorMessage(err));
+    } finally {
+      setEvalDraftSaving(false);
     }
   };
 
@@ -643,11 +672,13 @@ export function MenteeAnnualSummaryTab({
         <EvalModal
           review={enrichedReview}
           onSubmit={handleEvalSubmit}
+          onSaveDraft={handleEvalSaveDraft}
           onClose={() => {
             setEvalOpen(false);
             setEvalError("");
           }}
           isSaving={evalSaving}
+          isDraftSaving={evalDraftSaving}
           error={evalError}
         />
       )}

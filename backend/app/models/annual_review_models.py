@@ -70,6 +70,12 @@ class AnnualReview(Base):
     # ── Stage 2: Mentor Evaluation ───────────────────────────────────
     mentor_overall_review     = Column(Text, nullable=True)
     mentor_performance_rating = Column(Integer, nullable=True)
+    # Draft slots — written by Save Draft while status=PENDING_MENTOR; the
+    # row's `status` itself stays PENDING_MENTOR so the mentee doesn't see
+    # premature mentor content. Submit copies these into the final cols and
+    # clears them, then advances status to PENDING_MANAGEMENT.
+    mentor_overall_review_draft     = Column(Text, nullable=True)
+    mentor_performance_rating_draft = Column(Integer, nullable=True)
 
     # ── Stage 3: Management Calibration ──────────────────────────────
     management_performance_rating = Column(Integer, nullable=True)  # Optional override

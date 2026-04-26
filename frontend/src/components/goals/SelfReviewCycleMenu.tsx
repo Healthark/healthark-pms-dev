@@ -149,9 +149,15 @@ export function SelfReviewCycleMenu({
         role="menu"
       >
         {HALVES.map((half) => {
-          const submitted = goal.self_reviews.some(
+          // "Submitted" means a non-draft row exists for this half.
+          // Drafts (is_draft=true) are still in-progress — the mentee can
+          // resume them, the mentor can't see them yet.
+          const selfRow = goal.self_reviews.find(
             (sr) => sr.cycle_half === half,
           );
+          const submitted = selfRow !== undefined && !selfRow.is_draft;
+          const hasSelfDraft =
+            selfRow !== undefined && selfRow.is_draft;
           // Lock rules:
           //   Mentee mode  — locked when not yet submitted AND the time
           //                  window for the half isn't open. (Prevents
@@ -212,6 +218,10 @@ export function SelfReviewCycleMenu({
                     <span className="flex items-center gap-1">
                       <Circle className="h-2.5 w-2.5" /> {lockReason}
                     </span>
+                  ) : hasSelfDraft && mode === "mentee" ? (
+                    <span className="flex items-center gap-1">
+                      <Circle className="h-2.5 w-2.5" /> Draft saved
+                    </span>
                   ) : (
                     <span className="flex items-center gap-1">
                       <Circle className="h-2.5 w-2.5" /> Not Submitted
@@ -226,9 +236,11 @@ export function SelfReviewCycleMenu({
                 //   Eye          — self-review filed; mentor review pending.
                 //   Circle       — no self-review yet (row is disabled).
                 (() => {
-                  const mentorReviewed = goal.mentor_reviews.some(
+                  const mentorRow = goal.mentor_reviews.find(
                     (mr) => mr.cycle_half === half,
                   );
+                  const mentorReviewed =
+                    mentorRow !== undefined && !mentorRow.is_draft;
                   if (mentorReviewed) {
                     return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
                   }

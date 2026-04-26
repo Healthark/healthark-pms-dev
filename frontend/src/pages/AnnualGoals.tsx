@@ -19,6 +19,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
+import { useConfirm } from "../hooks/useConfirm";
 import { getErrorMessage } from "../utils/errors";
 import { AnnualGoalCard } from "../components/goals/AnnualGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
@@ -168,6 +169,7 @@ export function AnnualGoals() {
   const { settings } = useSystemSettings();
   const toast = useToast();
   const snackbar = useSnackbar();
+  const confirm = useConfirm();
 
   // A user is treated as a "mentor" purely based on whether other users
   // report to them via mentor_id — role is not the authority here.
@@ -200,6 +202,7 @@ export function AnnualGoals() {
   const [selfReviewCycle, setSelfReviewCycle] =
     useState<SelfReviewCycleHalf | null>(null);
   const [isSelfReviewSaving, setIsSelfReviewSaving] = useState(false);
+  const [isSelfReviewDraftSaving, setIsSelfReviewDraftSaving] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState("");
 
   // Role expectations for the My Goals tab — surfaced as collapsed
@@ -287,6 +290,13 @@ export function AnnualGoals() {
 
   // Submit draft / changes_requested goal for mentor review
   const handleSubmit = async (goal: Goal) => {
+    const ok = await confirm({
+      title: "Submit goal for approval?",
+      message: `Send "${goal.title}" to your mentor for review. Once submitted you can't edit this goal until your mentor approves it or requests changes.`,
+      variant: "warning",
+      confirmText: "Submit",
+    });
+    if (!ok) return;
     try {
       const updated = await goalService.submitGoal(goal.id);
       setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
@@ -312,6 +322,13 @@ export function AnnualGoals() {
     payload: GoalSelfReviewPayload,
   ) => {
     if (!selfReviewGoal) return;
+    const ok = await confirm({
+      title: `Submit ${cycleHalf} self-review?`,
+      message: `Submit your ${cycleHalf} reflection on "${selfReviewGoal.title}". Self-reviews are one-shot — once sent you can't edit this entry, and your mentor will be able to read it.`,
+      variant: "warning",
+      confirmText: "Submit Self-Review",
+    });
+    if (!ok) return;
     setIsSelfReviewSaving(true);
     setSelfReviewError("");
     try {
@@ -329,6 +346,32 @@ export function AnnualGoals() {
       setSelfReviewError(getErrorMessage(err));
     } finally {
       setIsSelfReviewSaving(false);
+    }
+  };
+
+  const handleSelfReviewSaveDraft = async (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalSelfReviewPayload,
+  ) => {
+    if (!selfReviewGoal) return;
+    setIsSelfReviewDraftSaving(true);
+    setSelfReviewError("");
+    try {
+      const updated = await goalService.saveSelfReviewDraft(
+        selfReviewGoal.id,
+        cycleHalf,
+        payload,
+      );
+      setGoals((prev) =>
+        prev.map((g) => (g.id === updated.id ? updated : g)),
+      );
+      // Keep the modal open so the mentee sees the "(Draft)" title and can
+      // continue editing — toast confirms the save.
+      toast.success("Draft saved.");
+    } catch (err) {
+      setSelfReviewError(getErrorMessage(err));
+    } finally {
+      setIsSelfReviewDraftSaving(false);
     }
   };
 
@@ -744,7 +787,9 @@ export function AnnualGoals() {
         cycleHalf={selfReviewCycle}
         onClose={closeSelfReview}
         onSubmit={handleSelfReviewSubmit}
+        onSaveDraft={handleSelfReviewSaveDraft}
         isSaving={isSelfReviewSaving}
+        isDraftSaving={isSelfReviewDraftSaving}
         error={selfReviewError}
       />
     </div>

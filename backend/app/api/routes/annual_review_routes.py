@@ -43,6 +43,7 @@ from app.schemas.annual_review_schemas import (
     SelfAppraisalCreate,
     SelfAppraisalDraft,
     MentorEvalUpdate,
+    MentorEvalDraft,
     ManagementFinalize,
     ManagementRatingUpdate,
     AnnualReviewResponse,
@@ -105,11 +106,16 @@ def _strip_private_ratings(review: AnnualReview, final_visible: bool) -> None:
     is not surfaced. The fallback is still strictly gated by the per-row
     final_rating_enabled AND the org-wide visibility flag so unfinalized
     reviews never leak.
+
+    Mentor draft text/rating are also stripped — the mentee should not
+    see in-progress mentor work.
     """
     mgmt = review.management_performance_rating
     mentor = review.mentor_performance_rating
     review.mentor_performance_rating = None
     review.management_performance_rating = None
+    review.mentor_overall_review_draft = None
+    review.mentor_performance_rating_draft = None
     if review.final_rating_enabled and final_visible:
         review.final_performance_rating = mgmt if mgmt is not None else mentor
     else:
@@ -128,11 +134,9 @@ def create_self_appraisal(
     current_user: CurrentUser,
 ):
     """
-    Create and submit the employee's self-appraisal.
-
-    One-shot: the review is created with all 8 competency descriptions plus
-    self_performance_rating, and the status moves to PENDING_MENTOR. The
-    employee cannot edit after submission.
+    Submit the employee's self-appraisal. If a draft row already exists for
+    the user/cycle, promote it to PENDING_MENTOR with the submitted payload.
+    Otherwise create a new row directly in PENDING_MENTOR.
 
     cycle_name is stamped from SystemSettings — the employee cannot pick.
     """
@@ -143,11 +147,20 @@ def create_self_appraisal(
         AnnualReview.user_id == current_user.id,
         AnnualReview.cycle_name == cycle_name,
     ).first()
-    if existing:
+    if existing and existing.status != ReviewStatus.DRAFT.value:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"You have already submitted a self-review for {cycle_name}.",
         )
+
+    if existing is not None:
+        # Promote draft → submitted.
+        existing.self_overall_review = payload.self_overall_review
+        existing.self_performance_rating = payload.self_performance_rating
+        existing.status = ReviewStatus.PENDING_MENTOR.value
+        db.commit()
+        db.refresh(existing)
+        return existing
 
     mentor_id = current_user.mentor_id
     review = AnnualReview(
@@ -156,6 +169,50 @@ def create_self_appraisal(
         mentor_id=mentor_id,
         cycle_name=cycle_name,
         status=ReviewStatus.PENDING_MENTOR.value,
+        self_overall_review=payload.self_overall_review,
+        self_performance_rating=payload.self_performance_rating,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+@router.post("/self/draft", response_model=AnnualReviewResponse, status_code=status.HTTP_201_CREATED)
+def create_self_appraisal_draft(
+    payload: SelfAppraisalDraft,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Create a new annual self-appraisal in DRAFT state. The employee can
+    revisit it via PATCH /draft and submit later via POST /self.
+
+    409 if a row already exists for the user/cycle (use the PATCH /draft
+    endpoint to update an existing draft).
+    """
+    cycle_name = _get_active_cycle(db, current_user.org_id)
+
+    existing = db.query(AnnualReview).filter(
+        AnnualReview.org_id == current_user.org_id,
+        AnnualReview.user_id == current_user.id,
+        AnnualReview.cycle_name == cycle_name,
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"A review for {cycle_name} already exists; use PATCH /draft "
+                f"to update an in-progress draft."
+            ),
+        )
+
+    review = AnnualReview(
+        org_id=current_user.org_id,
+        user_id=current_user.id,
+        mentor_id=current_user.mentor_id,
+        cycle_name=cycle_name,
+        status=ReviewStatus.DRAFT.value,
         self_overall_review=payload.self_overall_review,
         self_performance_rating=payload.self_performance_rating,
     )
@@ -302,7 +359,8 @@ def submit_mentor_evaluation(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Mentor submits their evaluation. Status: PENDING_MENTOR → PENDING_MANAGEMENT."""
+    """Mentor submits their evaluation. Status: PENDING_MENTOR → PENDING_MANAGEMENT.
+    Any saved mentor draft is cleared; the submitted payload becomes final."""
     review = db.query(AnnualReview).filter(
         AnnualReview.id == review_id,
         AnnualReview.org_id == current_user.org_id,
@@ -322,8 +380,54 @@ def submit_mentor_evaluation(
 
     review.mentor_overall_review = payload.mentor_overall_review
     review.mentor_performance_rating = payload.mentor_performance_rating
+    # Clear any draft scratchpad — the final cols are now authoritative.
+    review.mentor_overall_review_draft = None
+    review.mentor_performance_rating_draft = None
 
     review.status = ReviewStatus.PENDING_MANAGEMENT.value
+
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+@router.patch("/{review_id}/mentor-draft", response_model=AnnualReviewResponse)
+def save_mentor_draft(
+    review_id: int,
+    payload: MentorEvalDraft,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Mentor saves an in-progress evaluation without submitting. Writes only
+    the *_draft columns; the row's `status` stays PENDING_MENTOR so the
+    mentee never sees premature mentor content. The Submit endpoint
+    (PATCH /mentor-eval) clears these and advances status.
+    """
+    review = db.query(AnnualReview).filter(
+        AnnualReview.id == review_id,
+        AnnualReview.org_id == current_user.org_id,
+    ).first()
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
+    if review.status != ReviewStatus.PENDING_MENTOR.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This review is not in the mentor evaluation stage.",
+        )
+    if review.mentor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not the assigned mentor for this review.",
+        )
+
+    # Apply only fields the client included so partial saves don't wipe
+    # work the mentor previously stored.
+    data = payload.model_dump(exclude_unset=True)
+    if "mentor_overall_review" in data:
+        review.mentor_overall_review_draft = data["mentor_overall_review"]
+    if "mentor_performance_rating" in data:
+        review.mentor_performance_rating_draft = data["mentor_performance_rating"]
 
     db.commit()
     db.refresh(review)

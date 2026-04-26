@@ -14,8 +14,10 @@ import {
   projectReviewService,
   type PMPendingReviewCard,
   type PMEvaluationPayload,
+  type PMEvaluationDraftPayload,
   type ProjectReviewResponse,
   type SecondaryEvalPayload,
+  type SecondaryEvalDraftPayload,
   type RoleExpectation,
 } from "../../services/project-review.service";
 import { getErrorMessage } from "../../utils/errors";
@@ -181,6 +183,7 @@ export function PMEvaluationTab() {
   const [evalTarget, setEvalTarget] = useState<UnifiedEvalRow | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
   const loadData = useCallback(async () => {
@@ -324,6 +327,31 @@ export function PMEvaluationTab() {
       closeModal();
       toast.success("Impact statement saved.");
     } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsSaving(false); }
+  };
+
+  const handlePMSaveDraft = async (payload: PMEvaluationDraftPayload) => {
+    if (!evalTarget) return;
+    setIsDraftSaving(true); setModalError("");
+    try {
+      await projectReviewService.savePMDraft(
+        evalTarget.project_id,
+        evalTarget.user_id!,
+        payload,
+      );
+      toast.success("Draft saved.");
+    } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsDraftSaving(false); }
+  };
+
+  const handleSecSaveDraft = async (
+    reviewId: number,
+    payload: SecondaryEvalDraftPayload,
+  ) => {
+    setIsDraftSaving(true); setModalError("");
+    try {
+      await projectReviewService.saveSecondaryDraft(reviewId, payload);
+      await loadData();
+      toast.success("Draft saved.");
+    } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsDraftSaving(false); }
   };
 
   const viewBtnCls = (mode: ViewMode) =>
@@ -523,10 +551,15 @@ export function PMEvaluationTab() {
       {/* Modals */}
       {evalTarget?.type === "primary" && (
         <EvalModal card={evalTarget} expectation={getExpectation(evalTarget)} isEditMode={isEditMode}
-          onSubmit={handlePMSubmit} onClose={closeModal} isSaving={isSaving} error={modalError} />
+          onSubmit={handlePMSubmit}
+          onSaveDraft={isEditMode ? undefined : handlePMSaveDraft}
+          onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
       )}
       {evalTarget?.type === "secondary" && (
-        <ImpactModal row={evalTarget} onSubmit={handleSecSubmit} onClose={closeModal} isSaving={isSaving} error={modalError} />
+        <ImpactModal row={evalTarget}
+          onSubmit={handleSecSubmit}
+          onSaveDraft={evalTarget.review_status === "submitted" ? undefined : handleSecSaveDraft}
+          onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
       )}
     </div>
   );

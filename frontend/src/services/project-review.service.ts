@@ -30,6 +30,9 @@ export interface SecondaryEvalResponse {
   evaluator_id: number;
   evaluator_name: string;
   impact_statement: string | null;
+  /** "draft" while the evaluator has saved but not yet submitted;
+   *  "submitted" once finalized. The frontend gates editability on this. */
+  status: "draft" | "submitted";
   created_at: string;
 }
 
@@ -119,9 +122,15 @@ export interface PMEvaluationPayload {
   comment_competency_skills: string;
 }
 
+/** Save-draft payload — every field optional so the PM can park a
+ *  half-typed evaluation and resume later. */
+export type PMEvaluationDraftPayload = Partial<PMEvaluationPayload>;
+
 export interface SecondaryEvalPayload {
   impact_statement: string;
 }
+
+export type SecondaryEvalDraftPayload = Partial<SecondaryEvalPayload>;
 
 // ── Admin Management View Types ─────────────────────────────────────
 
@@ -193,6 +202,21 @@ export const projectReviewService = {
     return res.data;
   },
 
+  /** PM saves an in-progress evaluation as a draft (status=DRAFT). All
+   *  fields optional — only those present on the payload are written.
+   *  Submit (POST /evaluate) promotes the row to REVIEWED. */
+  savePMDraft: async (
+    projectId: number,
+    userId: number,
+    payload: PMEvaluationDraftPayload,
+  ): Promise<ProjectReviewResponse> => {
+    const res = await apiClient.patch<ProjectReviewResponse>(
+      `/project-reviews/${projectId}/evaluate/${userId}/draft`,
+      payload,
+    );
+    return res.data;
+  },
+
   /** PM edits an already-submitted evaluation. */
   updateReview: async (
     reviewId: number,
@@ -219,6 +243,19 @@ export const projectReviewService = {
   ): Promise<SecondaryEvalResponse> => {
     const res = await apiClient.post<SecondaryEvalResponse>(
       `/project-reviews/${reviewId}/secondary`,
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Secondary evaluator saves an in-progress impact statement as a
+   *  draft. Submit promotes it. */
+  saveSecondaryDraft: async (
+    reviewId: number,
+    payload: SecondaryEvalDraftPayload,
+  ): Promise<SecondaryEvalResponse> => {
+    const res = await apiClient.patch<SecondaryEvalResponse>(
+      `/project-reviews/${reviewId}/secondary/draft`,
       payload,
     );
     return res.data;

@@ -72,6 +72,9 @@ export interface GoalSelfReview {
   submitted_at: string;
   /** Single freeform paragraph, mirrors the Annual Review self-appraisal shape. */
   self_overall_review: string;
+  /** True while the row is a saved-but-not-submitted draft. Mentors only
+   *  see rows where this is false (drafts are owner-only). */
+  is_draft: boolean;
 }
 
 /**
@@ -87,6 +90,9 @@ export interface GoalMentorReview {
   /** Single freeform paragraph; the form surfaces Firm Growth and Competency
    *  & Skills role expectations as reference panels rather than separate fields. */
   mentor_overall_review: string;
+  /** True while the row is a saved-but-not-submitted draft. Mentees only
+   *  see rows where this is false. */
+  is_draft: boolean;
 }
 
 export interface GoalMentorReviewPayload {
@@ -216,6 +222,18 @@ export const goalService = {
     return res.data;
   },
 
+  saveSelfReviewDraft: async (
+    goalId: number,
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalSelfReviewPayload,
+  ): Promise<Goal> => {
+    const res = await apiClient.patch<Goal>(
+      `/goals/${goalId}/self-review/${cycleHalf}/draft`,
+      payload,
+    );
+    return res.data;
+  },
+
   submitMentorReview: async (
     goalId: number,
     cycleHalf: SelfReviewCycleHalf,
@@ -223,6 +241,18 @@ export const goalService = {
   ): Promise<Goal> => {
     const res = await apiClient.patch<Goal>(
       `/goals/${goalId}/mentor-review/${cycleHalf}`,
+      payload,
+    );
+    return res.data;
+  },
+
+  saveMentorReviewDraft: async (
+    goalId: number,
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ): Promise<Goal> => {
+    const res = await apiClient.patch<Goal>(
+      `/goals/${goalId}/mentor-review/${cycleHalf}/draft`,
       payload,
     );
     return res.data;

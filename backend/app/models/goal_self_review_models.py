@@ -20,6 +20,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -62,6 +63,12 @@ class GoalSelfReview(Base):
     # textareas — Firm Growth and Competency & Skills role expectations
     # are surfaced as a reference panel on the form instead.
     self_overall_review = Column(Text, nullable=False)
+
+    # When True, this row is a saved-but-not-yet-submitted draft; the
+    # mentee can keep editing it. The Submit endpoint flips it to False
+    # which advances the parent goal's approval_status. Mentors don't see
+    # draft rows.
+    is_draft = Column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
         # A goal can have at most one submission per half.  Enforcing at

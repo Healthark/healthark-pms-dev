@@ -53,6 +53,13 @@ class MentorEvalUpdate(BaseModel):
     mentor_performance_rating: int = Field(..., ge=1, le=5)
 
 
+class MentorEvalDraft(BaseModel):
+    """Partial save — mentor can save progress without submitting. Both
+    fields optional so the mentor can park work mid-thought."""
+    mentor_overall_review: Optional[str] = Field(default=None, max_length=10000)
+    mentor_performance_rating: Optional[int] = Field(default=None, ge=1, le=5)
+
+
 # ── Stage 3: Management Calibration ─────────────────────────────────
 
 class ManagementFinalize(BaseModel):
@@ -94,6 +101,10 @@ class AnnualReviewResponse(BaseModel):
     # Stage 2
     mentor_overall_review: Optional[str] = None
     mentor_performance_rating: Optional[int] = None
+    # Mentor's in-progress draft (only set while status=pending_mentor and
+    # the mentor has clicked Save Draft at least once). Cleared on submit.
+    mentor_overall_review_draft: Optional[str] = None
+    mentor_performance_rating_draft: Optional[int] = None
 
     # Stage 3
     management_performance_rating: Optional[int] = None

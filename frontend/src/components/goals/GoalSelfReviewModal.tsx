@@ -16,7 +16,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ClipboardCheck, Send, Loader2, X } from "lucide-react";
+import { ClipboardCheck, Send, Loader2, Save, X } from "lucide-react";
 import type {
   Goal,
   GoalSelfReviewPayload,
@@ -74,7 +74,14 @@ interface GoalSelfReviewModalProps {
     cycleHalf: SelfReviewCycleHalf,
     payload: GoalSelfReviewPayload,
   ) => Promise<void>;
+  /** Save-as-draft handler. Optional — when omitted (e.g. read-only mentor
+   *  view), the Save Draft button is hidden. */
+  readonly onSaveDraft?: (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalSelfReviewPayload,
+  ) => Promise<void>;
   readonly isSaving: boolean;
+  readonly isDraftSaving?: boolean;
   readonly error: string;
   /** Force the modal into view-only mode (mentor viewing mentee's entry). */
   readonly readOnly?: boolean;
@@ -88,7 +95,9 @@ export function GoalSelfReviewModal({
   cycleHalf,
   onClose,
   onSubmit,
+  onSaveDraft,
   isSaving,
+  isDraftSaving = false,
   error,
   readOnly = false,
 }: GoalSelfReviewModalProps) {
@@ -97,7 +106,9 @@ export function GoalSelfReviewModal({
       ? goal.self_reviews.find((sr) => sr.cycle_half === cycleHalf) ?? null
       : null;
 
-  const isLocked = readOnly || existing !== null;
+  // A draft row is editable; only a fully-submitted row locks the modal.
+  const isLocked = readOnly || (existing !== null && !existing.is_draft);
+  const isDraft = existing !== null && existing.is_draft;
 
   const [overall, setOverall] = useState("");
   // Fetched only when readOnly=false (mentee writing their own review).
@@ -154,9 +165,19 @@ export function GoalSelfReviewModal({
     await onSubmit(cycleHalf, { self_overall_review: overall.trim() });
   };
 
-  const title = `Self Review · ${cycleLabel(goal, cycleHalf)}${
-    existing && !readOnly ? " (Submitted)" : ""
-  }`;
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    await onSaveDraft(cycleHalf, { self_overall_review: overall });
+  };
+
+  const titleSuffix = readOnly
+    ? " (View)"
+    : isLocked
+      ? " (Submitted)"
+      : isDraft
+        ? " (Draft)"
+        : "";
+  const title = `Self Review · ${cycleLabel(goal, cycleHalf)}${titleSuffix}`;
 
   // Pick the right expectation source for the rubric panels.
   let expectationForPanel: RoleExpectation | null;
@@ -296,7 +317,9 @@ export function GoalSelfReviewModal({
           <p className="text-xs text-text-muted">
             {isLocked
               ? "Self-review is locked once submitted."
-              : "Single paragraph required."}
+              : isDraft
+                ? "Draft saved — keep editing or submit when ready."
+                : "Drafts can be saved and edited; submit when ready."}
           </p>
           <div className="flex items-center gap-3">
             <button
@@ -306,11 +329,26 @@ export function GoalSelfReviewModal({
             >
               {isLocked ? "Close" : "Cancel"}
             </button>
+            {!isLocked && onSaveDraft && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSaving || isDraftSaving}
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                {isDraftSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                {isDraftSaving ? "Saving…" : "Save Draft"}
+              </button>
+            )}
             {!isLocked && (
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSaving || !allFilled}
+                disabled={isSaving || isDraftSaving || !allFilled}
                 className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {isSaving ? (

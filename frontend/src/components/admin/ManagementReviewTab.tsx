@@ -28,6 +28,7 @@ import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { PerformanceRatingSelect } from "../reviews/PerformanceRatingSelect";
 import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
 import { getErrorMessage } from "../../utils/errors";
+import { useConfirm } from "../../hooks/useConfirm";
 
 type RatingValue = number | "";
 type StatusFilter = "all" | "pending" | "rated";
@@ -62,6 +63,7 @@ export function ManagementReviewTab() {
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -117,6 +119,19 @@ export function ManagementReviewTab() {
       setSaveError("Please select a rating.");
       return;
     }
+    const isOverwrite =
+      editTarget.row.management_performance_rating != null;
+    const ok = await confirm({
+      title: isOverwrite
+        ? `Overwrite management rating for ${editTarget.row.employee_name}?`
+        : `Publish management rating for ${editTarget.row.employee_name}?`,
+      message: isOverwrite
+        ? `Replace the existing management rating with ${editTarget.draft}/5. ${editTarget.row.employee_name} will see the updated rating immediately.`
+        : `Publish a management rating of ${editTarget.draft}/5 for ${editTarget.row.employee_name}. Once saved, ${editTarget.row.employee_name} will be able to see this rating in their own annual review.`,
+      variant: isOverwrite ? "warning" : "default",
+      confirmText: isOverwrite ? "Overwrite Rating" : "Publish Rating",
+    });
+    if (!ok) return;
     setIsSaving(true);
     setSaveError("");
     try {

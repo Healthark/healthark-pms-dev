@@ -37,7 +37,8 @@ from app.models.user_models import User
 from app.models.reference_models import Department, Designation
 from app.models.role_expectation_models import RoleExpectation
 from app.schemas.project_review_schemas import (
-    PMEvaluationSubmit, SecondaryEvalSubmit,
+    PMEvaluationSubmit, PMEvaluationDraft,
+    SecondaryEvalSubmit, SecondaryEvalDraft,
     ProjectReviewResponse, SecondaryEvalResponse,
     MyProjectCard, PMPendingReviewCard,
     RoleExpectationResponse,
@@ -64,20 +65,41 @@ def _get_active_cycle(db: DbSession, org_id: int) -> str:
     return settings.active_cycle_name
 
 
-def _build_review_response(review: ProjectReview, db: DbSession) -> ProjectReviewResponse:
+def _build_review_response(
+    review: ProjectReview,
+    db: DbSession,
+    viewer_user_id: Optional[int] = None,
+) -> ProjectReviewResponse:
+    """
+    Convert a ProjectReview ORM row to its API response shape.
+
+    `viewer_user_id` is used to decide whether to include in-progress
+    secondary-evaluator drafts: an evaluator can see their own draft (so
+    reopening the modal pre-populates), but other viewers (PM, mentor,
+    mentee, admin) only see submitted impact statements.
+    """
     employee = db.query(User).filter(User.id == review.user_id).first()
     reviewer = db.query(User).filter(User.id == review.reviewer_id).first() if review.reviewer_id else None
     project = db.query(Project).filter(Project.id == review.project_id).first()
 
     secondary_responses: list[SecondaryEvalResponse] = []
     for ev in review.secondary_evaluations:
-        if ev.status == EvaluatorStatus.SUBMITTED.value:
+        # Always include submitted; include drafts only for their author.
+        if (
+            ev.status == EvaluatorStatus.SUBMITTED.value
+            or (
+                ev.status == EvaluatorStatus.DRAFT.value
+                and viewer_user_id is not None
+                and ev.evaluator_id == viewer_user_id
+            )
+        ):
             ev_user = db.query(User).filter(User.id == ev.evaluator_id).first()
             secondary_responses.append(SecondaryEvalResponse(
                 id=ev.id,
                 evaluator_id=ev.evaluator_id,
                 evaluator_name=ev_user.full_name if ev_user else "Unknown",
                 impact_statement=ev.impact_statement,
+                status=ev.status,
                 created_at=ev.created_at,
             ))
 
@@ -400,22 +422,9 @@ def submit_pm_evaluation(
             detail="You cannot evaluate yourself.",
         )
 
-    # Check if already evaluated
-    existing = db.query(ProjectReview).filter(
-        ProjectReview.org_id == current_user.org_id,
-        ProjectReview.user_id == user_id,
-        ProjectReview.project_id == project_id,
-        ProjectReview.cycle == cycle,
-        ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This employee has already been evaluated for this project this cycle.",
-        )
-
-    # Create or update the review row
+    # Find any existing review row for this (employee, project, cycle).
+    # PENDING and DRAFT are both promotable to REVIEWED; only an existing
+    # REVIEWED row is a true 409.
     review = db.query(ProjectReview).filter(
         ProjectReview.org_id == current_user.org_id,
         ProjectReview.user_id == user_id,
@@ -423,8 +432,14 @@ def submit_pm_evaluation(
         ProjectReview.cycle == cycle,
     ).first()
 
+    if review and review.status == ProjectReviewStatus.REVIEWED.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This employee has already been evaluated for this project this cycle.",
+        )
+
     if review:
-        # Update existing pending review
+        # Promote PENDING / DRAFT row to REVIEWED.
         review.reviewer_id = current_user.id
         review.status = ProjectReviewStatus.REVIEWED.value
         review.comment_task_execution = payload.comment_task_execution
@@ -437,7 +452,6 @@ def submit_pm_evaluation(
         review.performance_group = payload.performance_group.value
         review.impact_statement = payload.impact_statement
     else:
-        # Create new review
         review = ProjectReview(
             org_id=current_user.org_id,
             user_id=user_id,
@@ -460,7 +474,99 @@ def submit_pm_evaluation(
     db.commit()
     db.refresh(review)
 
-    return _build_review_response(review, db)
+    return _build_review_response(review, db, viewer_user_id=current_user.id)
+
+
+@router.patch("/{project_id}/evaluate/{user_id}/draft", response_model=ProjectReviewResponse)
+def save_pm_evaluation_draft(
+    project_id: int,
+    user_id: int,
+    payload: PMEvaluationDraft,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    PM saves an in-progress evaluation as a DRAFT. Same auth gates as the
+    submit endpoint, but the row's status is set to DRAFT and the PM can
+    keep editing. Submit (POST /evaluate) promotes DRAFT → REVIEWED.
+
+    All fields in the payload are optional — a half-typed evaluation can
+    be parked and resumed later. Fields not present on the payload are
+    left as-is on the row.
+    """
+    cycle = _get_active_cycle(db, current_user.org_id)
+
+    # Same role gate as submit.
+    pm_assignment = db.query(ProjectAssignment).filter(
+        ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.user_id == current_user.id,
+        ProjectAssignment.evaluator_type == "Primary",
+    ).first()
+    if not pm_assignment:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not the Project Manager for this project.",
+        )
+
+    target_assignment = db.query(ProjectAssignment).filter(
+        ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.user_id == user_id,
+    ).first()
+    if not target_assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This employee is not assigned to this project.",
+        )
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot evaluate yourself.",
+        )
+
+    review = db.query(ProjectReview).filter(
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.user_id == user_id,
+        ProjectReview.project_id == project_id,
+        ProjectReview.cycle == cycle,
+    ).first()
+
+    if review and review.status == ProjectReviewStatus.REVIEWED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This employee has already been evaluated; drafts can no "
+                "longer be saved."
+            ),
+        )
+
+    if not review:
+        review = ProjectReview(
+            org_id=current_user.org_id,
+            user_id=user_id,
+            project_id=project_id,
+            reviewer_id=current_user.id,
+            cycle=cycle,
+            status=ProjectReviewStatus.DRAFT.value,
+        )
+        db.add(review)
+    else:
+        review.reviewer_id = current_user.id
+        review.status = ProjectReviewStatus.DRAFT.value
+
+    # Apply only the fields the client included (partial save).
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        if field == "performance_group" and value is not None:
+            # Pydantic model gives us the enum; persist the string value.
+            setattr(review, field, value.value if hasattr(value, "value") else value)
+        else:
+            setattr(review, field, value)
+
+    db.commit()
+    db.refresh(review)
+    return _build_review_response(review, db, viewer_user_id=current_user.id)
 
 
 # =====================================================================
@@ -511,7 +617,7 @@ def get_secondary_evaluation_queue(
         .all()
     )
 
-    return [_build_review_response(r, db) for r in reviews]
+    return [_build_review_response(r, db, viewer_user_id=current_user.id) for r in reviews]
 
 
 @router.post("/{review_id}/secondary", response_model=SecondaryEvalResponse, status_code=status.HTTP_201_CREATED)
@@ -558,21 +664,27 @@ def submit_secondary_evaluation(
         ProjectReviewEvaluator.evaluator_id == current_user.id,
     ).first()
 
-    if existing:
+    if existing and existing.status == EvaluatorStatus.SUBMITTED.value:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="You have already submitted your evaluation for this review.",
         )
 
-    evaluator = ProjectReviewEvaluator(
-        org_id=current_user.org_id,
-        project_review_id=review.id,
-        evaluator_id=current_user.id,
-        evaluator_type="Secondary",
-        status=EvaluatorStatus.SUBMITTED.value,
-        impact_statement=payload.impact_statement,
-    )
-    db.add(evaluator)
+    if existing is not None:
+        # Promote draft → submitted.
+        existing.status = EvaluatorStatus.SUBMITTED.value
+        existing.impact_statement = payload.impact_statement
+        evaluator = existing
+    else:
+        evaluator = ProjectReviewEvaluator(
+            org_id=current_user.org_id,
+            project_review_id=review.id,
+            evaluator_id=current_user.id,
+            evaluator_type="Secondary",
+            status=EvaluatorStatus.SUBMITTED.value,
+            impact_statement=payload.impact_statement,
+        )
+        db.add(evaluator)
     db.commit()
     db.refresh(evaluator)
 
@@ -582,6 +694,88 @@ def submit_secondary_evaluation(
         evaluator_id=evaluator.evaluator_id,
         evaluator_name=ev_user.full_name if ev_user else "Unknown",
         impact_statement=evaluator.impact_statement,
+        status=evaluator.status,
+        created_at=evaluator.created_at,
+    )
+
+
+@router.patch("/{review_id}/secondary/draft", response_model=SecondaryEvalResponse)
+def save_secondary_draft(
+    review_id: int,
+    payload: SecondaryEvalDraft,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Secondary evaluator saves an in-progress impact statement as DRAFT.
+    The row uses ``EvaluatorStatus.DRAFT`` so the PM, mentor, and mentee
+    don't see it until the evaluator submits via POST /secondary.
+    """
+    review = db.query(ProjectReview).filter(
+        ProjectReview.id == review_id,
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
+    ).first()
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reviewed project review not found.",
+        )
+
+    project = db.query(Project).filter(
+        Project.id == review.project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project or project.secondary_evaluator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not the Secondary evaluator for this project.",
+        )
+    if review.user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot evaluate yourself.",
+        )
+
+    existing = db.query(ProjectReviewEvaluator).filter(
+        ProjectReviewEvaluator.project_review_id == review.id,
+        ProjectReviewEvaluator.evaluator_id == current_user.id,
+    ).first()
+    if existing and existing.status == EvaluatorStatus.SUBMITTED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Your impact statement has already been submitted; drafts "
+                "can no longer be saved."
+            ),
+        )
+
+    if existing is not None:
+        if payload.impact_statement is not None:
+            existing.impact_statement = payload.impact_statement
+        existing.status = EvaluatorStatus.DRAFT.value
+        evaluator = existing
+    else:
+        evaluator = ProjectReviewEvaluator(
+            org_id=current_user.org_id,
+            project_review_id=review.id,
+            evaluator_id=current_user.id,
+            evaluator_type="Secondary",
+            status=EvaluatorStatus.DRAFT.value,
+            impact_statement=payload.impact_statement,
+        )
+        db.add(evaluator)
+    db.commit()
+    db.refresh(evaluator)
+
+    ev_user = db.query(User).filter(User.id == evaluator.evaluator_id).first()
+    return SecondaryEvalResponse(
+        id=evaluator.id,
+        evaluator_id=evaluator.evaluator_id,
+        evaluator_name=ev_user.full_name if ev_user else "Unknown",
+        impact_statement=evaluator.impact_statement,
+        status=evaluator.status,
         created_at=evaluator.created_at,
     )
 
@@ -627,6 +821,7 @@ def update_secondary_evaluation(
         evaluator_id=existing.evaluator_id,
         evaluator_name=ev_user.full_name if ev_user else "Unknown",
         impact_statement=existing.impact_statement,
+        status=existing.status,
         created_at=existing.created_at,
     )
 
@@ -660,7 +855,7 @@ def get_all_reviews(
         .all()
     )
 
-    return [_build_review_response(r, db) for r in reviews]
+    return [_build_review_response(r, db, viewer_user_id=current_user.id) for r in reviews]
 
 
 # =====================================================================
@@ -812,7 +1007,7 @@ def update_review(
     db.commit()
     db.refresh(review)
 
-    return _build_review_response(review, db)
+    return _build_review_response(review, db, viewer_user_id=current_user.id)
 
 
 @router.get("/{review_id}", response_model=ProjectReviewResponse)
@@ -863,4 +1058,4 @@ def get_review(
             detail="Your review has not been completed yet.",
         )
 
-    return _build_review_response(review, db)
+    return _build_review_response(review, db, viewer_user_id=current_user.id)

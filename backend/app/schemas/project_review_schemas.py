@@ -50,6 +50,20 @@ class PMEvaluationSubmit(BaseModel):
     comment_competency_skills: str = Field(..., min_length=1, max_length=5000)
 
 
+class PMEvaluationDraft(BaseModel):
+    """Partial save for the PM's evaluation. Every field optional so the PM
+    can park work mid-thought and pick up later."""
+    performance_group: Optional[PerformanceGroup] = None
+    impact_statement: Optional[str] = Field(default=None, max_length=5000)
+    comment_task_execution: Optional[str] = Field(default=None, max_length=5000)
+    comment_ownership: Optional[str] = Field(default=None, max_length=5000)
+    comment_project_management: Optional[str] = Field(default=None, max_length=5000)
+    comment_client_deliverables: Optional[str] = Field(default=None, max_length=5000)
+    comment_communication: Optional[str] = Field(default=None, max_length=5000)
+    comment_mentoring: Optional[str] = Field(default=None, max_length=5000)
+    comment_competency_skills: Optional[str] = Field(default=None, max_length=5000)
+
+
 # =====================================================================
 # SECONDARY EVALUATOR
 # =====================================================================
@@ -57,6 +71,12 @@ class PMEvaluationSubmit(BaseModel):
 class SecondaryEvalSubmit(BaseModel):
     """Secondary evaluator writes one impact statement only."""
     impact_statement: str = Field(..., min_length=1, max_length=5000)
+
+
+class SecondaryEvalDraft(BaseModel):
+    """Partial save — secondary evaluator can park their impact statement
+    mid-thought and resume later."""
+    impact_statement: Optional[str] = Field(default=None, max_length=5000)
 
 
 # =====================================================================
@@ -69,6 +89,9 @@ class SecondaryEvalResponse(BaseModel):
     evaluator_id: int
     evaluator_name: str
     impact_statement: Optional[str] = None
+    # "draft" while the evaluator has saved but not yet submitted; "submitted"
+    # once finalised. Frontend gates editability on this.
+    status: str = "submitted"
     created_at: datetime
 
 

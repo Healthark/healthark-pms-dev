@@ -135,6 +135,9 @@ class GoalMentorReviewResponse(BaseModel):
     cycle_half: SelfReviewCycleHalf
     submitted_at: datetime
     mentor_overall_review: str
+    # True while the mentor still has the row open as an unsubmitted
+    # draft. Submit flips this to False; mentees don't see draft rows.
+    is_draft: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -155,6 +158,17 @@ class GoalSelfReviewSubmit(BaseModel):
     self_overall_review: str = Field(..., min_length=1, max_length=10000)
 
 
+class GoalSelfReviewDraft(BaseModel):
+    """Save-draft variant. Empty body is allowed (mentee can park work
+    mid-thought) — only the submit path enforces non-empty."""
+    self_overall_review: str = Field(default="", max_length=10000)
+
+
+class GoalMentorReviewDraft(BaseModel):
+    """Save-draft variant for the mentor's per-half review."""
+    mentor_overall_review: str = Field(default="", max_length=10000)
+
+
 class GoalSelfReviewResponse(BaseModel):
     """
     One half's self-review on an approved goal.  A goal has 0–2 of these
@@ -165,6 +179,9 @@ class GoalSelfReviewResponse(BaseModel):
     cycle_half: SelfReviewCycleHalf
     submitted_at: datetime
     self_overall_review: str
+    # True while the mentee still has the row open as an unsubmitted
+    # draft. Submit flips this to False; mentors don't see draft rows.
+    is_draft: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

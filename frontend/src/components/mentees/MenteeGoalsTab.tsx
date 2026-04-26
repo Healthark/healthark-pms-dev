@@ -22,6 +22,7 @@ import { formatFyYearSpan } from "../../utils/fy";
 import { isPostApproved } from "../../utils/goalStatus";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
+import { useConfirm } from "../../hooks/useConfirm";
 import { TeamGoalCard } from "../goals/TeamGoalCard";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../goals/CriteriaChecklist";
@@ -154,6 +155,7 @@ interface MenteeGoalsTabProps {
 export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabProps) {
   const toast = useToast();
   const snackbar = useSnackbar();
+  const confirm = useConfirm();
 
   const [isActing, setIsActing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -181,6 +183,13 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
   };
 
   const handleApprove = async (goal: TeamGoal) => {
+    const ok = await confirm({
+      title: `Approve ${menteeName}'s goal?`,
+      message: `Approve "${goal.title}". This locks the goal for editing and opens the H1/H2 self-review window for ${menteeName}. You won't be able to undo this from here.`,
+      variant: "default",
+      confirmText: "Approve",
+    });
+    if (!ok) return;
     setIsActing(true);
     try {
       await goalService.updateApproval(goal.id, { approval_status: "approved" });

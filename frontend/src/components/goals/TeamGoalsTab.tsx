@@ -23,6 +23,7 @@ import {
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
+import { useConfirm } from "../../hooks/useConfirm";
 import { TeamGoalCard } from "./TeamGoalCard";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
@@ -180,6 +181,7 @@ function TeamGoalsSkeleton() {
 export function TeamGoalsTab() {
   const toast = useToast();
   const snackbar = useSnackbar();
+  const confirm = useConfirm();
 
   const [goals, setGoals] = useState<TeamGoal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -208,6 +210,7 @@ export function TeamGoalsTab() {
   const [reviewGoal, setReviewGoal] = useState<TeamGoal | null>(null);
   const [reviewCycle, setReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
   const [isSavingReview, setIsSavingReview] = useState(false);
+  const [isSavingReviewDraft, setIsSavingReviewDraft] = useState(false);
   const [reviewError, setReviewError] = useState("");
 
   const openReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
@@ -221,11 +224,42 @@ export function TeamGoalsTab() {
     setReviewError("");
   };
 
+  const handleSaveReviewDraft = async (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ) => {
+    if (!reviewGoal) return;
+    setIsSavingReviewDraft(true);
+    setReviewError("");
+    try {
+      const updated = await goalService.saveMentorReviewDraft(
+        reviewGoal.id,
+        cycleHalf,
+        payload,
+      );
+      setGoals((prev) =>
+        prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
+      );
+      toast.success("Draft saved.");
+    } catch (err) {
+      setReviewError(getErrorMessage(err));
+    } finally {
+      setIsSavingReviewDraft(false);
+    }
+  };
+
   const handleSubmitReview = async (
     cycleHalf: SelfReviewCycleHalf,
     payload: GoalMentorReviewPayload,
   ) => {
     if (!reviewGoal) return;
+    const ok = await confirm({
+      title: `Submit ${cycleHalf} mentor review?`,
+      message: `Submit your ${cycleHalf} review on "${reviewGoal.title}" for ${reviewGoal.owner_name}. Mentor reviews are one-shot — once submitted you can't edit this entry, and ${reviewGoal.owner_name} will see your assessment for this half.`,
+      variant: "warning",
+      confirmText: "Submit Mentor Review",
+    });
+    if (!ok) return;
     setIsSavingReview(true);
     setReviewError("");
     try {
@@ -262,6 +296,13 @@ export function TeamGoalsTab() {
   }, [loadGoals]);
 
   const handleApprove = async (goal: TeamGoal) => {
+    const ok = await confirm({
+      title: `Approve ${goal.owner_name}'s goal?`,
+      message: `Approve "${goal.title}". This locks the goal for editing and opens the H1/H2 self-review window for ${goal.owner_name}. You won't be able to undo this from here.`,
+      variant: "default",
+      confirmText: "Approve",
+    });
+    if (!ok) return;
     setIsActing(true);
     try {
       const updated = await goalService.updateApproval(goal.id, {
@@ -776,7 +817,9 @@ export function TeamGoalsTab() {
         cycleHalf={reviewCycle}
         onClose={closeReview}
         onSubmit={handleSubmitReview}
+        onSaveDraft={handleSaveReviewDraft}
         isSaving={isSavingReview}
+        isDraftSaving={isSavingReviewDraft}
         error={reviewError}
       />
 

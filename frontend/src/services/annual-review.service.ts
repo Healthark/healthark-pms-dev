@@ -39,6 +39,10 @@ export interface AnnualReview {
   // Stage 2 — mentor evaluation
   mentor_overall_review: string | null;
   mentor_performance_rating: number | null;
+  /** Mentor's in-progress draft, surfaced only to the mentor (the
+   *  backend strips these for the mentee). Cleared on submit. */
+  mentor_overall_review_draft: string | null;
+  mentor_performance_rating_draft: number | null;
 
   // Stage 3 — management calibration
   management_performance_rating: number | null;
@@ -91,6 +95,10 @@ export interface MentorEvalPayload {
   mentor_performance_rating: number;
 }
 
+/** Save-draft payload — both fields optional. The mentor can park work
+ *  before having committed to either the text or the rating. */
+export type MentorEvalDraftPayload = Partial<MentorEvalPayload>;
+
 export interface ManagementFinalizePayload {
   management_performance_rating?: number | null;
   final_performance_rating: number;
@@ -106,6 +114,19 @@ export const annualReviewService = {
   ): Promise<AnnualReview> => {
     const res = await apiClient.post<AnnualReview>(
       "/annual-reviews/self",
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Create a new annual self-review in DRAFT state. Use when no row
+   *  exists yet for the active cycle; for updating an existing draft,
+   *  use saveDraft. */
+  createSelfDraft: async (
+    payload: SelfReviewDraftPayload,
+  ): Promise<AnnualReview> => {
+    const res = await apiClient.post<AnnualReview>(
+      "/annual-reviews/self/draft",
       payload,
     );
     return res.data;
@@ -149,6 +170,20 @@ export const annualReviewService = {
   ): Promise<AnnualReview> => {
     const res = await apiClient.patch<AnnualReview>(
       `/annual-reviews/${reviewId}/mentor-eval`,
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Mentor saves an in-progress evaluation as a draft. Both fields are
+   *  optional; the row stays in pending_mentor status, the draft cols on
+   *  the row carry the in-progress text/rating. */
+  saveMentorDraft: async (
+    reviewId: number,
+    payload: MentorEvalDraftPayload,
+  ): Promise<AnnualReview> => {
+    const res = await apiClient.patch<AnnualReview>(
+      `/annual-reviews/${reviewId}/mentor-draft`,
       payload,
     );
     return res.data;

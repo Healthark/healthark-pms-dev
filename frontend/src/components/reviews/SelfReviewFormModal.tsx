@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Send, X } from "lucide-react";
-import type { SelfReviewPayload } from "../../services/annual-review.service";
+import { Loader2, Save, Send, X } from "lucide-react";
+import type {
+  AnnualReview,
+  SelfReviewPayload,
+  SelfReviewDraftPayload,
+} from "../../services/annual-review.service";
 import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
 import { formatFyLabel } from "../../utils/fy";
 
@@ -10,21 +14,41 @@ const TEXTAREA_CLS =
 
 interface SelfReviewFormModalProps {
   readonly cycleName: string;
+  /** Existing draft row (when one was previously saved). Used to pre-fill
+   *  the form on open and to drive the (Draft) title suffix. */
+  readonly draft?: AnnualReview | null;
   readonly onSubmit: (payload: SelfReviewPayload) => Promise<void>;
+  readonly onSaveDraft?: (payload: SelfReviewDraftPayload) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
+  readonly isDraftSaving?: boolean;
   readonly error: string;
 }
 
 export function SelfReviewFormModal({
   cycleName,
+  draft,
   onSubmit,
+  onSaveDraft,
   onClose,
   isSaving,
+  isDraftSaving = false,
   error,
 }: SelfReviewFormModalProps) {
-  const [overallReview, setOverallReview] = useState("");
-  const [rating, setRating] = useState<number | "">("");
+  const [overallReview, setOverallReview] = useState(
+    draft?.self_overall_review ?? "",
+  );
+  const [rating, setRating] = useState<number | "">(
+    draft?.self_performance_rating ?? "",
+  );
+
+  // If the draft prop arrives async, re-seed the form once.
+  useEffect(() => {
+    if (draft) {
+      setOverallReview(draft.self_overall_review ?? "");
+      setRating(draft.self_performance_rating ?? "");
+    }
+  }, [draft?.id, draft?.self_overall_review, draft?.self_performance_rating]);
 
   const allFilled =
     overallReview.trim().length > 0 && typeof rating === "number";
@@ -37,6 +61,19 @@ export function SelfReviewFormModal({
     });
   };
 
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    const payload: SelfReviewDraftPayload = {
+      self_overall_review: overallReview,
+    };
+    if (typeof rating === "number") {
+      payload.self_performance_rating = rating;
+    }
+    await onSaveDraft(payload);
+  };
+
+  const titleSuffix = draft ? " (Draft)" : "";
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -47,12 +84,13 @@ export function SelfReviewFormModal({
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <div>
             <h2 className="font-display text-base font-semibold text-text-main">
-              Self Annual Review
+              Self Annual Review{titleSuffix}
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">
               Year: {formatFyLabel(cycleName)} · Rate your overall performance
-              and summarise the year in your own words. Once submitted you
-              cannot edit.
+              and summarise the year in your own words. Save as a draft and
+              come back, or submit when you're ready (drafts can be edited;
+              submissions are final).
             </p>
           </div>
           <button
@@ -104,10 +142,25 @@ export function SelfReviewFormModal({
           >
             Cancel
           </button>
+          {onSaveDraft && (
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isSaving || isDraftSaving}
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {isDraftSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Save className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isDraftSaving ? "Saving…" : "Save Draft"}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSaving || !allFilled}
+            disabled={isSaving || isDraftSaving || !allFilled}
             className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isSaving ? (

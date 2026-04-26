@@ -14,9 +14,11 @@ import {
 import {
   projectReviewService,
   type PMEvaluationPayload,
+  type PMEvaluationDraftPayload,
   type ProjectReviewResponse,
   type RoleExpectation,
   type SecondaryEvalPayload,
+  type SecondaryEvalDraftPayload,
 } from "../../services/project-review.service";
 import type { MenteeProjectAssignment } from "../../services/mentee.service";
 import { getErrorMessage } from "../../utils/errors";
@@ -277,6 +279,7 @@ export function MenteeProjectsTab({
   const [evalMode, setEvalMode] = useState<"create" | "edit" | "view">("create");
   const [impactTarget, setImpactTarget] = useState<MenteeEvalRow | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
   // Role expectations only matter when the mentor will actually evaluate.
@@ -427,6 +430,42 @@ export function MenteeProjectsTab({
       setModalError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePMSaveDraft = async (payload: PMEvaluationDraftPayload) => {
+    if (!evalTarget) return;
+    setIsDraftSaving(true);
+    setModalError("");
+    try {
+      await projectReviewService.savePMDraft(
+        evalTarget.project_id,
+        menteeUserId,
+        payload,
+      );
+      onReload();
+      toast.success("Draft saved.");
+    } catch (err) {
+      setModalError(getErrorMessage(err));
+    } finally {
+      setIsDraftSaving(false);
+    }
+  };
+
+  const handleSecSaveDraft = async (
+    reviewId: number,
+    payload: SecondaryEvalDraftPayload,
+  ) => {
+    setIsDraftSaving(true);
+    setModalError("");
+    try {
+      await projectReviewService.saveSecondaryDraft(reviewId, payload);
+      onReload();
+      toast.success("Draft saved.");
+    } catch (err) {
+      setModalError(getErrorMessage(err));
+    } finally {
+      setIsDraftSaving(false);
     }
   };
 
@@ -704,8 +743,10 @@ export function MenteeProjectsTab({
           isEditMode={evalMode !== "create"}
           readOnly={evalMode === "view"}
           onSubmit={handlePMSubmit}
+          onSaveDraft={evalMode === "create" ? handlePMSaveDraft : undefined}
           onClose={closeEval}
           isSaving={isSaving}
+          isDraftSaving={isDraftSaving}
           error={modalError}
         />
       )}
@@ -713,8 +754,14 @@ export function MenteeProjectsTab({
         <ImpactModal
           row={impactModalRow}
           onSubmit={handleSecSubmit}
+          onSaveDraft={
+            impactModalRow.review_status === "submitted"
+              ? undefined
+              : handleSecSaveDraft
+          }
           onClose={closeImpact}
           isSaving={isSaving}
+          isDraftSaving={isDraftSaving}
           error={modalError}
         />
       )}

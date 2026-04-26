@@ -24,6 +24,7 @@ import {
   type MentorEvalPayload,
 } from "../../services/annual-review.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useConfirm } from "../../hooks/useConfirm";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
@@ -155,7 +156,9 @@ export function TeamReviewTab() {
   const [evalTarget, setEvalTarget] = useState<MenteeAnnualReview | null>(null);
   const [viewTarget, setViewTarget] = useState<MenteeAnnualReview | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -176,6 +179,18 @@ export function TeamReviewTab() {
     reviewId: number,
     payload: MentorEvalPayload,
   ) => {
+    const target = evalTarget;
+    const ok = await confirm({
+      title: target
+        ? `Submit annual review for ${target.employee_name}?`
+        : "Submit annual review?",
+      message: target
+        ? `Submit your evaluation for ${target.employee_name} (${formatFyLabel(target.cycle_name)}). Once submitted you can't edit it, and the review is forwarded to management for final calibration.`
+        : "Once submitted you can't edit your evaluation, and the review is forwarded to management for final calibration.",
+      variant: "warning",
+      confirmText: "Submit Evaluation",
+    });
+    if (!ok) return;
     setIsSaving(true);
     setModalError("");
     try {
@@ -202,6 +217,44 @@ export function TeamReviewTab() {
       setModalError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveEvalDraft = async (
+    reviewId: number,
+    payload: import("../../services/annual-review.service").MentorEvalDraftPayload,
+  ) => {
+    setIsDraftSaving(true);
+    setModalError("");
+    try {
+      const updated = await annualReviewService.saveMentorDraft(
+        reviewId,
+        payload,
+      );
+      // Keep the modal open; just update the row so reopening pre-populates.
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === reviewId
+            ? {
+                ...r,
+                ...updated,
+                employee_name: r.employee_name,
+                employee_email: r.employee_email,
+                department: r.department,
+                designation: r.designation,
+              }
+            : r,
+        ),
+      );
+      setEvalTarget((prev) =>
+        prev && prev.id === reviewId
+          ? { ...prev, ...updated }
+          : prev,
+      );
+    } catch (err) {
+      setModalError(getErrorMessage(err));
+    } finally {
+      setIsDraftSaving(false);
     }
   };
 
@@ -428,11 +481,13 @@ export function TeamReviewTab() {
         <EvalModal
           review={evalTarget}
           onSubmit={handleSubmitEval}
+          onSaveDraft={handleSaveEvalDraft}
           onClose={() => {
             setEvalTarget(null);
             setModalError("");
           }}
           isSaving={isSaving}
+          isDraftSaving={isDraftSaving}
           error={modalError}
         />
       )}

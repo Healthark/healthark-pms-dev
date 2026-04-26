@@ -18,12 +18,13 @@
  * past pending_mentor — that gating belongs to the parent, not this modal.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Send, X } from "lucide-react";
+import { Loader2, Save, Send, X } from "lucide-react";
 import type {
   MenteeAnnualReview,
   MentorEvalPayload,
+  MentorEvalDraftPayload,
 } from "../../services/annual-review.service";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
@@ -38,20 +39,38 @@ interface EvalModalProps {
     reviewId: number,
     payload: MentorEvalPayload,
   ) => Promise<void>;
+  readonly onSaveDraft?: (
+    reviewId: number,
+    payload: MentorEvalDraftPayload,
+  ) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
+  readonly isDraftSaving?: boolean;
   readonly error: string;
 }
 
 export function EvalModal({
   review,
   onSubmit,
+  onSaveDraft,
   onClose,
   isSaving,
+  isDraftSaving = false,
   error,
 }: EvalModalProps) {
-  const [mentorReview, setMentorReview] = useState("");
-  const [rating, setRating] = useState<number | "">("");
+  // Pre-populate from any existing mentor draft so the mentor can resume.
+  const [mentorReview, setMentorReview] = useState(
+    review.mentor_overall_review_draft ?? "",
+  );
+  const [rating, setRating] = useState<number | "">(
+    review.mentor_performance_rating_draft ?? "",
+  );
+
+  // Re-seed if a different review is opened in this modal instance.
+  useEffect(() => {
+    setMentorReview(review.mentor_overall_review_draft ?? "");
+    setRating(review.mentor_performance_rating_draft ?? "");
+  }, [review.id, review.mentor_overall_review_draft, review.mentor_performance_rating_draft]);
 
   const allFilled =
     mentorReview.trim().length > 0 && typeof rating === "number";
@@ -62,6 +81,16 @@ export function EvalModal({
       mentor_overall_review: mentorReview,
       mentor_performance_rating: rating,
     });
+  };
+
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    const payload: MentorEvalDraftPayload = {};
+    payload.mentor_overall_review = mentorReview;
+    if (typeof rating === "number") {
+      payload.mentor_performance_rating = rating;
+    }
+    await onSaveDraft(review.id, payload);
   };
 
   return createPortal(
@@ -159,10 +188,25 @@ export function EvalModal({
           >
             Cancel
           </button>
+          {onSaveDraft && (
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isSaving || isDraftSaving}
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {isDraftSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Save className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isDraftSaving ? "Saving…" : "Save Draft"}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSaving || !allFilled}
+            disabled={isSaving || isDraftSaving || !allFilled}
             className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isSaving ? (

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Info, Loader2, Pencil, Send, X } from "lucide-react";
+import { Info, Loader2, Pencil, Save, Send, X } from "lucide-react";
 import {
   projectReviewService,
   type PMEvaluationPayload,
+  type PMEvaluationDraftPayload,
   type PerformanceGroup,
   type RoleExpectation,
 } from "../../services/project-review.service";
@@ -55,8 +56,10 @@ interface EvalModalProps {
   /** When true, all inputs are disabled and the submit button is hidden. */
   readonly readOnly?: boolean;
   readonly onSubmit: (payload: PMEvaluationPayload) => Promise<void>;
+  readonly onSaveDraft?: (payload: PMEvaluationDraftPayload) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
+  readonly isDraftSaving?: boolean;
   readonly error: string;
 }
 
@@ -66,8 +69,10 @@ export function EvalModal({
   isEditMode,
   readOnly = false,
   onSubmit,
+  onSaveDraft,
   onClose,
   isSaving,
+  isDraftSaving = false,
   error,
 }: EvalModalProps) {
   // Pre-loading is needed in edit AND readOnly modes — both operate on an
@@ -275,6 +280,36 @@ export function EvalModal({
           >
             {readOnly ? "Close" : "Cancel"}
           </button>
+          {!readOnly && onSaveDraft && (
+            <button
+              type="button"
+              onClick={() => {
+                const payload: PMEvaluationDraftPayload = {
+                  impact_statement: impactStatement,
+                  comment_task_execution: comments.task_execution,
+                  comment_ownership: comments.ownership,
+                  comment_project_management: comments.project_management,
+                  comment_client_deliverables: comments.client_deliverables,
+                  comment_communication: comments.communication,
+                  comment_mentoring: comments.mentoring,
+                  comment_competency_skills: comments.competency_skills,
+                };
+                if (performanceGroup !== "") {
+                  payload.performance_group = performanceGroup;
+                }
+                onSaveDraft(payload);
+              }}
+              disabled={isSaving || isDraftSaving || isLoadingReview || !!fetchError}
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {isDraftSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {isDraftSaving ? "Saving…" : "Save Draft"}
+            </button>
+          )}
           {!readOnly && (
             <button
               type="button"
@@ -291,7 +326,7 @@ export function EvalModal({
                   comment_competency_skills: comments.competency_skills,
                 })
               }
-              disabled={isSaving || !allFilled || isLoadingReview || !!fetchError}
+              disabled={isSaving || isDraftSaving || !allFilled || isLoadingReview || !!fetchError}
               className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity ${
                 isEditMode ? "bg-amber-500" : "bg-brand"
               }`}

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Send, X } from "lucide-react";
+import { Loader2, Save, Send, X } from "lucide-react";
 import type {
   ProjectReviewResponse,
   SecondaryEvalPayload,
+  SecondaryEvalDraftPayload,
 } from "../../services/project-review.service";
 
 /**
@@ -30,8 +31,13 @@ interface ImpactModalProps {
     reviewId: number,
     payload: SecondaryEvalPayload,
   ) => Promise<void>;
+  readonly onSaveDraft?: (
+    reviewId: number,
+    payload: SecondaryEvalDraftPayload,
+  ) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
+  readonly isDraftSaving?: boolean;
   readonly error: string;
 }
 
@@ -39,18 +45,23 @@ export function ImpactModal({
   row,
   readOnly = false,
   onSubmit,
+  onSaveDraft,
   onClose,
   isSaving,
+  isDraftSaving = false,
   error,
 }: ImpactModalProps) {
   const isEdit = row.review_status === "submitted";
+  const isDraft = row.review_status === "draft";
   const [impactStatement, setImpactStatement] = useState(row.existingImpact ?? "");
 
   const title = readOnly
     ? "Secondary Feedback"
     : isEdit
-    ? "Edit Feedback"
-    : "Secondary Feedback";
+      ? "Edit Feedback"
+      : isDraft
+        ? "Secondary Feedback (Draft)"
+        : "Secondary Feedback";
 
   return createPortal(
     <div
@@ -124,6 +135,25 @@ export function ImpactModal({
           >
             {readOnly ? "Close" : "Cancel"}
           </button>
+          {!readOnly && onSaveDraft && (
+            <button
+              type="button"
+              onClick={() =>
+                onSaveDraft(row.secondaryReview!.id, {
+                  impact_statement: impactStatement,
+                })
+              }
+              disabled={isSaving || isDraftSaving}
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {isDraftSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {isDraftSaving ? "Saving…" : "Save Draft"}
+            </button>
+          )}
           {!readOnly && (
             <button
               type="button"
@@ -132,7 +162,7 @@ export function ImpactModal({
                   impact_statement: impactStatement,
                 })
               }
-              disabled={isSaving || !impactStatement.trim()}
+              disabled={isSaving || isDraftSaving || !impactStatement.trim()}
               className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {isSaving ? (

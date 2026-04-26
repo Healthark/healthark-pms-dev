@@ -18,6 +18,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -49,6 +50,11 @@ class GoalMentorReview(Base):
     # Single freeform paragraph mirroring the mentee's self-review shape.
     # Replaces the previous 8 per-competency mentor_comment_* columns.
     mentor_overall_review = Column(Text, nullable=False)
+
+    # When True, the mentor has saved a draft but hasn't submitted yet.
+    # Mentees don't see draft rows — only the final submission. Submit
+    # flips this to False and advances the goal's approval_status.
+    is_draft = Column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
         Index(

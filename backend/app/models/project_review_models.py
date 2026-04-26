@@ -28,8 +28,12 @@ from app.core.database import Base
 
 
 class ProjectReviewStatus(str, PyEnum):
-    """Review lifecycle — no self-review, just pending → reviewed."""
+    """Review lifecycle: pending (auto-created when cycle opens) →
+    draft (PM saved but hasn't submitted) → reviewed (final). Stored as a
+    plain VARCHAR so adding the DRAFT value here is enough — no migration
+    needed for the column itself."""
     PENDING = "pending"
+    DRAFT = "draft"
     REVIEWED = "reviewed"
 
 
