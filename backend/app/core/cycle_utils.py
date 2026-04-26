@@ -22,6 +22,59 @@ def get_goal_cycle_name(created_at: datetime, fiscal_start_month: int = 4) -> st
     return f"H{h_num} {fiscal_year}"
 
 
+def current_half_and_fy(current_date: date, fiscal_start_month: int = 4) -> tuple[str, int]:
+    """Return ('H1' | 'H2', fiscal_year_4_digit) for the given calendar instant.
+
+    Independent of cycle_type — the calendar half is purely a function of
+    the date and the fiscal_start_month. (Quarterly orgs still have an "H1"
+    that runs Q1+Q2 and an "H2" that runs Q3+Q4.)
+
+    Example with fiscal_start_month=4 (Indian FY):
+        May 2026  → ("H1", 2026)
+        Nov 2026  → ("H2", 2026)
+        Feb 2027  → ("H2", 2026)
+        Apr 2027  → ("H1", 2027)
+    """
+    month = current_date.month
+    year = current_date.year
+    fiscal_year = year if month >= fiscal_start_month else year - 1
+    relative_month = (month - fiscal_start_month) % 12
+    half = "H1" if relative_month < 6 else "H2"
+    return (half, fiscal_year)
+
+
+def is_review_window_open(
+    target_half: str,
+    target_fy_year: int,
+    current_date: date,
+    fiscal_start_month: int = 4,
+) -> bool:
+    """True iff the (target_half, target_fy_year) review window is currently open.
+
+    Rule (per product spec):
+        - Same FY required — no cross-fiscal-year reviews.
+        - H1 reviews open at the start of H1 and stay open through the end
+          of the FY (so an unfiled H1 review can be backfilled during H2 of
+          the same FY).
+        - H2 reviews open at the start of H2 and stay open through the end
+          of the FY.
+
+    Examples (fiscal_start_month=4):
+        is_review_window_open("H1", 2026, date(2026, 5, 1)) → True   (H1 of FY26)
+        is_review_window_open("H2", 2026, date(2026, 5, 1)) → False  (H2 not yet)
+        is_review_window_open("H1", 2026, date(2026, 11, 1)) → True  (backfill OK)
+        is_review_window_open("H2", 2026, date(2026, 11, 1)) → True  (current)
+        is_review_window_open("H1", 2026, date(2027, 5, 1)) → False  (FY ended)
+    """
+    current_half, current_fy = current_half_and_fy(current_date, fiscal_start_month)
+    if current_fy != target_fy_year:
+        return False
+    if target_half == "H2":
+        return current_half == "H2"
+    # target_half == "H1": open in both H1 and H2 of the same FY (backfill).
+    return True
+
+
 def extract_fy_label(cycle_name: str) -> str:
     """
     Extract the bare fiscal-year label from any cycle name.

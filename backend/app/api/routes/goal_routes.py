@@ -20,13 +20,13 @@ Security Layers Applied:
     Layer 5 — Gate Checks:      Annual goals respect the annual_goals_edit_enabled flag
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
-from app.models.goal_models import Goal, ApprovalStatus, GoalType
+from app.models.goal_models import Goal, ApprovalStatus, GoalType, POST_APPROVAL_STATES
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.goal_self_review_models import GoalSelfReview, SelfReviewCycleHalf
 from app.models.goal_mentor_review_models import GoalMentorReview
@@ -41,7 +41,7 @@ from app.schemas.goal_schemas import (
     GoalMentorReviewSubmit,
     TeamGoalResponse,
 )
-from app.core.cycle_utils import get_goal_cycle_name
+from app.core.cycle_utils import get_goal_cycle_name, is_review_window_open
 
 router = APIRouter()
 
@@ -87,6 +87,21 @@ def _assert_annual_gate_open(settings: SystemSettings) -> None:
                 "Please wait for the Admin to open the next submission window."
             ),
         )
+
+
+def _goal_fy_year(goal: Goal) -> Optional[int]:
+    """Extract the 4-digit fiscal start year from `goal.cycle_name`.
+
+    Goal cycle names are stamped at creation as "H1 2026" / "H2 2025"
+    (4-digit year, no FY prefix — see get_goal_cycle_name). Returns None
+    when the goal predates this stamping or has no cycle_name.
+    """
+    if not goal.cycle_name:
+        return None
+    for token in goal.cycle_name.split():
+        if token.isdigit() and len(token) == 4:
+            return int(token)
+    return None
 
 
 # =====================================================================
@@ -358,8 +373,9 @@ def update_goal(
             detail="You do not have permission to edit this goal.",
         )
 
-    # Approved goals are locked for employees; managers can still update them.
-    if goal.approval_status == ApprovalStatus.APPROVED.value and not is_manager:
+    # Approved or post-approval goals (anything in the H1/H2 review segment)
+    # are locked for employees; managers can still update them.
+    if goal.approval_status in POST_APPROVAL_STATES and not is_manager:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Approved goals cannot be edited. Contact your mentor.",
@@ -474,7 +490,7 @@ def submit_goal(
             detail="Only draft goals can be submitted.",
         )
 
-    goal.approval_status = ApprovalStatus.SUBMITTED.value
+    goal.approval_status = ApprovalStatus.PENDING_APPROVAL.value
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
@@ -516,7 +532,7 @@ def approve_goal(
             ),
         )
 
-    if goal.approval_status != ApprovalStatus.SUBMITTED.value:
+    if goal.approval_status != ApprovalStatus.PENDING_APPROVAL.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Goal is not currently awaiting approval.",
@@ -547,13 +563,20 @@ def submit_goal_self_review(
 ):
     """
     Owner submits their self-review on an APPROVED goal for ONE half
-    of the fiscal year (H1 or H2).
+    of the fiscal year (H1 or H2). Advances the goal's approval_status
+    to H1_SELF_REVIEWED or H2_SELF_REVIEWED.
 
     Gates:
         - Only the goal owner may submit.
-        - The goal must be in APPROVED state.
-        - One-shot per (goal_id, cycle_half) — double-submit returns 400.
-          The DB-level unique index also enforces this as a last resort.
+        - State machine: H1 self requires status APPROVED.
+                         H2 self requires status in {APPROVED, H1_SELF_REVIEWED,
+                                                     H1_MENTOR_REVIEWED}.
+        - Time window: today must be in the (cycle_half, goal.fy_year)
+          window — see cycle_utils.is_review_window_open. H1 reviews can
+          be backfilled during H2 of the same FY; H2 cannot be pre-empted;
+          neither can cross a fiscal-year boundary.
+        - One-shot per (goal_id, cycle_half) — DB unique index is the
+          final guard; the state machine prevents the case in normal flow.
 
     On success the updated goal is returned with the full self_reviews
     list (so the frontend can re-render both H1 and H2 rows).
@@ -566,33 +589,67 @@ def submit_goal_self_review(
             detail="Only the goal owner can submit a self-review.",
         )
 
-    if goal.approval_status != ApprovalStatus.APPROVED.value:
+    # Status gate — which states are allowed to *start* this transition?
+    half = cycle_half.value
+    if half == "H1":
+        allowed_states = {ApprovalStatus.APPROVED.value}
+    else:  # H2
+        allowed_states = {
+            ApprovalStatus.APPROVED.value,
+            ApprovalStatus.H1_SELF_REVIEWED.value,
+            ApprovalStatus.H1_MENTOR_REVIEWED.value,
+        }
+    if goal.approval_status not in allowed_states:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Self-review can only be submitted on an approved goal.",
+            detail=(
+                f"Self-review for {half} cannot be submitted from the "
+                f"current state ({goal.approval_status})."
+            ),
         )
 
-    # Has this half already been filled?
+    # Time-window gate — which calendar moment allows this submission?
+    settings = _get_settings(db, current_user.org_id)
+    fy_year = _goal_fy_year(goal)
+    if fy_year is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Goal has no fiscal year on record; cannot submit reviews.",
+        )
+    if not is_review_window_open(half, fy_year, date.today(), settings.fiscal_start_month):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"The review window for {half} FY{fy_year % 100:02d}-"
+                f"{(fy_year + 1) % 100:02d} is not currently open."
+            ),
+        )
+
+    # Defensive belt-and-suspenders: the unique index already enforces
+    # this; the state machine should make it unreachable in normal flow.
     existing = next(
-        (sr for sr in goal.self_reviews if sr.cycle_half == cycle_half.value),
+        (sr for sr in goal.self_reviews if sr.cycle_half == half),
         None,
     )
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Self-review for {cycle_half.value} has already been "
-                "submitted for this goal."
-            ),
+            detail=f"Self-review for {half} has already been submitted for this goal.",
         )
 
     review = GoalSelfReview(
         goal_id=goal.id,
         org_id=current_user.org_id,
-        cycle_half=cycle_half.value,
+        cycle_half=half,
         self_overall_review=payload.self_overall_review,
     )
     db.add(review)
+    # Advance the goal's lifecycle state.
+    goal.approval_status = (
+        ApprovalStatus.H1_SELF_REVIEWED.value
+        if half == "H1"
+        else ApprovalStatus.H2_SELF_REVIEWED.value
+    )
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
@@ -610,12 +667,19 @@ def submit_goal_mentor_review(
 ):
     """
     Mentor submits their review of a mentee's self-review for one half.
+    Advances the goal's approval_status to H1_MENTOR_REVIEWED or
+    H2_MENTOR_REVIEWED.
 
     Gates:
         - Caller must be the goal owner's assigned mentor.
-        - Goal must be APPROVED.
-        - The mentee must have already submitted their self-review for this half.
-        - One-shot per (goal_id, cycle_half) — a second call returns 400.
+        - State machine: H1 mentor requires status H1_SELF_REVIEWED.
+                         H2 mentor requires status H2_SELF_REVIEWED.
+          (The state machine implies the mentee has self-reviewed first;
+          the explicit row check below is a defensive belt-and-suspenders.)
+        - Time window: today must be in the (cycle_half, goal.fy_year)
+          window — same rule as self-review.
+        - One-shot per (goal_id, cycle_half) — DB unique index is the
+          final guard.
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
@@ -626,41 +690,72 @@ def submit_goal_mentor_review(
             detail="Only the assigned mentor can submit a mentor review.",
         )
 
-    if goal.approval_status != ApprovalStatus.APPROVED.value:
+    half = cycle_half.value
+    required_state = (
+        ApprovalStatus.H1_SELF_REVIEWED.value
+        if half == "H1"
+        else ApprovalStatus.H2_SELF_REVIEWED.value
+    )
+    if goal.approval_status != required_state:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mentor reviews can only be submitted on approved goals.",
+            detail=(
+                f"Mentor review for {half} cannot be submitted from the "
+                f"current state ({goal.approval_status}). The mentee must "
+                f"submit their {half} self-review first."
+            ),
         )
 
-    # Mentee must have submitted their self-review first.
+    # Time-window gate.
+    settings = _get_settings(db, current_user.org_id)
+    fy_year = _goal_fy_year(goal)
+    if fy_year is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Goal has no fiscal year on record; cannot submit reviews.",
+        )
+    if not is_review_window_open(half, fy_year, date.today(), settings.fiscal_start_month):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"The review window for {half} FY{fy_year % 100:02d}-"
+                f"{(fy_year + 1) % 100:02d} is not currently open."
+            ),
+        )
+
+    # Defensive checks — state machine should make these unreachable.
     mentee_review = next(
-        (sr for sr in goal.self_reviews if sr.cycle_half == cycle_half.value),
+        (sr for sr in goal.self_reviews if sr.cycle_half == half),
         None,
     )
     if mentee_review is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"The mentee has not yet submitted their self-review for {cycle_half.value}.",
+            detail=f"The mentee has not yet submitted their self-review for {half}.",
         )
-
-    # One-shot gate.
     existing = next(
-        (mr for mr in goal.mentor_reviews if mr.cycle_half == cycle_half.value),
+        (mr for mr in goal.mentor_reviews if mr.cycle_half == half),
         None,
     )
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Mentor review for {cycle_half.value} has already been submitted.",
+            detail=f"Mentor review for {half} has already been submitted.",
         )
 
     mentor_review = GoalMentorReview(
         goal_id=goal.id,
         org_id=current_user.org_id,
-        cycle_half=cycle_half.value,
+        cycle_half=half,
         mentor_overall_review=payload.mentor_overall_review,
     )
     db.add(mentor_review)
+    # Advance the goal's lifecycle state.
+    goal.approval_status = (
+        ApprovalStatus.H1_MENTOR_REVIEWED.value
+        if half == "H1"
+        else ApprovalStatus.H2_MENTOR_REVIEWED.value
+    )
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 

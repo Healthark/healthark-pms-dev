@@ -19,6 +19,7 @@ import type {
   GoalUpdatePayload,
   CriterionCreatePayload,
 } from "../../services/goal.service";
+import { isPostApproved } from "../../utils/goalStatus";
 
 interface GoalFormModalProps {
   readonly isOpen: boolean;
@@ -79,7 +80,9 @@ export function GoalFormModal({
   error,
 }: GoalFormModalProps) {
   const isEditing = editingGoal !== null;
-  const isApproved = editingGoal?.approval_status === "approved";
+  const isApproved = editingGoal
+    ? isPostApproved(editingGoal.approval_status)
+    : false;
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [criteria, setCriteria] = useState<CriterionDraft[]>([]);

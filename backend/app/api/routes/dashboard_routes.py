@@ -22,7 +22,7 @@ from fastapi import APIRouter
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.system_settings_models import SystemSettings
-from app.models.goal_models import Goal, GoalType, ApprovalStatus
+from app.models.goal_models import Goal, GoalType, ApprovalStatus, POST_APPROVAL_STATES
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.user_models import User
 from app.schemas.dashboard_schemas import DashboardSummary
@@ -59,8 +59,10 @@ def get_dashboard_summary(
     counts: dict[str, int] = dict(approval_rows)
 
     draft_goals             = counts.get(ApprovalStatus.DRAFT.value, 0)
-    submitted_goals         = counts.get(ApprovalStatus.SUBMITTED.value, 0)
-    approved_goals          = counts.get(ApprovalStatus.APPROVED.value, 0)
+    submitted_goals         = counts.get(ApprovalStatus.PENDING_APPROVAL.value, 0)
+    # Roll the 4 post-approval review states under the "approved" bucket so
+    # the dashboard widget keeps rendering a single consolidated count.
+    approved_goals          = sum(counts.get(s, 0) for s in POST_APPROVAL_STATES)
     changes_requested_goals = counts.get(ApprovalStatus.CHANGES_REQUESTED.value, 0)
     total_goals             = sum(counts.values())
 
@@ -79,7 +81,7 @@ def get_dashboard_summary(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
             Goal.goal_type == GoalType.ANNUAL.value,
-            Goal.approval_status == ApprovalStatus.APPROVED.value,
+            Goal.approval_status.in_(POST_APPROVAL_STATES),
         )
         .one()
     )

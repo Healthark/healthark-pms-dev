@@ -114,7 +114,7 @@ def get_topbar_summary(
         awaiting_count: int = db.query(func.count(Goal.id)).filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
-            Goal.approval_status == ApprovalStatus.SUBMITTED.value,
+            Goal.approval_status == ApprovalStatus.PENDING_APPROVAL.value,
         ).scalar() or 0
 
         if awaiting_count > 0:

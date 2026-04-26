@@ -31,6 +31,13 @@ import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { formatFyYearSpan } from "../utils/fy";
+import {
+  profileService,
+  type UserRoleExpectation,
+} from "../services/profile.service";
+import { isPostApproved } from "../utils/goalStatus";
+import type { RoleExpectation } from "../services/project-review.service";
+import { ExpectationPanel } from "../components/project-reviews/ExpectationPanel";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,9 +48,13 @@ type ApprovalFilter = "all" | ApprovalStatus;
 const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "draft", label: "Draft" },
-  { value: "submitted", label: "Requested" },
-  { value: "changes_requested", label: "Changes Required" },
+  { value: "pending_approval", label: "Pending Approval" },
+  { value: "changes_requested", label: "Changes Requested" },
   { value: "approved", label: "Approved" },
+  { value: "h1_self_reviewed", label: "H1 Self-Reviewed" },
+  { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
+  { value: "h2_self_reviewed", label: "H2 Self-Reviewed" },
+  { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
 ];
 
 type ActiveTab = "my" | "team" | "team_review";
@@ -71,6 +82,25 @@ function recomputeProgress(criteria: Criterion[]): number {
   if (criteria.length === 0) return 0;
   const completed = criteria.filter((c) => c.is_completed).length;
   return Math.round((completed / criteria.length) * 100);
+}
+
+/** Adapt the /users/me/expectations payload to the shape ExpectationPanel
+ *  consumes (shared with the Project Review forms). */
+function asRoleExpectation(u: UserRoleExpectation | null): RoleExpectation | null {
+  if (!u) return null;
+  return {
+    id: 0,
+    department_name: u.department_name ?? "",
+    designation_name: u.designation_name ?? "",
+    exp_task_execution: u.exp_task_execution,
+    exp_ownership: u.exp_ownership,
+    exp_project_management: u.exp_project_management,
+    exp_client_deliverables: u.exp_client_deliverables,
+    exp_communication: u.exp_communication,
+    exp_mentoring: u.exp_mentoring,
+    exp_firm_growth: u.exp_firm_growth,
+    exp_competency_skills: u.exp_competency_skills,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +202,26 @@ export function AnnualGoals() {
     useState<SelfReviewCycleHalf | null>(null);
   const [isSelfReviewSaving, setIsSelfReviewSaving] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState("");
+
+  // Role expectations for the My Goals tab — surfaced as collapsed
+  // ExpectationPanels above the toolbar so users keep Firm Growth and
+  // Competency & Skills in mind while writing/editing goals.
+  const [roleExpectation, setRoleExpectation] = useState<UserRoleExpectation | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    profileService
+      .getMyExpectations()
+      .then((exp) => {
+        if (!cancelled) setRoleExpectation(exp);
+      })
+      .catch(() => {
+        // Non-fatal — panels just won't render.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const expectationForPanel = asRoleExpectation(roleExpectation);
 
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
@@ -413,6 +463,37 @@ export function AnnualGoals() {
           {/* ── My Goals tab ── */}
           {activeTab === "my" && (
             <div className="space-y-4">
+              {/* Role expectations — collapsed by default. Two short panels
+                  scoped to the user's department × designation, kept side-
+                  by-side on wider screens and stacked on narrow ones. */}
+              {expectationForPanel && (
+                <div className="rounded-lg border border-border bg-blue-50/30 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+                    Your role expectations
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                    <div>
+                      <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                        Firm Growth
+                      </p>
+                      <ExpectationPanel
+                        expectation={expectationForPanel}
+                        expKey="exp_firm_growth"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                        Competency &amp; Skills
+                      </p>
+                      <ExpectationPanel
+                        expectation={expectationForPanel}
+                        expKey="exp_competency_skills"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Toolbar */}
               {!isLoading && goals.length > 0 && (
                 <div className="flex flex-col gap-3">
@@ -587,10 +668,10 @@ export function AnnualGoals() {
                                       <SendHorizonal className="h-3 w-3" /> Request Approval
                                     </button>
                                   )}
-                                  {goal.approval_status === "submitted" && (
+                                  {goal.approval_status === "pending_approval" && (
                                     <span className="text-[11px] text-text-muted italic">Awaiting review…</span>
                                   )}
-                                  {goal.approval_status === "approved" && (
+                                  {isPostApproved(goal.approval_status) && (
                                     <SelfReviewCycleMenu
                                       goal={goal}
                                       mode="mentee"
