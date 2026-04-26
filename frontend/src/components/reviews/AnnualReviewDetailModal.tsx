@@ -131,17 +131,6 @@ export function AnnualReviewDetailModal({
             </div>
           )}
 
-          {/* Management calibration notes */}
-          {showFinal && review.management_comments && (
-            <div className="rounded-lg border-2 border-green-200 bg-green-50 p-4">
-              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">
-                Management Comments
-              </p>
-              <p className="text-sm text-green-900 whitespace-pre-wrap">
-                {review.management_comments}
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="flex justify-end border-t border-border px-6 py-4 shrink-0">

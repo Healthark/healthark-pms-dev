@@ -11,7 +11,7 @@ Fields captured per stage:
     Employee: self_overall_review (free text) + self_performance_rating (1–5)
     Mentor:   mentor_overall_review (free text) + mentor_performance_rating (1–5)
     HR:       management_performance_rating (optional override) +
-              final_performance_rating (1–5) + management_comments (optional)
+              final_performance_rating (1–5)
 
 Performance rating (1=best .. 5=worst), matching the Project Review guide:
     1 — Performed beyond expectations
@@ -97,7 +97,6 @@ class AnnualReviewResponse(BaseModel):
     # Stage 3
     management_performance_rating: Optional[int] = None
     final_performance_rating: Optional[int] = None
-    management_comments: Optional[str] = None
     final_rating_enabled: bool = False
 
     # Metadata

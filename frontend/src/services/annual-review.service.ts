@@ -47,7 +47,6 @@ export interface AnnualReview {
   // Stage 3 — management calibration
   management_performance_rating: number | null;
   final_performance_rating: number | null;
-  management_comments: string | null;
   final_rating_enabled: boolean;
 
   created_at: string;

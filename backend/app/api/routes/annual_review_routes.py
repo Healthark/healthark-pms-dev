@@ -119,7 +119,6 @@ def _strip_private_ratings(review: AnnualReview, final_visible: bool) -> None:
         review.final_performance_rating = mgmt if mgmt is not None else mentor
     else:
         review.final_performance_rating = None
-        review.management_comments = None
 
 
 # =====================================================================
@@ -339,7 +338,6 @@ def get_mentee_reviews(
         if not settings.annual_review_final_rating_visible:
             base["final_performance_rating"] = None
             base["management_performance_rating"] = None
-            base["management_comments"] = None
         u = users.get(r.user_id)
         rows.append(MenteeAnnualReview(
             **base,
