@@ -2,6 +2,12 @@ import { useState } from "react";
 import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import type { RoleExpectation } from "../../services/project-review.service";
 
+// The "exp_*" keys are exactly the role-expectation columns on
+// `RoleExpectation`; constraining the prop to that subset removes the
+// previous `as Record<string, unknown>` cast and lets TypeScript verify
+// callers pass a real column name.
+type ExpKey = Extract<keyof RoleExpectation, `exp_${string}`>;
+
 /**
  * Collapsible panel that surfaces the role-expectation text for one
  * competency. Used inside evaluation modals so the PM can cross-check
@@ -12,11 +18,11 @@ export function ExpectationPanel({
   expKey,
 }: {
   readonly expectation: RoleExpectation | null;
-  readonly expKey: string;
+  readonly expKey: ExpKey;
 }) {
   const [open, setOpen] = useState(false);
   if (!expectation) return null;
-  const text = (expectation as Record<string, unknown>)[expKey] as string | null;
+  const text = expectation[expKey];
   if (!text) return null;
 
   return (
