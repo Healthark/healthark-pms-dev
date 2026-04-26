@@ -170,12 +170,6 @@ export const projectReviewService = {
     return res.data;
   },
 
-  /** Alias for getReview to match component expectations. */
-  getReviewDetails: async (reviewId: number): Promise<ProjectReviewResponse> => {
-    const res = await apiClient.get<ProjectReviewResponse>(`/project-reviews/${reviewId}`);
-    return res.data;
-  },
-
   // ── PM (Primary Evaluator) ─────────────────────────────────────
   /** List team members needing evaluation on PM's projects. */
   getPMQueue: async (): Promise<PMPendingReviewCard[]> => {

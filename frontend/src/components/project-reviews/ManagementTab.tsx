@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   BarChart2, Briefcase, CheckCircle2, Clock,
-  AlertCircle, ChevronDown, Users, User, Loader2,
+  AlertCircle, ChevronDown, Users, User,
 } from "lucide-react";
 import {
   projectReviewService,

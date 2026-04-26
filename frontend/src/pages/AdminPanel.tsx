@@ -358,9 +358,7 @@ export default function AdminPanel() {
           <SystemSettingsTab
             activeCycleName={settings?.active_cycle ?? ""}
             cycleType={cycleType}
-            onCycleTypeChange={setCycleType}
             fiscalStartMonth={fiscalStartMonth}
-            onFiscalStartMonthChange={setFiscalStartMonth}
             annualReviewsEnabled={annualReviewsEnabled}
             onAnnualReviewsEnabledChange={setAnnualReviewsEnabled}
             annualGoalsEditEnabled={annualGoalsEditEnabled}

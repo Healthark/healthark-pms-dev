@@ -61,12 +61,6 @@ function toDateInput(iso: string | null | undefined): string {
   return iso.slice(0, 10);
 }
 
-let nextTempId = 0;
-function createTempId(): string {
-  nextTempId += 1;
-  return `temp_${nextTempId}`;
-}
-
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";

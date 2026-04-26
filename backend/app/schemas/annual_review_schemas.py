@@ -4,7 +4,6 @@ AnnualReview Schemas — The API Contract for the 3-Stage Appraisal.
 Schema Map:
     SelfAppraisalCreate   → Stage 1: Employee submits overall review + rating
     MentorEvalUpdate      → Stage 2: Mentor submits overall review + rating
-    ManagementFinalize    → Stage 3: HR sets final_performance_rating and publishes
     AnnualReviewResponse  → What the frontend receives (all stages)
     CalibrationRow        → Simplified row for the HR calibration grid
 
@@ -61,17 +60,6 @@ class MentorEvalDraft(BaseModel):
 
 
 # ── Stage 3: Management Calibration ─────────────────────────────────
-
-class ManagementFinalize(BaseModel):
-    """
-    Payload from the HR Calibration Grid when Leadership clicks "Publish".
-    management_performance_rating is optional (only used when overriding).
-    final_performance_rating is the official, locked-in rating.
-    """
-    management_performance_rating: Optional[int] = Field(default=None, ge=1, le=5)
-    final_performance_rating: int = Field(..., ge=1, le=5)
-    management_comments: Optional[str] = None
-
 
 class ManagementRatingUpdate(BaseModel):
     """

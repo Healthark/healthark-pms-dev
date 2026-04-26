@@ -8,8 +8,8 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import {
   Briefcase, Clock, CheckCircle2,
-  User, Target, MessageSquare,
-  CalendarClock, FileText, Star, Loader2, UserCircle, X,
+  User, MessageSquare,
+  FileText, Star, Loader2, UserCircle, X,
   LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen, Lock, Search,
 } from "lucide-react";
 import {
@@ -19,7 +19,6 @@ import {
 } from "../services/project-review.service";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
-import { useAuth } from "../hooks/useAuth";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 
@@ -494,7 +493,6 @@ function TableSkeleton() {
 // ── Main Page Component ─────────────────────────────────────────────
 
 export function ProjectReviews() {
-  const { user } = useAuth();
   const { settings } = useSystemSettings();
 
   const projectRatingsVisible = settings?.project_ratings_visible ?? false;
@@ -507,7 +505,7 @@ export function ProjectReviews() {
   const [searchQuery, setSearchQuery] = useState("");
   const [pmFilter, setPmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [deptFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [sort, setSort] = useState<SortState<MyReviewsSortKey> | null>(null);
 
@@ -546,7 +544,6 @@ export function ProjectReviews() {
   const availableCycles = Array.from(new Set(cards.map((c) => c.cycle).filter(Boolean) as string[]));
 
   const availablePMs = Array.from(new Set(cards.map((c) => c.pm_name).filter(Boolean) as string[]));
-  const availableDepts = Array.from(new Set(cards.map((c) => c.department_name).filter(Boolean) as string[]));
   const availableProjects = Array.from(new Set(cards.map((c) => c.project_name))).sort();
 
   // Apply all filters

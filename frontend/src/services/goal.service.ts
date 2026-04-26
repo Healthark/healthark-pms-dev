@@ -5,7 +5,7 @@
  *   - Added Criterion, CriterionCreatePayload, CriterionUpdatePayload types
  *   - Goal interface now includes criteria[] and progress_percent
  *   - GoalCreatePayload now accepts optional criteria[] array
- *   - New API calls: addCriterion, updateCriterion, deleteCriterion
+ *   - New API calls: addCriterion, updateCriterion
  */
 
 import apiClient from "./api.client";
@@ -279,10 +279,6 @@ export const goalService = {
       payload,
     );
     return res.data;
-  },
-
-  deleteCriterion: async (criterionId: number): Promise<void> => {
-    await apiClient.delete(`/goals/criteria/${criterionId}`);
   },
 
   // ── Manager ─────────────────────────────────────────────────────

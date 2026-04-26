@@ -4,9 +4,7 @@ import type { CycleType } from "../../services/system-settings.service";
 interface SystemSettingsTabProps {
   readonly activeCycleName: string;
   readonly cycleType: CycleType;
-  readonly onCycleTypeChange: (val: CycleType) => void;
   readonly fiscalStartMonth: number;
-  readonly onFiscalStartMonthChange: (val: number) => void;
   // Annual review controls
   readonly annualReviewsEnabled: boolean;
   readonly onAnnualReviewsEnabledChange: (val: boolean) => void;
@@ -74,9 +72,7 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
 export function SystemSettingsTab({
   activeCycleName,
   cycleType,
-  onCycleTypeChange,
   fiscalStartMonth,
-  onFiscalStartMonthChange,
   annualReviewsEnabled,
   onAnnualReviewsEnabledChange,
   annualReviewFinalRatingVisible,

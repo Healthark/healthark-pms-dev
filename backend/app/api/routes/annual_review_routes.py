@@ -13,8 +13,8 @@ Endpoints:
     PATCH /annual-reviews/{id}/mentor-eval  → Submit mentor evaluation
 
     ── Stage 3: Management ──
-    GET   /annual-reviews/calibration       → Calibration grid (all org reviews)
-    PATCH /annual-reviews/{id}/finalize     → Set final rating + publish
+    GET   /annual-reviews/calibration            → Calibration grid (all org reviews)
+    PATCH /annual-reviews/{id}/management-rating → Set/override management rating inline
 
     ── Shared ──
     GET   /annual-reviews/{id}              → Get single review by ID
@@ -44,7 +44,6 @@ from app.schemas.annual_review_schemas import (
     SelfAppraisalDraft,
     MentorEvalUpdate,
     MentorEvalDraft,
-    ManagementFinalize,
     ManagementRatingUpdate,
     AnnualReviewResponse,
     CalibrationRow,
@@ -495,43 +494,6 @@ def get_calibration_grid(
             final_rating_enabled=r.final_rating_enabled,
         ))
     return rows
-
-
-@router.patch("/{review_id}/finalize", response_model=AnnualReviewResponse)
-def finalize_review(
-    review_id: int,
-    payload: ManagementFinalize,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """
-    HR sets the final rating and publishes. Review is locked after this.
-    Note: publishing sets final_rating_enabled=True but the employee will only
-    see the rating if the org-wide visibility flag is also on.
-    """
-    _require_management(current_user)
-
-    review = db.query(AnnualReview).filter(
-        AnnualReview.id == review_id,
-        AnnualReview.org_id == current_user.org_id,
-    ).first()
-    if not review:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
-    if review.status != ReviewStatus.PENDING_MANAGEMENT.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only reviews in the management stage can be finalized.",
-        )
-
-    review.management_performance_rating = payload.management_performance_rating
-    review.final_performance_rating = payload.final_performance_rating
-    review.management_comments = payload.management_comments
-    review.final_rating_enabled = True
-    review.status = ReviewStatus.COMPLETED.value
-
-    db.commit()
-    db.refresh(review)
-    return review
 
 
 @router.patch("/{review_id}/management-rating", response_model=AnnualReviewResponse)

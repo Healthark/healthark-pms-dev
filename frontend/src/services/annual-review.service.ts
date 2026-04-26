@@ -99,12 +99,6 @@ export interface MentorEvalPayload {
  *  before having committed to either the text or the rating. */
 export type MentorEvalDraftPayload = Partial<MentorEvalPayload>;
 
-export interface ManagementFinalizePayload {
-  management_performance_rating?: number | null;
-  final_performance_rating: number;
-  management_comments?: string | null;
-}
-
 // ── Service ─────────────────────────────────────────────────────────
 
 export const annualReviewService = {
@@ -140,11 +134,6 @@ export const annualReviewService = {
       `/annual-reviews/${reviewId}/draft`,
       payload,
     );
-    return res.data;
-  },
-
-  getMyReview: async (): Promise<AnnualReview> => {
-    const res = await apiClient.get<AnnualReview>("/annual-reviews/mine");
     return res.data;
   },
 
@@ -193,17 +182,6 @@ export const annualReviewService = {
   getCalibrationGrid: async (): Promise<CalibrationRow[]> => {
     const res = await apiClient.get<CalibrationRow[]>(
       "/annual-reviews/calibration",
-    );
-    return res.data;
-  },
-
-  finalizeReview: async (
-    reviewId: number,
-    payload: ManagementFinalizePayload,
-  ): Promise<AnnualReview> => {
-    const res = await apiClient.patch<AnnualReview>(
-      `/annual-reviews/${reviewId}/finalize`,
-      payload,
     );
     return res.data;
   },
