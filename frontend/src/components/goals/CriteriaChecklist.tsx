@@ -24,6 +24,7 @@ import {
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
+import { isPostApproved } from "../../utils/goalStatus";
 
 interface CriteriaChecklistProps {
   readonly criteria: Criterion[];
@@ -236,7 +237,7 @@ export function CriteriaChecklist({
 }: CriteriaChecklistProps) {
   const [expanded, setExpanded] = useState(false);
   const canToggle =
-    !readOnly && !!onCriterionUpdate && approvalStatus === "approved";
+    !readOnly && !!onCriterionUpdate && isPostApproved(approvalStatus);
   const completedCount = criteria.filter((c) => c.is_completed).length;
 
   if (criteria.length === 0) return null;

@@ -25,6 +25,7 @@ import { GoalMentorReviewModal } from "./GoalMentorReviewModal";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
+import { isPostApproved } from "../../utils/goalStatus";
 
 // ── Types & sort config ───────────────────────────────────────────────
 
@@ -229,7 +230,7 @@ export function TeamReviewTab() {
       setGoals(
         data.filter(
           (g) =>
-            g.approval_status === "approved" && g.self_reviews.length > 0,
+            isPostApproved(g.approval_status) && g.self_reviews.length > 0,
         ),
       );
     } catch {

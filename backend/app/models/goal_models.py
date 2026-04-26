@@ -6,10 +6,33 @@ import enum
 
 
 class ApprovalStatus(str, enum.Enum):
+    """Goal lifecycle. Linear from DRAFT through H2_MENTOR_REVIEWED, with one
+    looping branch (CHANGES_REQUESTED → DRAFT on next employee edit) and
+    two valid skip paths inside the post-approval segment when a half is
+    missed during its review window. See cycle_utils.is_review_window_open
+    for the time gate.
+    """
     DRAFT              = "draft"
-    SUBMITTED          = "submitted"
-    APPROVED           = "approved"
+    PENDING_APPROVAL   = "pending_approval"
     CHANGES_REQUESTED  = "changes_requested"
+    APPROVED           = "approved"
+    H1_SELF_REVIEWED   = "h1_self_reviewed"
+    H1_MENTOR_REVIEWED = "h1_mentor_reviewed"
+    H2_SELF_REVIEWED   = "h2_self_reviewed"
+    H2_MENTOR_REVIEWED = "h2_mentor_reviewed"
+
+
+# Convenience set used across routes / aggregators to identify the
+# "approved-or-later" segment of the goal lifecycle. Any time you want to
+# answer "is this goal locked from employee editing?" or "should this
+# show in the approved bucket of dashboards?" — use this set.
+POST_APPROVAL_STATES: frozenset[str] = frozenset({
+    ApprovalStatus.APPROVED.value,
+    ApprovalStatus.H1_SELF_REVIEWED.value,
+    ApprovalStatus.H1_MENTOR_REVIEWED.value,
+    ApprovalStatus.H2_SELF_REVIEWED.value,
+    ApprovalStatus.H2_MENTOR_REVIEWED.value,
+})
 
 
 class GoalType(str, enum.Enum):

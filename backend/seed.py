@@ -1303,6 +1303,14 @@ def seed_database():
                     cycle_half=half,
                     self_overall_review=SELF_REVIEW_DEFAULT,
                 ))
+            # Advance status to reflect the latest review milestone present.
+            # H2 wins over H1; we only stamp self-review rows here, so the
+            # furthest milestone is *_self_reviewed.
+            if approval == "approved":
+                if "H2" in self_reviewed_halves:
+                    g.approval_status = "h2_self_reviewed"
+                elif "H1" in self_reviewed_halves:
+                    g.approval_status = "h1_self_reviewed"
 
         if db.query(Goal).filter(Goal.org_id == org.id).count() == 0:
 
@@ -1326,7 +1334,7 @@ def seed_database():
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
             _goal(arjun, priya, "Senior-Level Storyboarding Mastery",
                   "Independently craft full client deck storyboards with compelling narratives and minimal review rounds.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             # ── Neha ───────────────────────────────────────────────────────
             _goal(neha, priya, "Independently Lead a Research Module",
@@ -1368,7 +1376,7 @@ def seed_database():
                   self_reviewed_halves=("H1",))
             _goal(meera, david, "End-to-End Feature Delivery on Trial Data Mart",
                   "Take full-cycle ownership of a feature from requirements to production deployment.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             # ── Ananya ─────────────────────────────────────────────────────
             _goal(ananya, vikram, "Long-Term Safety Study Protocol Lead",
@@ -1392,7 +1400,7 @@ def seed_database():
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
             _goal(karan, vikram, "Client Presentation Readiness",
                   "Present study design updates to the client sponsor at least twice in FY 2026.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             # ── Priya (mentor, now also mentee of Sarah) ───────────────────
             _goal(priya, admin_user, "Healthcare Strategy Practice Growth",
@@ -1420,7 +1428,7 @@ def seed_database():
                   progress_notes="First article published. External talk confirmed for Q2 FY26-27.")
             _goal(david, admin_user, "IDT Talent Pipeline",
                   "Build a structured campus hiring and onboarding pipeline for IDT consultants.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             # ── Vikram ─────────────────────────────────────────────────────
             _goal(vikram, admin_user, "RWE Center of Excellence",
@@ -1430,7 +1438,7 @@ def seed_database():
                   self_reviewed_halves=("H1", "H2"))
             _goal(vikram, admin_user, "Regulatory Insights Program",
                   "Build a regulatory insights tracker and publish quarterly briefs for the RWE practice.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
             _goal(vikram, admin_user, "RWE Talent Development",
                   "Design and run a structured RWE capability building program for Consultants and Senior Consultants.",
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
@@ -1462,7 +1470,7 @@ def seed_database():
                   progress_notes="Org design review completed. New structure rollout in progress.")
             _goal(founder1, admin_user, "Investor Relations Framework",
                   "Build a structured IR framework including quarterly updates and stakeholder reporting.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             # ── Founder2 (Nisha) ───────────────────────────────────────────
             _goal(founder2, admin_user, "Operational Excellence Program",
@@ -1472,7 +1480,7 @@ def seed_database():
                   self_reviewed_halves=("H1", "H2"))
             _goal(founder2, admin_user, "Innovation Pipeline 2026",
                   "Build and manage an innovation pipeline with at least 5 new service ideas evaluated per half.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
             _goal(founder2, admin_user, "Culture and Engagement Initiative",
                   "Design and launch a structured employee engagement and culture program.",
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
@@ -1485,7 +1493,7 @@ def seed_database():
                   self_reviewed_halves=("H1",))
             _goal(riya, amol, "Brand Analytics Dashboard",
                   "Own the brand performance analytics dashboard end-to-end.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
             _goal(riya, amol, "Client Acquisition Research",
                   "Conduct structured research on target client segments for business development.",
                   approval="draft", cycle_name="H1 2026", fy_year=2026)
@@ -1530,7 +1538,7 @@ def seed_database():
                   progress_notes="CoE launched.", self_reviewed_halves=("H1", "H2"))
             _goal(vikram, admin_user, "Regulatory Insights Program",
                   "Build a regulatory insights tracker and publish quarterly briefs.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             _goal(amol, admin_user, "Marketing Analytics Platform Launch",
                   "Build and launch the internal marketing analytics platform.",
@@ -1554,7 +1562,7 @@ def seed_database():
                   progress_notes="Process standardization complete.", self_reviewed_halves=("H1", "H2"))
             _goal(founder2, admin_user, "Innovation Pipeline 2026",
                   "Build and manage an innovation pipeline with new service ideas.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             _goal(riya, amol, "Marketing Research Fundamentals",
                   "Build core marketing research skills and apply them independently.",
@@ -1562,7 +1570,7 @@ def seed_database():
                   progress_notes="Completed core research modules.", self_reviewed_halves=("H1",))
             _goal(riya, amol, "Brand Analytics Dashboard",
                   "Own the brand performance analytics dashboard end-to-end.",
-                  approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                  approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             _goal(tej, amol, "Digital Analytics Framework",
                   "Design and implement the digital analytics framework.",
@@ -1606,6 +1614,12 @@ def seed_database():
                         cycle_half=half,
                         self_overall_review=SELF_REVIEW_DEFAULT,
                     ))
+                # Mirror _goal()'s state advance for consistency.
+                if approval == "approved":
+                    if "H2" in self_reviewed_halves:
+                        g.approval_status = "h2_self_reviewed"
+                    elif "H1" in self_reviewed_halves:
+                        g.approval_status = "h1_self_reviewed"
 
             _mil_goal(charlie, bob_lead, "CAR-T Workflow Automation Module",
                       "Own the automation of the upstream CAR-T processing workflow on the new instrument.",
@@ -1618,7 +1632,7 @@ def seed_database():
                       progress_notes="Validation assays underway; first read scheduled.")
             _mil_goal(fiona, evan_mfg, "MACS Quant Scale-Up Documentation",
                       "Author the scale-up documentation package for the new MACS Quant platform.",
-                      approval="submitted", cycle_name="H1 2026", fy_year=2026)
+                      approval="pending_approval", cycle_name="H1 2026", fy_year=2026)
 
             db.commit()
             print("  [+] Created Miltenyi Annual Goals + Self Reviews")

@@ -29,6 +29,7 @@ import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
+import { isPostApproved } from "../../utils/goalStatus";
 
 // ---------------------------------------------------------------------------
 // FeedbackModal — "Request Changes" portal
@@ -126,9 +127,13 @@ type ViewMode = "grid" | "table";
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "submitted", label: "Review Pending" },
-  { value: "approved", label: "Approved" },
+  { value: "pending_approval", label: "Pending Approval" },
   { value: "changes_requested", label: "Changes Requested" },
+  { value: "approved", label: "Approved" },
+  { value: "h1_self_reviewed", label: "H1 Self-Reviewed" },
+  { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
+  { value: "h2_self_reviewed", label: "H2 Self-Reviewed" },
+  { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
 ];
 
 type TeamGoalsSortKey = "title" | "owner_name" | "fy_year" | "approval_status";
@@ -443,8 +448,8 @@ export function TeamGoalsTab() {
             <tbody className="divide-y divide-border/50">
               {sortedGoals.map((goal) => {
                 const isExpanded = expandedGoalId === goal.id;
-                const isSubmitted = goal.approval_status === "submitted";
-                const isApproved = goal.approval_status === "approved";
+                const isSubmitted = goal.approval_status === "pending_approval";
+                const isApproved = isPostApproved(goal.approval_status);
                 const isChangesRequested = goal.approval_status === "changes_requested";
 
                 return (

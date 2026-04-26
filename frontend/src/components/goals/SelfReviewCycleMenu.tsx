@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import type { Goal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { formatFyYearSpan } from "../../utils/fy";
+import { isHalfWindowOpen } from "../../utils/goalStatus";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 interface SelfReviewCycleMenuProps {
   readonly goal: Goal;
@@ -50,6 +52,8 @@ export function SelfReviewCycleMenu({
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSystemSettings();
+  const fiscalStartMonth = settings?.fiscal_start_month ?? 4;
 
   // Compute the menu position from the trigger's bounding rect.  Called on
   // open, on window resize, and on any scroll (capture: true catches
@@ -148,16 +152,37 @@ export function SelfReviewCycleMenu({
           const submitted = goal.self_reviews.some(
             (sr) => sr.cycle_half === half,
           );
+          // Mentee mode: a row is "actionable" only when the half hasn't
+          // been submitted AND the time window for that half is currently
+          // open. Mentor mode is always actionable — clicking opens the
+          // read-only view modal regardless of the time window.
+          const windowOpen = isHalfWindowOpen(
+            half,
+            goal.fy_year,
+            fiscalStartMonth,
+          );
+          const isMenteeLocked = mode === "mentee" && !submitted && !windowOpen;
+          const lockReason =
+            half === "H2"
+              ? "H2 window has not opened yet"
+              : "Review window for this fiscal year has closed";
           return (
             <button
               key={half}
               type="button"
               role="menuitem"
+              disabled={isMenteeLocked}
               onClick={() => {
+                if (isMenteeLocked) return;
                 setOpen(false);
                 onSelect(half);
               }}
-              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-brand/5 transition-colors border-b border-border last:border-b-0"
+              title={isMenteeLocked ? lockReason : undefined}
+              className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
+                isMenteeLocked
+                  ? "cursor-not-allowed opacity-60"
+                  : "hover:bg-brand/5"
+              }`}
             >
               <div className="flex flex-col min-w-0">
                 <span className="text-[12px] font-semibold text-text-main">
@@ -165,12 +190,20 @@ export function SelfReviewCycleMenu({
                 </span>
                 <span
                   className={`text-[10px] ${
-                    submitted ? "text-green-600" : "text-text-muted"
+                    submitted
+                      ? "text-green-600"
+                      : isMenteeLocked
+                        ? "text-text-muted/70"
+                        : "text-text-muted"
                   }`}
                 >
                   {submitted ? (
                     <span className="flex items-center gap-1">
                       <Check className="h-2.5 w-2.5" /> Submitted
+                    </span>
+                  ) : isMenteeLocked ? (
+                    <span className="flex items-center gap-1">
+                      <Circle className="h-2.5 w-2.5" /> {lockReason}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1">
@@ -198,6 +231,8 @@ export function SelfReviewCycleMenu({
                 })()
               ) : submitted ? (
                 <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+              ) : isMenteeLocked ? (
+                <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />
               ) : (
                 <ClipboardCheck className="h-3.5 w-3.5 text-brand shrink-0" />
               )}

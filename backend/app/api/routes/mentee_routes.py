@@ -26,7 +26,7 @@ from app.api.dependencies import DbSession, CurrentUser
 from app.api.routes.project_review_routes import _build_review_response
 from app.core.cycle_utils import get_current_cycle_info
 from app.models.annual_review_models import AnnualReview, ReviewStatus
-from app.models.goal_models import Goal, GoalType, ApprovalStatus
+from app.models.goal_models import Goal, GoalType, ApprovalStatus, POST_APPROVAL_STATES
 from app.models.project_models import Project, ProjectAssignment
 from app.models.project_review_models import ProjectReview, ProjectReviewStatus
 from app.models.system_settings_models import SystemSettings, CycleType
@@ -79,12 +79,17 @@ def _list_mentees(db: DbSession, mentor: User) -> list[User]:
 
 
 def _build_goal_stats(annual_goals: list[Goal]) -> MenteeGoalsStats:
-    """Roll up annual-goal counts + progress for a single mentee."""
+    """Roll up annual-goal counts + progress for a single mentee.
+
+    The 4 post-approval review states (h1_self_reviewed, h1_mentor_reviewed,
+    h2_self_reviewed, h2_mentor_reviewed) are folded into the `approved`
+    bucket so the mentee card keeps showing one consolidated count.
+    """
     counts = {s.value: 0 for s in ApprovalStatus}
     for g in annual_goals:
         counts[g.approval_status] = counts.get(g.approval_status, 0) + 1
 
-    approved_goals = [g for g in annual_goals if g.approval_status == ApprovalStatus.APPROVED.value]
+    approved_goals = [g for g in annual_goals if g.approval_status in POST_APPROVAL_STATES]
     if approved_goals:
         progress_values: list[int] = []
         for g in approved_goals:
@@ -99,8 +104,8 @@ def _build_goal_stats(annual_goals: list[Goal]) -> MenteeGoalsStats:
 
     return MenteeGoalsStats(
         total=len(annual_goals),
-        approved=counts[ApprovalStatus.APPROVED.value],
-        submitted=counts[ApprovalStatus.SUBMITTED.value],
+        approved=sum(counts[s] for s in POST_APPROVAL_STATES),
+        submitted=counts[ApprovalStatus.PENDING_APPROVAL.value],
         draft=counts[ApprovalStatus.DRAFT.value],
         changes_requested=counts[ApprovalStatus.CHANGES_REQUESTED.value],
         avg_progress_percent=avg,

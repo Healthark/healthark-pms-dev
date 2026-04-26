@@ -12,11 +12,19 @@ import apiClient from "./api.client";
 
 // ── Enums ───────────────────────────────────────────────────────────
 
+/** The 8 lifecycle states a goal moves through, draft → terminal mentor review.
+ *  Mirrors backend `app.models.goal_models.ApprovalStatus`. The four
+ *  `*_reviewed` states are the post-approval segment — see
+ *  `frontend/src/utils/goalStatus.ts` for the consolidated set. */
 export type ApprovalStatus =
   | "draft"
-  | "submitted"
+  | "pending_approval"
+  | "changes_requested"
   | "approved"
-  | "changes_requested";
+  | "h1_self_reviewed"
+  | "h1_mentor_reviewed"
+  | "h2_self_reviewed"
+  | "h2_mentor_reviewed";
 export type GoalType = "regular" | "annual";
 /** Which half of the fiscal year a self-review covers. */
 export type SelfReviewCycleHalf = "H1" | "H2";

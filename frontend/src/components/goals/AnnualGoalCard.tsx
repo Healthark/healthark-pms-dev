@@ -14,6 +14,7 @@ import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 import { formatFyYearSpan } from "../../utils/fy";
+import { isPostApproved } from "../../utils/goalStatus";
 
 interface AnnualGoalCardProps {
   readonly goal: Goal;
@@ -34,9 +35,9 @@ export function AnnualGoalCard({
   editGateOpen,
 }: AnnualGoalCardProps) {
   const isDraft = goal.approval_status === "draft";
-  const isSubmitted = goal.approval_status === "submitted";
+  const isSubmitted = goal.approval_status === "pending_approval";
   const isChangesRequired = goal.approval_status === "changes_requested";
-  const isApproved = goal.approval_status === "approved";
+  const isApproved = isPostApproved(goal.approval_status);
 
   const canEdit = (isDraft || isChangesRequired) && editGateOpen;
   const canSubmit = isDraft || isChangesRequired;

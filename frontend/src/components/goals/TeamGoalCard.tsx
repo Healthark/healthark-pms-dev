@@ -3,6 +3,7 @@ import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service"
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 import { formatFyYearSpan } from "../../utils/fy";
+import { isPostApproved } from "../../utils/goalStatus";
 
 interface TeamGoalCardProps {
   readonly goal: TeamGoal;
@@ -22,8 +23,8 @@ export function TeamGoalCard({
   onViewSelfReview,
   isActing,
 }: TeamGoalCardProps) {
-  const isSubmitted = goal.approval_status === "submitted";
-  const isApproved = goal.approval_status === "approved";
+  const isSubmitted = goal.approval_status === "pending_approval";
+  const isApproved = isPostApproved(goal.approval_status);
   const isChangesRequested = goal.approval_status === "changes_requested";
 
   return (
