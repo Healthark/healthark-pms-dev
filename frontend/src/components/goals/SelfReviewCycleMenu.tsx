@@ -152,18 +152,25 @@ export function SelfReviewCycleMenu({
           const submitted = goal.self_reviews.some(
             (sr) => sr.cycle_half === half,
           );
-          // Mentee mode: a row is "actionable" only when the half hasn't
-          // been submitted AND the time window for that half is currently
-          // open. Mentor mode is always actionable — clicking opens the
-          // read-only view modal regardless of the time window.
+          // Lock rules:
+          //   Mentee mode  — locked when not yet submitted AND the time
+          //                  window for the half isn't open. (Prevents
+          //                  filing reviews outside the FY window.)
+          //   Mentor mode  — locked when no self-review exists yet. The
+          //                  mentor-review surface needs the mentee's
+          //                  self-review on the left panel; no point
+          //                  opening it before there's anything to react to.
           const windowOpen = isHalfWindowOpen(
             half,
             goal.fy_year,
             fiscalStartMonth,
           );
           const isMenteeLocked = mode === "mentee" && !submitted && !windowOpen;
-          const lockReason =
-            half === "H2"
+          const isMentorLocked = mode === "mentor" && !submitted;
+          const isLocked = isMenteeLocked || isMentorLocked;
+          const lockReason = isMentorLocked
+            ? "Awaiting mentee self-review for this half"
+            : half === "H2"
               ? "H2 window has not opened yet"
               : "Review window for this fiscal year has closed";
           return (
@@ -171,15 +178,15 @@ export function SelfReviewCycleMenu({
               key={half}
               type="button"
               role="menuitem"
-              disabled={isMenteeLocked}
+              disabled={isLocked}
               onClick={() => {
-                if (isMenteeLocked) return;
+                if (isLocked) return;
                 setOpen(false);
                 onSelect(half);
               }}
-              title={isMenteeLocked ? lockReason : undefined}
+              title={isLocked ? lockReason : undefined}
               className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left transition-colors border-b border-border last:border-b-0 ${
-                isMenteeLocked
+                isLocked
                   ? "cursor-not-allowed opacity-60"
                   : "hover:bg-brand/5"
               }`}
@@ -192,7 +199,7 @@ export function SelfReviewCycleMenu({
                   className={`text-[10px] ${
                     submitted
                       ? "text-green-600"
-                      : isMenteeLocked
+                      : isLocked
                         ? "text-text-muted/70"
                         : "text-text-muted"
                   }`}
@@ -201,7 +208,7 @@ export function SelfReviewCycleMenu({
                     <span className="flex items-center gap-1">
                       <Check className="h-2.5 w-2.5" /> Submitted
                     </span>
-                  ) : isMenteeLocked ? (
+                  ) : isLocked ? (
                     <span className="flex items-center gap-1">
                       <Circle className="h-2.5 w-2.5" /> {lockReason}
                     </span>
@@ -213,10 +220,11 @@ export function SelfReviewCycleMenu({
                 </span>
               </div>
               {mode === "mentor" ? (
-                // Read-only view — icons are status indicators only, not edit actions.
-                // CheckCircle2 = mentor has reviewed this half in Team Review tab.
-                // Eye          = self-review submitted, awaiting mentor review.
-                // Circle       = mentee hasn't submitted yet.
+                // Status-indicator icons (the row click target opens the
+                // mentor review modal):
+                //   CheckCircle2 — mentor review already submitted.
+                //   Eye          — self-review filed; mentor review pending.
+                //   Circle       — no self-review yet (row is disabled).
                 (() => {
                   const mentorReviewed = goal.mentor_reviews.some(
                     (mr) => mr.cycle_half === half,
@@ -231,7 +239,7 @@ export function SelfReviewCycleMenu({
                 })()
               ) : submitted ? (
                 <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-              ) : isMenteeLocked ? (
+              ) : isLocked ? (
                 <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />
               ) : (
                 <ClipboardCheck className="h-3.5 w-3.5 text-brand shrink-0" />

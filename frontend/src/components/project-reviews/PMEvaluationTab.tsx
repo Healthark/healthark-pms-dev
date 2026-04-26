@@ -344,7 +344,7 @@ export function PMEvaluationTab() {
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-500">
+    <div className="space-y-5">
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3">

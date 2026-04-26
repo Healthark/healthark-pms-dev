@@ -97,6 +97,25 @@ class GoalApprovalUpdate(BaseModel):
     feedback: Optional[str] = None
 
 
+class GoalBulkApproveRequest(BaseModel):
+    """Mentor-side bulk approval. Capped at 100 ids per call to keep the
+    transaction tight and prevent runaway payloads."""
+    goal_ids: list[int] = Field(..., min_length=1, max_length=100)
+
+
+class GoalBulkApproveFailure(BaseModel):
+    goal_id: int
+    reason: str
+
+
+class GoalBulkApproveResult(BaseModel):
+    """Per-goal outcome so the UI can show "approved 8 of 10" rather than
+    failing the whole batch when one goal slipped state between modal-open
+    and submit."""
+    approved_ids: list[int]
+    failures: list[GoalBulkApproveFailure]
+
+
 class GoalMentorReviewSubmit(BaseModel):
     """
     Payload the mentor submits when reviewing a mentee's self-review for one

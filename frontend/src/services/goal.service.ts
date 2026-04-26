@@ -162,6 +162,19 @@ export interface GoalApprovalPayload {
   feedback?: string | null;
 }
 
+/** One goal that the bulk-approve endpoint refused to approve, with the
+ *  human-readable reason. The UI surfaces these in a snackbar so the mentor
+ *  knows which goals slipped state between modal-open and submit. */
+export interface BulkApproveFailure {
+  goal_id: number;
+  reason: string;
+}
+
+export interface BulkApproveResult {
+  approved_ids: number[];
+  failures: BulkApproveFailure[];
+}
+
 // ── Service ─────────────────────────────────────────────────────────
 
 export const goalService = {
@@ -258,6 +271,13 @@ export const goalService = {
       `/goals/${goalId}/approve`,
       payload,
     );
+    return res.data;
+  },
+
+  bulkApprove: async (goalIds: number[]): Promise<BulkApproveResult> => {
+    const res = await apiClient.post<BulkApproveResult>("/goals/bulk-approve", {
+      goal_ids: goalIds,
+    });
     return res.data;
   },
 };

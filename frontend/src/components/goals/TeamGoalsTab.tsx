@@ -8,6 +8,7 @@ import {
   ChevronDown,
   UserCircle,
   Check,
+  CheckCheck,
   RotateCcw,
   Link as LinkIcon,
   MessageSquare,
@@ -17,6 +18,7 @@ import {
   type TeamGoal,
   type ApprovalStatus,
   type SelfReviewCycleHalf,
+  type GoalMentorReviewPayload,
 } from "../../services/goal.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
@@ -24,8 +26,9 @@ import { useSnackbar } from "../../hooks/useSnackbar";
 import { TeamGoalCard } from "./TeamGoalCard";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
-import { GoalSelfReviewModal } from "./GoalSelfReviewModal";
+import { GoalMentorReviewModal } from "./GoalMentorReviewModal";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
+import { BulkApproveModal } from "./BulkApproveModal";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
@@ -187,23 +190,59 @@ export function TeamGoalsTab() {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [menteeFilter, setMenteeFilter] = useState("all");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
 
   // "Request Changes" modal state
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
   const [modalError, setModalError] = useState("");
 
-  // Read-only self-review view state (mentor viewing mentee's submission)
-  const [viewSelfReviewGoal, setViewSelfReviewGoal] = useState<TeamGoal | null>(null);
-  const [viewSelfReviewCycle, setViewSelfReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
+  // Bulk approve modal state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState("");
 
-  const openViewSelfReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
-    setViewSelfReviewGoal(goal);
-    setViewSelfReviewCycle(half);
+  // Mentor review modal state — opens for any post-approval half. The modal
+  // itself decides editable vs read-only based on whether a mentor review
+  // for this (goal, half) already exists.
+  const [reviewGoal, setReviewGoal] = useState<TeamGoal | null>(null);
+  const [reviewCycle, setReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
+  const [isSavingReview, setIsSavingReview] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+
+  const openReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
+    setReviewError("");
+    setReviewGoal(goal);
+    setReviewCycle(half);
   };
-  const closeViewSelfReview = () => {
-    setViewSelfReviewGoal(null);
-    setViewSelfReviewCycle(null);
+  const closeReview = () => {
+    setReviewGoal(null);
+    setReviewCycle(null);
+    setReviewError("");
+  };
+
+  const handleSubmitReview = async (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ) => {
+    if (!reviewGoal) return;
+    setIsSavingReview(true);
+    setReviewError("");
+    try {
+      const updated = await goalService.submitMentorReview(
+        reviewGoal.id,
+        cycleHalf,
+        payload,
+      );
+      setGoals((prev) =>
+        prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
+      );
+      closeReview();
+    } catch (err) {
+      setReviewError(getErrorMessage(err));
+    } finally {
+      setIsSavingReview(false);
+    }
   };
 
   const loadGoals = useCallback(async () => {
@@ -231,11 +270,56 @@ export function TeamGoalsTab() {
       setGoals((prev) =>
         prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
       );
-      toast.success(`${goal.user_name}'s goal approved.`);
+      toast.success(`${goal.owner_name}'s goal approved.`);
     } catch (err) {
       snackbar.error(getErrorMessage(err));
     } finally {
       setIsActing(false);
+    }
+  };
+
+  const handleBulkApprove = async (goalIds: number[]) => {
+    setBulkSaving(true);
+    setBulkError("");
+    try {
+      const result = await goalService.bulkApprove(goalIds);
+      // Optimistically refresh the goal rows that were approved.
+      if (result.approved_ids.length > 0) {
+        const approvedSet = new Set(result.approved_ids);
+        setGoals((prev) =>
+          prev.map((g) =>
+            approvedSet.has(g.id)
+              ? { ...g, approval_status: "approved", manager_feedback: null }
+              : g,
+          ),
+        );
+      }
+      // Close on full success; surface partials inline so the mentor sees
+      // exactly which goals slipped state.
+      if (result.failures.length === 0) {
+        toast.success(
+          `Approved ${result.approved_ids.length} goal${
+            result.approved_ids.length === 1 ? "" : "s"
+          }.`,
+        );
+        setBulkOpen(false);
+      } else {
+        toast.success(
+          `Approved ${result.approved_ids.length} of ${goalIds.length} goal${
+            goalIds.length === 1 ? "" : "s"
+          }.`,
+        );
+        const firstReason = result.failures[0]?.reason ?? "Some goals could not be approved.";
+        const extra =
+          result.failures.length > 1
+            ? ` (+${result.failures.length - 1} more)`
+            : "";
+        setBulkError(`${firstReason}${extra}`);
+      }
+    } catch (err) {
+      setBulkError(getErrorMessage(err));
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -265,9 +349,19 @@ export function TeamGoalsTab() {
     new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
   ).sort((a, b) => b - a);
 
+  // Count goals currently awaiting approval — drives the toolbar badge.
+  const pendingApprovalCount = goals.filter(
+    (g) => g.approval_status === "pending_approval",
+  ).length;
+
+  const availableMentees = Array.from(
+    new Set(goals.map((g) => g.owner_name).filter((n): n is string => Boolean(n))),
+  ).sort((a, b) => a.localeCompare(b));
+
   const filtered = goals
     .filter((g) => statusFilter === "all" || g.approval_status === statusFilter)
     .filter((g) => yearFilter === "all" || g.fy_year === Number(yearFilter))
+    .filter((g) => menteeFilter === "all" || g.owner_name === menteeFilter)
     .filter((g) => {
       const q = searchQuery.trim().toLowerCase();
       if (q === "") return true;
@@ -286,7 +380,7 @@ export function TeamGoalsTab() {
 
   useEffect(() => {
     setExpandedGoalId(null);
-  }, [statusFilter, yearFilter, searchQuery, viewMode]);
+  }, [statusFilter, yearFilter, menteeFilter, searchQuery, viewMode]);
 
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
@@ -327,21 +421,47 @@ export function TeamGoalsTab() {
               className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
             />
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className={viewBtnCls("grid")}
-              onClick={() => setViewMode("grid")}
+              onClick={() => {
+                setBulkError("");
+                setBulkOpen(true);
+              }}
+              disabled={pendingApprovalCount === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title={
+                pendingApprovalCount === 0
+                  ? "No goals are currently awaiting approval"
+                  : `Bulk approve ${pendingApprovalCount} pending goal${
+                      pendingApprovalCount === 1 ? "" : "s"
+                    }`
+              }
             >
-              <LayoutGrid className="h-3.5 w-3.5" /> Cards
+              <CheckCheck className="h-3.5 w-3.5" />
+              Bulk Approve
+              {pendingApprovalCount > 0 && (
+                <span className="rounded-full bg-white/20 px-1.5 text-[10px] font-semibold">
+                  {pendingApprovalCount}
+                </span>
+              )}
             </button>
-            <button
-              type="button"
-              className={viewBtnCls("table")}
-              onClick={() => setViewMode("table")}
-            >
-              <Table2 className="h-3.5 w-3.5" /> Table
-            </button>
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+              <button
+                type="button"
+                className={viewBtnCls("grid")}
+                onClick={() => setViewMode("grid")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Cards
+              </button>
+              <button
+                type="button"
+                className={viewBtnCls("table")}
+                onClick={() => setViewMode("table")}
+              >
+                <Table2 className="h-3.5 w-3.5" /> Table
+              </button>
+            </div>
           </div>
         </div>
 
@@ -364,6 +484,28 @@ export function TeamGoalsTab() {
               {availableYears.map((y) => (
                 <option key={y} value={y}>
                   {y}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="team-mentee-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Mentee
+            </label>
+            <select
+              id="team-mentee-filter"
+              value={menteeFilter}
+              onChange={(e) => setMenteeFilter(e.target.value)}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+            >
+              <option value="all">All Mentees</option>
+              {availableMentees.map((name) => (
+                <option key={name} value={name}>
+                  {name} ({goals.filter((g) => g.owner_name === name).length})
                 </option>
               ))}
             </select>
@@ -417,7 +559,7 @@ export function TeamGoalsTab() {
                 setModalError("");
                 setFeedbackTarget(g);
               }}
-              onViewSelfReview={openViewSelfReview}
+              onSelectHalf={openReview}
               isActing={isActing}
             />
           ))}
@@ -528,12 +670,14 @@ export function TeamGoalsTab() {
                             </>
                           )}
                           {isApproved && (
-                            // Read-only view of mentee's self-review.
-                            // Actual mentor reviews are filled in the Team Review tab.
+                            // Per-half mentor review entry. The modal handles
+                            // both editable (no mentor review yet) and read-
+                            // only (already submitted) modes; the menu itself
+                            // disables halves where no self-review exists yet.
                             <SelfReviewCycleMenu
                               goal={goal}
                               mode="mentor"
-                              onSelect={(half) => openViewSelfReview(goal, half)}
+                              onSelect={(half) => openReview(goal, half)}
                             />
                           )}
                           {isChangesRequested && (
@@ -611,16 +755,29 @@ export function TeamGoalsTab() {
         />
       )}
 
-      {/* Read-only self-review modal — mentor views mentee's submission */}
-      <GoalSelfReviewModal
-        isOpen={viewSelfReviewGoal !== null && viewSelfReviewCycle !== null}
-        goal={viewSelfReviewGoal}
-        cycleHalf={viewSelfReviewCycle}
-        onClose={closeViewSelfReview}
-        onSubmit={async () => {}}
-        isSaving={false}
-        error=""
-        readOnly
+      {/* Bulk approve modal */}
+      <BulkApproveModal
+        isOpen={bulkOpen}
+        goals={goals}
+        onClose={() => {
+          setBulkOpen(false);
+          setBulkError("");
+        }}
+        onSubmit={handleBulkApprove}
+        isSaving={bulkSaving}
+        error={bulkError}
+      />
+
+      {/* Mentor review modal — editable when no review yet for this half,
+          read-only once the mentor's review has been submitted. */}
+      <GoalMentorReviewModal
+        isOpen={reviewGoal !== null && reviewCycle !== null}
+        goal={reviewGoal}
+        cycleHalf={reviewCycle}
+        onClose={closeReview}
+        onSubmit={handleSubmitReview}
+        isSaving={isSavingReview}
+        error={reviewError}
       />
 
     </div>

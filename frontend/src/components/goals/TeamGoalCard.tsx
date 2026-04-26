@@ -9,7 +9,10 @@ interface TeamGoalCardProps {
   readonly goal: TeamGoal;
   readonly onApprove: (goal: TeamGoal) => void;
   readonly onRequestChanges: (goal: TeamGoal) => void;
-  readonly onViewSelfReview: (
+  /** Fired when the mentor picks H1 or H2 from the cycle menu. The parent
+   *  decides which modal to open (mentor review modal in the unified Team
+   *  Goals tab; read-only self-review viewer in MenteeGoalsTab). */
+  readonly onSelectHalf: (
     goal: TeamGoal,
     cycleHalf: SelfReviewCycleHalf,
   ) => void;
@@ -20,7 +23,7 @@ export function TeamGoalCard({
   goal,
   onApprove,
   onRequestChanges,
-  onViewSelfReview,
+  onSelectHalf,
   isActing,
 }: TeamGoalCardProps) {
   const isSubmitted = goal.approval_status === "pending_approval";
@@ -99,7 +102,7 @@ export function TeamGoalCard({
           <SelfReviewCycleMenu
             goal={goal}
             mode="mentor"
-            onSelect={(half) => onViewSelfReview(goal, half)}
+            onSelect={(half) => onSelectHalf(goal, half)}
           />
         )}
 

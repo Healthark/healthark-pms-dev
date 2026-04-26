@@ -185,7 +185,7 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
     try {
       await goalService.updateApproval(goal.id, { approval_status: "approved" });
       onReload();
-      toast.success(`${goal.user_name}'s goal approved.`);
+      toast.success(`${goal.owner_name}'s goal approved.`);
     } catch (err) {
       snackbar.error(getErrorMessage(err));
     } finally {
@@ -364,7 +364,7 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
                 setModalError("");
                 setFeedbackTarget(g);
               }}
-              onViewSelfReview={openMenteeSelfReview}
+              onSelectHalf={openMenteeSelfReview}
               isActing={isActing}
             />
           ))}

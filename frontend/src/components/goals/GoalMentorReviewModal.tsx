@@ -32,27 +32,13 @@ import {
 } from "../../services/project-review.service";
 import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
+import { getOwnerRole } from "../../utils/goalOwner";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
   return goal.fy_year ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}` : cycleHalf;
-}
-
-/** Pull the goal owner's department/designation off the runtime object. The
- *  modal's prop type is `Goal` for backwards compatibility; in practice the
- *  callers (TeamReviewTab, MenteeGoalsTab) pass `TeamGoal`, which carries
- *  these two fields. Falls back gracefully when not present. */
-function getOwnerRole(goal: Goal): { dept: string | null; desig: string | null } {
-  const t = goal as Goal & {
-    owner_department_name?: string | null;
-    owner_designation_name?: string | null;
-  };
-  return {
-    dept: t.owner_department_name ?? null,
-    desig: t.owner_designation_name ?? null,
-  };
 }
 
 // ── Props ────────────────────────────────────────────────────────────

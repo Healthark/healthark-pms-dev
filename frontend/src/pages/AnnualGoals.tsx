@@ -25,7 +25,6 @@ import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { GoalSelfReviewModal } from "../components/goals/GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "../components/goals/SelfReviewCycleMenu";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
-import { TeamReviewTab } from "../components/goals/TeamReviewTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
@@ -57,7 +56,7 @@ const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
   { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
 ];
 
-type ActiveTab = "my" | "team" | "team_review";
+type ActiveTab = "my" | "team";
 type ViewMode = "grid" | "table";
 
 // My Goals table sort config — Goal/Mentor/Status are alpha, Year is numeric.
@@ -440,22 +439,13 @@ export function AnnualGoals() {
             My Goals
           </button>
           {isMentor && (
-            <>
-              <button
-                type="button"
-                className={tabCls("team")}
-                onClick={() => setActiveTab("team")}
-              >
-                Team Goals
-              </button>
-              <button
-                type="button"
-                className={tabCls("team_review")}
-                onClick={() => setActiveTab("team_review")}
-              >
-                Team Review
-              </button>
-            </>
+            <button
+              type="button"
+              className={tabCls("team")}
+              onClick={() => setActiveTab("team")}
+            >
+              Team Goals
+            </button>
           )}
         </div>
 
@@ -735,9 +725,6 @@ export function AnnualGoals() {
 
           {/* ── Team Goals tab ── */}
           {activeTab === "team" && isMentor && <TeamGoalsTab />}
-
-          {/* ── Team Review tab ── */}
-          {activeTab === "team_review" && isMentor && <TeamReviewTab />}
         </div>
       </div>
 

@@ -37,6 +37,9 @@ from app.schemas.goal_schemas import (
     GoalUpdate,
     GoalResponse,
     GoalApprovalUpdate,
+    GoalBulkApproveRequest,
+    GoalBulkApproveResult,
+    GoalBulkApproveFailure,
     GoalSelfReviewSubmit,
     GoalMentorReviewSubmit,
     TeamGoalResponse,
@@ -548,6 +551,75 @@ def approve_goal(
 
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
+
+
+@router.post("/bulk-approve", response_model=GoalBulkApproveResult)
+def bulk_approve_goals(
+    payload: GoalBulkApproveRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Mentor-side bulk approval. Loads the requested goals (org-scoped),
+    validates each one independently against the same rules as the single-
+    goal /approve endpoint (mentor must own the relationship; goal must be
+    PENDING_APPROVAL), and approves the valid set in a single transaction.
+
+    Returns a per-goal outcome rather than failing the whole batch — so the
+    UI can show "approved 8 of 10" when a goal slips state between modal
+    open and submit (e.g. another tab approved it first, or the mentee
+    edited it back to draft).
+    """
+    requested_ids = list(dict.fromkeys(payload.goal_ids))  # de-dup, preserve order
+
+    goals = (
+        db.query(Goal)
+        .filter(Goal.id.in_(requested_ids), Goal.org_id == current_user.org_id)
+        .all()
+    )
+    by_id = {g.id: g for g in goals}
+
+    # Pre-fetch all owners in one query so we can do mentor-relationship
+    # checks without N round-trips.
+    owner_ids = {g.user_id for g in goals}
+    owners = db.query(User).filter(User.id.in_(owner_ids)).all() if owner_ids else []
+    owner_by_id = {u.id: u for u in owners}
+
+    approved_ids: list[int] = []
+    failures: list[GoalBulkApproveFailure] = []
+    now = datetime.now(timezone.utc)
+
+    for goal_id in requested_ids:
+        goal = by_id.get(goal_id)
+        if goal is None:
+            failures.append(GoalBulkApproveFailure(
+                goal_id=goal_id,
+                reason="Goal not found or not in your organization.",
+            ))
+            continue
+
+        owner = owner_by_id.get(goal.user_id)
+        if owner is None or owner.mentor_id != current_user.id:
+            failures.append(GoalBulkApproveFailure(
+                goal_id=goal_id,
+                reason="You are not the assigned mentor for this goal's owner.",
+            ))
+            continue
+
+        if goal.approval_status != ApprovalStatus.PENDING_APPROVAL.value:
+            failures.append(GoalBulkApproveFailure(
+                goal_id=goal_id,
+                reason="Goal is not currently awaiting approval.",
+            ))
+            continue
+
+        goal.approval_status = ApprovalStatus.APPROVED.value
+        goal.manager_feedback = None
+        goal.approved_at = now
+        approved_ids.append(goal_id)
+
+    db.commit()
+    return GoalBulkApproveResult(approved_ids=approved_ids, failures=failures)
 
 
 @router.patch(

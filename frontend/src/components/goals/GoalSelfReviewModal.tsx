@@ -5,13 +5,13 @@
  * Form shape mirrors the Annual Review self-appraisal: one freeform
  * paragraph capturing the reflection. Above the textarea, two collapsible
  * panels surface the role expectations for **Firm Growth** and **Competency
- * & Skills** as a reference rubric, fetched from /users/me/expectations
- * for the current user's department × designation.
- *
- * - Opens from the My Goals H1/H2 cycle dropdown. When the matching
- *   self-review already exists, the modal renders read-only.
- * - The mentor also opens this modal (via readOnly=true) to view what
- *   the mentee submitted — they cannot edit or submit.
+ * & Skills** as a reference rubric — scoped to whichever role the *goal
+ * owner* holds:
+ *   - readOnly=false (mentee filling their own self-review):
+ *       fetch via /users/me/expectations.
+ *   - readOnly=true  (mentor viewing the mentee's submission):
+ *       fetch all org role expectations and filter by the goal owner's
+ *       department + designation injected on the goal payload.
  */
 
 import { useState, useEffect } from "react";
@@ -26,9 +26,13 @@ import {
   profileService,
   type UserRoleExpectation,
 } from "../../services/profile.service";
-import type { RoleExpectation } from "../../services/project-review.service";
+import {
+  projectReviewService,
+  type RoleExpectation,
+} from "../../services/project-review.service";
 import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
+import { getOwnerRole, getOwnerName } from "../../utils/goalOwner";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
@@ -96,7 +100,11 @@ export function GoalSelfReviewModal({
   const isLocked = readOnly || existing !== null;
 
   const [overall, setOverall] = useState("");
-  const [expectation, setExpectation] = useState<UserRoleExpectation | null>(null);
+  // Fetched only when readOnly=false (mentee writing their own review).
+  const [myExpectation, setMyExpectation] = useState<UserRoleExpectation | null>(null);
+  // Fetched only when readOnly=true (mentor viewing): all org expectations,
+  // then filtered client-side by the goal owner's dept + desig.
+  const [orgExpectations, setOrgExpectations] = useState<RoleExpectation[]>([]);
 
   // Re-seed the textarea whenever the modal opens on a different (goal, half).
   useEffect(() => {
@@ -104,16 +112,14 @@ export function GoalSelfReviewModal({
     setOverall(existing ? existing.self_overall_review : "");
   }, [isOpen, goal?.id, cycleHalf, existing]);
 
-  // Fetch the current user's resolved role expectations once the modal opens.
-  // The modal is for a self-review, so the panels surface the *self* user's
-  // role rubric. Background fetch — UI shouldn't block on it.
+  // Mentee path: fetch the *current user's* expectations.
   useEffect(() => {
-    if (!isOpen || expectation) return;
+    if (!isOpen || readOnly || myExpectation) return;
     let cancelled = false;
     profileService
       .getMyExpectations()
       .then((exp) => {
-        if (!cancelled) setExpectation(exp);
+        if (!cancelled) setMyExpectation(exp);
       })
       .catch(() => {
         // Non-fatal: panels just won't render. The modal still works.
@@ -121,7 +127,24 @@ export function GoalSelfReviewModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, expectation]);
+  }, [isOpen, readOnly, myExpectation]);
+
+  // Mentor-view path: fetch all org expectations once; filter by goal owner.
+  useEffect(() => {
+    if (!isOpen || !readOnly || orgExpectations.length > 0) return;
+    let cancelled = false;
+    projectReviewService
+      .getRoleExpectations()
+      .then((rows) => {
+        if (!cancelled) setOrgExpectations(rows);
+      })
+      .catch(() => {
+        // Non-fatal — panels just won't render.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, readOnly, orgExpectations.length]);
 
   if (!isOpen || !goal || !cycleHalf) return null;
 
@@ -135,7 +158,23 @@ export function GoalSelfReviewModal({
     existing && !readOnly ? " (Submitted)" : ""
   }`;
 
-  const expectationForPanel = asRoleExpectation(expectation);
+  // Pick the right expectation source for the rubric panels.
+  let expectationForPanel: RoleExpectation | null;
+  if (readOnly) {
+    const { dept, desig } = getOwnerRole(goal);
+    expectationForPanel =
+      dept && desig
+        ? orgExpectations.find(
+            (e) => e.department_name === dept && e.designation_name === desig,
+          ) ?? null
+        : null;
+  } else {
+    expectationForPanel = asRoleExpectation(myExpectation);
+  }
+
+  const expectationsHeading = readOnly
+    ? `Refer to ${getOwnerName(goal)}'s role expectations`
+    : "Refer to your role expectations";
 
   return createPortal(
     <div
@@ -186,7 +225,7 @@ export function GoalSelfReviewModal({
           {expectationForPanel && (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                Refer to your role expectations
+                {expectationsHeading}
               </p>
               <div>
                 <p className="text-[11px] font-semibold text-text-main mb-0.5">
