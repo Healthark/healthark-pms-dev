@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { MenteeCard } from "../components/mentees/MenteeCard";
-import { MenteeTable } from "../components/mentees/MenteeTable";
+import {
+  MenteeTable,
+  type MenteeTableSortKey,
+} from "../components/mentees/MenteeTable";
 import {
   MenteeToolbar,
   type MenteeSortKey,
@@ -11,6 +14,19 @@ import {
   menteeService,
   type MenteeSummary,
 } from "../services/mentee.service";
+import { compareValues, type SortKind, type SortState } from "../utils/sort";
+
+const MENTEE_TABLE_SORT_CONFIG: Record<
+  MenteeTableSortKey,
+  { kind: SortKind; get: (m: MenteeSummary) => unknown }
+> = {
+  full_name:             { kind: "alpha",   get: (m) => m.full_name },
+  employee_code:         { kind: "natural", get: (m) => m.employee_code },
+  email:                 { kind: "alpha",   get: (m) => m.email },
+  department_name:       { kind: "alpha",   get: (m) => m.department_name },
+  designation_name:      { kind: "alpha",   get: (m) => m.designation_name },
+  pending_actions_count: { kind: "numeric", get: (m) => m.pending_actions_count },
+};
 
 function CardSkeleton() {
   return (
@@ -37,6 +53,7 @@ export function MyMentees() {
   const [onlyPending, setOnlyPending] = useState(false);
   const [sortKey, setSortKey] = useState<MenteeSortKey>("name");
   const [viewMode, setViewMode] = useState<MenteeViewMode>("grid");
+  const [tableSort, setTableSort] = useState<SortState<MenteeTableSortKey> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +92,16 @@ export function MyMentees() {
     if (onlyPending) {
       out = out.filter((m) => m.pending_actions_count > 0);
     }
+
+    // Table mode with an active column sort takes precedence over the
+    // toolbar dropdown — column headers are the sort UI in that mode.
+    if (viewMode === "table" && tableSort) {
+      const { kind, get } = MENTEE_TABLE_SORT_CONFIG[tableSort.key];
+      return [...out].sort((a, b) =>
+        compareValues(get(a), get(b), kind, tableSort.direction),
+      );
+    }
+
     return [...out].sort((a, b) => {
       if (sortKey === "pending") {
         // Most pending first, then name tiebreak
@@ -89,7 +116,7 @@ export function MyMentees() {
       }
       return a.full_name.localeCompare(b.full_name);
     });
-  }, [mentees, search, onlyPending, sortKey]);
+  }, [mentees, search, onlyPending, sortKey, viewMode, tableSort]);
 
   return (
     <div className="space-y-6">
@@ -153,7 +180,11 @@ export function MyMentees() {
             ))}
           </div>
         ) : (
-          <MenteeTable mentees={visibleMentees} />
+          <MenteeTable
+            mentees={visibleMentees}
+            sort={tableSort}
+            onSort={setTableSort}
+          />
         )
       )}
     </div>

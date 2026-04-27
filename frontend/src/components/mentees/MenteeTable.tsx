@@ -1,9 +1,21 @@
 import { ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { MenteeSummary } from "../../services/mentee.service";
+import { SortableHeader } from "../SortableHeader";
+import type { SortState } from "../../utils/sort";
+
+export type MenteeTableSortKey =
+  | "full_name"
+  | "employee_code"
+  | "email"
+  | "department_name"
+  | "designation_name"
+  | "pending_actions_count";
 
 interface MenteeTableProps {
   readonly mentees: readonly MenteeSummary[];
+  readonly sort: SortState<MenteeTableSortKey> | null;
+  readonly onSort: (next: SortState<MenteeTableSortKey>) => void;
 }
 
 function initialsFor(name: string): string {
@@ -16,8 +28,9 @@ function initialsFor(name: string): string {
     .toUpperCase();
 }
 
-export function MenteeTable({ mentees }: MenteeTableProps) {
-  const thCls =
+export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
+  const thCls = "px-4 py-2.5 text-left";
+  const plainThCls =
     "px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-text-muted";
 
   return (
@@ -25,14 +38,26 @@ export function MenteeTable({ mentees }: MenteeTableProps) {
       <table className="w-full text-[13px]">
         <thead>
           <tr className="border-b border-border bg-slate-50/80">
-            <th className={thCls}>Mentee</th>
-            <th className={thCls}>Emp Code</th>
-            <th className={thCls}>Email</th>
-            <th className={thCls}>Phone</th>
-            <th className={thCls}>Department</th>
-            <th className={thCls}>Designation</th>
-            <th className={thCls}>Pending</th>
-            <th className={`${thCls} text-right`}>Actions</th>
+            <th className={thCls}>
+              <SortableHeader label="Mentee" columnKey="full_name" sort={sort} onSort={onSort} />
+            </th>
+            <th className={thCls}>
+              <SortableHeader label="Emp Code" columnKey="employee_code" sort={sort} onSort={onSort} />
+            </th>
+            <th className={thCls}>
+              <SortableHeader label="Email" columnKey="email" sort={sort} onSort={onSort} />
+            </th>
+            <th className={plainThCls}>Phone</th>
+            <th className={thCls}>
+              <SortableHeader label="Department" columnKey="department_name" sort={sort} onSort={onSort} />
+            </th>
+            <th className={thCls}>
+              <SortableHeader label="Designation" columnKey="designation_name" sort={sort} onSort={onSort} />
+            </th>
+            <th className={thCls}>
+              <SortableHeader label="Pending" columnKey="pending_actions_count" sort={sort} onSort={onSort} />
+            </th>
+            <th className={`${plainThCls} text-right`}>Actions</th>
           </tr>
         </thead>
         <tbody>

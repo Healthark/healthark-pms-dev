@@ -1,6 +1,13 @@
+import { useMemo, useState } from "react";
 import { Search, Pencil, UserX, UserCheck, KeyRound } from "lucide-react";
 import type { UserResponse } from "../../services/admin.service";
 import { StatusBadge } from "./StatusBadge";
+import { SortableHeader } from "../SortableHeader";
+import {
+  compareValues,
+  type SortKind,
+  type SortState,
+} from "../../utils/sort";
 
 interface UsersTabProps {
   readonly users: UserResponse[];
@@ -13,16 +20,51 @@ interface UsersTabProps {
   readonly onResetPassword: (user: UserResponse) => void;
 }
 
-const TABLE_HEADERS = [
-  "Employee",
-  "Email",
-  "Phone",
-  "Mentor",
-  "Department",
-  "Designation",
-  "Status",
-  "Actions",
+type UsersSortKey =
+  | "full_name"
+  | "email"
+  | "mentor_name"
+  | "department_name"
+  | "designation_name"
+  | "status";
+
+type RoleFilter = "all" | "Admin" | "Manager" | "Principal" | "Employee";
+type StatusFilter = "all" | "active" | "inactive";
+
+const ROLE_OPTIONS: { value: RoleFilter; label: string }[] = [
+  { value: "all", label: "All Roles" },
+  { value: "Admin", label: "Admin" },
+  { value: "Manager", label: "Manager" },
+  { value: "Principal", label: "Principal" },
+  { value: "Employee", label: "Employee" },
 ];
+
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All Statuses" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+const USERS_SORT_CONFIG: Record<
+  UsersSortKey,
+  { kind: SortKind; get: (u: UserResponse, all: readonly UserResponse[]) => unknown }
+> = {
+  full_name:        { kind: "alpha", get: (u) => u.full_name },
+  email:            { kind: "alpha", get: (u) => u.email },
+  mentor_name:      {
+    kind: "alpha",
+    get: (u, all) =>
+      u.mentor_id ? all.find((x) => x.id === u.mentor_id)?.full_name ?? null : null,
+  },
+  department_name:  { kind: "alpha", get: (u) => u.department?.name ?? null },
+  designation_name: { kind: "alpha", get: (u) => u.designation?.name ?? null },
+  status:           { kind: "alpha", get: (u) => (u.is_deleted ? "Inactive" : "Active") },
+};
+
+const FILTER_LABEL_CLS =
+  "text-[11px] font-bold uppercase tracking-wider text-text-muted";
+const FILTER_SELECT_CLS =
+  "rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
 
 export function UsersTab({
   users,
@@ -34,20 +76,37 @@ export function UsersTab({
   onReactivate,
   onResetPassword,
 }: UsersTabProps) {
-  const filtered = users.filter((u) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      u.full_name.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      u.employee_code.toLowerCase().includes(q)
+  const [sort, setSort] = useState<SortState<UsersSortKey> | null>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+
+  const visibleUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = users.filter((u) => {
+      if (q) {
+        const matchesSearch =
+          u.full_name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.employee_code.toLowerCase().includes(q);
+        if (!matchesSearch) return false;
+      }
+      if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      if (statusFilter === "active" && u.is_deleted) return false;
+      if (statusFilter === "inactive" && !u.is_deleted) return false;
+      return true;
+    });
+    if (!sort) return filtered;
+    const { kind, get } = USERS_SORT_CONFIG[sort.key];
+    return filtered.slice().sort((a, b) =>
+      compareValues(get(a, users), get(b, users), kind, sort.direction),
     );
-  });
+  }, [users, searchQuery, roleFilter, statusFilter, sort]);
 
   return (
     <div>
-      {/* Search bar */}
-      <div className="border-b border-border px-5 py-4">
-        <div className="relative max-w-sm">
+      {/* Toolbar — search + filters */}
+      <div className="border-b border-border px-5 py-4 flex items-center gap-4 flex-wrap">
+        <div className="relative max-w-sm flex-1 min-w-[200px]">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
             aria-hidden="true"
@@ -61,6 +120,32 @@ export function UsersTab({
             aria-label="Search users"
           />
         </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="user-role-filter" className={FILTER_LABEL_CLS}>Role</label>
+          <select
+            id="user-role-filter"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+            className={`${FILTER_SELECT_CLS} min-w-[120px]`}
+          >
+            {ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="user-status-filter" className={FILTER_LABEL_CLS}>Status</label>
+          <select
+            id="user-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className={`${FILTER_SELECT_CLS} min-w-[120px]`}
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -73,28 +158,44 @@ export function UsersTab({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-slate-50 text-left">
-                {TABLE_HEADERS.map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted"
-                  >
-                    {h}
-                  </th>
-                ))}
+                <th className="px-5 py-3">
+                  <SortableHeader label="Employee" columnKey="full_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Email" columnKey="email" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                  Phone
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Mentor" columnKey="mentor_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Department" columnKey="department_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Designation" columnKey="designation_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Status" columnKey="status" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? (
+              {visibleUsers.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
                     className="px-5 py-10 text-center text-text-muted"
                   >
-                    No users found.
+                    No users match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((user) => (
+                visibleUsers.map((user) => (
                   <tr
                     key={user.id}
                     className={`transition-colors hover:bg-slate-50 ${user.is_deleted ? "opacity-60" : ""}`}

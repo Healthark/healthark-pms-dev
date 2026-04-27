@@ -73,22 +73,24 @@ export function MenteeToolbar({
           )}
         </button>
 
-        <div className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs">
-          <ArrowUpDown className="h-3.5 w-3.5 text-text-muted" aria-hidden="true" />
-          <label htmlFor="mentee-sort" className="text-text-muted">
-            Sort:
-          </label>
-          <select
-            id="mentee-sort"
-            value={sortKey}
-            onChange={(e) => onSortChange(e.target.value as MenteeSortKey)}
-            className="bg-transparent font-medium text-text-main focus:outline-none"
-          >
-            <option value="name">Name</option>
-            <option value="designation">Designation</option>
-            <option value="pending">Pending actions</option>
-          </select>
-        </div>
+        {viewMode === "grid" && (
+          <div className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs">
+            <ArrowUpDown className="h-3.5 w-3.5 text-text-muted" aria-hidden="true" />
+            <label htmlFor="mentee-sort" className="text-text-muted">
+              Sort:
+            </label>
+            <select
+              id="mentee-sort"
+              value={sortKey}
+              onChange={(e) => onSortChange(e.target.value as MenteeSortKey)}
+              className="bg-transparent font-medium text-text-main focus:outline-none"
+            >
+              <option value="name">Name</option>
+              <option value="designation">Designation</option>
+              <option value="pending">Pending actions</option>
+            </select>
+          </div>
+        )}
 
         <div className="flex h-9 items-center gap-1 rounded-md border border-border bg-surface p-0.5">
           <button
