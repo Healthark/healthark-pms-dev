@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   LayoutDashboard,
   Briefcase,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useSidebar } from "../hooks/useSidebar";
 
 interface NavItemData {
   readonly id: string;
@@ -96,7 +96,9 @@ const BOTTOM_NAV: NavItemData[] = [
 ];
 
 export function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Lifted to context so other surfaces (e.g. EvalDrawer) can collapse the
+  // sidebar on demand and restore it on close.
+  const { collapsed: isCollapsed, setCollapsed } = useSidebar();
   const navigate = useNavigate();
   const { logout, hasFeature, user } = useAuth();
 
@@ -127,7 +129,7 @@ export function Sidebar() {
       } h-screen shrink-0 bg-surface border-r border-border flex flex-col transition-all duration-300 relative`}
     >
       <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={() => setCollapsed(!isCollapsed)}
         className="absolute -right-3.5 top-6 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-text-muted hover:text-brand shadow-sm z-50 transition-colors"
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >

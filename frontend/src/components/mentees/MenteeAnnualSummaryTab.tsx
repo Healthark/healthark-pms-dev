@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardCheck,
+  Save,
   Target,
 } from "lucide-react";
 import {
@@ -39,10 +40,11 @@ import type {
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import type { MenteeProjectAssignment } from "../../services/mentee.service";
-import { EvalModal } from "../reviews/EvalModal";
+import { EvalDrawer } from "../reviews/EvalDrawer";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useToast } from "../../hooks/useToast";
 import { getErrorMessage } from "../../utils/errors";
 import {
   extractFyToken,
@@ -96,51 +98,81 @@ function StatusPill({ status }: { readonly status: ReviewStatus | null }) {
   );
 }
 
-// ── Self-review card ────────────────────────────────────────────────
+// ── Review paragraph card ───────────────────────────────────────────
+//
+// Shared shape for the mentee's self-review AND the mentor's review.
+// Layout: large rating badge top-left, label + author next to it, body
+// paragraph spans the full width below. Putting the badge on the left
+// makes the rating the first thing the eye lands on — much more visible
+// than the original right-edge placement.
 
-function SelfReviewCard({
-  review,
+function ReviewParagraphCard({
+  label,
+  ratingLabel,
+  rating,
+  text,
+  emptyText,
 }: {
-  readonly review: AnnualReview;
+  readonly label: string;
+  readonly ratingLabel: string;
+  readonly rating: number | null;
+  readonly text: string | null;
+  readonly emptyText: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const text = review.self_overall_review ?? "";
-  const isLong = text.length > 280;
-  const display = expanded || !isLong ? text : `${text.slice(0, 280)}…`;
+  const body = text ?? "";
+  const isLong = body.length > 280;
+  const display = expanded || !isLong ? body : `${body.slice(0, 280)}…`;
 
   return (
     <section className="rounded-lg border border-border bg-surface p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-          Mentee's self review
-        </p>
-        {review.self_performance_rating !== null && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-text-muted">Self-rating</span>
-            <PerformanceRatingBadge value={review.self_performance_rating} />
-          </div>
-        )}
-      </div>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-text-main">
-        {display || <span className="italic text-text-muted">No self-review text</span>}
-      </p>
-      {isLong && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
-        >
-          {expanded ? (
+      <div className="flex items-start gap-3">
+        {/* Prominent rating column on the left. Reserves a fixed width so
+            cards stack visually even when one of them has no rating. */}
+        <div className="flex w-16 shrink-0 flex-col items-center gap-1">
+          {rating !== null ? (
             <>
-              <ChevronUp className="h-3.5 w-3.5" /> Show less
+              <PerformanceRatingBadge value={rating} size="md" />
+              <span className="text-[10px] font-medium uppercase tracking-wide text-text-muted text-center">
+                {ratingLabel}
+              </span>
             </>
           ) : (
-            <>
-              <ChevronDown className="h-3.5 w-3.5" /> Read full
-            </>
+            <span className="text-[10px] italic text-text-muted text-center">
+              {ratingLabel}
+              <br />—
+            </span>
           )}
-        </button>
-      )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            {label}
+          </p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm text-text-main">
+            {display || (
+              <span className="italic text-text-muted">{emptyText}</span>
+            )}
+          </p>
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" /> Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" /> Read full
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -437,12 +469,21 @@ export function MenteeAnnualSummaryTab({
     return buckets;
   }, [mentee.project_assignments, selectedFy]);
 
-  // Eval modal state
+  // Eval drawer state
+  // `evalFy` snapshots which FY the drawer is editing — captured when the
+  // CTA is clicked. Once the drawer is open, switching the page-level FY
+  // picker still re-flows the summary on the left, but the form on the
+  // right stays pinned to the FY that was active when it opened. Without
+  // this, picking a past completed FY would re-target the form to a
+  // non-actionable review (status != pending_mentor) and any save attempt
+  // would 400 from the backend.
   const [evalOpen, setEvalOpen] = useState(false);
+  const [evalFy, setEvalFy] = useState<string | null>(null);
   const [evalSaving, setEvalSaving] = useState(false);
   const [evalDraftSaving, setEvalDraftSaving] = useState(false);
   const [evalError, setEvalError] = useState("");
   const confirm = useConfirm();
+  const toast = useToast();
 
   const handleEvalSubmit = async (
     reviewId: number,
@@ -451,7 +492,7 @@ export function MenteeAnnualSummaryTab({
     const ok = await confirm({
       title: `Submit annual review for ${mentee.full_name}?`,
       message: `Submit your evaluation for ${mentee.full_name} (${formatFyLabel(
-        selectedFy,
+        evalFy ?? selectedFy,
       )}). Once submitted you can't edit it, and the review is forwarded to management for final calibration.`,
       variant: "warning",
       confirmText: "Submit Evaluation",
@@ -462,6 +503,7 @@ export function MenteeAnnualSummaryTab({
     try {
       await annualReviewService.submitMentorEval(reviewId, payload);
       setEvalOpen(false);
+      setEvalFy(null);
       onReload();
     } catch (err) {
       setEvalError(getErrorMessage(err));
@@ -479,6 +521,11 @@ export function MenteeAnnualSummaryTab({
     try {
       await annualReviewService.saveMentorDraft(reviewId, payload);
       onReload();
+      // Fires for both the explicit "Save Draft" click and the implicit
+      // auto-save when the parent unmounts (tab switch). The toast
+      // provider lives at the app root, so it survives this component
+      // unmounting mid-save.
+      toast.success("Draft saved.");
     } catch (err) {
       setEvalError(getErrorMessage(err));
     } finally {
@@ -486,10 +533,14 @@ export function MenteeAnnualSummaryTab({
     }
   };
 
-  // Adapt selectedReview into a MenteeAnnualReview for the shared modal.
-  const enrichedReview: MenteeAnnualReview | null = selectedReview
+  // Adapt the form's pinned review into a MenteeAnnualReview for the
+  // shared form. Reads from `evalFy` (set when the drawer opened) so the
+  // form stays bound to the FY-at-open-time even if the user fiddles with
+  // the picker afterwards.
+  const formReview = evalFy ? reviewByCycle.get(evalFy) ?? null : null;
+  const enrichedReview: MenteeAnnualReview | null = formReview
     ? {
-        ...selectedReview,
+        ...formReview,
         employee_name: mentee.full_name,
         employee_email: mentee.email,
         department: mentee.department_name,
@@ -499,6 +550,13 @@ export function MenteeAnnualSummaryTab({
 
   const status = selectedReview?.status ?? null;
   const canFill = isActiveFy && status === "pending_mentor";
+  // Either column being non-null on the active-FY review means the mentor
+  // has parked their work mid-eval — drives the "Continue" CTA label and
+  // the "Draft saved" reminder pill.
+  const hasMentorDraft =
+    canFill &&
+    (selectedReview?.mentor_overall_review_draft != null ||
+      selectedReview?.mentor_performance_rating_draft != null);
 
   // CTA / status note copy. Only states where the mentor *can't* act yet
   // get a hint here (pre-mentor stages). Post-mentor states are conveyed
@@ -552,28 +610,61 @@ export function MenteeAnnualSummaryTab({
         </div>
         <div className="flex items-center gap-2">
           {canFill ? (
-            <button
-              type="button"
-              onClick={() => {
-                setEvalError("");
-                setEvalOpen(true);
-              }}
-              className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              Fill Annual Review for {formatFyLabel(selectedFy)}
-            </button>
+            <>
+              {hasMentorDraft && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700"
+                  title="An unsubmitted draft is saved for this review"
+                >
+                  <Save className="h-3 w-3" />
+                  Draft saved
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setEvalError("");
+                  setEvalFy(selectedFy);
+                  setEvalOpen(true);
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                {hasMentorDraft ? "Continue" : "Fill"} Annual Review for{" "}
+                {formatFyLabel(selectedFy)}
+              </button>
+            </>
           ) : ctaNote ? (
             <p className="text-xs italic text-text-muted">{ctaNote}</p>
           ) : null}
         </div>
       </div>
 
-      {/* Mentee self review */}
+      {/* Reviews — mentee self + mentor evaluation. Mentor card only
+          renders once the mentor has actually submitted (the field is null
+          for active-FY rows still in `pending_mentor`, so it stays hidden
+          there but appears on past completed/calibration rows). */}
       {selectedReview &&
         (selectedReview.self_overall_review ||
           selectedReview.self_performance_rating !== null) && (
-          <SelfReviewCard review={selectedReview} />
+          <ReviewParagraphCard
+            label="Mentee's self review"
+            ratingLabel="Self rating"
+            rating={selectedReview.self_performance_rating}
+            text={selectedReview.self_overall_review}
+            emptyText="No self-review text"
+          />
+        )}
+      {selectedReview &&
+        (selectedReview.mentor_overall_review ||
+          selectedReview.mentor_performance_rating !== null) && (
+          <ReviewParagraphCard
+            label="Mentor review"
+            ratingLabel="Final rating"
+            rating={selectedReview.mentor_performance_rating}
+            text={selectedReview.mentor_overall_review}
+            emptyText="No mentor review text"
+          />
         )}
 
       {/* Goals section */}
@@ -667,14 +758,16 @@ export function MenteeAnnualSummaryTab({
         )}
       </section>
 
-      {/* Eval modal */}
+      {/* Eval drawer — right-anchored, leaves the Annual Summary visible
+          on the left so the mentor can read while writing. */}
       {evalOpen && enrichedReview && (
-        <EvalModal
+        <EvalDrawer
           review={enrichedReview}
           onSubmit={handleEvalSubmit}
           onSaveDraft={handleEvalSaveDraft}
           onClose={() => {
             setEvalOpen(false);
+            setEvalFy(null);
             setEvalError("");
           }}
           isSaving={evalSaving}

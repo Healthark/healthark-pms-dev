@@ -20,7 +20,27 @@ import { MyMentees } from "./pages/MyMentees";
 import { MenteeDetail } from "./pages/MenteeDetail";
 import { ChangePassword } from "./pages/ChangePassword";
 import { PageTitleProvider } from "./contexts/PageTitleProvider";
+import { SidebarProvider } from "./contexts/SidebarProvider";
+import { useSidebar } from "./hooks/useSidebar";
 import { useAuth } from "./hooks/useAuth";
+
+/**
+ * Wraps the route content. Reads `rightInsetPx` from the layout context so
+ * an open right-side drawer (e.g. EvalDrawer) actually claims horizontal
+ * space — the page reflows narrower instead of having content hidden under
+ * the drawer. Drawer is still `position: fixed`; this is just the gutter.
+ */
+function MainContent() {
+  const { rightInsetPx } = useSidebar();
+  return (
+    <main
+      className="flex-1 overflow-y-auto bg-background p-6 transition-[padding] duration-200"
+      style={{ paddingRight: rightInsetPx ? rightInsetPx + 24 : undefined }}
+    >
+      <Outlet />
+    </main>
+  );
+}
 
 /**
  * AppShell renders the persistent chrome (Sidebar + Topbar) around all
@@ -28,17 +48,17 @@ import { useAuth } from "./hooks/useAuth";
  */
 function AppShell() {
   return (
-    <PageTitleProvider>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar />
-          <main className="flex-1 overflow-y-auto bg-background p-6">
-            <Outlet />
-          </main>
+    <SidebarProvider>
+      <PageTitleProvider>
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <Topbar />
+            <MainContent />
+          </div>
         </div>
-      </div>
-    </PageTitleProvider>
+      </PageTitleProvider>
+    </SidebarProvider>
   );
 }
 
