@@ -47,4 +47,36 @@
   body {
     @apply bg-background text-text-main font-body min-h-screen overflow-x-hidden antialiased;
   }
+
+  /* ── Site-wide minimalist scrollbar ───────────────────────────────
+     Subtle gray, applied to every scroll container automatically.
+     Firefox honours the standardized `scrollbar-*` properties; Chrome,
+     Edge, and Safari fall through to the `::-webkit-scrollbar` pseudos.
+     Track is transparent on both engines so the bar doesn't read as a
+     framed channel. */
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.18) transparent; /* slate-900 @ 18% */
+  }
+
+  /* WebKit / Chromium / Safari */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(15, 23, 42, 0.18);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(15, 23, 42, 0.32);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
