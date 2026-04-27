@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  UserPlus, Users, Settings, FolderOpen, BarChart2, ShieldCheck,
+  UserPlus, Users, Settings, FolderOpen, BarChart2, ShieldCheck, Plus,
 } from "lucide-react";
 
 import {
@@ -18,7 +18,7 @@ import type { CycleType } from "../services/system-settings.service";
 import { getErrorMessage } from "../utils/errors";
 import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
-import { ProjectsTab } from "../components/admin/ProjectsTab";
+import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
 import { TempPasswordRevealModal } from "../components/admin/TempPasswordRevealModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
@@ -69,6 +69,8 @@ export default function AdminPanel() {
   const toast = useToast();
   const snackbar = useSnackbar();
   const confirm = useConfirm();
+
+  const projectsTabRef = useRef<ProjectsTabHandle>(null);
 
   const { user } = useAuth();
   // Sub-role gate. The backend also enforces this on every management
@@ -280,6 +282,16 @@ export default function AdminPanel() {
             Add User
           </button>
         )}
+        {activeTab === "projects" && (
+          <button
+            type="button"
+            onClick={() => projectsTabRef.current?.openCreate()}
+            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add Project
+          </button>
+        )}
       </div>
 
       {/* Tab container */}
@@ -342,7 +354,7 @@ export default function AdminPanel() {
           />
         )}
 
-        {activeTab === "projects" && <ProjectsTab />}
+        {activeTab === "projects" && <ProjectsTab ref={projectsTabRef} />}
 
         {activeTab === "reviews" && (
           <div className="p-5">

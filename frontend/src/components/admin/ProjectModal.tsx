@@ -219,24 +219,28 @@ export function ProjectModal({
   //   - reports_to_id set
   //   - reports_to_id != PM (a PM cannot review themselves)
   //   - secondary_evaluator_id != PM (no self-review)
+  //   - expected_end_date >= start_date when both set
   const pmUserId = existingPrimary?.user_id ?? (draftPrimary && draftPrimary.user_id ? Number(draftPrimary.user_id) : null);
   const reportsToConflict = pmUserId !== null && reportsToId === pmUserId;
   const secondaryConflict = pmUserId !== null && secondaryEvaluatorId === pmUserId;
+  const endBeforeStart = !!startDate && !!expectedEndDate && expectedEndDate < startDate;
 
   const validationError =
     !projectCode.trim()
       ? "Project Code is required."
       : !name.trim()
         ? "Project Name is required."
-        : !isEditing && !hasPrimary
-          ? "Mark exactly one member as PM."
-          : !isEditing && reportsToId === null
-            ? "PM Reports To is required."
-            : reportsToConflict
-              ? "PM Reports To must be a different user than the PM."
-              : secondaryConflict
-                ? "Secondary Evaluator must be a different user than the PM."
-                : null;
+        : endBeforeStart
+          ? "End Date cannot be before Start Date."
+          : !isEditing && !hasPrimary
+            ? "Mark exactly one member as PM."
+            : !isEditing && reportsToId === null
+              ? "PM Reports To is required."
+              : reportsToConflict
+                ? "PM Reports To must be a different user than the PM."
+                : secondaryConflict
+                  ? "Secondary Evaluator must be a different user than the PM."
+                  : null;
 
   // ── Submit ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -367,7 +371,18 @@ export function ProjectModal({
                 </div>
                 <div>
                   <label htmlFor="proj-end" className={LABEL_CLS}>End Date</label>
-                  <input id="proj-end" type="date" className={INPUT_CLS} value={expectedEndDate} onChange={(e) => setExpectedEndDate(e.target.value)} />
+                  <input
+                    id="proj-end"
+                    type="date"
+                    className={INPUT_CLS}
+                    value={expectedEndDate}
+                    min={startDate || undefined}
+                    onChange={(e) => setExpectedEndDate(e.target.value)}
+                    aria-invalid={endBeforeStart}
+                  />
+                  {endBeforeStart && (
+                    <p className="mt-1 text-xs text-red-600">End Date cannot be before Start Date.</p>
+                  )}
                 </div>
               </div>
 

@@ -10,8 +10,8 @@
  * Placement: src/components/admin/ProjectsTab.tsx
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, Pencil, Trash2, Users, FolderOpen } from "lucide-react";
+import { useState, useEffect, useCallback, useImperativeHandle, type Ref } from "react";
+import { Search, Pencil, Trash2, Users, FolderOpen } from "lucide-react";
 import {
   projectService,
   type ProjectResponse,
@@ -35,7 +35,7 @@ function formatDate(dateStr: string | null): string {
 const TABLE_HEADERS = [
   "Project",
   "Code",
-  "Start",
+  "Start Date",
   "End Date",
   "PM",
   "PM Reports To",
@@ -43,7 +43,15 @@ const TABLE_HEADERS = [
   "Actions",
 ];
 
-export function ProjectsTab() {
+export interface ProjectsTabHandle {
+  openCreate: () => void;
+}
+
+interface ProjectsTabProps {
+  readonly ref?: Ref<ProjectsTabHandle>;
+}
+
+export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,10 +101,12 @@ export function ProjectsTab() {
     }
   };
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
     setEditingProjectId(null);
     setShowModal(true);
-  };
+  }, []);
+
+  useImperativeHandle(ref, () => ({ openCreate }), [openCreate]);
 
   const openEdit = (projectId: number) => {
     setEditingProjectId(projectId);
@@ -124,8 +134,8 @@ export function ProjectsTab() {
   return (
     <div>
       {/* Toolbar */}
-      <div className="border-b border-border px-5 py-4 flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1">
+      <div className="border-b border-border px-5 py-4">
+        <div className="relative max-w-sm">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
             aria-hidden="true"
@@ -139,14 +149,6 @@ export function ProjectsTab() {
             aria-label="Search projects"
           />
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity shrink-0"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add Project
-        </button>
       </div>
 
       {isLoading ? (
