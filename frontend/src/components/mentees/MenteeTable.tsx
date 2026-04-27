@@ -16,39 +16,6 @@ function initialsFor(name: string): string {
     .toUpperCase();
 }
 
-function reviewShortLabel(review: MenteeSummary["review"]): string {
-  if (!review.status) return "—";
-  const label = (() => {
-    switch (review.status) {
-      case "draft":
-        return "Self-review";
-      case "pending_mentor":
-        return "Pending review";
-      case "pending_management":
-        return "With management";
-      case "completed":
-        return "Completed";
-      default:
-        return "In progress";
-    }
-  })();
-  return review.cycle_name ? `${review.cycle_name} · ${label}` : label;
-}
-
-function goalsSummary(goals: MenteeSummary["goals"]): string {
-  if (goals.total === 0) return "—";
-  return `${goals.approved}/${goals.total} approved`;
-}
-
-function projectsSummary(projects: MenteeSummary["projects"]): string {
-  if (projects.active_count === 0) return "—";
-  const pending = projects.pending_reviews_count;
-  const pendingNote = pending > 0
-    ? ` · ${pending} pending`
-    : "";
-  return `${projects.active_count} active${pendingNote}`;
-}
-
 export function MenteeTable({ mentees }: MenteeTableProps) {
   const thCls =
     "px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-text-muted";
@@ -59,12 +26,11 @@ export function MenteeTable({ mentees }: MenteeTableProps) {
         <thead>
           <tr className="border-b border-border bg-slate-50/80">
             <th className={thCls}>Mentee</th>
-            <th className={thCls}>Designation</th>
+            <th className={thCls}>Emp Code</th>
+            <th className={thCls}>Email</th>
+            <th className={thCls}>Phone</th>
             <th className={thCls}>Department</th>
-            <th className={thCls}>Goals</th>
-            <th className={thCls}>Review</th>
-            <th className={thCls}>Projects</th>
-            <th className={thCls}>Rating</th>
+            <th className={thCls}>Designation</th>
             <th className={thCls}>Pending</th>
             <th className={`${thCls} text-right`}>Actions</th>
           </tr>
@@ -91,28 +57,19 @@ export function MenteeTable({ mentees }: MenteeTableProps) {
                         {m.full_name}
                       </p>
                       <p className="truncate text-[11px] text-text-muted">
-                        {m.employee_code}
+                        {m.role}
                       </p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-text-main">
-                  {m.designation_name ?? "—"}
-                </td>
+                <td className="px-4 py-3 text-text-main">{m.employee_code}</td>
+                <td className="px-4 py-3 text-text-main">{m.email}</td>
+                <td className="px-4 py-3 text-text-main">{m.phone ?? "—"}</td>
                 <td className="px-4 py-3 text-text-main">
                   {m.department_name ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-text-main">
-                  {goalsSummary(m.goals)}
-                </td>
-                <td className="px-4 py-3 text-text-main">
-                  {reviewShortLabel(m.review)}
-                </td>
-                <td className="px-4 py-3 text-text-main">
-                  {projectsSummary(m.projects)}
-                </td>
-                <td className="px-4 py-3 text-text-main">
-                  {m.projects.latest_performance_group ?? "—"}
+                  {m.designation_name ?? "—"}
                 </td>
                 <td className="px-4 py-3">
                   {hasPending ? (

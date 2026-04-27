@@ -108,11 +108,9 @@ function asRoleExpectation(u: UserRoleExpectation | null): RoleExpectation | nul
 // ---------------------------------------------------------------------------
 
 function EmptyState({
-  onAdd,
   editGateOpen,
   hasFilter,
 }: {
-  onAdd: () => void;
   editGateOpen: boolean;
   hasFilter: boolean;
 }) {
@@ -126,19 +124,9 @@ function EmptyState({
         {hasFilter
           ? "Try selecting a different filter above."
           : editGateOpen
-          ? "Set your first annual goal to start tracking progress."
+          ? "Use Add Goal button to add your first annual goal."
           : "Goal submissions are currently closed. Check back when the next window opens."}
       </p>
-      {!hasFilter && editGateOpen && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className="mt-4 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add your first goal
-        </button>
-      )}
     </div>
   );
 }
@@ -591,13 +579,11 @@ export function AnnualGoals() {
                 <GoalSkeleton />
               ) : goals.length === 0 ? (
                 <EmptyState
-                  onAdd={openAdd}
                   editGateOpen={annualGoalsEditEnabled}
                   hasFilter={false}
                 />
               ) : filteredGoals.length === 0 ? (
                 <EmptyState
-                  onAdd={openAdd}
                   editGateOpen={annualGoalsEditEnabled}
                   hasFilter={true}
                 />

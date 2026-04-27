@@ -29,11 +29,7 @@ export function MenteeCard({ mentee }: MenteeCardProps) {
   const initials = initialsFor(mentee.full_name);
 
   return (
-    <div
-      className={`flex flex-col gap-3 rounded-lg border bg-surface p-4 shadow-sm transition hover:shadow-md ${
-        hasPending ? "border-border border-l-4 border-l-amber-400" : "border-border"
-      }`}
-    >
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 shadow-sm transition hover:shadow-md">
       {/* Header — avatar, name, active dot, attention pill */}
       <div className="flex items-center gap-3">
         <div
