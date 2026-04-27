@@ -324,6 +324,44 @@ def update_project(
                 detail=f"Project code '{update_data['project_code']}' already exists.",
             )
 
+    # Validate the *merged* reviewer-role state (current values for fields
+    # the payload didn't touch + new values for fields it did). The PM,
+    # the senior reviewing them ("Reports To"), and the Secondary evaluator
+    # must be three distinct users — same reason ProjectCreate enforces it.
+    final_reports_to = update_data.get("reports_to_id", project.reports_to_id)
+    final_secondary = update_data.get(
+        "secondary_evaluator_id", project.secondary_evaluator_id,
+    )
+    pm_assignment = db.query(ProjectAssignment).filter(
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.evaluator_type == "Primary",
+    ).first()
+    pm_user_id = pm_assignment.user_id if pm_assignment else None
+
+    if pm_user_id is not None and final_reports_to == pm_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PM Reports To must be a different user than the PM.",
+        )
+    if (
+        final_secondary is not None
+        and pm_user_id is not None
+        and final_secondary == pm_user_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Secondary Evaluator must be a different user than the PM.",
+        )
+    if (
+        final_secondary is not None
+        and final_secondary == final_reports_to
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Secondary Evaluator must be a different user than PM Reports To.",
+        )
+
     for field, value in update_data.items():
         setattr(project, field, value)
 
@@ -407,6 +445,21 @@ def add_assignment(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This project already has a Primary evaluator (Project Manager).",
             )
+        # The PM cannot also be the senior reviewing them or the project's
+        # secondary evaluator — same constraint enforced on project create.
+        if assignment_in.user_id == project.reports_to_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The PM cannot be the same user as PM Reports To.",
+            )
+        if (
+            project.secondary_evaluator_id is not None
+            and assignment_in.user_id == project.secondary_evaluator_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The PM cannot be the same user as the Secondary Evaluator.",
+            )
 
     # Auto-fill role and department from user profile
     assignment_in = _auto_fill_assignment(assignment_in, db)
@@ -458,6 +511,27 @@ def update_assignment(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This project already has a Primary evaluator.",
+            )
+        # The promoted PM cannot also be the senior who reviews them or
+        # the project's secondary evaluator. Look up the parent project to
+        # cross-check both fields.
+        parent = db.query(Project).filter(
+            Project.id == assignment.project_id,
+            Project.org_id == current_user.org_id,
+        ).first()
+        if parent and assignment.user_id == parent.reports_to_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The PM cannot be the same user as PM Reports To.",
+            )
+        if (
+            parent
+            and parent.secondary_evaluator_id is not None
+            and assignment.user_id == parent.secondary_evaluator_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The PM cannot be the same user as the Secondary Evaluator.",
             )
 
     for field, value in update_data.items():

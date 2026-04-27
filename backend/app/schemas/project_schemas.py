@@ -98,6 +98,37 @@ class ProjectCreate(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _no_reviewer_role_overlap(self) -> "ProjectCreate":
+        """The PM, the senior who reviews them ("Reports To"), and the
+        Secondary evaluator must be three distinct people. Allowing any
+        two of these to be the same user would let one person review
+        themselves or hold both reviewer roles, breaking the chain.
+        """
+        primaries = [a for a in self.assignments if a.evaluator_type == "Primary"]
+        pm_user_id = primaries[0].user_id if primaries else None
+
+        if pm_user_id is not None and self.reports_to_id == pm_user_id:
+            raise ValueError(
+                "PM Reports To must be a different user than the PM."
+            )
+        if (
+            self.secondary_evaluator_id is not None
+            and pm_user_id is not None
+            and self.secondary_evaluator_id == pm_user_id
+        ):
+            raise ValueError(
+                "Secondary Evaluator must be a different user than the PM."
+            )
+        if (
+            self.secondary_evaluator_id is not None
+            and self.secondary_evaluator_id == self.reports_to_id
+        ):
+            raise ValueError(
+                "Secondary Evaluator must be a different user than PM Reports To."
+            )
+        return self
+
 
 class ProjectUpdate(BaseModel):
     """Payload for updating project metadata."""

@@ -219,11 +219,26 @@ export function ProjectModal({
   //   - reports_to_id set
   //   - reports_to_id != PM (a PM cannot review themselves)
   //   - secondary_evaluator_id != PM (no self-review)
+  //   - secondary_evaluator_id != reports_to_id (the same person can't
+  //     play both reviewer roles — the secondary should be an outside
+  //     perspective, not the same senior who already reviews the PM)
   //   - expected_end_date >= start_date when both set
   const pmUserId = existingPrimary?.user_id ?? (draftPrimary && draftPrimary.user_id ? Number(draftPrimary.user_id) : null);
   const reportsToConflict = pmUserId !== null && reportsToId === pmUserId;
-  const secondaryConflict = pmUserId !== null && secondaryEvaluatorId === pmUserId;
+  const secondaryConflictWithPm = pmUserId !== null && secondaryEvaluatorId === pmUserId;
+  const secondaryConflictWithReportsTo =
+    secondaryEvaluatorId !== null && secondaryEvaluatorId === reportsToId;
   const endBeforeStart = !!startDate && !!expectedEndDate && expectedEndDate < startDate;
+
+  // Dropdown exclusions — keep the two reviewer-role pickers from
+  // surfacing each other or the PM as candidates.
+  const reportsToExclude: number[] = [];
+  if (pmUserId !== null) reportsToExclude.push(pmUserId);
+  if (secondaryEvaluatorId !== null) reportsToExclude.push(secondaryEvaluatorId);
+
+  const secondaryExclude: number[] = [];
+  if (pmUserId !== null) secondaryExclude.push(pmUserId);
+  if (reportsToId !== null) secondaryExclude.push(reportsToId);
 
   const validationError =
     !projectCode.trim()
@@ -238,9 +253,11 @@ export function ProjectModal({
               ? "PM Reports To is required."
               : reportsToConflict
                 ? "PM Reports To must be a different user than the PM."
-                : secondaryConflict
+                : secondaryConflictWithPm
                   ? "Secondary Evaluator must be a different user than the PM."
-                  : null;
+                  : secondaryConflictWithReportsTo
+                    ? "Secondary Evaluator must be a different user than PM Reports To."
+                    : null;
 
   // ── Submit ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -393,7 +410,7 @@ export function ProjectModal({
                   onChange={setReportsToId}
                   label="PM Reports To"
                   required
-                  excludeIds={pmUserId !== null ? [pmUserId] : undefined}
+                  excludeIds={reportsToExclude}
                 />
                 <UserCombobox
                   users={users}
@@ -401,7 +418,7 @@ export function ProjectModal({
                   onChange={setSecondaryEvaluatorId}
                   label="Secondary Evaluator"
                   placeholder="Optional — can be added later"
-                  excludeIds={pmUserId !== null ? [pmUserId] : undefined}
+                  excludeIds={secondaryExclude}
                 />
               </div>
 
