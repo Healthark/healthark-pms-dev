@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     CSRF_COOKIE_NAME: str = "csrf_token"
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
 
+    # ── CORS ─────────────────────────────────────────────────────────
+    # Comma-separated list of production frontend origins to allow in addition
+    # to the localhost defaults. Set this in Render env vars:
+    #   CORS_ALLOWED_ORIGINS=https://your-app.vercel.app,https://www.yourapp.com
+    CORS_ALLOWED_ORIGINS: str = ""
+
     # ── Outbound email (admin password reset, future notifications) ─
     # Leave SMTP_USERNAME / SMTP_PASSWORD unset to disable email sending —
     # the password-reset endpoint will still succeed and the admin can
