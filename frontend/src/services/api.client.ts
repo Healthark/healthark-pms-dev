@@ -5,7 +5,7 @@ const CSRF_HEADER_NAME = "X-CSRF-Token";
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
 
 const apiClient = axios.create({
-  baseURL: "http://localhost:8000/api/v1",
+  baseURL: "https://healthark-pms-dev.onrender.com/api/v1",
   // Send the HttpOnly auth cookie + the readable csrf cookie on every call.
   // Without this, the browser strips cookies from cross-origin requests.
   withCredentials: true,
