@@ -25,6 +25,7 @@ _default_origins = [
     "http://localhost",
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://healthark-pms-dev.vercel.app"
 ]
 
 # Merge in any production origins set via env var (comma-separated).
