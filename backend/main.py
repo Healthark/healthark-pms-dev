@@ -21,12 +21,23 @@ app = FastAPI(
     description="Multi-Tenant Performance Management API"
 )
 
-origins = [
+_default_origins = [
     "http://localhost",
     "http://localhost:5173",
     "http://localhost:3000",
     "https://healthark-pms-dev.vercel.app"
 ]
+
+# Merge in any production origins set via env var (comma-separated).
+# Example Render env var:
+#   CORS_ALLOWED_ORIGINS=https://your-app.vercel.app,https://www.yourapp.com
+_extra_origins = [
+    o.strip()
+    for o in settings.CORS_ALLOWED_ORIGINS.split(",")
+    if o.strip()
+]
+
+origins = _default_origins + _extra_origins
 
 # Starlette executes middleware in reverse registration order on the request
 # phase — the LAST add_middleware call is the outermost layer. CORS must be
