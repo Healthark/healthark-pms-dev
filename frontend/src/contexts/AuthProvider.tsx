@@ -59,6 +59,11 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
    * consuming component (Login.tsx watches `user`).
    */
   const login = useCallback((data: AuthResponse): void => {
+    // Store the CSRF token separately so the axios interceptor can read it
+    // on cross-origin deployments where document.cookie is domain-scoped.
+    if (data.csrf_token) {
+      localStorage.setItem("csrf_token", data.csrf_token);
+    }
     localStorage.setItem("user", JSON.stringify(data));
     setUser(data);
   }, []);
@@ -68,6 +73,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
     // still runs even if the network call fails).
     void authService.logout();
     localStorage.removeItem("user");
+    localStorage.removeItem("csrf_token");
     setUser(null);
   }, []);
 

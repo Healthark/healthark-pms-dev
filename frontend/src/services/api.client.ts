@@ -29,10 +29,17 @@ function readCookie(name: string): string | null {
 // REQUEST INTERCEPTOR: double-submit CSRF token on mutating requests.
 // The JWT itself is no longer touched here — it rides in the HttpOnly cookie
 // that the browser attaches automatically thanks to `withCredentials`.
+//
+// CSRF source priority:
+//   1. Cookie — works in same-origin deployments (local dev: localhost:5173 → localhost:8000)
+//   2. localStorage — cross-origin fallback (Vercel → Render). JS on vercel.app cannot
+//      read cookies set by onrender.com, so the login endpoint returns the CSRF token
+//      in the response body and AuthProvider stores it in localStorage["csrf_token"].
 apiClient.interceptors.request.use((config) => {
   const method = (config.method ?? "get").toLowerCase();
   if (MUTATING_METHODS.has(method)) {
-    const csrf = readCookie(CSRF_COOKIE_NAME);
+    const csrf =
+      readCookie(CSRF_COOKIE_NAME) ?? localStorage.getItem(CSRF_COOKIE_NAME);
     if (csrf) {
       config.headers[CSRF_HEADER_NAME] = csrf;
     }

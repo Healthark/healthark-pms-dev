@@ -27,9 +27,13 @@ export interface SessionClaims {
 }
 
 // After C12 the JWT lives in an HttpOnly cookie and is NEVER surfaced to JS.
-// The login response body is just the session claims — same shape as
-// /auth/session, which is why AuthResponse is a simple alias now.
-export type AuthResponse = SessionClaims;
+// The login response body carries session claims + the CSRF token value.
+// The CSRF token is also set as a readable cookie, but cross-origin
+// deployments (Vercel → Render) can't read a foreign-domain cookie, so
+// the body field is the cross-origin escape hatch. Same-origin dev ignores it.
+export interface AuthResponse extends SessionClaims {
+  csrf_token?: string; // present on login, absent on session refresh
+}
 
 export const authService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {

@@ -47,4 +47,11 @@ class SessionResponse(BaseModel):
 # deliberately NOT part of the body so JS can never read it. The body carries
 # only the session claims the frontend needs to render.
 class TokenResponse(SessionResponse):
-    pass
+    # The CSRF token value is also included in the response body so that
+    # cross-origin deployments (e.g. Vercel frontend → Render backend) can
+    # store it in localStorage and replay it as the X-CSRF-Token header.
+    # The double-submit cookie trick breaks cross-origin because JS running on
+    # vercel.app cannot read cookies set by onrender.com — document.cookie is
+    # domain-scoped. The body field is the escape hatch; same-origin dev
+    # continues to use the cookie path unchanged.
+    csrf_token: str = ""

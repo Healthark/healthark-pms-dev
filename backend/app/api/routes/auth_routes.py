@@ -104,8 +104,13 @@ def login(
     # The JWT rides in an HttpOnly cookie so JS (and therefore XSS) cannot
     # read it. The CSRF token rides in a parallel non-HttpOnly cookie so the
     # frontend can copy it into the X-CSRF-Token header (double-submit).
+    # The same value is also returned in the response body — cross-origin
+    # deployments (Vercel → Render) cannot read a cookie set by a different
+    # domain, so they fall back to reading it from the body and storing it in
+    # localStorage. Same-origin dev uses the cookie path unchanged.
     max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     cookie_kwargs = settings.cookie_kwargs()
+    csrf_token_value = secrets.token_urlsafe(32)
 
     response.set_cookie(
         key=settings.ACCESS_COOKIE_NAME,
@@ -116,13 +121,13 @@ def login(
     )
     response.set_cookie(
         key=settings.CSRF_COOKIE_NAME,
-        value=secrets.token_urlsafe(32),
+        value=csrf_token_value,
         httponly=False,
         max_age=max_age,
         **cookie_kwargs,
     )
 
-    return session
+    return {**session, "csrf_token": csrf_token_value}
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
