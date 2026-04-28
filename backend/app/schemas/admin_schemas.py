@@ -90,11 +90,15 @@ class PasswordResetResponse(BaseModel):
     The temporary password is shown in the admin UI exactly once — the admin
     reads it out to the user, who is then forced to change it on next login.
     It is NEVER stored anywhere except as a hash on the user's row.
+
+    `email_sent` reports whether the temp password was successfully delivered
+    to the user via SMTP. False means the admin must relay it manually.
     """
     user_id: int
     full_name: str
     email: str
     temporary_password: str
+    email_sent: bool = False
 
 
 # ── Admin Settings (Simplified View) ─────────────────────────────────

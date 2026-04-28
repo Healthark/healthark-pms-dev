@@ -30,6 +30,7 @@ from app.models.user_models import User
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings, CycleType
 from app.core.cycle_utils import get_current_cycle_info
+from app.services.send_email import send_password_reset_email
 from datetime import date
 from app.schemas.admin_schemas import (
     DepartmentBrief,
@@ -254,11 +255,21 @@ def reset_user_password(
     user.must_change_password = True
     db.commit()
 
+    # Best-effort email delivery. Failure is logged inside the service and the
+    # plaintext temp password still flows back to the admin reveal modal so
+    # they can relay it manually.
+    email_sent = send_password_reset_email(
+        to_email=user.email,
+        full_name=user.full_name,
+        temp_password=temp_password,
+    )
+
     return PasswordResetResponse(
         user_id=user.id,
         full_name=user.full_name,
         email=user.email,
         temporary_password=temp_password,
+        email_sent=email_sent,
     )
 
 

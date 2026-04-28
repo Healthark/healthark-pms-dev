@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, KeyRound, AlertTriangle, Check } from "lucide-react";
+import { Copy, KeyRound, AlertTriangle, Check, Mail, MailX } from "lucide-react";
 import type { PasswordResetResponse } from "../../services/admin.service";
 
 interface TempPasswordRevealModalProps {
@@ -63,7 +63,27 @@ export function TempPasswordRevealModal({
           </div>
         </div>
 
-        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+        {/* Email delivery status */}
+        {result.email_sent ? (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3">
+            <Mail className="h-4 w-4 shrink-0 text-green-600 mt-0.5" aria-hidden="true" />
+            <p className="text-xs text-green-800">
+              Temporary password emailed to{" "}
+              <span className="font-medium">{result.email}</span>. They can also
+              use the copy below if the email is delayed.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+            <MailX className="h-4 w-4 shrink-0 text-red-600 mt-0.5" aria-hidden="true" />
+            <p className="text-xs text-red-800">
+              Email delivery failed or is not configured. Copy the password
+              below and share it with the user manually.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <div className="flex items-start gap-2">
             <AlertTriangle
               className="h-4 w-4 shrink-0 text-amber-600 mt-0.5"

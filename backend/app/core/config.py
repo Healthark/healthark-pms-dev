@@ -27,6 +27,18 @@ class Settings(BaseSettings):
     CSRF_COOKIE_NAME: str = "csrf_token"
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
 
+    # ── Outbound email (admin password reset, future notifications) ─
+    # Leave SMTP_USERNAME / SMTP_PASSWORD unset to disable email sending —
+    # the password-reset endpoint will still succeed and the admin can
+    # relay the temp password manually via the reveal modal.
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_NAME: str = "Healthark PMS"
+    # Used to render the "Sign in" CTA link inside outbound emails.
+    APP_BASE_URL: str = "http://localhost:5173"
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     FISCAL_START_MONTH: int = 4

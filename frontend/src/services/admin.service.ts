@@ -37,6 +37,9 @@ export interface PasswordResetResponse {
   full_name: string;
   email: string;
   temporary_password: string;
+  /** Whether the backend successfully emailed the temp password to the user.
+   *  False = SMTP unconfigured or delivery failed; admin must relay manually. */
+  email_sent: boolean;
 }
 
 export interface SystemSettings {
