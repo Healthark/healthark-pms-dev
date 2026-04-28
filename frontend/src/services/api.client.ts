@@ -4,8 +4,13 @@ const CSRF_COOKIE_NAME = "csrf_token";
 const CSRF_HEADER_NAME = "X-CSRF-Token";
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
 
+// In development this falls back to localhost. In production set
+// VITE_API_URL=https://your-backend.onrender.com/api/v1 in Vercel env vars.
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+
 const apiClient = axios.create({
-  baseURL: "https://healthark-pms-dev.onrender.com/api/v1",
+  baseURL: API_BASE_URL,
   // Send the HttpOnly auth cookie + the readable csrf cookie on every call.
   // Without this, the browser strips cookies from cross-origin requests.
   withCredentials: true,
