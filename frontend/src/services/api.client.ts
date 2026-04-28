@@ -7,7 +7,7 @@ const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
 // In development this falls back to localhost. In production set
 // VITE_API_URL=https://your-backend.onrender.com/api/v1 in Vercel env vars.
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+  import.meta.env.VITE_API_URL ?? "https://healthark-pms-dev.onrender.com/api/v1";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
