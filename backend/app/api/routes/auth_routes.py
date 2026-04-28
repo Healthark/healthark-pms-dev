@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from typing import Annotated
 
@@ -5,14 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, create_access_token, get_password_hash
 from app.core.config import settings
 from app.models.user_models import User
 from app.models.organization_models import Organization
-from app.schemas.auth_schemas import SessionResponse, TokenResponse
+from app.models.password_reset_token_models import PasswordResetToken
+from app.schemas.auth_schemas import (
+    SessionResponse,
+    TokenResponse,
+    ResetPasswordRequest,
+)
 from app.schemas.user_schemas import UserProfile as UserProfileResponse
 from app.api.dependencies import CurrentUser
 
@@ -140,6 +146,62 @@ def get_session(current_user: CurrentUser, db: DbSession):
     feature toggles, and mentor assignments take effect without re-login.
     """
     return _build_session(current_user, db)
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(payload: ResetPasswordRequest, db: DbSession):
+    """
+    Public endpoint — consumes a one-time reset token and sets a new password.
+
+    Called by the frontend `/reset-password?token=…` page after the user
+    arrives via the email link. The token is validated by hashing the
+    submitted plaintext and looking up `password_reset_tokens.token_hash`;
+    the row must exist, not be expired, and not have been used. On success
+    we update `password_hash`, clear `must_change_password`, and stamp
+    `used_at` so the token cannot be replayed.
+
+    Generic error messages are intentional — we do NOT distinguish "token
+    not found" from "token expired" from "token already used" externally,
+    so an attacker probing tokens cannot tell which condition failed.
+
+    Unauthenticated by design (the user has lost access to their account).
+    The CSRF middleware exempts this path because no auth/CSRF cookies
+    exist at the time of call.
+    """
+    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
+    record = (
+        db.query(PasswordResetToken)
+        .filter(PasswordResetToken.token_hash == token_hash)
+        .first()
+    )
+
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This reset link is invalid or has expired. Ask your administrator to issue a new one.",
+    )
+
+    if record is None or record.used_at is not None:
+        raise invalid
+
+    # `expires_at` is stored as timezone-aware UTC. Compare in the same zone.
+    now = datetime.now(timezone.utc)
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        # SQLite returns naive datetimes; treat as UTC.
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        raise invalid
+
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if user is None or user.is_deleted:
+        raise invalid
+
+    user.password_hash = get_password_hash(payload.new_password)
+    user.must_change_password = False
+    record.used_at = now
+    db.commit()
+
+    return None
 
 
 @router.get("/me", response_model=UserProfileResponse)

@@ -30,12 +30,39 @@ class Settings(BaseSettings):
     # ── Outbound email (admin password reset, future notifications) ─
     # Leave SMTP_USERNAME / SMTP_PASSWORD unset to disable email sending —
     # the password-reset endpoint will still succeed and the admin can
-    # relay the temp password manually via the reveal modal.
+    # relay the link manually via the reveal modal.
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
-    SMTP_FROM_NAME: str = "Healthark PMS"
+    # Optional GLOBAL display-name override. When unset, the per-org email
+    # theme's brand_name wins (HealthArk vs Miltenyi vs …). Single-tenant
+    # deployments can pin this; multi-tenant should leave it unset.
+    SMTP_FROM_NAME: str | None = None
+    # Mailbox in the From: header. When unset, _send() falls back to
+    # SMTP_USERNAME (the auth account), which is required for personal
+    # Gmail since Gmail rewrites/rejects mismatching From: addresses.
+    #
+    # Production checklist for sending from a custom domain (e.g.
+    # `noreply@yourcompany.com`) so messages don't get tagged "via gmail.com"
+    # and don't trip strict spam filters:
+    #   1. SPF — TXT record at the apex declaring authorised senders, e.g.:
+    #        "v=spf1 include:_spf.google.com include:mailgun.org ~all"
+    #   2. DKIM — generate a key pair from your transactional provider
+    #      (Postmark / Mailgun / SES / Google Workspace) and publish the
+    #      public key as TXT at `<selector>._domainkey.yourcompany.com`.
+    #      Example value (provider-issued):
+    #        "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA…"
+    #   3. DMARC — TXT at `_dmarc.yourcompany.com`:
+    #        "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourcompany.com"
+    #      Start with `p=none` for a week to monitor `rua` reports, then
+    #      ratchet to `quarantine` and finally `reject` once aligned.
+    #   4. Verify with https://www.mail-tester.com/ before sending volume.
+    #
+    # Personal Gmail accounts (i.e. our current dev setup) are also subject
+    # to a ~500/day send cap and a 100/recipient cap. Production should run
+    # via Workspace SMTP relay or a transactional provider.
+    SMTP_FROM_EMAIL: str | None = None
     # Used to render the "Sign in" CTA link inside outbound emails.
     APP_BASE_URL: str = "http://localhost:5173"
 

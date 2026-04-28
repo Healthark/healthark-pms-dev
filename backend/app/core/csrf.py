@@ -38,6 +38,9 @@ _EXEMPT_PATHS = frozenset(
         "/openapi.json",
         f"{settings.API_V1_STR}/auth/login",
         f"{settings.API_V1_STR}/auth/logout",
+        # Public — the user has no auth/CSRF cookies yet (they lost access
+        # to their account, which is the whole reason they're hitting it).
+        f"{settings.API_V1_STR}/auth/reset-password",
     }
 )
 

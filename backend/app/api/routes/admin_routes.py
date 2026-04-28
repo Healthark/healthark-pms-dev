@@ -18,20 +18,23 @@ Security Layers Applied (ALL endpoints):
     Layer 4 — Ownership:        Not applicable (Admin operates on all org data)
 """
 
+import hashlib
 import secrets
 import string
 from typing import List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user_models import User
+from app.models.password_reset_token_models import PasswordResetToken
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings, CycleType
 from app.core.cycle_utils import get_current_cycle_info
-from app.services.send_email import send_password_reset_email
-from datetime import date
+from app.services.send_email import is_smtp_configured, send_password_reset_email
+from datetime import date, datetime, timedelta, timezone
 from app.schemas.admin_schemas import (
     DepartmentBrief,
     DesignationBrief,
@@ -207,23 +210,53 @@ def update_user(
     return _load_user_with_relations(db, user.id)
 
 
+# ── Reset rate limits ────────────────────────────────────────────────
+# Caps the rolling-1-hour count of /users/{id}/reset-password requests.
+# RESETS_PER_USER_PER_HOUR  - prevents reset-spam being weaponized as
+#   denial-of-account against a single target.
+# RESETS_PER_ADMIN_PER_HOUR - cuts the blast radius if an admin account
+#   itself is compromised.
+# Backed by the password_reset_tokens table — no Redis required.
+RESETS_PER_USER_PER_HOUR = 3
+RESETS_PER_ADMIN_PER_HOUR = 30
+RESET_TOKEN_TTL_MINUTES = 15
+
+
+def _hash_reset_token(token: str) -> str:
+    """SHA-256 hex of the URL-safe token, stored in password_reset_tokens.
+    The plaintext is only ever in the email link; the DB never sees it."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 @router.post("/users/{user_id}/reset-password", response_model=PasswordResetResponse)
 def reset_user_password(
     user_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
-    Generate a random temporary password for a user and return it to the admin
-    exactly once.
+    Issue a one-time, time-limited password-reset link for a user.
 
-    The user's `must_change_password` flag is set so the app will force them
-    into the change-password screen on their next authenticated request. The
-    plaintext temp password is NEVER persisted — only its bcrypt hash lands
-    in the database. If the admin loses it, they just click reset again.
+    Flow:
+        1. Generate a URL-safe random token, store its SHA-256 hash with a
+           15-minute expiry, lock the user's existing password (rotated to a
+           random unguessable hash so the old credentials no longer work),
+           set must_change_password=True.
+        2. Email the link `{APP_BASE_URL}/reset-password?token=<token>` to
+           the user. The plaintext token NEVER touches the database.
+        3. The user clicks the link, picks a new password via
+           POST /auth/reset-password, and the token is marked used.
 
-    Admins cannot reset their own password via this endpoint — they must use
-    the self-service change-password flow so their session stays valid.
+    Rate limits (rolling 1-hour window, per the password_reset_tokens ledger):
+        - up to 3 resets per target user
+        - up to 30 resets per requesting admin
+
+    Failure modes:
+        - Email delivery failure: the reset link is still returned to the
+          admin in the response so they can copy and relay it manually.
+        - Self-reset blocked: admins must use the self-service change-password
+          flow so their session stays valid.
     """
     _require_admin(current_user)
 
@@ -250,25 +283,100 @@ def reset_user_password(
             detail="Use the profile page's change-password form to reset your own password.",
         )
 
-    temp_password = _generate_temp_password()
-    user.password_hash = get_password_hash(temp_password)
+    # ── Rate limit: per target user ──────────────────────────────────
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    user_recent = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.created_at >= one_hour_ago,
+        )
+        .count()
+    )
+    if user_recent >= RESETS_PER_USER_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"This user already has {RESETS_PER_USER_PER_HOUR} active "
+                "reset requests in the last hour. Wait for the existing link "
+                "to expire or be used before issuing a new one."
+            ),
+        )
+
+    # ── Rate limit: per requesting admin ─────────────────────────────
+    admin_recent = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.requested_by_id == current_user.id,
+            PasswordResetToken.created_at >= one_hour_ago,
+        )
+        .count()
+    )
+    if admin_recent >= RESETS_PER_ADMIN_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"You've issued {RESETS_PER_ADMIN_PER_HOUR} password resets "
+                "in the last hour. This rate limit guards against compromised "
+                "admin accounts — please wait before issuing more."
+            ),
+        )
+
+    # ── Issue the token ──────────────────────────────────────────────
+    # 32 bytes URL-safe → ~43 chars. Hash before storage; plaintext leaves
+    # the process exactly once via the email link below.
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
+
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            requested_by_id=current_user.id,
+            token_hash=_hash_reset_token(raw_token),
+            expires_at=expires_at,
+        )
+    )
+
+    # Lock the user's current password by rotating to a random unguessable
+    # hash. They can no longer log in with their existing credentials —
+    # only via the email link → /reset-password page.
+    user.password_hash = get_password_hash(secrets.token_urlsafe(32))
     user.must_change_password = True
     db.commit()
 
-    # Best-effort email delivery. Failure is logged inside the service and the
-    # plaintext temp password still flows back to the admin reveal modal so
-    # they can relay it manually.
-    email_sent = send_password_reset_email(
-        to_email=user.email,
-        full_name=user.full_name,
-        temp_password=temp_password,
+    reset_link = (
+        f"{settings.APP_BASE_URL.rstrip('/')}/reset-password?token={raw_token}"
     )
+
+    # Decide synchronously whether email will be attempted at all. SMTP
+    # config is process-wide so we know up-front if the request can leave
+    # the building. If yes, schedule the actual SMTP work to run AFTER the
+    # response is sent — keeps the API thread off Gmail's TLS handshake
+    # (~200–800 ms typical, multi-second on transient failures) and
+    # decouples admin UX from outbound-mail health.
+    #
+    # `email_sent` semantics: "queued for delivery" rather than "delivered".
+    # Real failure is logged inside the service. The link is also returned
+    # in this response, so the admin can relay it manually if the user
+    # reports the email never arrived.
+    email_sent = False
+    if is_smtp_configured():
+        background_tasks.add_task(
+            send_password_reset_email,
+            to_email=user.email,
+            full_name=user.full_name,
+            reset_link=reset_link,
+            expires_in_minutes=RESET_TOKEN_TTL_MINUTES,
+            org_id=user.org_id,
+        )
+        email_sent = True
 
     return PasswordResetResponse(
         user_id=user.id,
         full_name=user.full_name,
         email=user.email,
-        temporary_password=temp_password,
+        reset_link=reset_link,
+        expires_in_minutes=RESET_TOKEN_TTL_MINUTES,
         email_sent=email_sent,
     )
 

@@ -12,3 +12,4 @@ from app.models.annual_review_models import AnnualReview
 from app.models.project_models import Project, ProjectAssignment
 from app.models.project_review_models import ProjectReview, ProjectReviewEvaluator
 from app.models.role_expectation_models import RoleExpectation
+from app.models.password_reset_token_models import PasswordResetToken

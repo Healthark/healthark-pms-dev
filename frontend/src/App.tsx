@@ -19,6 +19,7 @@ import { ProjectReviews } from "./pages/ProjectReviews";
 import { MyMentees } from "./pages/MyMentees";
 import { MenteeDetail } from "./pages/MenteeDetail";
 import { ChangePassword } from "./pages/ChangePassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { PageTitleProvider } from "./contexts/PageTitleProvider";
 import { SidebarProvider } from "./contexts/SidebarProvider";
 import { useSidebar } from "./hooks/useSidebar";
@@ -79,6 +80,7 @@ export default function App() {
         {/* Public */}
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/*
           Forced change-password screen. Authenticated but deliberately OUTSIDE

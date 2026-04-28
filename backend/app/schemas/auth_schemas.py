@@ -1,9 +1,19 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 # 1. The Incoming Request (What the React frontend sends us)
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Body for POST /auth/reset-password — user-facing token consumption.
+
+    Submitted by the unauthenticated user via the public reset page after
+    clicking the email link. The plaintext token is hashed in-process and
+    looked up against `password_reset_tokens.token_hash`."""
+    token: str = Field(..., min_length=20, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class SessionResponse(BaseModel):
