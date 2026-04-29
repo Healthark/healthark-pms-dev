@@ -29,7 +29,7 @@ const ORG_ASSETS: Record<number, { logo: string; logoSmall: string; displayName:
   1: {
     logo: "/healtharklogov2.png",
     logoSmall: "/healtharklogo-small.png",
-    displayName: "HealthArk Insights",
+    displayName: "Healthark Insights",
     logoClass: "h-7 w-auto object-contain shrink-0 max-w-[140px]", 
   },
   2: {
@@ -102,7 +102,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { logout, hasFeature, user } = useAuth();
 
-  // Safely grab the org_id, default to 1 (HealthArk) if something goes wrong
+  // Safely grab the org_id, default to 1 (Healthark) if something goes wrong
   const currentOrgId = user?.org_id || 1; 
   const activeAssets = ORG_ASSETS[currentOrgId] || ORG_ASSETS[1];
   // ----------------------

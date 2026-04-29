@@ -33,7 +33,7 @@ function isApiError(
 const TENANT_ASSETS = {
   healthark: {
     id: "healthark",
-    name: "HealthArk",
+    name: "Healthark",
     logo: "/healtharklogov2.png",
     // Locked to h-14 for strict consistency
     logoClass: "h-14 w-auto object-contain drop-shadow-sm",
@@ -90,7 +90,7 @@ export function Login() {
       document.title = "Miltenyi Biotec PMS";
     } else {
       favicon.href = "/healtharklogo-small.png";
-      document.title = "HealthArk PMS";
+      document.title = "Healthark PMS";
     }
 
   }, [activeTenant, user]);

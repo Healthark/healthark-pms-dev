@@ -10,7 +10,7 @@ const THEME_MAP: Record<number, string> = {
 
 /** Browser tab title + favicon per org */
 const BRAND_META: Record<number, { title: string; favicon: string }> = {
-  1: { title: "HealthArk PMS",       favicon: "/healtharklogo-small.png" },
+  1: { title: "Healthark PMS",       favicon: "/healtharklogo-small.png" },
   2: { title: "Miltenyi Biotec PMS", favicon: "/miltenyi-biotech-small.svg" },
 };
 
@@ -148,8 +148,8 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
       setFavicon(meta.favicon);
     } else {
       document.documentElement.removeAttribute("data-theme");
-      // Reset to HealthArk defaults when logged out
-      document.title = "HealthArk PMS";
+      // Reset to Healthark defaults when logged out
+      document.title = "Healthark PMS";
       setFavicon("/healtharklogo-small.png");
     }
   }, [user?.org_id]);
