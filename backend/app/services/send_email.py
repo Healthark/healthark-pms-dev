@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import socket
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -111,6 +112,40 @@ def _esc(value: object) -> str:
 # ── Transport ───────────────────────────────────────────────────────
 
 
+class _IPv4SMTP(smtplib.SMTP):
+    """SMTP that resolves and connects via IPv4 only.
+
+    Render Free/Starter tiers don't have working IPv6 outbound. `smtp.gmail.com`
+    (and most managed mail providers) resolve to both AAAA and A records, so
+    Python's default `socket.create_connection` tries IPv6 first and fails
+    with `OSError: [Errno 101] Network is unreachable` before it ever attempts
+    IPv4. Asking `getaddrinfo` for `AF_INET` only sidesteps that.
+    """
+
+    def _get_socket(self, host, port, timeout):
+        if self.debuglevel > 0:
+            self._print_debug("connect: to", (host, port), self.source_address)
+        last_err: Exception | None = None
+        for af, socktype, proto, _canon, sa in socket.getaddrinfo(
+            host, port, socket.AF_INET, socket.SOCK_STREAM,
+        ):
+            sock: socket.socket | None = None
+            try:
+                sock = socket.socket(af, socktype, proto)
+                sock.settimeout(timeout)
+                if self.source_address is not None:
+                    sock.bind(self.source_address)
+                sock.connect(sa)
+                return sock
+            except OSError as exc:
+                last_err = exc
+                if sock is not None:
+                    sock.close()
+        if last_err is not None:
+            raise last_err
+        raise OSError(f"No IPv4 address found for {host}")
+
+
 def is_smtp_configured() -> bool:
     """True iff outbound mail can leave the building. Callers use this to
     decide synchronously whether to bother enqueuing a background send."""
@@ -153,7 +188,7 @@ def _send(
     message.add_alternative(html_body, subtype="html")
 
     try:
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
+        with _IPv4SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
             server.starttls()
             server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
             server.send_message(message)
