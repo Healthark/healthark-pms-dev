@@ -17,6 +17,7 @@ from enum import Enum
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import DbSession, CurrentUser
+from app.core.cache import invalidate_settings, system_settings_cache
 from app.models.system_settings_models import SystemSettings
 from app.schemas.system_settings_schemas import (
     SystemSettingsCreate,
@@ -38,18 +39,25 @@ def get_system_settings(
     This endpoint is intentionally open to ALL authenticated users (not just Admins)
     because the Topbar component needs to display the active cycle name on every page.
     Tenant isolation is still enforced — you only ever see your own org's settings.
+
+    Cached per-org via app.core.cache.system_settings_cache. Invalidated on every
+    write to SystemSettings (POST/PATCH here and admin PATCH /admin/settings) so a
+    save reflects immediately rather than waiting for the TTL.
     """
-    settings = db.query(SystemSettings).filter(
-        SystemSettings.org_id == current_user.org_id
-    ).first()
+    def _query() -> SystemSettingsResponse:
+        row = db.query(SystemSettings).filter(
+            SystemSettings.org_id == current_user.org_id
+        ).first()
 
-    if not settings:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="System settings have not been configured for this organization."
-        )
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="System settings have not been configured for this organization."
+            )
 
-    return settings
+        return SystemSettingsResponse.model_validate(row, from_attributes=True)
+
+    return system_settings_cache.get_or_compute(current_user.org_id, _query)
 
 
 @router.post(
@@ -101,6 +109,7 @@ def initialize_system_settings(
     db.add(new_settings)
     db.commit()
     db.refresh(new_settings)
+    invalidate_settings(current_user.org_id)
 
     return new_settings
 
@@ -154,5 +163,6 @@ def update_system_settings(
 
     db.commit()
     db.refresh(settings)
+    invalidate_settings(current_user.org_id)
 
     return settings

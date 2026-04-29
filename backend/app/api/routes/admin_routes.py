@@ -26,6 +26,12 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
+from app.core.cache import (
+    admin_settings_cache,
+    departments_cache,
+    designations_cache,
+    invalidate_settings,
+)
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user_models import User
@@ -472,15 +478,21 @@ def list_departments(
     """Return all active departments for the org (powers the <select> dropdown)."""
     _require_admin(current_user)
 
-    return (
-        db.query(Department)
-        .filter(
-            Department.org_id == current_user.org_id,
-            Department.is_active == True,  # noqa: E712
+    def _query() -> List[DepartmentBrief]:
+        rows = (
+            db.query(Department)
+            .filter(
+                Department.org_id == current_user.org_id,
+                Department.is_active == True,  # noqa: E712
+            )
+            .order_by(Department.name)
+            .all()
         )
-        .order_by(Department.name)
-        .all()
-    )
+        # Serialize to plain Pydantic models so the cache holds stable values
+        # rather than ORM objects bound to a (now-closed) Session.
+        return [DepartmentBrief.model_validate(r, from_attributes=True) for r in rows]
+
+    return departments_cache.get_or_compute(current_user.org_id, _query)
 
 
 @router.get("/designations", response_model=List[DesignationBrief])
@@ -491,15 +503,19 @@ def list_designations(
     """Return all active designations for the org, sorted by hierarchy level."""
     _require_admin(current_user)
 
-    return (
-        db.query(Designation)
-        .filter(
-            Designation.org_id == current_user.org_id,
-            Designation.is_active == True,  # noqa: E712
+    def _query() -> List[DesignationBrief]:
+        rows = (
+            db.query(Designation)
+            .filter(
+                Designation.org_id == current_user.org_id,
+                Designation.is_active == True,  # noqa: E712
+            )
+            .order_by(Designation.level)
+            .all()
         )
-        .order_by(Designation.level)
-        .all()
-    )
+        return [DesignationBrief.model_validate(r, from_attributes=True) for r in rows]
+
+    return designations_cache.get_or_compute(current_user.org_id, _query)
 
 
 # =====================================================================
@@ -520,30 +536,33 @@ def get_admin_settings(
     """
     _require_admin(current_user)
 
-    settings = db.query(SystemSettings).filter(
-        SystemSettings.org_id == current_user.org_id,
-    ).first()
+    def _query() -> AdminSettingsResponse:
+        row = db.query(SystemSettings).filter(
+            SystemSettings.org_id == current_user.org_id,
+        ).first()
 
-    if not settings:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="System settings have not been configured.",
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="System settings have not been configured.",
+            )
+
+        return AdminSettingsResponse(
+            id=row.id,
+            org_id=row.org_id,
+            active_cycle=row.active_cycle_name,
+            cycle_type=row.cycle_type,
+            fiscal_start_month=row.fiscal_start_month,
+            goals_edit_enabled=row.goals_edit_enabled,
+            annual_goals_edit_enabled=row.annual_goals_edit_enabled,
+            annual_goals_final_rating_visible=row.annual_goals_final_rating_visible,
+            project_ratings_visible=row.project_ratings_visible,
+            annual_reviews_enabled=row.annual_reviews_enabled,
+            annual_review_final_rating_visible=row.annual_review_final_rating_visible,
+            updated_at=row.updated_at,
         )
 
-    return AdminSettingsResponse(
-        id=settings.id,
-        org_id=settings.org_id,
-        active_cycle=settings.active_cycle_name,
-        cycle_type=settings.cycle_type,
-        fiscal_start_month=settings.fiscal_start_month,
-        goals_edit_enabled=settings.goals_edit_enabled,
-        annual_goals_edit_enabled=settings.annual_goals_edit_enabled,
-        annual_goals_final_rating_visible=settings.annual_goals_final_rating_visible,
-        project_ratings_visible=settings.project_ratings_visible,
-        annual_reviews_enabled=settings.annual_reviews_enabled,
-        annual_review_final_rating_visible=settings.annual_review_final_rating_visible,
-        updated_at=settings.updated_at,
-    )
+    return admin_settings_cache.get_or_compute(current_user.org_id, _query)
 
 
 @router.patch("/settings", response_model=AdminSettingsResponse)
@@ -597,6 +616,7 @@ def update_admin_settings(
 
     db.commit()
     db.refresh(settings)
+    invalidate_settings(current_user.org_id)
 
     return AdminSettingsResponse(
         id=settings.id,
