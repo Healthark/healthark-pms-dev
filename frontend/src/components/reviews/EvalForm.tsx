@@ -190,7 +190,7 @@ export function EvalForm({
 
         <PerformanceRatingSelect
           id="mentor-rating"
-          label="Your Overall Rating"
+          label="Overall Rating"
           value={rating}
           onChange={setRating}
         />
