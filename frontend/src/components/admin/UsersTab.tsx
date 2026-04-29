@@ -28,15 +28,13 @@ type UsersSortKey =
   | "designation_name"
   | "status";
 
-type RoleFilter = "all" | "Admin" | "Manager" | "Principal" | "Employee";
+type RoleFilter = "all" | "Admin" | "Staff";
 type StatusFilter = "all" | "active" | "inactive";
 
 const ROLE_OPTIONS: { value: RoleFilter; label: string }[] = [
   { value: "all", label: "All Roles" },
   { value: "Admin", label: "Admin" },
-  { value: "Manager", label: "Manager" },
-  { value: "Principal", label: "Principal" },
-  { value: "Employee", label: "Employee" },
+  { value: "Staff", label: "Staff" },
 ];
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
