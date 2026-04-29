@@ -28,11 +28,11 @@
 
 /* Base Styles */
 @layer base {
-  /* Default Theme (HealthArk - org_id: 1) */
+  /* Default Theme (Healthark - org_id: 1) */
   :root, [data-theme="healthark"] {
     --brand: #315C84;
     --brand-light: #EBF1F6;
-    --accent: #0EA5E9; /* A nice secondary Sky Blue for HealthArk */
+    --accent: #0EA5E9; /* A nice secondary Sky Blue for Healthark */
     --background: #F8FAFC; 
   }
 
