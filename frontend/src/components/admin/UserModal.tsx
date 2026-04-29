@@ -7,6 +7,7 @@ import type {
   DepartmentBrief,
   DesignationBrief,
 } from "../../services/admin.service";
+import { UserCombobox } from "../common/UserCombobox";
 
 // UPDATE 1: Restrict available roles to only Admin and Staff
 const ROLES = ["Admin", "Staff"] as const;
@@ -260,25 +261,14 @@ export function UserModal({
             </div>
           </div>
 
-          <div>
-            <label htmlFor="mentor" className={LABEL_CLS}>
-              Assigned Mentor / Line Manager
-            </label>
-            <select
-              id="mentor"
-              className={INPUT_CLS}
-              value={form.mentor_id}
-              onChange={(e) => set("mentor_id", e.target.value)}
-            >
-              <option value="">— None —</option>
-              {managers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {/* UPDATE 2: Show designation instead of the system role string */}
-                  {m.full_name} {m.designation?.name ? `(${m.designation.name})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
+          <UserCombobox
+            users={managers}
+            value={form.mentor_id ? Number(form.mentor_id) : null}
+            onChange={(id) => set("mentor_id", id !== null ? String(id) : "")}
+            label="Assigned Mentor / Line Manager"
+            placeholder="Search by name, email, or role…"
+            excludeIds={editingUser ? [editingUser.id] : undefined}
+          />
 
           {!isEditing && (
             <div>

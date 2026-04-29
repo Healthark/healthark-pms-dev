@@ -110,9 +110,10 @@ export default function AdminPanel() {
   }, [loadData]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const mentorOptions = users.filter(
-    (u) => !u.is_deleted && ["Admin", "Manager", "Principal"].includes(u.role),
-  );
+  // Any active user can mentor — Manager/Principal/Admin gating is a UX
+  // choice that fights real-world team structures (a senior IC can mentor a
+  // junior IC without being a "Manager"). Filter here is just the active set.
+  const mentorOptions = users.filter((u) => !u.is_deleted);
 
   // ── User handlers ─────────────────────────────────────────────────────────
   const openAddModal = () => {
