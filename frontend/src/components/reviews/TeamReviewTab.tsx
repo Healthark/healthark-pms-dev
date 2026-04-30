@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, Eye, LayoutGrid, Search,
   Table2, UserCircle, Users,
@@ -21,14 +22,10 @@ import {
 import {
   annualReviewService,
   type MenteeAnnualReview,
-  type MentorEvalPayload,
 } from "../../services/annual-review.service";
-import { getErrorMessage } from "../../utils/errors";
-import { useConfirm } from "../../hooks/useConfirm";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
-import { EvalModal } from "./EvalModal";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
@@ -147,18 +144,14 @@ function EmptyState({ hasFilter }: { readonly hasFilter: boolean }) {
 // ── Main ────────────────────────────────────────────────────────────
 
 export function TeamReviewTab() {
+  const navigate = useNavigate();
   const [reviews, setReviews] = useState<MenteeAnnualReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
-  const [evalTarget, setEvalTarget] = useState<MenteeAnnualReview | null>(null);
   const [viewTarget, setViewTarget] = useState<MenteeAnnualReview | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
-  const [modalError, setModalError] = useState("");
-  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -174,89 +167,6 @@ export function TeamReviewTab() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const handleSubmitEval = async (
-    reviewId: number,
-    payload: MentorEvalPayload,
-  ) => {
-    const target = evalTarget;
-    const ok = await confirm({
-      title: target
-        ? `Submit annual review for ${target.employee_name}?`
-        : "Submit annual review?",
-      message: target
-        ? `Submit your evaluation for ${target.employee_name} (${formatFyLabel(target.cycle_name)}). Once submitted you can't edit it, and the review is forwarded to management for final calibration.`
-        : "Once submitted you can't edit your evaluation, and the review is forwarded to management for final calibration.",
-      variant: "warning",
-      confirmText: "Submit Evaluation",
-    });
-    if (!ok) return;
-    setIsSaving(true);
-    setModalError("");
-    try {
-      const updated = await annualReviewService.submitMentorEval(
-        reviewId,
-        payload,
-      );
-      setReviews((prev) =>
-        prev.map((r) =>
-          r.id === reviewId
-            ? {
-                ...r,
-                ...updated,
-                employee_name: r.employee_name,
-                employee_email: r.employee_email,
-                department: r.department,
-                designation: r.designation,
-              }
-            : r,
-        ),
-      );
-      setEvalTarget(null);
-    } catch (err) {
-      setModalError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveEvalDraft = async (
-    reviewId: number,
-    payload: import("../../services/annual-review.service").MentorEvalDraftPayload,
-  ) => {
-    setIsDraftSaving(true);
-    setModalError("");
-    try {
-      const updated = await annualReviewService.saveMentorDraft(
-        reviewId,
-        payload,
-      );
-      // Keep the modal open; just update the row so reopening pre-populates.
-      setReviews((prev) =>
-        prev.map((r) =>
-          r.id === reviewId
-            ? {
-                ...r,
-                ...updated,
-                employee_name: r.employee_name,
-                employee_email: r.employee_email,
-                department: r.department,
-                designation: r.designation,
-              }
-            : r,
-        ),
-      );
-      setEvalTarget((prev) =>
-        prev && prev.id === reviewId
-          ? { ...prev, ...updated }
-          : prev,
-      );
-    } catch (err) {
-      setModalError(getErrorMessage(err));
-    } finally {
-      setIsDraftSaving(false);
-    }
-  };
 
   const availableYears = Array.from(
     new Set(reviews.map((r) => extractFyToken(r.cycle_name))),
@@ -365,7 +275,7 @@ export function TeamReviewTab() {
             <TeamReviewCard
               key={r.id}
               review={r}
-              onEvaluate={setEvalTarget}
+              onEvaluate={(rev) => navigate(`/my-mentees/${rev.user_id}?tab=summary`)}
               onView={setViewTarget}
             />
           ))}
@@ -450,7 +360,7 @@ export function TeamReviewTab() {
                       {canEvaluate ? (
                         <button
                           type="button"
-                          onClick={() => setEvalTarget(r)}
+                          onClick={() => navigate(`/my-mentees/${r.user_id}?tab=summary`)}
                           className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
                         >
                           <ClipboardCheck className="h-3 w-3" /> Evaluate
@@ -475,21 +385,6 @@ export function TeamReviewTab() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {evalTarget && (
-        <EvalModal
-          review={evalTarget}
-          onSubmit={handleSubmitEval}
-          onSaveDraft={handleSaveEvalDraft}
-          onClose={() => {
-            setEvalTarget(null);
-            setModalError("");
-          }}
-          isSaving={isSaving}
-          isDraftSaving={isDraftSaving}
-          error={modalError}
-        />
       )}
 
       {viewTarget && (

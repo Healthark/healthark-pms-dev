@@ -226,6 +226,8 @@ function HalfPanel({
 }
 
 function GoalSummaryCard({ goal }: { readonly goal: TeamGoal }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const h1Self = goal.self_reviews.find((sr) => sr.cycle_half === "H1");
   const h2Self = goal.self_reviews.find((sr) => sr.cycle_half === "H2");
   const h1Mentor = goal.mentor_reviews.find((mr) => mr.cycle_half === "H1");
@@ -235,15 +237,31 @@ function GoalSummaryCard({ goal }: { readonly goal: TeamGoal }) {
   const totalCriteria = goal.criteria.length;
 
   return (
-    <article className="rounded-lg border border-border bg-surface p-4 shadow-sm">
-      <header className="mb-3">
-        <p className="font-medium text-text-main">{goal.title}</p>
-        {goal.description && (
-          <p className="mt-1 text-xs text-text-muted line-clamp-2">
-            {goal.description}
-          </p>
-        )}
-        <div className="mt-2 flex items-center gap-3">
+    <article className="rounded-lg border border-border bg-surface shadow-sm">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((v) => !v)}
+        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-slate-50/60 transition-colors rounded-lg"
+        aria-expanded={isExpanded}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-text-main">{goal.title}</p>
+          {goal.description && (
+            <p className="mt-1 text-xs text-text-muted line-clamp-2">
+              {goal.description}
+            </p>
+          )}
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 text-text-muted shrink-0 mt-0.5 transition-transform duration-200 ${
+            isExpanded ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {isExpanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
           {totalCriteria > 0 && (
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-32 rounded-full bg-slate-100 overflow-hidden">
@@ -263,12 +281,12 @@ function GoalSummaryCard({ goal }: { readonly goal: TeamGoal }) {
               </span>
             </div>
           )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <HalfPanel half="H1" self={h1Self} mentor={h1Mentor} />
+            <HalfPanel half="H2" self={h2Self} mentor={h2Mentor} />
+          </div>
         </div>
-      </header>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <HalfPanel half="H1" self={h1Self} mentor={h1Mentor} />
-        <HalfPanel half="H2" self={h2Self} mentor={h2Mentor} />
-      </div>
+      )}
     </article>
   );
 }
