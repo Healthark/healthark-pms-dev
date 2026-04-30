@@ -735,9 +735,9 @@ export function MenteeAnnualSummaryTab({
           <div className="space-y-4">
             {projectsInFy.h1.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                {/* <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   H1
-                </p>
+                </p> */}
                 {projectsInFy.h1.map((p) => (
                   <ProjectSummaryCard
                     key={`h1-${p.project_id}`}

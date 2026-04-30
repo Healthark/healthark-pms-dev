@@ -197,7 +197,8 @@ export function GoalFormModal({
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <label htmlFor="goal-attachment" className={LABEL_CLS + " mb-0"}>
-                Attachment (URL)
+                Attachment (URL){" "}
+                <span className="font-normal text-text-muted text-xs">(Optional)</span>
               </label>
               <div className="relative group">
                 <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-default select-none">

@@ -88,7 +88,7 @@ export function SystemSettingsTab({
 }: SystemSettingsTabProps) {
 
   return (
-    <div className="p-6 max-w-2xl space-y-6">
+    <div className="p-6 max-w-mx-auto space-y-6">
 
       {/* ── Annual Review Settings ───────────────────────────────────── */}
       <div>
