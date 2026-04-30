@@ -246,13 +246,13 @@ def reset_user_password(
 
     Flow:
         1. Generate a URL-safe random token, store its SHA-256 hash with a
-           15-minute expiry, lock the user's existing password (rotated to a
-           random unguessable hash so the old credentials no longer work),
-           set must_change_password=True.
+           15-minute expiry, and set must_change_password=True. The user's
+           existing password remains valid until they complete the reset.
         2. Email the link `{APP_BASE_URL}/reset-password?token=<token>` to
            the user. The plaintext token NEVER touches the database.
         3. The user clicks the link, picks a new password via
-           POST /auth/reset-password, and the token is marked used.
+           POST /auth/reset-password, and the token is marked used. Only at
+           this point is the old password replaced.
 
     Rate limits (rolling 1-hour window, per the password_reset_tokens ledger):
         - up to 3 resets per target user
@@ -343,10 +343,10 @@ def reset_user_password(
         )
     )
 
-    # Lock the user's current password by rotating to a random unguessable
-    # hash. They can no longer log in with their existing credentials —
-    # only via the email link → /reset-password page.
-    user.password_hash = get_password_hash(secrets.token_urlsafe(32))
+    # Flag the user so the frontend can show a "please reset" prompt if they
+    # log in with their old credentials before clicking the email link.
+    # The old password stays valid — it is only replaced when the user
+    # submits a new one via POST /auth/reset-password.
     user.must_change_password = True
     db.commit()
 
