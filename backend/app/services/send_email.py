@@ -28,6 +28,7 @@ Design notes:
 
 from __future__ import annotations
 
+import json
 import logging
 import smtplib
 import socket
@@ -35,6 +36,8 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formataddr
 from html import escape as _html_escape
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from app.core.config import settings
 
