@@ -406,6 +406,9 @@ export function TeamReviewTab() {
                   Your Rating
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  Management Rating
+                </th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Actions
                 </th>
               </tr>
@@ -437,14 +440,25 @@ export function TeamReviewTab() {
                       <ReviewStatusBadge status={r.status} />
                     </td>
                     <td className="px-4 py-3">
-                      <PerformanceRatingBadge
-                        value={r.self_performance_rating}
-                      />
+                      {r.self_performance_rating != null ? (
+                        <PerformanceRatingBadge value={r.self_performance_rating} />
+                      ) : (
+                        <span className="text-[11px] italic text-text-muted">Not rated yet</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <PerformanceRatingBadge
-                        value={r.mentor_performance_rating}
-                      />
+                      {r.mentor_performance_rating != null ? (
+                        <PerformanceRatingBadge value={r.mentor_performance_rating} />
+                      ) : (
+                        <span className="text-[11px] italic text-text-muted">Not rated yet</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.management_performance_rating != null ? (
+                        <PerformanceRatingBadge value={r.management_performance_rating} />
+                      ) : (
+                        <span className="text-[11px] italic text-text-muted">Not rated yet</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {canEvaluate ? (
