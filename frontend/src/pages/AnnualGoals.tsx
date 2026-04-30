@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import {
   Plus, Target, Lock, Search,
-  LayoutGrid, Table2, ChevronDown,
+  LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen,
   Pencil, SendHorizonal, Link, MessageSquare,
   UserCircle,
 } from "lucide-react";
@@ -36,8 +36,6 @@ import {
   type UserRoleExpectation,
 } from "../services/profile.service";
 import { isPostApproved } from "../utils/goalStatus";
-import type { RoleExpectation } from "../services/project-review.service";
-import { ExpectationPanel } from "../components/project-reviews/ExpectationPanel";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -84,24 +82,10 @@ function recomputeProgress(criteria: Criterion[]): number {
   return Math.round((completed / criteria.length) * 100);
 }
 
-/** Adapt the /users/me/expectations payload to the shape ExpectationPanel
- *  consumes (shared with the Project Review forms). */
-function asRoleExpectation(u: UserRoleExpectation | null): RoleExpectation | null {
-  if (!u) return null;
-  return {
-    id: 0,
-    department_name: u.department_name ?? "",
-    designation_name: u.designation_name ?? "",
-    exp_task_execution: u.exp_task_execution,
-    exp_ownership: u.exp_ownership,
-    exp_project_management: u.exp_project_management,
-    exp_client_deliverables: u.exp_client_deliverables,
-    exp_communication: u.exp_communication,
-    exp_mentoring: u.exp_mentoring,
-    exp_firm_growth: u.exp_firm_growth,
-    exp_competency_skills: u.exp_competency_skills,
-  };
-}
+const ROLE_EXP_FIELDS: { expKey: keyof UserRoleExpectation; label: string }[] = [
+  { expKey: "exp_firm_growth",       label: "Firm Growth" },
+  { expKey: "exp_competency_skills", label: "Competency & Skills" },
+];
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -193,10 +177,9 @@ export function AnnualGoals() {
   const [isSelfReviewDraftSaving, setIsSelfReviewDraftSaving] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState("");
 
-  // Role expectations for the My Goals tab — surfaced as collapsed
-  // ExpectationPanels above the toolbar so users keep Firm Growth and
-  // Competency & Skills in mind while writing/editing goals.
+  // Role expectations for the My Goals tab — collapsed by default.
   const [roleExpectation, setRoleExpectation] = useState<UserRoleExpectation | null>(null);
+  const [roleExpectationsOpen, setRoleExpectationsOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     profileService
@@ -205,13 +188,12 @@ export function AnnualGoals() {
         if (!cancelled) setRoleExpectation(exp);
       })
       .catch(() => {
-        // Non-fatal — panels just won't render.
+        // Non-fatal — section just won't render.
       });
     return () => {
       cancelled = true;
     };
   }, []);
-  const expectationForPanel = asRoleExpectation(roleExpectation);
 
   const loadGoals = useCallback(async () => {
     setIsLoading(true);
@@ -484,34 +466,41 @@ export function AnnualGoals() {
           {/* ── My Goals tab ── */}
           {activeTab === "my" && (
             <div className="space-y-4">
-              {/* Role expectations — collapsed by default. Two short panels
-                  scoped to the user's department × designation, kept side-
-                  by-side on wider screens and stacked on narrow ones. */}
-              {expectationForPanel && (
-                <div className="rounded-lg border border-border bg-blue-50/30 px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
-                    Your role expectations
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                    <div>
-                      <p className="text-[11px] font-semibold text-text-main mb-0.5">
-                        Firm Growth
+              {/* Role expectations — single collapsible container, all competencies */}
+              {roleExpectation && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setRoleExpectationsOpen((v) => !v)}
+                    className="flex w-full items-center justify-between px-4 py-2.5 bg-blue-50/50 hover:bg-blue-50/80 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
+                      <BookOpen className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      Your Role Expectations
+                    </span>
+                    {roleExpectationsOpen
+                      ? <ChevronUp className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                      : <ChevronDown className="h-3.5 w-3.5 text-text-muted shrink-0" />}
+                  </button>
+                  {roleExpectationsOpen && (
+                    <div className="px-4 py-3 space-y-3 bg-blue-50/20 border-t border-border">
+                      {ROLE_EXP_FIELDS.map(({ expKey, label }) => {
+                        const text = roleExpectation[expKey] as string | null | undefined;
+                        if (!text) return null;
+                        return (
+                          <div key={expKey}>
+                            <p className="text-[11px] font-semibold text-text-main mb-0.5">{label}</p>
+                            <p className="text-xs text-text-muted whitespace-pre-wrap leading-relaxed">
+                              {text.replace(/ \| /g, "\n• ")}
+                            </p>
+                          </div>
+                        );
+                      })}
+                      <p className="text-[10px] text-text-muted pt-1 border-t border-border">
+                        {roleExpectation.department_name} · {roleExpectation.designation_name}
                       </p>
-                      <ExpectationPanel
-                        expectation={expectationForPanel}
-                        expKey="exp_firm_growth"
-                      />
                     </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-text-main mb-0.5">
-                        Competency &amp; Skills
-                      </p>
-                      <ExpectationPanel
-                        expectation={expectationForPanel}
-                        expKey="exp_competency_skills"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 
