@@ -34,9 +34,15 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: str = ""
 
     # ── Outbound email (admin password reset, future notifications) ─
-    # Leave SMTP_USERNAME / SMTP_PASSWORD unset to disable email sending —
-    # the password-reset endpoint will still succeed and the admin can
-    # relay the link manually via the reveal modal.
+    # Two transport options, in order of preference:
+    #   1. Resend HTTP API (RESEND_API_KEY)  — uses HTTPS:443, works on
+    #      Render Free where outbound SMTP is silently dropped.
+    #   2. SMTP STARTTLS (SMTP_USERNAME / SMTP_PASSWORD) — works on any
+    #      host that allows outbound 587, including local dev. On Render
+    #      Free, SMTP times out at the network layer; use Resend there.
+    # If neither is configured, sending is skipped and admins fall back
+    # to the reveal-modal that shows the reset link in-app.
+    RESEND_API_KEY: str | None = None
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str | None = None
