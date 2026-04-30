@@ -3,6 +3,10 @@ import axios from "axios";
 const CSRF_COOKIE_NAME = "csrf_token";
 const CSRF_HEADER_NAME = "X-CSRF-Token";
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
+// Public routes where a 401 from a background call (e.g. AuthProvider's
+// bootstrap /auth/session probe) must NOT yank the user away. Mirrors the
+// public Routes registered in App.tsx.
+const PUBLIC_AUTH_PATHS = new Set(["/login", "/reset-password", "/unauthorized"]);
 
 // In development this falls back to localhost. In production set
 // VITE_API_URL=https://<your-render-backend>/api/v1 in Vercel env vars.
@@ -59,7 +63,7 @@ function forceLogout(): void {
     /* best effort */
   }
   localStorage.removeItem("user");
-  if (globalThis.location.pathname !== "/login") {
+  if (!PUBLIC_AUTH_PATHS.has(globalThis.location.pathname)) {
     globalThis.location.href = "/login";
   }
 }
