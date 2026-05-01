@@ -39,7 +39,11 @@ from app.models.password_reset_token_models import PasswordResetToken
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings, CycleType
 from app.core.cycle_utils import get_current_cycle_info
-from app.services.send_email import is_smtp_configured, send_password_reset_email
+from app.services.send_email import (
+    is_smtp_configured,
+    send_password_reset_email,
+    send_welcome_user_email,
+)
 from datetime import date, datetime, timedelta, timezone
 from app.schemas.admin_schemas import (
     DepartmentBrief,
@@ -111,12 +115,18 @@ def create_user(
     user_in: UserCreate,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
     Create a new user in the organization.
 
     The email is checked for uniqueness within the org (not globally)
     because the composite index ix_users_org_email enforces this.
+
+    On success, a welcome email containing the email + plaintext password
+    is queued for delivery (best-effort via BackgroundTasks). Failed
+    delivery does NOT roll back the creation — the user row is already
+    persisted and the admin can relay the credentials manually.
     """
     _require_admin(current_user)
 
@@ -160,6 +170,21 @@ def create_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # Send the welcome email after the row is committed so a delivery
+    # failure can't prevent account creation. The plaintext password is
+    # only available here (we hashed it before storage); after this
+    # function returns, no other code path can reconstruct it.
+    if is_smtp_configured():
+        login_url = f"{settings.APP_BASE_URL.rstrip('/')}/login"
+        background_tasks.add_task(
+            send_welcome_user_email,
+            to_email=new_user.email,
+            full_name=new_user.full_name,
+            password=user_in.password,
+            login_url=login_url,
+            org_id=new_user.org_id,
+        )
 
     # Eagerly load relationships for the response
     return _load_user_with_relations(db, new_user.id)
