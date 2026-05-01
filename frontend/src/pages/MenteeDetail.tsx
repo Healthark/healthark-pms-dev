@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -16,11 +16,23 @@ import {
   menteeService,
   type MenteeDetail as MenteeDetailData,
 } from "../services/mentee.service";
+import {
+  annualReviewService,
+  type AnnualReview,
+  type MenteeAnnualReview,
+  type MentorEvalPayload,
+  type MentorEvalDraftPayload,
+} from "../services/annual-review.service";
 import { MenteeGoalsTab } from "../components/mentees/MenteeGoalsTab";
 import { MenteeReviewTab } from "../components/mentees/MenteeReviewTab";
 import { MenteeProjectsTab } from "../components/mentees/MenteeProjectsTab";
 import { MenteeAnnualSummaryTab } from "../components/mentees/MenteeAnnualSummaryTab";
+import { EvalDrawer } from "../components/reviews/EvalDrawer";
 import { usePageTitleOverride } from "../hooks/usePageTitleOverride";
+import { useConfirm } from "../hooks/useConfirm";
+import { useToast } from "../hooks/useToast";
+import { getErrorMessage } from "../utils/errors";
+import { extractFyToken, formatFyLabel } from "../utils/fy";
 
 type TabKey = "summary" | "projects" | "goals" | "review";
 
@@ -111,6 +123,98 @@ export function MenteeDetail() {
     const next = new URLSearchParams(searchParams);
     next.set("tab", key);
     setSearchParams(next, { replace: true });
+  };
+
+  // ── Annual eval drawer ────────────────────────────────────────────
+  // The drawer lives at the page level (NOT inside the Annual Summary
+  // tab) so the mentor can browse other tabs while evaluating. The
+  // form's auto-save-on-unmount only fires when this whole page
+  // unmounts (route change), not on tab switches.
+  const [evalFy, setEvalFy] = useState<string | null>(null);
+  const [evalSaving, setEvalSaving] = useState(false);
+  const [evalDraftSaving, setEvalDraftSaving] = useState(false);
+  const [evalError, setEvalError] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
+
+  const reviewByCycle = useMemo(() => {
+    const m = new Map<string, AnnualReview>();
+    if (data) {
+      for (const r of data.reviews_list) {
+        m.set(extractFyToken(r.cycle_name), r);
+      }
+    }
+    return m;
+  }, [data]);
+
+  const evalReview = evalFy ? reviewByCycle.get(evalFy) ?? null : null;
+  const enrichedReview: MenteeAnnualReview | null =
+    evalReview && data
+      ? {
+          ...evalReview,
+          employee_name: data.full_name,
+          employee_email: data.email,
+          department: data.department_name,
+          designation: data.designation_name,
+        }
+      : null;
+
+  const openEval = useCallback((fy: string) => {
+    setEvalError("");
+    setEvalFy(fy);
+  }, []);
+
+  const closeEval = useCallback(() => {
+    setEvalFy(null);
+    setEvalError("");
+  }, []);
+
+  const handleEvalSubmit = async (
+    reviewId: number,
+    payload: MentorEvalPayload,
+  ) => {
+    if (!data) return;
+    const ok = await confirm({
+      title: `Submit annual review for ${data.full_name}?`,
+      message: `Submit your evaluation for ${data.full_name} (${formatFyLabel(
+        evalFy ?? "",
+      )}). Once submitted you can't edit it, and the review is forwarded to management for final calibration.`,
+      variant: "warning",
+      confirmText: "Submit Evaluation",
+    });
+    if (!ok) return;
+    setEvalSaving(true);
+    setEvalError("");
+    try {
+      await annualReviewService.submitMentorEval(reviewId, payload);
+      setEvalFy(null);
+      reloadDetail();
+    } catch (err) {
+      setEvalError(getErrorMessage(err));
+    } finally {
+      setEvalSaving(false);
+    }
+  };
+
+  const handleEvalSaveDraft = async (
+    reviewId: number,
+    payload: MentorEvalDraftPayload,
+  ) => {
+    setEvalDraftSaving(true);
+    setEvalError("");
+    try {
+      await annualReviewService.saveMentorDraft(reviewId, payload);
+      reloadDetail();
+      // Fires for both the explicit "Save Draft" click and the implicit
+      // auto-save when this page unmounts (route change). The toast
+      // provider lives at the app root, so it survives this component
+      // unmounting mid-save.
+      toast.success("Draft saved.");
+    } catch (err) {
+      setEvalError(getErrorMessage(err));
+    } finally {
+      setEvalDraftSaving(false);
+    }
   };
 
   return (
@@ -218,7 +322,7 @@ export function MenteeDetail() {
               {activeTab === "summary" && (
                 <MenteeAnnualSummaryTab
                   mentee={data}
-                  onReload={reloadDetail}
+                  onOpenEval={openEval}
                 />
               )}
               {activeTab === "review" && (
@@ -237,6 +341,22 @@ export function MenteeDetail() {
               )}
             </div>
           </div>
+
+          {/* Eval drawer — lives at the page level so tab switches
+              within MenteeDetail don't unmount it (which would trigger
+              EvalForm's auto-save-on-unmount). It only unmounts when
+              the user navigates away from this page entirely. */}
+          {enrichedReview && (
+            <EvalDrawer
+              review={enrichedReview}
+              onSubmit={handleEvalSubmit}
+              onSaveDraft={handleEvalSaveDraft}
+              onClose={closeEval}
+              isSaving={evalSaving}
+              isDraftSaving={evalDraftSaving}
+              error={evalError}
+            />
+          )}
         </>
       )}
     </div>

@@ -16,6 +16,15 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Body for POST /auth/forgot-password — self-service reset request.
+
+    The unauthenticated user enters their email on the login page. Backend
+    looks up the account and, if found, issues a reset token + emails the
+    link (same format/template as the admin-triggered reset)."""
+    email: EmailStr
+
+
 class SessionResponse(BaseModel):
     """Live auth claims — role, features, mentor/mentee flags — refreshed
     independently of the JWT so admin changes take effect without re-login."""

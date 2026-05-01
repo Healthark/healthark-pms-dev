@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,12 +18,20 @@ from app.schemas.auth_schemas import (
     SessionResponse,
     TokenResponse,
     ResetPasswordRequest,
+    ForgotPasswordRequest,
 )
 from app.schemas.user_schemas import UserProfile as UserProfileResponse
 from app.api.dependencies import CurrentUser
+from app.services.send_email import is_smtp_configured, send_password_reset_email
 
 router = APIRouter()
 DbSession = Annotated[Session, Depends(get_db)]
+
+# Must match the values in admin_routes.py — both endpoints write to the
+# same password_reset_tokens table and the email template renders the TTL
+# verbatim, so divergence would surface as inconsistent UX.
+RESET_TOKEN_TTL_MINUTES = 15
+RESETS_PER_USER_PER_HOUR = 3
 
 
 def _build_session(user: User, db: Session) -> dict:
@@ -205,6 +213,99 @@ def reset_password(payload: ResetPasswordRequest, db: DbSession):
     user.must_change_password = False
     record.used_at = now
     db.commit()
+
+    return None
+
+
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Public self-service password reset request.
+
+    The user enters their email on the login page. We look up an active
+    account; if found, we issue a one-time reset token and email the link
+    using the same template + storage as the admin-triggered reset
+    (POST /admin/users/{id}/reset-password). The plaintext token leaves
+    the process exactly once via the email — only its SHA-256 hash is
+    persisted.
+
+    Behaviour:
+        - 204: token issued (or would be issued — email send is best-effort
+               via background task).
+        - 404: no active account is registered for the supplied email.
+        - 429: 3 active reset tokens have been issued for this account in
+               the last hour (prevents email-bombing a victim).
+
+    Unauthenticated by design — the user has lost access to their account.
+    The CSRF middleware exempts this path because no auth/CSRF cookies
+    exist at the time of call.
+    """
+    email = payload.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+
+    if not user or user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account is registered with that email address.",
+        )
+
+    # Per-user rate limit — mirrors the admin reset path. Self-service has
+    # no admin actor, so we only apply the per-target cap.
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    recent = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.created_at >= one_hour_ago,
+        )
+        .count()
+    )
+    if recent >= RESETS_PER_USER_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"This email already has {RESETS_PER_USER_PER_HOUR} active "
+                "reset requests in the last hour. Please wait for the existing "
+                "link to expire or be used before requesting another."
+            ),
+        )
+
+    # Issue the token — same shape as admin_routes.reset_user_password().
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            # Self-service: the user is the requester. The column is non-null
+            # in the schema, so we point it at the same user — admin-vs-self
+            # provenance can be inferred from `user_id == requested_by_id`.
+            requested_by_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+    )
+    user.must_change_password = True
+    db.commit()
+
+    reset_link = (
+        f"{settings.APP_BASE_URL.rstrip('/')}/reset-password?token={raw_token}"
+    )
+
+    if is_smtp_configured():
+        background_tasks.add_task(
+            send_password_reset_email,
+            to_email=user.email,
+            full_name=user.full_name,
+            reset_link=reset_link,
+            expires_in_minutes=RESET_TOKEN_TTL_MINUTES,
+            org_id=user.org_id,
+        )
 
     return None
 

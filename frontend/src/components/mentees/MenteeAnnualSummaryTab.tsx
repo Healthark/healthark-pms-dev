@@ -10,9 +10,10 @@
  *   - Project assignments grouped by half within the FY, each with
  *     performance group + PM eval excerpt
  *
- * The CTA reuses the same EvalModal as /annual-reviews → Team Review tab.
- * On submit, calls onReload() so the parent's silent refetch updates the
- * status pill without flashing a skeleton.
+ * The CTA calls `onOpenEval(selectedFy)` — the actual EvalDrawer is
+ * mounted at the MenteeDetail page level so tab switches don't unmount
+ * it (and don't trigger EvalForm's auto-save-on-unmount). Auto-save
+ * only fires when the user leaves the mentee page entirely.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -25,11 +26,7 @@ import {
   Target,
 } from "lucide-react";
 import {
-  annualReviewService,
   type AnnualReview,
-  type MenteeAnnualReview,
-  type MentorEvalPayload,
-  type MentorEvalDraftPayload,
   type ReviewStatus,
 } from "../../services/annual-review.service";
 import type { MenteeDetail } from "../../services/mentee.service";
@@ -40,12 +37,8 @@ import type {
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import type { MenteeProjectAssignment } from "../../services/mentee.service";
-import { EvalDrawer } from "../reviews/EvalDrawer";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { useConfirm } from "../../hooks/useConfirm";
-import { useToast } from "../../hooks/useToast";
-import { getErrorMessage } from "../../utils/errors";
 import {
   extractFyToken,
   formatFyLabel,
@@ -54,7 +47,9 @@ import {
 
 interface MenteeAnnualSummaryTabProps {
   readonly mentee: MenteeDetail;
-  readonly onReload: () => void;
+  /** Open the page-level eval drawer for the given FY token. Drawer
+   *  state lives in MenteeDetail so tab switches don't unmount it. */
+  readonly onOpenEval: (fy: string) => void;
 }
 
 // ── Status helpers ──────────────────────────────────────────────────
@@ -326,89 +321,100 @@ function ProjectSummaryCard({
   const secondaryEvals = detail?.secondary_evaluations ?? [];
   const hasNarrative = filledComments.length > 0 || secondaryEvals.length > 0;
 
-  return (
-    <article className="rounded-lg border border-border bg-surface p-3 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-medium text-text-main truncate">
-            {assignment.project_name}
-            <span className="ml-1.5 text-[11px] font-mono text-text-muted">
-              ({assignment.project_code})
-            </span>
-          </p>
-          <p className="mt-0.5 text-[11px] text-text-muted">
-            {assignment.assignment_role ?? "—"}
-            {assignment.cycle && ` · ${assignment.cycle}`}
-            {assignment.pm_name && ` · PM: ${assignment.pm_name}`}
-          </p>
-        </div>
-        {assignment.performance_group && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[11px] text-text-muted">Rating</span>
+  const headerContent = (
+    <div className="flex items-start gap-3 w-full">
+      {/* Rating column — mirrors ReviewParagraphCard */}
+      <div className="flex w-16 shrink-0 flex-col items-center gap-1">
+        {assignment.performance_group != null ? (
+          <>
             <PerformanceRatingBadge
               value={Number(assignment.performance_group)}
+              size="md"
             />
-          </div>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-text-muted text-center">
+              PM Rating
+            </span>
+          </>
+        ) : (
+          <span className="text-[10px] italic text-text-muted text-center leading-tight">
+            PM Rating
+            <br />—
+          </span>
         )}
       </div>
 
-      {hasNarrative ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-brand hover:underline"
-          >
-            {expanded ? (
-              <>
-                <ChevronUp className="h-3 w-3" /> Hide PM eval
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-3 w-3" /> Read PM eval
-                {filledComments.length > 0 &&
-                  ` (${filledComments.length} competenc${
-                    filledComments.length === 1 ? "y" : "ies"
-                  })`}
-                {secondaryEvals.length > 0 &&
-                  ` · ${secondaryEvals.length} impact statement${
-                    secondaryEvals.length === 1 ? "" : "s"
-                  }`}
-              </>
-            )}
-          </button>
-          {expanded && (
-            <div className="mt-2 space-y-2 rounded-md bg-slate-50/60 p-3">
-              {filledComments.map(({ key, label }) => (
-                <div key={key}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                    {label}
-                  </p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-text-main">
-                    {detail![key]}
-                  </p>
-                </div>
-              ))}
-              {secondaryEvals.map((s, idx) => (
-                <div key={`sec-${idx}`}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                    Impact statement
-                    {s.evaluator_name ? ` — ${s.evaluator_name}` : ""}
-                  </p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-text-main">
-                    {s.impact_statement || "—"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="mt-2 text-xs italic text-text-muted">
-          {assignment.review_status === "reviewed"
-            ? "PM evaluation has no narrative comments."
-            : "Not yet evaluated by PM."}
+      {/* Project info */}
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-text-main">
+          {assignment.project_name}
+          <span className="ml-1.5 text-[11px] font-mono text-text-muted">
+            ({assignment.project_code})
+          </span>
         </p>
+        <p className="mt-0.5 text-xs text-text-muted">
+          {assignment.assignment_role ?? "—"}
+          {assignment.cycle && ` · ${assignment.cycle}`}
+          {assignment.pm_name && ` · PM: ${assignment.pm_name}`}
+        </p>
+        {!hasNarrative && (
+          <p className="mt-1 text-xs italic text-text-muted">
+            {assignment.review_status === "reviewed"
+              ? "PM evaluation has no narrative comments."
+              : "Not yet evaluated by PM."}
+          </p>
+        )}
+      </div>
+
+      {hasNarrative && (
+        <ChevronDown
+          className={`h-4 w-4 text-text-muted shrink-0 mt-0.5 transition-transform duration-200 ${
+            expanded ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <article className="rounded-lg border border-border bg-surface shadow-sm">
+      {hasNarrative ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full text-left p-4 hover:bg-slate-50/60 transition-colors rounded-lg"
+          aria-expanded={expanded}
+        >
+          {headerContent}
+        </button>
+      ) : (
+        <div className="p-4">{headerContent}</div>
+      )}
+
+      {expanded && hasNarrative && (
+        <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
+          {filledComments.map(({ key, label }) => (
+            <div key={key}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                {label}
+              </p>
+              <p className="mt-0.5 whitespace-pre-wrap text-xs text-text-main">
+                {detail![key]}
+              </p>
+            </div>
+          ))}
+          {secondaryEvals.map((s, idx) => (
+            <div key={`sec-${idx}`}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                Impact statement
+                {s.evaluator_name ? ` — ${s.evaluator_name}` : ""}
+              </p>
+              <p className="mt-0.5 whitespace-pre-wrap text-xs text-text-main">
+                {s.impact_statement || "—"}
+              </p>
+            </div>
+          ))}
+        </div>
       )}
     </article>
   );
@@ -418,7 +424,7 @@ function ProjectSummaryCard({
 
 export function MenteeAnnualSummaryTab({
   mentee,
-  onReload,
+  onOpenEval,
 }: MenteeAnnualSummaryTabProps) {
   const { settings } = useSystemSettings();
   const activeFyToken = settings?.active_cycle_name
@@ -486,85 +492,6 @@ export function MenteeAnnualSummaryTab({
     }
     return buckets;
   }, [mentee.project_assignments, selectedFy]);
-
-  // Eval drawer state
-  // `evalFy` snapshots which FY the drawer is editing — captured when the
-  // CTA is clicked. Once the drawer is open, switching the page-level FY
-  // picker still re-flows the summary on the left, but the form on the
-  // right stays pinned to the FY that was active when it opened. Without
-  // this, picking a past completed FY would re-target the form to a
-  // non-actionable review (status != pending_mentor) and any save attempt
-  // would 400 from the backend.
-  const [evalOpen, setEvalOpen] = useState(false);
-  const [evalFy, setEvalFy] = useState<string | null>(null);
-  const [evalSaving, setEvalSaving] = useState(false);
-  const [evalDraftSaving, setEvalDraftSaving] = useState(false);
-  const [evalError, setEvalError] = useState("");
-  const confirm = useConfirm();
-  const toast = useToast();
-
-  const handleEvalSubmit = async (
-    reviewId: number,
-    payload: MentorEvalPayload,
-  ) => {
-    const ok = await confirm({
-      title: `Submit annual review for ${mentee.full_name}?`,
-      message: `Submit your evaluation for ${mentee.full_name} (${formatFyLabel(
-        evalFy ?? selectedFy,
-      )}). Once submitted you can't edit it, and the review is forwarded to management for final calibration.`,
-      variant: "warning",
-      confirmText: "Submit Evaluation",
-    });
-    if (!ok) return;
-    setEvalSaving(true);
-    setEvalError("");
-    try {
-      await annualReviewService.submitMentorEval(reviewId, payload);
-      setEvalOpen(false);
-      setEvalFy(null);
-      onReload();
-    } catch (err) {
-      setEvalError(getErrorMessage(err));
-    } finally {
-      setEvalSaving(false);
-    }
-  };
-
-  const handleEvalSaveDraft = async (
-    reviewId: number,
-    payload: MentorEvalDraftPayload,
-  ) => {
-    setEvalDraftSaving(true);
-    setEvalError("");
-    try {
-      await annualReviewService.saveMentorDraft(reviewId, payload);
-      onReload();
-      // Fires for both the explicit "Save Draft" click and the implicit
-      // auto-save when the parent unmounts (tab switch). The toast
-      // provider lives at the app root, so it survives this component
-      // unmounting mid-save.
-      toast.success("Draft saved.");
-    } catch (err) {
-      setEvalError(getErrorMessage(err));
-    } finally {
-      setEvalDraftSaving(false);
-    }
-  };
-
-  // Adapt the form's pinned review into a MenteeAnnualReview for the
-  // shared form. Reads from `evalFy` (set when the drawer opened) so the
-  // form stays bound to the FY-at-open-time even if the user fiddles with
-  // the picker afterwards.
-  const formReview = evalFy ? reviewByCycle.get(evalFy) ?? null : null;
-  const enrichedReview: MenteeAnnualReview | null = formReview
-    ? {
-        ...formReview,
-        employee_name: mentee.full_name,
-        employee_email: mentee.email,
-        department: mentee.department_name,
-        designation: mentee.designation_name,
-      }
-    : null;
 
   const status = selectedReview?.status ?? null;
   const canFill = isActiveFy && status === "pending_mentor";
@@ -640,11 +567,7 @@ export function MenteeAnnualSummaryTab({
               )}
               <button
                 type="button"
-                onClick={() => {
-                  setEvalError("");
-                  setEvalFy(selectedFy);
-                  setEvalOpen(true);
-                }}
+                onClick={() => onOpenEval(selectedFy)}
                 className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
               >
                 <ClipboardCheck className="h-4 w-4" />
@@ -776,23 +699,6 @@ export function MenteeAnnualSummaryTab({
         )}
       </section>
 
-      {/* Eval drawer — right-anchored, leaves the Annual Summary visible
-          on the left so the mentor can read while writing. */}
-      {evalOpen && enrichedReview && (
-        <EvalDrawer
-          review={enrichedReview}
-          onSubmit={handleEvalSubmit}
-          onSaveDraft={handleEvalSaveDraft}
-          onClose={() => {
-            setEvalOpen(false);
-            setEvalFy(null);
-            setEvalError("");
-          }}
-          isSaving={evalSaving}
-          isDraftSaving={evalDraftSaving}
-          error={evalError}
-        />
-      )}
     </div>
   );
 }

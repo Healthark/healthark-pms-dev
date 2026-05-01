@@ -67,4 +67,16 @@ export const authService = {
       /* best effort — local cleanup still runs */
     }
   },
+
+  /**
+   * Self-service password reset request. Backend looks up the email and
+   * (if found + active) issues a reset token + emails the link, using the
+   * same template as the admin-triggered reset.
+   *
+   * Resolves on 204. Throws on 404 (no account), 429 (rate-limited), or
+   * any other non-2xx status — the caller should surface the message.
+   */
+  forgotPassword: async (email: string): Promise<void> => {
+    await apiClient.post("/auth/forgot-password", { email });
+  },
 };

@@ -92,9 +92,20 @@ export function SystemSettingsTab({
 
       {/* ── Annual Review Settings ───────────────────────────────────── */}
       <div>
-        <h3 className="font-display text-lg font-semibold text-text-main mb-4">
-          Annual Review Settings
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-lg font-semibold text-text-main">
+            Annual Review Settings
+          </h3>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-70 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            <Save className="h-4 w-4" aria-hidden="true" />
+            {isSaving ? "Saving…" : "Save Configuration"}
+          </button>
+        </div>
         <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
           <div className="px-5 py-4">
             <div className="divide-y divide-border/60">
@@ -231,19 +242,6 @@ export function SystemSettingsTab({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* ── Save Actions ─────────────────────────────────────────────── */}
-      <div className="pt-2 flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-70 disabled:cursor-not-allowed transition-all shadow-sm"
-        >
-          <Save className="h-4 w-4" aria-hidden="true" />
-          {isSaving ? "Saving…" : "Save Configuration"}
-        </button>
       </div>
 
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { Mail, Lock, Loader2, Building2 } from "lucide-react";
+import { ArrowLeft, Building2, CheckCircle2, Loader2, Lock, Mail } from "lucide-react";
 import { authService } from "../services/auth.service";
 import { useAuth } from "../hooks/useAuth";
 
@@ -66,6 +66,47 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Forgot-password mode swaps the form fields in-place (no separate route).
+  // Keeps the tenant switcher visible above so the user keeps their bearings.
+  const [mode, setMode] = useState<"login" | "forgot">("login");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+
+  const switchToForgot = () => {
+    setMode("forgot");
+    setError("");
+    setForgotError("");
+    setForgotSent(false);
+    setPassword("");
+  };
+
+  const switchToLogin = () => {
+    setMode("login");
+    setError("");
+    setForgotError("");
+    setForgotSent(false);
+  };
+
+  const handleForgotSubmit = async (
+    e: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
+    e.preventDefault();
+    setIsForgotLoading(true);
+    setForgotError("");
+    try {
+      await authService.forgotPassword(email);
+      setForgotSent(true);
+    } catch (err: unknown) {
+      const message = isApiError(err)
+        ? err.response.data.detail
+        : "Connection to server failed. Please try again.";
+      setForgotError(message);
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
 
   /**
    * Pre-Auth Theming: Inject the theme based on the selected tab.
@@ -191,101 +232,211 @@ export function Login() {
             `}</style>
           </div>
 
-          <form className="space-y-6" onSubmit={handleLogin} noValidate>
-            {error && (
-              <div
-                role="alert"
-                aria-live="assertive"
-                className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
-              >
-                {error}
-              </div>
-            )}
-
-            {/* Email Field */}
-            <div>
-              <label
-                htmlFor="email-address"
-                className="block text-sm font-medium text-text-main mb-1 transition-colors duration-1000"
-              >
-                Email address
-              </label>
-              <div className="relative">
+          {mode === "login" && (
+            <form className="space-y-6" onSubmit={handleLogin} noValidate>
+              {error && (
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  aria-hidden="true"
+                  role="alert"
+                  aria-live="assertive"
+                  className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
                 >
-                  <Mail className="h-5 w-5 text-text-muted transition-colors duration-1000" />
+                  {error}
                 </div>
-                <input
-                  id="email-address"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
-                  placeholder={currentAssets.placeholder}
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-text-main mb-1 transition-colors duration-1000"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  aria-hidden="true"
-                >
-                  <Lock className="h-5 w-5 text-text-muted transition-colors duration-1000" />
-                </div>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                className="text-sm text-brand hover:underline focus:outline-none"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              aria-busy={isLoading}
-              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-700 mt-4"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2
-                    className="h-5 w-5 animate-spin mr-2"
-                    aria-hidden="true"
-                  />
-                  <span>Signing in…</span>
-                </>
-              ) : (
-                "Sign in"
               )}
-            </button>
-          </form>
+
+              {/* Email Field */}
+              <div>
+                <label
+                  htmlFor="email-address"
+                  className="block text-sm font-medium text-text-main mb-1 transition-colors duration-1000"
+                >
+                  Email address
+                </label>
+                <div className="relative">
+                  <div
+                    className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                    aria-hidden="true"
+                  >
+                    <Mail className="h-5 w-5 text-text-muted transition-colors duration-1000" />
+                  </div>
+                  <input
+                    id="email-address"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
+                    placeholder={currentAssets.placeholder}
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-text-main mb-1 transition-colors duration-1000"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <div
+                    className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                    aria-hidden="true"
+                  >
+                    <Lock className="h-5 w-5 text-text-muted transition-colors duration-1000" />
+                  </div>
+                  <input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={switchToForgot}
+                  className="text-sm text-brand hover:underline focus:outline-none"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                aria-busy={isLoading}
+                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-700 mt-4"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2
+                      className="h-5 w-5 animate-spin mr-2"
+                      aria-hidden="true"
+                    />
+                    <span>Signing in…</span>
+                  </>
+                ) : (
+                  "Sign in"
+                )}
+              </button>
+            </form>
+          )}
+
+          {mode === "forgot" && (
+            <div className="space-y-5 animate-[fadeIn_0.3s_ease-in-out]">
+              <div>
+                <h2 className="text-base font-semibold text-text-main">
+                  Reset your password
+                </h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  Enter the email registered with your account. We'll send a
+                  link to set a new password.
+                </p>
+              </div>
+
+              {forgotSent ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                    <CheckCircle2
+                      className="h-5 w-5 shrink-0 text-green-600 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-green-800">
+                        Email sent
+                      </p>
+                      <p className="mt-0.5 text-xs text-green-700">
+                        We've sent a password-reset link to{" "}
+                        <span className="font-medium">{email}</span>. The link
+                        expires in 15 minutes.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={switchToLogin}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Back to sign in
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} className="space-y-5" noValidate>
+                  {forgotError && (
+                    <div
+                      role="alert"
+                      aria-live="assertive"
+                      className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
+                    >
+                      {forgotError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label
+                      htmlFor="forgot-email"
+                      className="block text-sm font-medium text-text-main mb-1"
+                    >
+                      Email address
+                    </label>
+                    <div className="relative">
+                      <div
+                        className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                        aria-hidden="true"
+                      >
+                        <Mail className="h-5 w-5 text-text-muted" />
+                      </div>
+                      <input
+                        id="forgot-email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm outline-none"
+                        placeholder={currentAssets.placeholder}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isForgotLoading}
+                    aria-busy={isForgotLoading}
+                    className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-300"
+                  >
+                    {isForgotLoading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin mr-2" aria-hidden="true" />
+                        <span>Sending…</span>
+                      </>
+                    ) : (
+                      "Send reset link"
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={switchToLogin}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted hover:text-brand"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Back to sign in
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
