@@ -165,6 +165,10 @@ def create_user(
         designation_id=user_in.designation_id,
         mentor_id=user_in.mentor_id,
         password_hash=get_password_hash(user_in.password),
+        # Force a password change on first login. The admin chose the
+        # initial password and emailed it to the user; ProtectedRoute
+        # routes the user to /change-password until they pick their own.
+        must_change_password=True,
     )
 
     db.add(new_user)
