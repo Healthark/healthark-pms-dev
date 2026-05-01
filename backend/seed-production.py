@@ -199,6 +199,153 @@ def _seed_users(db, org, depts, desigs):
     return {"amol": amol, "devanshi": devanshi, "trapti": trapti}
 
 
+EXPECTATIONS_DATA = {
+    "Strategy": {
+        "Consultant": {
+            "exp_task_execution": "Applies fundamental frameworks with clear guidance and breaks down problems into smaller components.",
+            "exp_ownership": "Takes responsibility for assigned tasks and modules, executes independently once goals are defined.",
+            "exp_client_deliverables": "Produces accurate, well-formatted outputs with minimal errors.",
+            "exp_communication": "Drafts clear and concise meeting notes and written updates.",
+            "exp_project_management": "Conducts deep secondary research and takes ownership of specific sector research.",
+            "exp_mentoring": "Encourages team building and performs peer reviews.",
+            "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm",
+            "exp_competency_skills": "Builds foundational knowledge in a specific sector or domain.",
+        },
+        "Senior Consultant": {
+            "exp_task_execution": "Independently structures and solves moderately complex problems.",
+            "exp_ownership": "Owns multiple modules within a project and ensures quality delivery.",
+            "exp_client_deliverables": "Develops polished, visually appealing outputs with compelling narratives.",
+            "exp_communication": "Leads internal discussions and co-leads client readouts.",
+            "exp_project_management": "Develops project management plans and structures research effectively.",
+            "exp_mentoring": "Provides guidance to junior team members on project tasks.",
+            "exp_firm_growth": "Leads a firm initiative | Contribute to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Plays a major role in finalising proposals | Owns knowledge management at the end of the project (structured research uploads, key documents etc.) to facilitate firm knowledge build-up | Supports the recruitment efforts and drives interviews / other activities when required with some leadership team",
+            "exp_competency_skills": "Leads a firm initiative and develops deeper industry expertise.",
+        },
+        "Manager": {
+            "exp_task_execution": "Leads problem definition and solution design for complex issues.",
+            "exp_ownership": "Understands each team member and leverages their strengths for project success.",
+            "exp_client_deliverables": "Crafts compelling, story-driven outputs aligned with client expectations.",
+            "exp_communication": "Leads client discussions, readouts, and critical meetings independently.",
+            "exp_project_management": "Takes end-to-end ownership of projects or large workstreams.",
+            "exp_mentoring": "Coaches team members on advanced skills and career development.",
+            "exp_firm_growth": "Identifies opportunities for process improvements and efficiency | Supports organisation growth and continuously identifies areas for upskilling team/practice (encourages people to undertake development activities, makes required resources available) | Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Creates an environment to enable others to be creative, agile, innovative and value quality (gives space to team members working on a project to think of approach, delegating instead of hand-holding every time) | Plays a leadership role within their firm, sometimes leading a new initiative or a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc.) | Leads proposals independently with minimal guidance from the leadership | Supports recruitment activities; trains and retains top talent while fostering a culture of collaboration and continuous learning",
+            "exp_competency_skills": "Identifies opportunities for process improvements and leads proposals.",
+        },
+    },
+    "IDT": {
+        "Consultant": {
+            "exp_task_execution": "Performs simple to medium complexity tasks and breaks down problems.",
+            "exp_ownership": "Executes tasks independently once goals are defined.",
+            "exp_project_management": "Adheres to timelines and communicates potential delays early.",
+            "exp_client_deliverables": "Produces quality code and deliverables with no major defects.",
+            "exp_communication": "Drafts clear meeting notes and written communications.",
+            "exp_mentoring": "Encourages team building and knowledge sharing.",
+            "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm | Contribute to Eminence and Excellence activities to grow the service offering for their respective practice area",
+            "exp_competency_skills": "Proficient in assigned technology area and produces quality code on time.",
+        },
+        "Senior Consultant": {
+            "exp_task_execution": "Independently structures and solves moderately complex technical problems.",
+            "exp_ownership": "Owns multiple modules and guides junior team members.",
+            "exp_project_management": "Performs work estimation, planning, and delivery management.",
+            "exp_client_deliverables": "Reviews code and leverages expertise to produce high-quality deliverables.",
+            "exp_communication": "Leads internal discussions and manages client relationships.",
+            "exp_mentoring": "Provides guidance to junior team members and leads coaching.",
+            "exp_firm_growth": "Plays a leadership role within the team; is the face of the organization / leadership team to junior team members | Participates in new proposals / SoW creation | Leads and owns Eminence and Excellence activities to grow the service offering for their respective practice area | Participates in screening and hiring of new members in the organization",
+            "exp_competency_skills": "Leads technical eminence and demonstrates SME capability.",
+        },
+        "Manager": {
+            "exp_task_execution": "Leads problem definition and architecture decisions for complex solutions.",
+            "exp_ownership": "Independently manages multiple large projects end-to-end.",
+            "exp_project_management": "Owns SoW governance and ensures quality, risk, and budget management.",
+            "exp_client_deliverables": "Reviews and ensures final deliverables are free from defects.",
+            "exp_communication": "Leads client discussions and builds strong stakeholder relationships.",
+            "exp_mentoring": "Develops junior team members through structured coaching.",
+            "exp_firm_growth": "Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Operates with full independence, managing projects and anticipating client needs | Identifies opportunities for process improvements and efficiency | Plays a leadership role within their firm, sometimes leading a new initiative or a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc.) | Leads proposals independently with minimal guidance from the leadership | Supports recruitment activities | Recruits, trains, and retains top talent while fostering a culture of collaboration and continuous learning",
+            "exp_competency_skills": "Acts as role model and drives process improvements.",
+        },
+    },
+    "RWE": {
+        "Consultant": {
+            "exp_task_execution": "Performs simple to medium complexity RWE tasks.",
+            "exp_ownership": "Completes assigned tasks on time with quality.",
+            "exp_project_management": "Communicates timely status and updates to the team.",
+            "exp_communication": "Drafts clear research summaries and meeting notes.",
+            "exp_client_deliverables": "Produces accurate, well-formatted RWE outputs.",
+            "exp_mentoring": "Encourages team building and participates actively.",
+            "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm",
+            "exp_competency_skills": "Proficient in project-specific RWE concepts.",
+        },
+        "Senior Consultant": {
+            "exp_task_execution": "Develops independent perspective on RWE tasks and solves complex problems.",
+            "exp_ownership": "Owns delivery of one or more workstreams end-to-end.",
+            "exp_project_management": "Performs work estimation and manages team delivery.",
+            "exp_communication": "Independently interacts with clients and leads workstreams.",
+            "exp_client_deliverables": "Produces contextual, high-quality RWE deliverables.",
+            "exp_mentoring": "Demonstrates maturity in coaching junior team members.",
+            "exp_firm_growth": "Plays a leadership role within the team; is the face of the organization / leadership team to junior team members | Contributes to pitching for different projects and proposal development; able to identify small-scale opportunities for cross-sell or up-sell within existing client projects | Participates in / leads firm initiatives | Contributes to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Helps in interviewing / recruiting new talent to the practice",
+            "exp_competency_skills": "Is a Subject Matter Expert in one RWE vertical.",
+        },
+        "Manager": {
+            "exp_task_execution": "Leads RWE methodology design for complex studies.",
+            "exp_ownership": "Takes end-to-end ownership of RWE programs.",
+            "exp_project_management": "Owns study governance and quality across multiple projects.",
+            "exp_communication": "Leads client and clinical stakeholder discussions.",
+            "exp_client_deliverables": "Ensures final RWE deliverables are publication-quality.",
+            "exp_mentoring": "Coaches team members and leads knowledge building.",
+            "exp_firm_growth": "Plays a leadership role within the firm; acts as a role model by fostering a positive culture and encouraging teamwork within the organisation | Drives initiatives that enhance the firm's service offerings and expand its market presence | Leads proposal development for new projects and opportunities | Contributes to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Demonstrates responsibility for review and action where required | Recruits, trains, and retains top talent while fostering a culture of collaboration and continuous learning",
+            "exp_competency_skills": "Thought leader in RWE methodology and scientific rigor.",
+        },
+    },
+}
+
+
+def _seed_role_expectations(db, org):
+    """Add role expectations for each dept/designation combo that doesn't already exist."""
+    added_count = 0
+    skipped_count = 0
+    for dept_name, designations_dict in EXPECTATIONS_DATA.items():
+        dept = db.query(Department).filter(
+            Department.org_id == org.id, Department.name == dept_name
+        ).first()
+        if not dept:
+            print(f"  [!] Department '{dept_name}' not found, skipping")
+            continue
+        for desig_name, competencies in designations_dict.items():
+            desig = db.query(Designation).filter(
+                Designation.org_id == org.id, Designation.name == desig_name
+            ).first()
+            if not desig:
+                print(f"  [!] Designation '{desig_name}' not found, skipping")
+                continue
+            already_exists = db.query(RoleExpectation).filter(
+                RoleExpectation.org_id == org.id,
+                RoleExpectation.department_id == dept.id,
+                RoleExpectation.designation_id == desig.id,
+            ).first()
+            if already_exists:
+                skipped_count += 1
+                continue
+            db.add(RoleExpectation(
+                org_id=org.id,
+                department_id=dept.id,
+                designation_id=desig.id,
+                exp_task_execution=competencies.get("exp_task_execution", ""),
+                exp_ownership=competencies.get("exp_ownership", ""),
+                exp_project_management=competencies.get("exp_project_management", ""),
+                exp_client_deliverables=competencies.get("exp_client_deliverables", ""),
+                exp_communication=competencies.get("exp_communication", ""),
+                exp_mentoring=competencies.get("exp_mentoring", ""),
+                exp_firm_growth=competencies.get("exp_firm_growth", ""),
+                exp_competency_skills=competencies.get("exp_competency_skills", ""),
+            ))
+            added_count += 1
+    db.flush()
+    if added_count:
+        print(f"  [+] Seeded {added_count} Role Expectations")
+    if skipped_count:
+        print(f"  [~] Skipped {skipped_count} Role Expectations (already exist)")
+
+
 def _seed_system_settings(db, org, admin_user):
     db.add(SystemSettings(
         org_id=org.id,
@@ -240,6 +387,7 @@ def seed_production(skip_confirm: bool = False):
         depts, desigs = _seed_reference_data(db, org)
         users = _seed_users(db, org, depts, desigs)
         _seed_system_settings(db, org, users["amol"])
+        _seed_role_expectations(db, org)
         db.commit()
 
         # Hard guarantee the operator asked for: only these 3 users exist.
@@ -256,5 +404,29 @@ def seed_production(skip_confirm: bool = False):
         db.close()
 
 
+def seed_expectations_only():
+    """Add role expectations to the existing org without touching any other data."""
+    db = SessionLocal()
+    try:
+        org = db.query(Organization).filter(
+            Organization.domain == "healtharkinsights.com"
+        ).first()
+        if not org:
+            print("No Healthark organization found. Run the full seed first.")
+            return
+        print(f"Adding role expectations to org: {org.name} (id={org.id})")
+        _seed_role_expectations(db, org)
+        db.commit()
+        print("Done.")
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
-    seed_production(skip_confirm="--yes" in sys.argv)
+    if "--expectations-only" in sys.argv:
+        seed_expectations_only()
+    else:
+        seed_production(skip_confirm="--yes" in sys.argv)
