@@ -28,6 +28,7 @@ from app.models.annual_review_models import AnnualReview
 from app.models.goal_models import Goal
 from app.models.goal_self_review_models import GoalSelfReview
 from app.models.role_expectation_models import RoleExpectation
+from app.models.feedback_360_models import Feedback360Review, Feedback360Answer
 
 
 def seed_database():
@@ -46,7 +47,7 @@ def seed_database():
                 domain="healthark.com",
                 enabled_features=[
                     "dashboard", "goals", "project_reviews",
-                    "annual_reviews", "mentoring", "admin",
+                    "annual_reviews", "mentoring", "admin", "feedback_360",
                 ],
             )
             db.add(org)
@@ -63,7 +64,7 @@ def seed_database():
                 domain="miltenyi.com",
                 enabled_features=[
                     "dashboard", "goals", "project_reviews",
-                    "annual_reviews", "mentoring", "admin",
+                    "annual_reviews", "mentoring", "admin", "feedback_360",
                 ],
             )
             db.add(miltenyi_org)
@@ -72,6 +73,18 @@ def seed_database():
             print("  [+] Created Organization: Miltenyi (full suite)")
         else:
             print("  [~] Organization 'Miltenyi' already exists, skipping...")
+
+        # Idempotent backfill: ensure both orgs have the 360 feedback flag.
+        # Re-running this seed against a DB that predates the feature must
+        # turn it on; the JSON column needs a full list reassignment for
+        # SQLAlchemy to detect the change.
+        for _o in (org, miltenyi_org):
+            feats = list(_o.enabled_features or [])
+            if "feedback_360" not in feats:
+                feats.append("feedback_360")
+                _o.enabled_features = feats
+                print(f"  [+] Backfilled feedback_360 onto {_o.name}")
+        db.commit()
 
         # ================================================================== #
         # 2. DEPARTMENTS & DESIGNATIONS                                       #
@@ -1640,6 +1653,164 @@ def seed_database():
             print("  [~] Miltenyi Goals already exist, skipping...")
 
         # ================================================================== #
+        # 11. 360 FEEDBACK (anonymous peer review)                            #
+        # ================================================================== #
+        #
+        # Seeds enough reviews on a few targets so the four tabs of the
+        # 360 module render their major UI states out-of-the-box:
+        #   - Priya:  4 worked-with + 3 not-worked-with  → both bars
+        #   - David:  3 worked-with + 2 not-worked-with  → only worked-with
+        #   - Arjun:  3 worked-with + 1 not-worked-with  → only worked-with
+        #   - Sarah:           0    + 4 not-worked-with  → only not-worked-with
+        # The threshold is 3 per cohort (see feedback_360_routes.py); below
+        # that the cohort is hidden behind the "Need 3+ reviewers" placeholder.
+        #
+        # We compute the reviewer hash inline using the same HMAC algorithm
+        # as feedback_360_service.reviewer_hash so the uniqueness check
+        # holds. The plaintext reviewer_id is consumed and dropped — the
+        # rows persisted carry only the opaque hash.
+
+        import hmac as _hmac
+        import hashlib as _hashlib
+        from app.core.config import settings as _settings
+
+        # Active FY for the seeded "H1 FY26-27" cycle.
+        _F360_FY = 2026
+
+        def _f360_hash(reviewer_id: int, target_id: int, fy_year: int) -> str:
+            msg = f"{reviewer_id}|{target_id}|{fy_year}".encode("utf-8")
+            secret = _settings.FEEDBACK_HASH_SECRET.encode("utf-8")
+            return _hmac.new(secret, msg, _hashlib.sha256).hexdigest()
+
+        def _f360_did_work(reviewer_id: int, target_id: int, scoped_org_id: int) -> bool:
+            """Mirrors feedback_360_service.did_work_together — true iff
+            both users have at least one shared project assignment in the
+            same org."""
+            r_proj = {
+                pid for (pid,) in db.query(ProjectAssignment.project_id)
+                .filter(ProjectAssignment.user_id == reviewer_id,
+                        ProjectAssignment.org_id == scoped_org_id)
+                .all()
+            }
+            if not r_proj:
+                return False
+            t_proj = {
+                pid for (pid,) in db.query(ProjectAssignment.project_id)
+                .filter(ProjectAssignment.user_id == target_id,
+                        ProjectAssignment.org_id == scoped_org_id)
+                .all()
+            }
+            return bool(r_proj & t_proj)
+
+        def _f360(reviewer, target, ratings: dict[str, int]):
+            """Upsert a 360 review. If a review with the same reviewer
+            hash already exists (re-running seed.py against an existing
+            DB), its answers are dropped and re-inserted from `ratings`
+            so the seed remains the source of truth across runs."""
+            if not reviewer or not target:
+                return
+            rev_hash = _f360_hash(reviewer.id, target.id, _F360_FY)
+            existing = db.query(Feedback360Review).filter_by(
+                target_user_id=target.id,
+                fy_year=_F360_FY,
+                reviewer_hash=rev_hash,
+            ).first()
+            if existing:
+                # Refresh: nuke the answers, keep the row + creation
+                # timestamp + worked_with snapshot so anonymity isn't
+                # disturbed for any consumers downstream.
+                db.query(Feedback360Answer).filter_by(
+                    review_id=existing.id
+                ).delete(synchronize_session=False)
+                db.flush()
+                review = existing
+            else:
+                review = Feedback360Review(
+                    org_id=reviewer.org_id,
+                    target_user_id=target.id,
+                    fy_year=_F360_FY,
+                    reviewer_hash=rev_hash,
+                    worked_with=_f360_did_work(
+                        reviewer.id, target.id, reviewer.org_id
+                    ),
+                )
+                db.add(review)
+                db.flush()
+            for key, rating in ratings.items():
+                db.add(Feedback360Answer(
+                    review_id=review.id,
+                    question_key=key,
+                    rating=rating,
+                ))
+
+        # All 12 question keys, in registry order. Helper below maps a
+        # 12-element list of ratings onto these keys so each reviewer's
+        # full ballot is one line. Every reviewer rates every question
+        # so each cohort hits the per-question count we'd see at scale
+        # — without that, individual questions can sit below the 3-per-
+        # cohort anonymity threshold and the dot stays hidden even
+        # though the header shows a non-zero total review count.
+        _F360_KEYS = [
+            "collab_inclusive_env",
+            "empathy_consideration",
+            "empower_support_autonomy",
+            "empower_recognition",
+            "equity_fair_treatment",
+            "growth_dev_feedback",
+            "impact_outcomes",
+            "values_integrity",
+            "comm_clarity",
+            "comm_alignment",
+            "core_expertise",
+            "domain_knowledge",
+        ]
+
+        def _all_q(values: list[int]) -> dict[str, int]:
+            assert len(values) == len(_F360_KEYS), "Need 12 ratings."
+            return dict(zip(_F360_KEYS, values))
+
+        # ── Priya — full demo: 4 worked-with + 3 not-worked-with ──────
+        # Worked-with: Priya's project peers on PRJ-101 / PRJ-104.
+        _f360(arjun,  priya, _all_q([5, 4, 5, 5, 4, 4, 5, 5, 5, 4, 4, 5]))
+        _f360(neha,   priya, _all_q([4, 5, 4, 4, 4, 5, 4, 5, 4, 4, 4, 4]))
+        _f360(david,  priya, _all_q([5, 4, 4, 4, 5, 4, 5, 5, 5, 5, 4, 5]))
+        _f360(rahul,  priya, _all_q([4, 4, 4, 4, 4, 4, 5, 5, 5, 4, 5, 4]))
+        # Not-worked-with: no shared project with Priya.
+        _f360(meera,  priya, _all_q([3, 4, 3, 3, 4, 3, 3, 4, 3, 3, 3, 4]))
+        _f360(karan,  priya, _all_q([4, 4, 3, 4, 4, 4, 4, 4, 3, 3, 4, 5]))
+        _f360(riya,   priya, _all_q([3, 4, 3, 4, 4, 3, 3, 4, 3, 4, 3, 4]))
+
+        # ── David — worked-with visible, not-worked-with hidden ──────
+        _f360(priya,  david, _all_q([4, 4, 4, 4, 4, 4, 5, 5, 4, 4, 5, 5]))
+        _f360(rahul,  david, _all_q([5, 4, 5, 4, 4, 5, 5, 5, 4, 5, 5, 5]))
+        _f360(meera,  david, _all_q([5, 5, 5, 5, 4, 5, 4, 5, 4, 4, 5, 5]))
+        # Below threshold (only 2 not-worked-with reviewers):
+        _f360(ananya, david, _all_q([4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4]))
+        _f360(karan,  david, _all_q([4, 3, 4, 3, 4, 4, 4, 4, 4, 3, 4, 4]))
+
+        # ── Arjun — worked-with visible, not-worked-with hidden ──────
+        _f360(priya,  arjun, _all_q([5, 4, 4, 5, 4, 5, 4, 4, 4, 4, 4, 4]))
+        _f360(neha,   arjun, _all_q([5, 5, 4, 4, 5, 4, 4, 4, 4, 4, 4, 3]))
+        _f360(david,  arjun, _all_q([4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]))
+        # Below threshold (only 1 not-worked-with reviewer):
+        _f360(meera,  arjun, _all_q([4, 4, 3, 4, 4, 4, 3, 4, 4, 4, 4, 4]))
+
+        # ── Sarah — only the not-worked-with cohort populates ────────
+        # Sarah has no project_assignments, so every reviewer lands
+        # in the not-worked-with bucket.
+        _f360(priya,  admin_user, _all_q([5, 5, 5, 5, 5, 4, 5, 5, 4, 5, 5, 5]))
+        _f360(david,  admin_user, _all_q([5, 4, 4, 5, 5, 4, 5, 5, 4, 4, 5, 5]))
+        _f360(vikram, admin_user, _all_q([5, 5, 5, 4, 5, 5, 4, 5, 4, 5, 4, 5]))
+        _f360(amol,   admin_user, _all_q([4, 5, 4, 5, 5, 4, 5, 5, 4, 4, 5, 4]))
+
+        db.commit()
+        print(
+            "  [+] Seeded 360 feedback (full 12-question coverage per reviewer; "
+            "Priya: both cohorts; David/Arjun: worked-with only; "
+            "Sarah: not-worked-with only)"
+        )
+
+        # ================================================================== #
         # DONE                                                                #
         # ================================================================== #
 
@@ -1662,6 +1833,14 @@ def seed_database():
         print("            karan@healthark.com     Karan Mehta      (mentor: Vikram)")
         print("  MARKETING:riya@healthark.com      Riya Kapoor      (mentor: Amol)")
         print("            tej@healthark.com       Tej Nair         (mentor: Amol)")
+        print()
+        print("--- 360 FEEDBACK seeded for Healthark (FY26-27) ---")
+        print("  Priya:  4 worked-with + 3 not-worked-with reviews -> both cohorts visible")
+        print("  David:  3 worked-with + 2 not-worked-with reviews -> only worked-with shown")
+        print("  Arjun:  3 worked-with + 1 not-worked-with reviews -> only worked-with shown")
+        print("  Sarah:           0   + 4 not-worked-with reviews -> only not-worked-with shown")
+        print("  Log in as Sarah (admin) to view Priya/David's aggregates via Mentee Feedback.")
+        print("  Log in as Amol/founder1/founder2 to view all via Org Feedback (Management).")
         print()
         print("--- MILTENYI Accounts (Quarterly Cycle | all passwords: password123) ---")
         print("  ADMIN:    admin@miltenyi.com      Alice Admin      (Admin)")

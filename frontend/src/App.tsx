@@ -20,6 +20,8 @@ import { MyMentees } from "./pages/MyMentees";
 import { MenteeDetail } from "./pages/MenteeDetail";
 import { ChangePassword } from "./pages/ChangePassword";
 import { ResetPassword } from "./pages/ResetPassword";
+import { Feedback360 } from "./pages/Feedback360";
+import { FeedbackGive } from "./pages/FeedbackGive";
 import { PageTitleProvider } from "./contexts/PageTitleProvider";
 import { SidebarProvider } from "./contexts/SidebarProvider";
 import { useSidebar } from "./hooks/useSidebar";
@@ -125,6 +127,11 @@ export default function App() {
             <Route element={<ProtectedRoute requiredFeature="mentoring" />}>
               <Route path="/my-mentees" element={<MyMentees />} />
               <Route path="/my-mentees/:id" element={<MenteeDetail />} />
+            </Route>
+
+            <Route element={<ProtectedRoute requiredFeature="feedback_360" />}>
+              <Route path="/feedback" element={<Feedback360 />} />
+              <Route path="/feedback/give/:id" element={<FeedbackGive />} />
             </Route>
           </Route>
         </Route>
