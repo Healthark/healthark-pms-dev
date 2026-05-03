@@ -28,6 +28,13 @@
 
 /* Base Styles */
 @layer base {
+  /* Bake in a one-notch zoom-out so the app matches the typical
+     1366×768 / 1920×1080 14–16" laptop. All rem-based Tailwind
+     utilities (spacing, font sizes, gaps) scale off this. */
+  html {
+    font-size: 87.5%;
+  }
+
   /* Default Theme (Healthark - org_id: 1) */
   :root, [data-theme="healthark"] {
     --brand: #315C84;

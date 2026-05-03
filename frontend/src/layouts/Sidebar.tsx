@@ -56,23 +56,23 @@ const NavItem = ({
       title={isCollapsed ? item.label : undefined}
       className={({ isActive }) =>
         `w-full flex items-center rounded-lg transition-all duration-200 ${
-          isCollapsed ? "justify-center py-3 px-0" : "px-4 py-2.5 gap-3"
+          isCollapsed ? "justify-center py-2.5 px-0" : "px-3 py-2 gap-2.5"
         } ${
           isActive
-            ? "bg-brand-light text-brand font-semibold border-l-4 border-accent"
-            : "text-text-muted hover:bg-slate-50 hover:text-text-main font-medium border-l-4 border-transparent"
+            ? "bg-brand-light text-brand font-semibold border-l-2 border-accent"
+            : "text-text-muted hover:bg-slate-50 hover:text-text-main font-medium border-l-2 border-transparent"
         }`
       }
     >
       {({ isActive }) => (
         <>
           <Icon
-            className={`w-5 h-5 shrink-0 transition-colors ${
+            className={`w-4 h-4 shrink-0 transition-colors ${
               isActive ? "text-brand" : "text-text-muted"
             }`}
           />
           {!isCollapsed && (
-            <span className="text-[14px] whitespace-nowrap overflow-hidden">
+            <span className="text-sm whitespace-nowrap overflow-hidden">
               {item.label}
             </span>
           )}
@@ -127,7 +127,7 @@ export function Sidebar() {
   return (
     <aside
       className={`${
-        isCollapsed ? "w-[80px]" : "w-[260px]"
+        isCollapsed ? "w-16" : "w-56"
       } h-screen shrink-0 bg-surface border-r border-border flex flex-col transition-all duration-300 relative`}
     >
       <button
@@ -144,8 +144,8 @@ export function Sidebar() {
 
       {/* --- DYNAMIC LOGO RENDER HERE --- */}
       <div
-        className={`h-16 flex items-center border-b border-border transition-all duration-300 ${
-          isCollapsed ? "justify-center px-0" : "px-6"
+        className={`h-14 flex items-center border-b border-border transition-all duration-300 ${
+          isCollapsed ? "justify-center px-0" : "px-4"
         }`}
       >
         {isCollapsed ? (
@@ -172,14 +172,14 @@ export function Sidebar() {
 
       <nav
         aria-label="Main menu"
-        className="flex-1 px-3 py-6 flex flex-col gap-1 overflow-y-auto overflow-x-hidden"
+        className="flex-1 px-2.5 py-4 flex flex-col gap-1 overflow-y-auto overflow-x-hidden"
       >
         {visibleMainNav.map((item) => (
           <NavItem key={item.id} item={item} isCollapsed={isCollapsed} />
         ))}
       </nav>
 
-      <div className="p-3 border-t border-border flex flex-col gap-1 overflow-x-hidden">
+      <div className="p-2.5 border-t border-border flex flex-col gap-1 overflow-x-hidden">
         {BOTTOM_NAV.map((item) => (
           <NavItem key={item.id} item={item} isCollapsed={isCollapsed} />
         ))}
@@ -187,13 +187,13 @@ export function Sidebar() {
         <button
           onClick={handleLogout}
           title={isCollapsed ? "Logout" : undefined}
-          className={`w-full flex items-center rounded-lg text-red-600 hover:bg-red-50 font-medium transition-colors mt-2 ${
-            isCollapsed ? "justify-center py-3 px-0" : "px-4 py-2.5 gap-3"
+          className={`w-full flex items-center rounded-lg text-red-600 hover:bg-red-50 font-medium transition-colors mt-1.5 ${
+            isCollapsed ? "justify-center py-2.5 px-0" : "px-3 py-2 gap-2.5"
           }`}
         >
-          <LogOut className="w-5 h-5 shrink-0" />
+          <LogOut className="w-4 h-4 shrink-0" />
           {!isCollapsed && (
-            <span className="text-[14px] whitespace-nowrap">Logout</span>
+            <span className="text-sm whitespace-nowrap">Logout</span>
           )}
         </button>
       </div>

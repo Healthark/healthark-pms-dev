@@ -334,13 +334,15 @@ def get_aggregate(
         .scalar()
     ) or 0
 
-    # Per-question, per-cohort count + avg in one grouped query.
+    # Per-question, per-cohort count + avg + min + max in one grouped query.
     rows = (
         db.query(
             Feedback360Answer.question_key,
             Feedback360Review.worked_with,
             func.count(Feedback360Answer.id),
             func.avg(Feedback360Answer.rating),
+            func.min(Feedback360Answer.rating),
+            func.max(Feedback360Answer.rating),
         )
         .join(
             Feedback360Review,
@@ -357,10 +359,12 @@ def get_aggregate(
     )
 
     by_q: dict[str, dict[bool, FeedbackBucketAggregate]] = {}
-    for question_key, ww, count, avg in rows:
+    for question_key, ww, count, avg, mn, mx in rows:
         by_q.setdefault(question_key, {})[bool(ww)] = FeedbackBucketAggregate(
             count=int(count),
             avg=float(avg) if avg is not None else 0.0,
+            min=int(mn) if mn is not None else 0,
+            max=int(mx) if mx is not None else 0,
         )
 
     out: list[FeedbackQuestionAggregate] = []

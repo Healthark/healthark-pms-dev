@@ -71,6 +71,10 @@ export interface FeedbackMyReview {
 export interface FeedbackBucketAggregate {
   count: number;
   avg: number;
+  /** Lowest rating any reviewer in this cohort gave for this question. */
+  min: number;
+  /** Highest rating any reviewer in this cohort gave for this question. */
+  max: number;
 }
 
 export interface FeedbackQuestionAggregate {

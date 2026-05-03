@@ -3,25 +3,26 @@ import { AlertCircle, Loader2, Users } from "lucide-react";
 import {
   feedback360Service,
   type FeedbackAggregate,
+  type FeedbackBucketAggregate,
   type FeedbackQuestionAggregate,
 } from "../../services/feedback360.service";
 import { getErrorMessage } from "../../utils/errors";
-import { RatingTrack } from "./RatingTrack";
+import { Gridlines } from "./Gridlines";
 
 interface AggregateViewProps {
   /** Target whose 360 aggregate is being displayed. */
   readonly targetUserId: number;
-  /** Header label — typically the target's name or "Your Feedback". */
+  /** Label rendered in the table header (left side, above n=X). */
   readonly heading?: string;
 }
 
 /**
- * Per-question 360 aggregate. Each question shows two rows — one for
- * the worked-with cohort and one for the not-worked-with cohort. Each
- * row is a dotted 1–5 track with a colored dot at the cohort's average
- * (interpolated, e.g. 4.2 sits 80% along the track). Cohorts below the
- * minimum-reviewer threshold are rendered as a muted placeholder so a
- * single rater can't be identified.
+ * Single-container tabular aggregate. Each question row contains TWO
+ * stacked whiskers in the plot column — worked-with on top (brand)
+ * and not-worked-with below (amber). Buckets visually rowspan their
+ * questions on the left. Cohorts below the anonymity threshold render
+ * a muted placeholder line in the same slot, so spacing stays
+ * consistent regardless of which cohorts cleared the threshold.
  */
 export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
   const [data, setData] = useState<FeedbackAggregate | null>(null);
@@ -94,117 +95,172 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {heading && (
-        <div className="flex flex-col gap-1 border-b border-border pb-3 sm:flex-row sm:items-end sm:justify-between">
-          <h3 className="font-display text-base font-semibold text-text-main">
-            {heading}
+    <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+      {/* ── Header row ────────────────────────────────────────────── */}
+      <div className="flex items-stretch border-b border-border bg-slate-50/50">
+        <div className="w-[180px] shrink-0 px-6 py-4 border-r border-border/40">
+          <h3 className="text-[14px] font-bold text-brand">
+            {heading ?? "Feedback Ratings"}
           </h3>
-          <p className="text-[11px] text-text-muted">
-            {data.total_reviews} review{data.total_reviews === 1 ? "" : "s"} ·
-            FY{String(data.fy_year).slice(-2)}-
-            {String(data.fy_year + 1).slice(-2)} · cohort hidden below{" "}
-            {data.min_reviewers_threshold} reviewers
+          <p className="mt-0.5 text-[11px] text-text-muted">
+            n = {data.total_reviews} respondent
+            {data.total_reviews === 1 ? "" : "s"}
           </p>
+          <div className="mt-2 flex flex-col gap-1 text-[10px]">
+            <span className="inline-flex items-center gap-1.5 text-brand font-semibold">
+              <span className="h-2 w-2 rounded-full bg-brand" />
+              Worked with
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-amber-700 font-semibold">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              Not worked with
+            </span>
+          </div>
         </div>
-      )}
-
-      {/* Scale legend above the plot grid */}
-      <div className="hidden sm:grid grid-cols-[28%_72%] items-end gap-3 px-4 text-[10px] font-bold uppercase tracking-wider text-text-muted">
-        <div />
-        <div className="grid grid-cols-3">
-          <span className="text-left">Strongly Disagree</span>
-          <span className="text-center">Neutral</span>
-          <span className="text-right">Strongly Agree</span>
+        <div className="flex flex-1">
+          <div className="w-[38%] border-r border-border/40" />
+          <div className="flex-1 px-6 py-4 relative">
+            <div className="absolute inset-x-6 bottom-3 flex justify-between items-end pointer-events-none">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight w-24">
+                Very Strongly
+                <br />
+                Disagree
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight text-center absolute left-1/2 -translate-x-1/2">
+                Neither Agree
+                <br />
+                Nor Disagree
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight w-24 text-right">
+                Very Strongly
+                <br />
+                Agree
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {grouped.map((g) => (
-        <section
-          key={g.bucket}
-          className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden"
+      {/* ── Bucket groups ─────────────────────────────────────────── */}
+      {grouped.map((group, gIdx) => (
+        <div
+          key={group.bucket}
+          className={`flex ${
+            gIdx > 0 ? "border-t border-border" : ""
+          }`}
         >
-          <div className="border-b border-border bg-slate-50/50 px-5 py-2.5">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-              {g.bucket}
-            </h4>
+          {/* Bucket cell — vertically centered relative to its questions */}
+          <div className="w-[180px] shrink-0 flex items-center justify-end px-5 py-4 border-r border-border/40 bg-slate-50/30">
+            <span className="italic font-semibold text-[13px] text-text-main text-right leading-tight">
+              {group.bucket}
+            </span>
           </div>
-          <div className="divide-y divide-border/50">
-            {g.questions.map((q) => (
-              <QuestionRow
+
+          {/* Questions column */}
+          <div className="flex flex-1 flex-col">
+            {group.questions.map((q, qIdx) => (
+              <div
                 key={q.key}
-                q={q}
-                threshold={data.min_reviewers_threshold}
-              />
+                className={`flex ${
+                  qIdx > 0 ? "border-t border-border/30" : ""
+                }`}
+              >
+                {/* Statement */}
+                <div className="w-[38%] flex items-center justify-end px-4 py-3 border-r border-border/40">
+                  <p className="text-[13px] text-text-muted text-right leading-snug">
+                    {q.text}
+                  </p>
+                </div>
+                {/* Two stacked whiskers, with gridlines behind them */}
+                <div className="flex-1 px-6 py-3 flex flex-col justify-center gap-1.5 min-h-[60px] relative">
+                  <Gridlines />
+                  <div className="relative z-10">
+                    <Whisker
+                      cohortKey="worked"
+                      data={q.worked_with}
+                      threshold={data.min_reviewers_threshold}
+                    />
+                  </div>
+                  <div className="relative z-10">
+                    <Whisker
+                      cohortKey="not_worked"
+                      data={q.not_worked_with}
+                      threshold={data.min_reviewers_threshold}
+                    />
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
-        </section>
+        </div>
       ))}
     </div>
   );
 }
 
-function QuestionRow({
-  q,
-  threshold,
-}: {
-  readonly q: FeedbackQuestionAggregate;
-  readonly threshold: number;
-}) {
-  return (
-    <div className="px-5 py-4">
-      <p className="text-sm text-text-main mb-3">{q.text}</p>
-      <div className="space-y-2.5">
-        <CohortLine
-          label="Worked with"
-          cohortKey="worked"
-          cohort={q.worked_with}
-          threshold={threshold}
-        />
-        <CohortLine
-          label="Not worked with"
-          cohortKey="not_worked"
-          cohort={q.not_worked_with}
-          threshold={threshold}
-        />
-      </div>
-    </div>
-  );
+
+// ── Whisker ────────────────────────────────────────────────────────
+
+function pctFor(rating: number): number {
+  return ((rating - 1) / 4) * 100;
 }
 
-function CohortLine({
-  label,
+function Whisker({
   cohortKey,
-  cohort,
+  data,
   threshold,
 }: {
-  readonly label: string;
   readonly cohortKey: "worked" | "not_worked";
-  readonly cohort: { count: number; avg: number } | null;
+  readonly data: FeedbackBucketAggregate | null;
   readonly threshold: number;
 }) {
-  const labelColor =
-    cohortKey === "worked" ? "text-brand" : "text-amber-700";
+  const isWorked = cohortKey === "worked";
+  const lineColor = isWorked ? "bg-brand/60" : "bg-amber-500/60";
+  const dotColor = isWorked ? "bg-brand" : "bg-amber-500";
+  const placeholderColor = isWorked ? "text-brand/60" : "text-amber-700/70";
+
+  if (!data) {
+    return (
+      <div className="relative h-5 flex items-center">
+        <div className={`absolute h-px w-full ${isWorked ? "bg-brand/15" : "bg-amber-500/15"}`} />
+        <p
+          className={`relative text-[10px] italic ${placeholderColor} bg-surface px-1.5`}
+        >
+          Need {threshold}+ reviewers
+        </p>
+      </div>
+    );
+  }
+
+  const minPct = pctFor(data.min);
+  const maxPct = pctFor(data.max);
+  const avgPct = pctFor(data.avg);
 
   return (
-    <div className="grid grid-cols-[28%_72%] items-center gap-3">
-      <span className={`text-[11px] font-semibold ${labelColor}`}>
-        {label}
-      </span>
-      <div className="flex items-center gap-3">
-        <RatingTrack
-          avg={cohort ? cohort.avg : null}
-          cohort={cohortKey}
-          placeholder={`Need ${threshold}+ reviewers`}
-        />
-        <span className="w-28 shrink-0 text-right text-[11px] text-text-muted">
-          {cohort
-            ? `${cohort.avg.toFixed(1)} · ${cohort.count} reviewer${
-                cohort.count === 1 ? "" : "s"
-              }`
-            : ""}
-        </span>
-      </div>
+    <div className="relative h-5 flex items-center" title={`avg ${data.avg.toFixed(1)} · range ${data.min}–${data.max} · ${data.count} reviewer${data.count === 1 ? "" : "s"}`}>
+      {/* Whisker line (min → max) */}
+      <div
+        className={`absolute h-[2px] ${lineColor}`}
+        style={{
+          left: `${minPct}%`,
+          width: `${Math.max(maxPct - minPct, 0.001)}%`,
+        }}
+      />
+      {/* Min cap */}
+      <div
+        className={`absolute h-2.5 w-[2px] ${lineColor}`}
+        style={{ left: `${minPct}%`, transform: "translateX(-50%)" }}
+      />
+      {/* Max cap */}
+      <div
+        className={`absolute h-2.5 w-[2px] ${lineColor}`}
+        style={{ left: `${maxPct}%`, transform: "translateX(-50%)" }}
+      />
+      {/* Average dot */}
+      <div
+        className={`absolute h-2.5 w-2.5 rounded-full ${dotColor} ring-2 ring-surface shadow-sm`}
+        style={{ left: `${avgPct}%`, transform: "translateX(-50%)", zIndex: 5 }}
+      />
     </div>
   );
 }

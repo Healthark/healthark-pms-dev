@@ -32,8 +32,8 @@ export function PeerList() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "worked" | "not_worked" | "pending">(
-    "all",
+  const [filter, setFilter] = useState<"all" | "worked" | "not_worked">(
+    "worked",
   );
 
   useEffect(() => {
@@ -62,7 +62,6 @@ export function PeerList() {
       if (q && !p.full_name.toLowerCase().includes(q)) return false;
       if (filter === "worked" && !p.worked_with) return false;
       if (filter === "not_worked" && p.worked_with) return false;
-      if (filter === "pending" && p.has_submitted) return false;
       return true;
     });
   }, [peers, search, filter]);
@@ -90,8 +89,6 @@ export function PeerList() {
     );
   }
 
-  const submittedCount = peers.filter((p) => p.has_submitted).length;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -108,12 +105,6 @@ export function PeerList() {
         <div className="flex items-center gap-2 flex-wrap">
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
             All ({peers.length})
-          </FilterChip>
-          <FilterChip
-            active={filter === "pending"}
-            onClick={() => setFilter("pending")}
-          >
-            Pending ({peers.length - submittedCount})
           </FilterChip>
           <FilterChip
             active={filter === "worked"}

@@ -5,9 +5,11 @@
  *   ratings === null  → submit mode (sliders enabled, Submit button)
  *   ratings non-null  → read-only mode (sliders disabled, no submit)
  *
- * Navigated to from PeerList instead of opened as a modal so the
- * slider layout has room to breathe and the URL can be shared / used
- * as the "view my submitted review" entry point.
+ * Uses the same single-container tabular layout as the aggregate view
+ * (AggregateView): bucket on the left rowspan-style, statement in the
+ * middle right-aligned, RatingTrack in the plot cell. The only
+ * visual difference between submit and read-only is the `disabled`
+ * flag on RatingTrack and whether the Clear button renders.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -30,6 +32,7 @@ import {
 import { getErrorMessage } from "../utils/errors";
 import { useToast } from "../hooks/useToast";
 import { RatingTrack } from "../components/feedback360/RatingTrack";
+import { Gridlines } from "../components/feedback360/Gridlines";
 
 export function FeedbackGive() {
   const { id } = useParams<{ id: string }>();
@@ -151,7 +154,7 @@ export function FeedbackGive() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <Link
         to="/feedback"
         className="inline-flex items-center gap-1 text-xs font-medium text-text-muted hover:text-brand"
@@ -159,7 +162,7 @@ export function FeedbackGive() {
         <ArrowLeft className="h-3.5 w-3.5" /> Back to 360 Feedback
       </Link>
 
-      {/* Header card — peer info + mode banner */}
+      {/* Header card — peer info + read-only banner */}
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 shrink-0">
@@ -204,45 +207,88 @@ export function FeedbackGive() {
             </p>
           </div>
         )}
-
-        {!isReadOnly && (
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-5 gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            <span>1 Strongly disagree</span>
-            <span>2 Disagree</span>
-            <span>3 Neutral</span>
-            <span>4 Agree</span>
-            <span className="sm:text-right">5 Strongly agree</span>
-          </div>
-        )}
       </div>
 
-      {/* Questions, grouped by bucket */}
-      <div className="space-y-6">
-        {grouped.map((g) => (
-          <section
-            key={g.bucket}
-            className="rounded-xl border border-border bg-surface shadow-sm"
-          >
-            <div className="border-b border-border px-5 py-3">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                {g.bucket}
-              </h2>
+      {/* ── Single-container rating table ─────────────────────────── */}
+      <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+        {/* Header row — left cell summary, right cell scale labels */}
+        <div className="flex items-stretch border-b border-border bg-slate-50/50">
+          <div className="w-[180px] shrink-0 px-6 py-4 border-r border-border/40">
+            <h3 className="text-[14px] font-bold text-brand">
+              {isReadOnly ? "Your ratings" : "Rate each statement"}
+            </h3>
+            <p className="mt-0.5 text-[11px] text-text-muted">
+              {isReadOnly
+                ? "Submit-once · cannot edit"
+                : `${ratedCount} of ${questions.length} rated`}
+            </p>
+          </div>
+          <div className="flex flex-1">
+            <div className="w-[38%] border-r border-border/40" />
+            <div className="flex-1 px-6 py-4 relative">
+              <div className="absolute inset-x-6 bottom-3 flex justify-between items-end pointer-events-none">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight w-24">
+                  Strongly
+                  <br />
+                  Disagree
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight text-center absolute left-1/2 -translate-x-1/2">
+                  Neither Agree
+                  <br />
+                  Nor Disagree
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight w-24 text-right">
+                  Strongly
+                  <br />
+                  Agree
+                </span>
+              </div>
             </div>
-            <div className="divide-y divide-border/50">
-              {g.questions.map((q) => (
-                <div key={q.key} className="px-5 py-4 space-y-2">
-                  <p className="text-sm text-text-main">{q.text}</p>
-                  <div className="flex items-center gap-3">
-                    <RatingTrack
-                      value={ratings[q.key]}
-                      onChange={(v) => setRating(q.key, v)}
-                      disabled={isReadOnly}
-                    />
+          </div>
+        </div>
+
+        {/* Bucket groups */}
+        {grouped.map((group, gIdx) => (
+          <div
+            key={group.bucket}
+            className={`flex ${gIdx > 0 ? "border-t border-border" : ""}`}
+          >
+            <div className="w-[180px] shrink-0 flex items-center justify-end px-5 py-4 border-r border-border/40 bg-slate-50/30">
+              <span className="italic font-semibold text-[13px] text-text-main text-right leading-tight">
+                {group.bucket}
+              </span>
+            </div>
+            <div className="flex flex-1 flex-col">
+              {group.questions.map((q, qIdx) => (
+                <div
+                  key={q.key}
+                  className={`flex ${
+                    qIdx > 0 ? "border-t border-border/30" : ""
+                  }`}
+                >
+                  <div className="w-[38%] flex items-center justify-end px-4 py-3 border-r border-border/40">
+                    <p className="text-[13px] text-text-muted text-right leading-snug">
+                      {q.text}
+                    </p>
+                  </div>
+                  <div className="flex-1 px-6 py-3 min-h-[60px] relative">
+                    <Gridlines />
+                    {/* RatingTrack pinned to inset-x-6 so its dot
+                        positions line up with the gridlines + scale
+                        labels in the header, regardless of whether
+                        the Clear button is rendered. */}
+                    <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 z-10">
+                      <RatingTrack
+                        value={ratings[q.key]}
+                        onChange={(v) => setRating(q.key, v)}
+                        disabled={isReadOnly}
+                      />
+                    </div>
                     {!isReadOnly && ratings[q.key] !== undefined && (
                       <button
                         type="button"
                         onClick={() => clearRating(q.key)}
-                        className="text-[11px] font-medium text-text-muted hover:text-brand shrink-0"
+                        className="absolute right-2 top-1.5 text-[10px] font-medium text-text-muted hover:text-brand z-20 bg-surface px-1 rounded"
                       >
                         Clear
                       </button>
@@ -251,7 +297,7 @@ export function FeedbackGive() {
                 </div>
               ))}
             </div>
-          </section>
+          </div>
         ))}
       </div>
 

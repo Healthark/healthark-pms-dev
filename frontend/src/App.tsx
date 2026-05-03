@@ -38,7 +38,13 @@ function MainContent() {
   return (
     <main
       className="flex-1 overflow-y-auto bg-background p-6 transition-[padding] duration-200"
-      style={{ paddingRight: rightInsetPx ? rightInsetPx + 24 : undefined }}
+      style={{
+        paddingRight: rightInsetPx ? rightInsetPx + 24 : undefined,
+        // Extra one-notch zoom-out applied only to the main content
+        // area. Sidebar stays at its current size. Layered on top of
+        // the global 87.5% root font-size in index.css.
+        zoom: 0.9,
+      }}
     >
       <Outlet />
     </main>

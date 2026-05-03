@@ -19,7 +19,6 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
-  FileText,
   Lock,
   Search,
   ChevronDown,
@@ -180,7 +179,7 @@ export function ProjectReviews() {
     sortedCards.some((c) => cardKey(c) === expandedRowKey);
 
   const tabCls = (tab: ActiveTab) =>
-    `px-4 py-3 text-[14px] font-semibold border-b-2 transition-all ${
+    `px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
       activeTab === tab
         ? "border-brand text-brand"
         : "border-transparent text-text-muted hover:text-text-main"
@@ -189,16 +188,13 @@ export function ProjectReviews() {
   return (
     <div className="flex flex-col gap-6 pb-10 animate-in fade-in duration-500">
       {/* ── Page Header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-display text-[22px] font-semibold tracking-tight text-text-main">
-            Project Reviews
-          </h1>
-          <p className="mt-1 text-[13px] text-text-muted flex items-center gap-1.5">
-            <FileText className="h-3.5 w-3.5" />
-            Project-specific performance feedback and evaluations.
-          </p>
-        </div>
+      <div>
+        <h1 className="font-display text-xl font-semibold text-text-main">
+          Project Reviews
+        </h1>
+        <p className="mt-0.5 text-sm text-text-muted">
+          Project-specific performance feedback and evaluations.
+        </p>
       </div>
 
       {/* ── Main Content Container ── */}

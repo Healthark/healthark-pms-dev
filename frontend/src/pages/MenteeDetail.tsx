@@ -298,7 +298,7 @@ export function MenteeDetail() {
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
                       isActive
                         ? "border-brand text-brand"
                         : "border-transparent text-text-muted hover:text-text-main"

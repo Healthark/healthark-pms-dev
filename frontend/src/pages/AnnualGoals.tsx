@@ -386,7 +386,7 @@ export function AnnualGoals() {
     : filteredGoals;
 
   const tabCls = (tab: ActiveTab) =>
-    `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+    `px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
       activeTab === tab
         ? "border-brand text-brand"
         : "border-transparent text-text-muted hover:text-text-main"

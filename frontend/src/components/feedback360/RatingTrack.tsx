@@ -1,29 +1,22 @@
 /**
- * RatingTrack — 1–5 dotted slider used in two modes:
+ * RatingTrack — 1–5 dotted slider used for input + read-only modes
+ * on the FeedbackGive page.
  *
- *   <RatingTrack value={4} onChange={setRating} />          // input
- *   <RatingTrack value={4} disabled />                       // read-only, integer
- *   <RatingTrack avg={4.2} cohort="worked" />                // aggregate plot
- *   <RatingTrack avg={null} placeholder="Need 3+ reviewers" /> // hidden cohort
+ *   <RatingTrack value={4} onChange={setRating} />     // input
+ *   <RatingTrack value={4} disabled />                  // read-only
+ *   <RatingTrack value={undefined} onChange={...} />    // not-yet-rated (no thumb)
  *
- * Visual: a thin horizontal track with five tick dots evenly spaced.
- * The "thumb" is rendered as a larger filled dot at either an integer
- * position (input mode) or an interpolated float position (aggregate
- * mode). Untouched input → no thumb rendered, only the ticks.
+ * Tick dots and thumb are both absolute-positioned at exact
+ * percentages (0% / 25% / 50% / 75% / 100%), so a parent's gridlines
+ * at the same percentages line up perfectly with the dot centers.
  */
 
 interface RatingTrackProps {
-  /** Integer rating 1–5 (input / read-only modes). `undefined` = not rated. */
+  /** Integer rating 1–5. `undefined` = not rated (no thumb shown). */
   readonly value?: number;
-  /** Float average 1.0–5.0 (aggregate mode). null = below threshold. */
-  readonly avg?: number | null;
-  /** Aggregate cohort — drives the thumb colour. */
-  readonly cohort?: "worked" | "not_worked";
-  /** Placeholder text when avg is null (below threshold). */
-  readonly placeholder?: string;
-  /** Click handler for input mode. Omit for read-only / aggregate. */
+  /** Click handler. Omit to render as read-only. */
   readonly onChange?: (v: number) => void;
-  /** Disable interaction (read-only). Doesn't affect aggregate mode. */
+  /** Disable interaction (read-only). */
   readonly disabled?: boolean;
 }
 
@@ -34,94 +27,65 @@ function pctFor(rating: number): number {
   return ((rating - 1) / 4) * 100;
 }
 
-export function RatingTrack({
-  value,
-  avg,
-  cohort,
-  placeholder,
-  onChange,
-  disabled,
-}: RatingTrackProps) {
-  const isAggregate = avg !== undefined;
-  const isInteractive = !isAggregate && !disabled && !!onChange;
-
-  // Resolve thumb position + colour.
-  let thumbPct: number | null = null;
-  let thumbColor = "bg-brand";
-  if (isAggregate) {
-    if (avg !== null) {
-      thumbPct = pctFor(avg);
-      thumbColor = cohort === "not_worked" ? "bg-amber-500" : "bg-brand";
-    }
-  } else if (typeof value === "number") {
-    thumbPct = pctFor(value);
-  }
+export function RatingTrack({ value, onChange, disabled }: RatingTrackProps) {
+  const isInteractive = !disabled && !!onChange;
+  const thumbPct = typeof value === "number" ? pctFor(value) : null;
 
   return (
-    <div className="flex items-center gap-3 w-full">
-      <div className="relative flex-1 h-7 flex items-center select-none">
-        {/* The track line */}
-        <div className="absolute inset-x-1.5 h-px bg-border" />
+    <div className="relative h-7 w-full select-none">
+      {/* The track line — pinned to the dot centers (translateX(-50%)
+          puts dot 1 at left=0 and dot 5 at left=width-1, so the track
+          spans 0% → 100% horizontally to match). */}
+      <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-border" />
 
-        {/* Tick dots — also serve as click targets in input mode */}
-        <div className="absolute inset-x-0 flex justify-between items-center">
-          {TICK_VALUES.map((v) => {
-            const selected = !isAggregate && value === v;
-            const tickBase =
-              "h-2 w-2 rounded-full transition-all";
-            const tickColor = selected
-              ? "bg-brand"
-              : "bg-slate-300";
-            if (isInteractive) {
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onChange?.(v)}
-                  className={`${tickBase} ${tickColor} hover:scale-150 hover:bg-brand cursor-pointer`}
-                  aria-label={`Rate ${v}`}
-                  aria-pressed={selected}
-                />
-              );
-            }
-            return (
-              <span
-                key={v}
-                className={`${tickBase} ${tickColor} ${
-                  disabled ? "opacity-70" : ""
-                }`}
-                aria-hidden="true"
-              />
-            );
-          })}
-        </div>
+      {/* Tick dots — absolute at exact percentages */}
+      {TICK_VALUES.map((v) => {
+        const pct = pctFor(v);
+        const selected = value === v;
+        const tickBase =
+          "absolute top-1/2 h-2 w-2 rounded-full transition-all";
+        const tickColor = selected ? "bg-brand" : "bg-slate-300";
+        const positionStyle = {
+          left: `${pct}%`,
+          transform: "translate(-50%, -50%)",
+        } as const;
 
-        {/* Thumb — input/read-only show at integer; aggregate at float. */}
-        {thumbPct !== null && (
-          <div
-            className={`absolute h-3.5 w-3.5 rounded-full ${thumbColor} ring-2 ring-surface shadow-sm pointer-events-none transition-all`}
-            style={{
-              left: `${thumbPct}%`,
-              transform: "translateX(-50%)",
-              opacity: disabled ? 0.7 : 1,
-            }}
+        if (isInteractive) {
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onChange?.(v)}
+              style={positionStyle}
+              className={`${tickBase} ${tickColor} hover:scale-150 hover:bg-brand cursor-pointer z-10`}
+              aria-label={`Rate ${v}`}
+              aria-pressed={selected}
+            />
+          );
+        }
+        return (
+          <span
+            key={v}
+            style={positionStyle}
+            className={`${tickBase} ${tickColor} ${
+              disabled ? "opacity-70" : ""
+            }`}
             aria-hidden="true"
           />
-        )}
+        );
+      })}
 
-        {/* Aggregate-mode placeholder when below threshold */}
-        {isAggregate && avg === null && placeholder && (
-          <div className="absolute inset-0 flex items-center">
-            <p className="text-[11px] italic text-text-muted">{placeholder}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Right-hand value/label */}
-      {isAggregate ? null : (
-        <span className="w-14 shrink-0 text-right text-[11px] font-medium text-text-muted">
-          {typeof value === "number" ? `${value} / 5` : "Not rated"}
-        </span>
+      {/* Thumb at the selected integer position */}
+      {thumbPct !== null && (
+        <div
+          className="absolute top-1/2 h-3.5 w-3.5 rounded-full bg-brand ring-2 ring-surface shadow-sm pointer-events-none transition-all z-20"
+          style={{
+            left: `${thumbPct}%`,
+            transform: "translate(-50%, -50%)",
+            opacity: disabled ? 0.7 : 1,
+          }}
+          aria-hidden="true"
+        />
       )}
     </div>
   );

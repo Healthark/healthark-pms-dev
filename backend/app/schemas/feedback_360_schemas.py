@@ -77,9 +77,14 @@ class FeedbackSubmitRequest(BaseModel):
 class FeedbackBucketAggregate(BaseModel):
     """Per-question aggregate for one of the two reviewer cohorts.
     `null` (i.e. None) when the cohort has fewer than the minimum
-    number of reviewers required to render — anonymity guard."""
+    number of reviewers required to render — anonymity guard.
+
+    `min` / `max` drive the whisker line on the aggregate plot;
+    `avg` is the dot on it."""
     count: int
     avg: float
+    min: int
+    max: int
 
 
 class FeedbackQuestionAggregate(BaseModel):
