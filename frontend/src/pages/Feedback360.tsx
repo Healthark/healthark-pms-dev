@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, MessageCircleHeart, Search, UserCircle } from "lucide-react";
+import { Loader2, Search, UserCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import {
   menteeService,
@@ -47,7 +47,6 @@ export function Feedback360() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-xl font-semibold text-text-main flex items-center gap-2">
-          <MessageCircleHeart className="h-5 w-5 text-brand" />
           360 Feedback
         </h1>
         <p className="mt-0.5 text-sm text-text-muted">
