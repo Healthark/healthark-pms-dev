@@ -124,19 +124,19 @@ function ProjectCard({
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
-            <Briefcase className="h-5 w-5" aria-hidden="true" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+            <Briefcase className="h-4 w-4" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-[15px] text-text-main truncate">
+              <span className="font-semibold text-sm text-text-main truncate">
                 {summary.project_name}
               </span>
-              <span className="shrink-0 text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-text-muted">
+              <span className="shrink-0 text-[11px] font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-text-muted">
                 {summary.project_code}
               </span>
             </div>
-            <div className="flex items-center gap-3 mt-0.5 text-[12px] text-text-muted flex-wrap">
+            <div className="flex items-center gap-3 mt-0.5 text-[11px] text-text-muted flex-wrap">
               {summary.pm_name && (
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" aria-hidden="true" />
@@ -322,40 +322,66 @@ export function ManagementTab() {
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
 
-      {/* ── Filters Row ── */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-            Cycle
-          </label>
-          <select
-            value={selectedCycle}
-            onChange={(e) => setSelectedCycle(e.target.value)}
-            className={SELECT_CLS}
-            disabled={cycleOptions.length === 0}
-          >
-            {cycleOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+      {/* ── Filters Row + Summary stats ── */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+              Cycle
+            </label>
+            <select
+              value={selectedCycle}
+              onChange={(e) => setSelectedCycle(e.target.value)}
+              className={SELECT_CLS}
+              disabled={cycleOptions.length === 0}
+            >
+              {cycleOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className={SELECT_CLS}
+            >
+              <option value="all">All Statuses</option>
+              <option value="reviewed">Completed</option>
+              <option value="pending">Pending / Not Started</option>
+            </select>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className={SELECT_CLS}
-          >
-            <option value="all">All Statuses</option>
-            <option value="reviewed">Completed</option>
-            <option value="pending">Pending / Not Started</option>
-          </select>
-        </div>
+        {/* Right-aligned summary chips — only when data is loaded. */}
+        {!isLoading && !error && data.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center">
+            {[
+              { label: "Projects", value: totalProjects, color: "text-text-main" },
+              { label: "Total Members", value: totalMembers, color: "text-text-main" },
+              { label: "Reviewed", value: totalReviewed, color: "text-green-600" },
+              {
+                label: "Completion",
+                value: `${overallPct}%`,
+                color: overallPct === 100 ? "text-green-600" : "text-brand",
+              },
+            ].map(({ label, value, color }) => (
+              <div
+                key={label}
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 flex items-center gap-1.5 shadow-sm"
+              >
+                <span className="text-[11px] text-text-muted">{label}</span>
+                <span className={`font-semibold text-[12px] ${color}`}>{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -377,28 +403,6 @@ export function ManagementTab() {
         </div>
       ) : (
         <>
-          {/* Summary stats strip */}
-          <div className="flex flex-wrap gap-3">
-            {[
-              { label: "Projects", value: totalProjects, color: "text-text-main" },
-              { label: "Total Members", value: totalMembers, color: "text-text-main" },
-              { label: "Reviewed", value: totalReviewed, color: "text-green-600" },
-              {
-                label: "Completion",
-                value: `${overallPct}%`,
-                color: overallPct === 100 ? "text-green-600" : "text-brand",
-              },
-            ].map(({ label, value, color }) => (
-              <div
-                key={label}
-                className="rounded-lg border border-border bg-surface px-4 py-2.5 flex items-center gap-2 shadow-sm"
-              >
-                <span className="text-[12px] text-text-muted">{label}</span>
-                <span className={`font-bold text-[14px] ${color}`}>{value}</span>
-              </div>
-            ))}
-          </div>
-
           {/* Project cards */}
           <div className="flex flex-col gap-4">
             {data.map((summary) => (

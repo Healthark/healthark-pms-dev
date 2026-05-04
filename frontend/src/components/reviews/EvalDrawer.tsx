@@ -77,6 +77,14 @@ export function EvalDrawer(props: EvalFormProps) {
       className="fixed top-0 right-0 z-40 h-screen w-full md:w-[35vw] md:min-w-[28rem] bg-surface shadow-2xl border-l border-border flex flex-col overflow-x-hidden animate-in slide-in-from-right duration-200"
       role="dialog"
       aria-modal="true"
+      // Match the `zoom: 0.9` applied to <main> in App.tsx so the drawer
+      // contents render at the same effective scale as the page behind
+      // it. The drawer is portaled into <body>, outside <main>, so it
+      // doesn't inherit that zoom automatically. Height is inflated by
+      // 1/0.9 so the post-zoom used height lands at 100vh — without
+      // this `h-screen` (100vh) becomes 90vh used, leaving white space
+      // below the drawer.
+      style={{ zoom: 0.9, height: "calc(100vh / 0.9)" }}
     >
       <EvalForm {...props} />
     </div>,
