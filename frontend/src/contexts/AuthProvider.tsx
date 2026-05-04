@@ -2,16 +2,17 @@ import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react
 import { AuthContext, type AuthContextType } from "./AuthContext";
 import { authService, type AuthResponse } from "../services/auth.service";
 
-// Maps outside the component and acts as source of truth
+// Maps outside the component and acts as source of truth.
+// Single-tenant deployment — only Healthark is populated. Kept as a
+// lookup table so the existing org_id-driven plumbing continues to
+// work and a second tenant could be wired in by inserting one row.
 const THEME_MAP: Record<number, string> = {
   1: "healthark",
-  2: "miltenyi",
 };
 
 /** Browser tab title + favicon per org */
 const BRAND_META: Record<number, { title: string; favicon: string }> = {
-  1: { title: "Healthark PMS",       favicon: "/healtharklogo-small.png" },
-  2: { title: "Miltenyi Biotec PMS", favicon: "/miltenyi-biotech-small.svg" },
+  1: { title: "Healthark PMS", favicon: "/healtharklogo-small.png" },
 };
 
 /** Helper – create or reuse the <link rel="icon"> element */

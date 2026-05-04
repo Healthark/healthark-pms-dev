@@ -47,9 +47,8 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
-    # Optional GLOBAL display-name override. When unset, the per-org email
-    # theme's brand_name wins (HealthArk vs Miltenyi vs …). Single-tenant
-    # deployments can pin this; multi-tenant should leave it unset.
+    # Optional GLOBAL display-name override for the From: header. When
+    # unset, the email theme's brand_name (HealthArk PMS) wins.
     SMTP_FROM_NAME: str | None = None
     # Mailbox in the From: header. When unset, _send() falls back to
     # SMTP_USERNAME (the auth account), which is required for personal

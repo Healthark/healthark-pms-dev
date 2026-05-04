@@ -17,9 +17,10 @@ Design notes:
       escaped via `html.escape(quote=True)` at the template boundary so a
       malicious or imported value like ``<img onerror=...>`` cannot inject
       HTML/JS into the rendered email body.
-    * Per-org theming is resolved from a Python-side mirror of the frontend
-      THEME_MAP / BRAND_META (see `_ORG_THEMES`). Keep the two in sync when
-      adding a new tenant.
+    * Theming uses the Healthark palette (single-tenant deployment). The
+      `_ORG_THEMES` lookup is preserved keyed by org_id for parity with
+      the frontend's `THEME_MAP` / `BRAND_META`, but only the Healthark
+      entry is populated.
     * The From: address is decoupled from SMTP_USERNAME via SMTP_FROM_EMAIL
       so production can send from `noreply@<your-domain>` while still
       authenticating against a transactional-provider mailbox. See the
@@ -49,12 +50,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class EmailTheme:
-    """Color + display-name palette for a single tenant's outbound mail.
+    """Color + display-name palette for outbound mail.
 
     Mirrors `--brand` / `--brand-light` in `frontend/src/index.css` and the
-    title in `BRAND_META` from `frontend/src/contexts/AuthProvider.tsx`.
-    Keep them in sync when adding a tenant — if they drift, the email a
-    Miltenyi user receives will look like a HealthArk email."""
+    title in `BRAND_META` from `frontend/src/contexts/AuthProvider.tsx`."""
 
     brand_name: str
     brand: str
@@ -67,21 +66,17 @@ _DEFAULT_THEME = EmailTheme(
     brand_light="#EBF1F6",
 )
 
-# org_id → theme. Org IDs match `data-theme` slugs:
-#   1 = healthark, 2 = miltenyi  (per CLAUDE.md / AuthProvider.tsx)
+# org_id → theme. Single-tenant deployment: only Healthark is populated.
+# Kept as a lookup table so the public API surface (`org_id` argument)
+# stays stable for callers built before the tenancy collapse, and so a
+# future second tenant could be added with a one-line change.
 _ORG_THEMES: dict[int, EmailTheme] = {
     1: _DEFAULT_THEME,
-    2: EmailTheme(
-        brand_name="Miltenyi PMS",
-        brand="#3C1053",
-        brand_light="#F4EFF8",
-    ),
 }
 
 
 def _resolve_theme(org_id: int | None) -> EmailTheme:
-    """Look up the per-org theme. Unknown org_id → default (HealthArk).
-    Same fallback behavior as the frontend's THEME_MAP."""
+    """Look up the per-org theme. Unknown / None org_id → default."""
     if org_id is None:
         return _DEFAULT_THEME
     return _ORG_THEMES.get(org_id, _DEFAULT_THEME)
@@ -89,9 +84,7 @@ def _resolve_theme(org_id: int | None) -> EmailTheme:
 
 def _resolve_from_name(theme: EmailTheme) -> str:
     """Display name in the From: header. SMTP_FROM_NAME (env) wins as a
-    global override; otherwise we use the per-org brand name. This keeps
-    single-tenant deployments using their existing env config while letting
-    multi-tenant deployments brand per-org by leaving the env unset."""
+    global override; otherwise we use the brand name from the theme."""
     return settings.SMTP_FROM_NAME or theme.brand_name
 
 
@@ -222,10 +215,9 @@ def _password_reset_html(
     background images.
 
     The body header and footer brand name come from `theme.brand_name`
-    directly (per-org), independent of the SMTP_FROM_NAME env override —
-    that override only steers the visible From: address so multi-tenant
-    deployments don't misbrand the email body. User-supplied fields are
-    escaped via `_esc()` before interpolation."""
+    directly, independent of the SMTP_FROM_NAME env override — that
+    override only steers the visible From: address. User-supplied fields
+    are escaped via `_esc()` before interpolation."""
 
     # Escape every interpolation that could plausibly carry user-controlled
     # content. Defense-in-depth — even fields like `theme.brand_name`

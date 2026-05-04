@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Building2, CheckCircle2, Loader2, Lock, Mail } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Lock, Mail } from "lucide-react";
 import { authService } from "../services/auth.service";
 import { useAuth } from "../hooks/useAuth";
 
 // ─── Types & Configuration ───────────────────────────────────────────────────
-
-type Tenant = "healthark" | "miltenyi";
 
 interface ApiErrorResponse {
   response?: {
@@ -30,24 +28,7 @@ function isApiError(
   return typeof detail === "string";
 }
 
-const TENANT_ASSETS = {
-  healthark: {
-    id: "healthark",
-    name: "Healthark",
-    logo: "/healtharklogov2.png",
-    // Locked to h-14 for strict consistency
-    logoClass: "h-14 w-auto object-contain drop-shadow-sm",
-    placeholder: "david@healthark.com",
-  },
-  miltenyi: {
-    id: "miltenyi",
-    name: "Miltenyi Biotec",
-    logo: "/miltenyi-biotec-logo.svg",
-    // Locked to h-14 for strict consistency
-    logoClass: "h-14 w-auto object-contain drop-shadow-sm",
-    placeholder: "david@miltenyi.com",
-  },
-} as const;
+const EMAIL_PLACEHOLDER = "david@healthark.com";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -61,7 +42,6 @@ export function Login() {
   const intendedPath =
     (location.state as LocationState | null)?.from?.pathname ?? "/dashboard";
 
-  const [activeTenant, setActiveTenant] = useState<Tenant>("healthark");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -108,33 +88,20 @@ export function Login() {
     }
   };
 
-  /**
-   * Pre-Auth Theming: Inject the theme based on the selected tab.
-   */
+  // Pre-auth theming: pin to Healthark. Once the user is authenticated,
+  // AuthProvider takes over and re-applies the same theme based on org_id.
   useEffect(() => {
-    // When the auth guard below redirects, this effect is a no-op — the
-    // component unmounts immediately. Running the hook unconditionally keeps
-    // hook order stable across renders (React Rules of Hooks).
     if (user) return;
-
-    document.documentElement.setAttribute("data-theme", activeTenant);
-
+    document.documentElement.setAttribute("data-theme", "healthark");
     let favicon = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (!favicon) {
       favicon = document.createElement("link");
       favicon.rel = "icon";
       document.head.appendChild(favicon);
     }
-
-    if (activeTenant === "miltenyi") {
-      favicon.href = "/miltenyi-biotech-small.svg";
-      document.title = "Miltenyi Biotec PMS";
-    } else {
-      favicon.href = "/healtharklogo-small.png";
-      document.title = "Healthark PMS";
-    }
-
-  }, [activeTenant, user]);
+    favicon.href = "/healtharklogo-small.png";
+    document.title = "Healthark PMS";
+  }, [user]);
 
   // Synchronous redirect for already-authenticated users — avoids the
   // single-frame flash of the login form that useEffect-based redirects cause.
@@ -165,8 +132,6 @@ export function Login() {
     }
   };
 
-  const currentAssets = TENANT_ASSETS[activeTenant];
-
   return (
     // Increased to duration-1000 for slow-motion theme shift
     <div className="min-h-screen bg-background transition-colors duration-1000 ease-in-out flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
@@ -176,54 +141,20 @@ export function Login() {
 
       {/* ── Container for Cards ── */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col gap-6 relative z-10">
-        
-        {/* ── Top Card: Tenant Switcher ── */}
-        <div className="bg-surface p-1.5 shadow-md rounded-xl border border-border transition-colors duration-1000 ease-in-out">
-          <div className="flex gap-1 relative">
-            {(Object.keys(TENANT_ASSETS) as Tenant[]).map((tenantKey) => {
-              const isActive = activeTenant === tenantKey;
-              return (
-                <button
-                  key={tenantKey}
-                  type="button"
-                  onClick={() => {
-                    setActiveTenant(tenantKey);
-                    setError(""); 
-                  }}
-                  // Slower transitions here (duration-700) and dramatic contrast on the active state
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold rounded-lg transition-all duration-700 ease-in-out ${
-                    isActive
-                      ? "bg-brand text-white shadow-md scale-[1.02]"
-                      : "text-text-muted hover:bg-slate-50 hover:text-text-main"
-                  }`}
-                >
-                  <Building2 className={`w-4 h-4 transition-colors duration-700 ${isActive ? 'text-white' : 'text-text-muted'}`} />
-                  {TENANT_ASSETS[tenantKey].name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* ── Bottom Card: Login Form ── */}
+        {/* ── Login Card ── */}
         <div className="bg-surface py-8 px-4 shadow-xl sm:rounded-xl sm:px-10 border border-border transition-colors duration-1000 ease-in-out">
-          
-          {/* Dynamic Logo, PMS Tag, and Header */}
+
+          {/* Logo + PMS Tag */}
           <div className="flex flex-col items-center justify-center mb-8 gap-3">
-            
-            {/* PMS Text positioned ABOVE the logo */}
             <span className="text-text-muted font-medium text-lg tracking-[0.15em] animate-[fadeIn_0.8s_ease-in-out]">
               PMS
             </span>
-
-            {/* Logo */}
             <img
-              key={currentAssets.id}
-              src={currentAssets.logo}
-              alt={`${currentAssets.name} Performance Management System`}
-              className={`${currentAssets.logoClass} animate-[fadeIn_0.8s_ease-in-out]`}
+              src="/healtharklogov2.png"
+              alt="Healthark Performance Management System"
+              className="h-14 w-auto object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out]"
             />
-
             <style>{`
               @keyframes fadeIn {
                 from { opacity: 0; transform: translateY(5px); }
@@ -267,7 +198,7 @@ export function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
-                    placeholder={currentAssets.placeholder}
+                    placeholder={EMAIL_PLACEHOLDER}
                   />
                 </div>
               </div>
@@ -404,7 +335,7 @@ export function Login() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm outline-none"
-                        placeholder={currentAssets.placeholder}
+                        placeholder={EMAIL_PLACEHOLDER}
                       />
                     </div>
                   </div>

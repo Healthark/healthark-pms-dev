@@ -26,18 +26,14 @@ interface NavItemData {
   readonly requiredRole?: readonly string[];
 }
 
+// Single-tenant deployment — only Healthark is populated. Kept as a
+// lookup table so the existing org_id-driven plumbing continues to work.
 const ORG_ASSETS: Record<number, { logo: string; logoSmall: string; displayName: string; logoClass: string }> = {
   1: {
     logo: "/healtharklogov2.png",
     logoSmall: "/healtharklogo-small.png",
     displayName: "Healthark Insights",
-    logoClass: "h-7 w-auto object-contain shrink-0 max-w-[140px]", 
-  },
-  2: {
-    logo: "/miltenyi-biotec-logo.svg",
-    logoSmall: "/miltenyi-biotech-small.svg", 
-    displayName: "Miltenyi Biotec",
-    logoClass: "h-10 w-auto object-contain shrink-0 max-w-[180px]", 
+    logoClass: "h-7 w-auto object-contain shrink-0 max-w-[140px]",
   },
 };
 
