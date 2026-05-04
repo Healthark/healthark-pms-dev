@@ -12,7 +12,6 @@ import {
   type DesignationBrief,
   type SystemSettings,
   type AdminSettingsUpdatePayload,
-  type PasswordResetResponse,
 } from "../services/admin.service";
 import type { CycleType } from "../services/system-settings.service";
 import { getErrorMessage } from "../utils/errors";
@@ -20,7 +19,6 @@ import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
-import { TempPasswordRevealModal } from "../components/admin/TempPasswordRevealModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { ManagementReviewTab } from "../components/admin/ManagementReviewTab";
 import { useSystemSettings } from "../hooks/useSystemSettings";
@@ -50,9 +48,6 @@ export default function AdminPanel() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
-  const [resetResult, setResetResult] = useState<PasswordResetResponse | null>(
-    null,
-  );
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
@@ -160,24 +155,6 @@ export default function AdminPanel() {
       setModalError(getErrorMessage(err));
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleResetPassword = async (user: UserResponse) => {
-    const ok = await confirm({
-      title: "Reset password?",
-      message: `Generate a new temporary password for ${user.full_name}? Their current password will be invalidated immediately.`,
-      variant: "warning",
-      confirmText: "Reset password",
-    });
-    if (!ok) return;
-
-    try {
-      const result = await adminService.resetUserPassword(user.id);
-      // Opens the reveal modal. Temp password is shown exactly once.
-      setResetResult(result);
-    } catch (err) {
-      snackbar.error(getErrorMessage(err));
     }
   };
 
@@ -351,7 +328,6 @@ export default function AdminPanel() {
             onEdit={openEditModal}
             onDeactivate={handleDeactivate}
             onReactivate={handleReactivate}
-            onResetPassword={handleResetPassword}
           />
         )}
 
@@ -401,12 +377,6 @@ export default function AdminPanel() {
         error={modalError}
       />
 
-      {resetResult && (
-        <TempPasswordRevealModal
-          result={resetResult}
-          onClose={() => setResetResult(null)}
-        />
-      )}
     </div>
   );
 }

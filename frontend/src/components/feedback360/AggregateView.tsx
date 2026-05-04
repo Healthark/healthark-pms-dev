@@ -77,7 +77,7 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
           {String(data.fy_year + 1).slice(-2)}
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          The aggregate will populate as colleagues submit reviews.
+          The aggregate will populate as employees submit reviews.
         </p>
       </div>
     );

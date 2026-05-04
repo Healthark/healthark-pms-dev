@@ -12,8 +12,8 @@
  * but if they hit /aggregate/{any} directly the backend returns 403.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, Search, UserCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Loader2, Search, UserCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import {
   menteeService,
@@ -51,7 +51,7 @@ export function Feedback360() {
         </h1>
         <p className="mt-0.5 text-sm text-text-muted">
           Share peer feedback and view the aggregate of feedback received.
-          Reviews are anonymous — submit-once per colleague, per fiscal year.
+          Reviews are anonymous — submit-once per employee, per fiscal year.
         </p>
       </div>
 
@@ -201,7 +201,6 @@ function OrgFeedbackTab() {
   const [peers, setPeers] = useState<FeedbackPeer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<FeedbackPeer | null>(null);
 
   useEffect(() => {
@@ -223,12 +222,6 @@ function OrgFeedbackTab() {
     };
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return peers;
-    return peers.filter((p) => p.full_name.toLowerCase().includes(q));
-  }, [peers, search]);
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16 text-sm text-text-muted">
@@ -245,73 +238,180 @@ function OrgFeedbackTab() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* Picker column */}
-      <div className="md:col-span-1 space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search org…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-          />
-        </div>
-        <div className="rounded-lg border border-border max-h-[60vh] overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="p-4 text-xs italic text-text-muted">
-              No matches.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border/50">
-              {filtered.map((p) => {
-                const isActive = selected?.user_id === p.user_id;
-                return (
-                  <li key={p.user_id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(p)}
-                      className={`w-full flex items-center gap-2 text-left px-3 py-2 transition-colors ${
-                        isActive
-                          ? "bg-brand/10"
-                          : "hover:bg-slate-50/60"
-                      }`}
-                    >
-                      <UserCircle className="h-4 w-4 text-text-muted shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm text-text-main truncate">
-                          {p.full_name}
-                        </p>
-                        {p.designation_name && (
-                          <p className="text-[11px] text-text-muted truncate">
-                            {p.designation_name}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PeerCombobox peers={peers} value={selected} onChange={setSelected} />
 
-      {/* Aggregate column */}
-      <div className="md:col-span-2">
-        {selected ? (
-          <AggregateView
-            key={selected.user_id}
-            targetUserId={selected.user_id}
-            heading={`${selected.full_name}'s aggregate`}
-          />
+      {selected ? (
+        <AggregateView
+          key={selected.user_id}
+          targetUserId={selected.user_id}
+          heading={`${selected.full_name}'s aggregate`}
+        />
+      ) : (
+        <div className="rounded-lg border-2 border-dashed border-border py-16 text-center text-sm text-text-muted">
+          Pick an employee above to view their aggregate.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Searchable peer combobox ────────────────────────────────────────
+//
+// Single-select with a type-to-filter input, a dropdown list, and a
+// per-row badge indicating how many reviews each peer has received in
+// the active FY (so Management can see at a glance who's covered and
+// who isn't). Keyboard-friendly (Esc closes), click-outside dismisses.
+
+function PeerCombobox({
+  peers,
+  value,
+  onChange,
+}: {
+  readonly peers: FeedbackPeer[];
+  readonly value: FeedbackPeer | null;
+  readonly onChange: (peer: FeedbackPeer | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Click-outside dismisses.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return peers;
+    return peers.filter(
+      (p) =>
+        p.full_name.toLowerCase().includes(q) ||
+        (p.designation_name?.toLowerCase().includes(q) ?? false) ||
+        (p.department_name?.toLowerCase().includes(q) ?? false),
+    );
+  }, [peers, query]);
+
+  const select = (peer: FeedbackPeer) => {
+    onChange(peer);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <label
+        htmlFor="org-feedback-search"
+        className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1"
+      >
+        Search Org
+      </label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+        <input
+          id="org-feedback-search"
+          type="text"
+          autoComplete="off"
+          placeholder="Type an employee's name…"
+          value={open ? query : value?.full_name ?? ""}
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+          }}
+          className="w-full rounded-lg border border-border bg-white pl-9 pr-9 py-2 text-sm text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+        />
+        {value && !open ? (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted hover:bg-slate-100"
+            aria-label="Clear selection"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
         ) : (
-          <div className="rounded-lg border-2 border-dashed border-border py-16 text-center text-sm text-text-muted">
-            Pick a colleague from the list to view their aggregate.
-          </div>
+          <ChevronDown
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted"
+            aria-hidden="true"
+          />
         )}
       </div>
+
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-lg border border-border bg-white shadow-lg"
+        >
+          {filtered.length === 0 ? (
+            <li className="p-3 text-sm italic text-text-muted">
+              No matches.
+            </li>
+          ) : (
+            filtered.map((p) => {
+              const isActive = value?.user_id === p.user_id;
+              return (
+                <li
+                  key={p.user_id}
+                  role="option"
+                  aria-selected={isActive}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    select(p);
+                  }}
+                  className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
+                    isActive
+                      ? "bg-brand/10"
+                      : "hover:bg-slate-50/70"
+                  }`}
+                >
+                  <UserCircle className="h-4 w-4 text-text-muted shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-text-main truncate">
+                      {p.full_name}
+                    </p>
+                    {(p.designation_name || p.department_name) && (
+                      <p className="text-[11px] text-text-muted truncate">
+                        {p.designation_name ?? "—"}
+                        {p.department_name && ` · ${p.department_name}`}
+                      </p>
+                    )}
+                  </div>
+                  <ReviewedBadge count={p.received_count} />
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function ReviewedBadge({ count }: { count: number }) {
+  if (count > 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700 shrink-0">
+        {count} review{count === 1 ? "" : "s"}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-text-muted shrink-0">
+      No reviews yet
+    </span>
   );
 }

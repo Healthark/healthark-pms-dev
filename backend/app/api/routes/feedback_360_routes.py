@@ -113,6 +113,27 @@ def list_peers(current_user: CurrentUser, db: DbSession):
     }
     submitted_peer_ids = {hashes_by_peer[h] for h in submitted_hashes}
 
+    # Batched received-review count per peer. Single grouped query —
+    # no N+1. The count is org-wide info (no reviewer identity leaked),
+    # so it's safe to expose for every requester.
+    peer_ids = [p.id for p in peers]
+    received_rows = (
+        db.query(
+            Feedback360Review.target_user_id,
+            func.count(Feedback360Review.id),
+        )
+        .filter(
+            Feedback360Review.org_id == current_user.org_id,
+            Feedback360Review.fy_year == fy_year,
+            Feedback360Review.target_user_id.in_(peer_ids),
+        )
+        .group_by(Feedback360Review.target_user_id)
+        .all()
+    ) if peer_ids else []
+    received_count_by_peer: dict[int, int] = {
+        int(pid): int(cnt) for pid, cnt in received_rows
+    }
+
     return [
         FeedbackPeerResponse(
             user_id=p.id,
@@ -121,6 +142,7 @@ def list_peers(current_user: CurrentUser, db: DbSession):
             department_name=p.department.name if p.department else None,
             has_submitted=p.id in submitted_peer_ids,
             worked_with=p.id in worked_with_set,
+            received_count=received_count_by_peer.get(p.id, 0),
         )
         for p in peers
     ]

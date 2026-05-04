@@ -84,28 +84,6 @@ class UserUpdate(BaseModel):
     mentor_id: Optional[int] = None
 
 
-class PasswordResetResponse(BaseModel):
-    """Returned to the admin once, immediately after issuing a password-reset
-    link for a user.
-
-    The user's current password is invalidated (rotated to a random hash) and
-    a one-time, time-limited token is generated. The plaintext token is the
-    secret in `reset_link`; only its SHA-256 hash is persisted in
-    `password_reset_tokens`.
-
-    `email_sent` reports whether the link was successfully delivered to the
-    user via SMTP. False means the admin must copy `reset_link` from this
-    response and relay it manually (Slack, voice, etc.). The link itself is
-    revealed in the admin UI exactly once for that fallback case.
-    """
-    user_id: int
-    full_name: str
-    email: str
-    reset_link: str
-    expires_in_minutes: int
-    email_sent: bool = False
-
-
 # ── Admin Settings (Simplified View) ─────────────────────────────────
 
 class AdminSettingsResponse(BaseModel):

@@ -84,7 +84,7 @@ export function PeerList() {
   if (peers.length === 0) {
     return (
       <div className="rounded-lg border-2 border-dashed border-border py-12 text-center text-sm text-text-muted">
-        No colleagues to review.
+        No employees to review.
       </div>
     );
   }
@@ -96,7 +96,7 @@ export function PeerList() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
           <input
             type="text"
-            placeholder="Search colleagues…"
+            placeholder="Search employees…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
@@ -123,7 +123,7 @@ export function PeerList() {
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-border py-12 text-center text-sm text-text-muted">
-          No colleagues match the current filter.
+          No employees match the current filter.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

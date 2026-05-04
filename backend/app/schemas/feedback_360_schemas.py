@@ -28,13 +28,16 @@ class FeedbackPeerResponse(BaseModel):
     """One row in the Give Feedback list. `has_submitted` is computed
     server-side via the requester's reviewer_hash — only the requester
     themselves can resolve it. `worked_with` is the system-inferred bit
-    used to color the row in the UI."""
+    used to color the row in the UI. `received_count` is the total
+    reviews this peer has received in the active FY (org-wide info,
+    not reviewer-tied — safe to expose to all peers)."""
     user_id: int
     full_name: str
     designation_name: Optional[str] = None
     department_name: Optional[str] = None
     has_submitted: bool
     worked_with: bool
+    received_count: int = 0
 
 
 # ── Single peer + my own review (for the Give/Read-only page) ──────

@@ -32,26 +32,6 @@ export interface UserResponse {
   designation: DesignationBrief | null;
 }
 
-export interface PasswordResetResponse {
-  user_id: number;
-  full_name: string;
-  email: string;
-  /** One-time, time-limited URL of the form `${APP_BASE_URL}/reset-password?token=…`.
-   *  The plaintext token is the secret — only its hash is persisted server-side.
-   *  Returned to the admin so they can relay it manually if email delivery fails. */
-  reset_link: string;
-  /** Token TTL — drives the "expires in X minutes" copy in the modal. */
-  expires_in_minutes: number;
-  /** Whether the backend queued an outbound email to the user. True =
-   *  scheduled for background delivery (SMTP is configured); False = SMTP
-   *  is unconfigured at the server, so the admin must relay the link
-   *  manually. Note: True does not guarantee the message ultimately
-   *  reached the inbox — transient SMTP failures are logged server-side
-   *  but not surfaced here. If the user reports never receiving it, click
-   *  Reset Password again to issue a fresh link. */
-  email_sent: boolean;
-}
-
 export interface SystemSettings {
   id: number;
   org_id: number;
@@ -138,13 +118,6 @@ export const adminService = {
   reactivateUser: async (userId: number): Promise<UserResponse> => {
     const res = await apiClient.post<UserResponse>(
       `/admin/users/${userId}/reactivate`,
-    );
-    return res.data;
-  },
-
-  resetUserPassword: async (userId: number): Promise<PasswordResetResponse> => {
-    const res = await apiClient.post<PasswordResetResponse>(
-      `/admin/users/${userId}/reset-password`,
     );
     return res.data;
   },

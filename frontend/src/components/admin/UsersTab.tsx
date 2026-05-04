@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Pencil, UserX, UserCheck, KeyRound } from "lucide-react";
+import { Search, Pencil, UserX, UserCheck } from "lucide-react";
 import type { UserResponse } from "../../services/admin.service";
 import { StatusBadge } from "./StatusBadge";
 import { SortableHeader } from "../SortableHeader";
@@ -17,7 +17,6 @@ interface UsersTabProps {
   readonly onEdit: (user: UserResponse) => void;
   readonly onDeactivate: (user: UserResponse) => void;
   readonly onReactivate: (user: UserResponse) => void;
-  readonly onResetPassword: (user: UserResponse) => void;
 }
 
 type UsersSortKey =
@@ -72,7 +71,6 @@ export function UsersTab({
   onEdit,
   onDeactivate,
   onReactivate,
-  onResetPassword,
 }: UsersTabProps) {
   const [sort, setSort] = useState<SortState<UsersSortKey> | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
@@ -241,16 +239,6 @@ export function UsersTab({
                         >
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </button>
-                        {!user.is_deleted && (
-                          <button
-                            type="button"
-                            onClick={() => onResetPassword(user)}
-                            title="Reset password"
-                            className="rounded-md p-1.5 text-text-muted hover:bg-amber-50 hover:text-amber-600 transition-colors"
-                          >
-                            <KeyRound className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                        )}
                         {!user.is_deleted && (
                           <button
                             type="button"

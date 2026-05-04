@@ -37,6 +37,10 @@ export interface FeedbackPeer {
   /** System-inferred from project_assignments. Drives the colour
    *  treatment in the UI. */
   worked_with: boolean;
+  /** Total reviews this peer has received in the active FY. Org-wide
+   *  info — used by the Org Feedback combobox to indicate at a glance
+   *  whether an employee has any feedback to look at. */
+  received_count: number;
 }
 
 // ── Submission ──────────────────────────────────────────────────────
