@@ -81,9 +81,10 @@ def _list_mentees(db: DbSession, mentor: User) -> list[User]:
 def _build_goal_stats(annual_goals: list[Goal]) -> MenteeGoalsStats:
     """Roll up annual-goal counts + progress for a single mentee.
 
-    The 4 post-approval review states (h1_self_reviewed, h1_mentor_reviewed,
-    h2_self_reviewed, h2_mentor_reviewed) are folded into the `approved`
-    bucket so the mentee card keeps showing one consolidated count.
+    All post-approval review states (h1_*/h2_* for half-yearly orgs and
+    q1_*..q4_* for quarterly orgs) are folded into the `approved` bucket
+    so the mentee card keeps showing one consolidated count regardless of
+    cadence — see POST_APPROVAL_STATES.
     """
     counts = {s.value: 0 for s in ApprovalStatus}
     for g in annual_goals:

@@ -25,7 +25,11 @@ import {
 } from "lucide-react";
 import type { Goal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { formatFyYearSpan } from "../../utils/fy";
-import { isHalfWindowOpen } from "../../utils/goalStatus";
+import {
+  cycleKeysForType,
+  halfDisplayLabel,
+  isHalfWindowOpen,
+} from "../../utils/goalStatus";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 interface SelfReviewCycleMenuProps {
@@ -35,12 +39,16 @@ interface SelfReviewCycleMenuProps {
   readonly onSelect: (cycleHalf: SelfReviewCycleHalf) => void;
 }
 
-const HALVES: readonly SelfReviewCycleHalf[] = ["H1", "H2"];
 const MENU_WIDTH = 224; // Tailwind w-56
 const MENU_GAP = 4;
 
-function cycleLabel(goal: Goal, half: SelfReviewCycleHalf): string {
-  return goal.fy_year ? `${half} ${formatFyYearSpan(goal.fy_year)}` : half;
+function cycleLabel(
+  goal: Goal,
+  half: SelfReviewCycleHalf,
+  cycleType: string | null,
+): string {
+  const display = halfDisplayLabel(half, cycleType);
+  return goal.fy_year ? `${display} ${formatFyYearSpan(goal.fy_year)}` : display;
 }
 
 export function SelfReviewCycleMenu({
@@ -54,6 +62,12 @@ export function SelfReviewCycleMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const { settings } = useSystemSettings();
   const fiscalStartMonth = settings?.fiscal_start_month ?? 4;
+  const cycleType = settings?.cycle_type ?? null;
+  // For half-yearly orgs the menu shows 2 rows (H1/H2). For quarterly
+  // orgs it shows 4 rows (Q1/Q2/Q3/Q4). The data column carries either
+  // family — we read whichever is configured for the org.
+  const cycles = cycleKeysForType(cycleType);
+  const totalCycles = cycles.length;
 
   // Compute the menu position from the trigger's bounding rect.  Called on
   // open, on window resize, and on any scroll (capture: true catches
@@ -119,20 +133,20 @@ export function SelfReviewCycleMenu({
     return () => document.removeEventListener("keydown", handler);
   }, [open]);
 
-  const submittedCount = goal.self_reviews.length;
-  const mentorReviewedCount = goal.mentor_reviews.length;
+  const submittedCount = goal.self_reviews.filter((sr) => !sr.is_draft).length;
+  const mentorReviewedCount = goal.mentor_reviews.filter((mr) => !mr.is_draft).length;
 
   const triggerLabel =
     mode === "mentor"
       ? mentorReviewedCount > 0
         ? `Reviews (${mentorReviewedCount}/${submittedCount} reviewed)`
         : submittedCount > 0
-        ? `Self Reviews (${submittedCount}/2)`
+        ? `Self Reviews (${submittedCount}/${totalCycles})`
         : "Self Reviews"
-      : submittedCount === 2
+      : submittedCount === totalCycles
       ? "Self Reviews · Submitted"
-      : submittedCount === 1
-      ? "Self Reviews (1/2)"
+      : submittedCount > 0
+      ? `Self Reviews (${submittedCount}/${totalCycles})`
       : "Self Review";
 
   const menu =
@@ -148,7 +162,7 @@ export function SelfReviewCycleMenu({
         className="z-50 rounded-lg border border-border bg-surface shadow-lg overflow-hidden"
         role="menu"
       >
-        {HALVES.map((half) => {
+        {cycles.map((half) => {
           // "Submitted" means a non-draft row exists for this half.
           // Drafts (is_draft=true) are still in-progress — the mentee can
           // resume them, the mentor can't see them yet.
@@ -174,10 +188,11 @@ export function SelfReviewCycleMenu({
           const isMenteeLocked = mode === "mentee" && !submitted && !windowOpen;
           const isMentorLocked = mode === "mentor" && !submitted;
           const isLocked = isMenteeLocked || isMentorLocked;
+          const isFirstCycle = cycles.indexOf(half) === 0;
           const lockReason = isMentorLocked
-            ? "Awaiting mentee self-review for this half"
-            : half === "H2"
-              ? "H2 window has not opened yet"
+            ? "Awaiting mentee self-review for this cycle"
+            : !isFirstCycle
+              ? `${halfDisplayLabel(half, cycleType)} window has not opened yet`
               : "Review window for this fiscal year has closed";
           return (
             <button
@@ -199,7 +214,7 @@ export function SelfReviewCycleMenu({
             >
               <div className="flex flex-col min-w-0">
                 <span className="text-[12px] font-semibold text-text-main">
-                  {cycleLabel(goal, half)}
+                  {cycleLabel(goal, half, cycleType)}
                 </span>
                 <span
                   className={`text-[10px] ${

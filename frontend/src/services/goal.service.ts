@@ -12,22 +12,35 @@ import apiClient from "./api.client";
 
 // ── Enums ───────────────────────────────────────────────────────────
 
-/** The 8 lifecycle states a goal moves through, draft → terminal mentor review.
- *  Mirrors backend `app.models.goal_models.ApprovalStatus`. The four
- *  `*_reviewed` states are the post-approval segment — see
- *  `frontend/src/utils/goalStatus.ts` for the consolidated set. */
+/** Lifecycle states a goal moves through. Mirrors backend
+ *  `app.models.goal_models.ApprovalStatus`. The post-approval segment
+ *  splits by cadence: half-yearly orgs use the h1/h2 review states,
+ *  quarterly orgs use the q1..q4 review states. A given goal stays
+ *  within one family for life. */
 export type ApprovalStatus =
   | "draft"
   | "pending_approval"
   | "changes_requested"
   | "approved"
+  // Half-yearly cadence
   | "h1_self_reviewed"
   | "h1_mentor_reviewed"
   | "h2_self_reviewed"
-  | "h2_mentor_reviewed";
+  | "h2_mentor_reviewed"
+  // Quarterly cadence
+  | "q1_self_reviewed"
+  | "q1_mentor_reviewed"
+  | "q2_self_reviewed"
+  | "q2_mentor_reviewed"
+  | "q3_self_reviewed"
+  | "q3_mentor_reviewed"
+  | "q4_self_reviewed"
+  | "q4_mentor_reviewed";
 export type GoalType = "regular" | "annual";
-/** Which half of the fiscal year a self-review covers. */
-export type SelfReviewCycleHalf = "H1" | "H2";
+/** Which review window a self-review covers. H1/H2 for half-yearly orgs,
+ *  Q1..Q4 for quarterly orgs (the org's `cycle_type` in SystemSettings
+ *  decides which family is in play). */
+export type SelfReviewCycleHalf = "H1" | "H2" | "Q1" | "Q2" | "Q3" | "Q4";
 
 // ── Criterion Types ─────────────────────────────────────────────────
 

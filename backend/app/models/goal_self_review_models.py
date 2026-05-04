@@ -32,9 +32,20 @@ from app.core.database import Base
 
 
 class SelfReviewCycleHalf(str, enum.Enum):
-    """Which half of the fiscal year this self-review covers."""
+    """Which review window this row covers.
+
+    Half-yearly orgs use H1 / H2 (two windows per FY).
+    Quarterly  orgs use Q1 / Q2 / Q3 / Q4 (four windows per FY).
+
+    The org's `cycle_type` (SystemSettings) decides which set is in play —
+    routes derive that from the value's prefix (`H` vs `Q`) so a single
+    string column can hold either family without a separate column."""
     H1 = "H1"
     H2 = "H2"
+    Q1 = "Q1"
+    Q2 = "Q2"
+    Q3 = "Q3"
+    Q4 = "Q4"
 
 
 class GoalSelfReview(Base):

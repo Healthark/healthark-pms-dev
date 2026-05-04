@@ -75,9 +75,13 @@ export function EvalModal({
   isDraftSaving = false,
   error,
 }: EvalModalProps) {
-  // Pre-loading is needed in edit AND readOnly modes — both operate on an
-  // existing review and need its content before the modal is usable.
-  const shouldPreload = (isEditMode || readOnly) && card.review_id != null;
+  // Pre-load whenever a review row already exists. That covers three
+  // distinct cases: editing a finalised review (isEditMode=true), the
+  // read-only viewer (readOnly=true), AND continuing from a saved draft
+  // — drafts share the same columns as finalised reviews but keep the
+  // row's status="pending", so without this branch a PM who saved a
+  // draft would re-open the form to empty fields.
+  const shouldPreload = card.review_id != null;
   const [isLoadingReview, setIsLoadingReview] = useState(shouldPreload);
   const [fetchError, setFetchError] = useState("");
   const [comments, setComments] = useState<Record<CompKey, string>>(EMPTY_COMMENTS);

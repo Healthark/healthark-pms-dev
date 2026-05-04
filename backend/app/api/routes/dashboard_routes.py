@@ -49,14 +49,18 @@ from app.schemas.dashboard_schemas import DashboardSummary
 router = APIRouter()
 
 
-# Goal states that signal "mentor review of the half-cycle is owed."
-# Lifecycle: APPROVED → H1_SELF_REVIEWED → H1_MENTOR_REVIEWED →
-#            H2_SELF_REVIEWED → H2_MENTOR_REVIEWED.
-# A goal sits at *_SELF_REVIEWED until the mentor finishes the half — that's
-# the trigger for "mentor reviews pending."
+# Goal states that signal "mentor review of the cycle is owed."
+# A goal sits at *_SELF_REVIEWED until the mentor finishes that cycle — the
+# trigger for "mentor reviews pending." Covers both half-yearly (H1/H2)
+# and quarterly (Q1..Q4) cadences in one set so a single org with mixed
+# legacy data still rolls up correctly.
 _MENTOR_REVIEW_PENDING_STATES = (
     ApprovalStatus.H1_SELF_REVIEWED.value,
     ApprovalStatus.H2_SELF_REVIEWED.value,
+    ApprovalStatus.Q1_SELF_REVIEWED.value,
+    ApprovalStatus.Q2_SELF_REVIEWED.value,
+    ApprovalStatus.Q3_SELF_REVIEWED.value,
+    ApprovalStatus.Q4_SELF_REVIEWED.value,
 )
 
 

@@ -6,20 +6,36 @@ import enum
 
 
 class ApprovalStatus(str, enum.Enum):
-    """Goal lifecycle. Linear from DRAFT through H2_MENTOR_REVIEWED, with one
-    looping branch (CHANGES_REQUESTED → DRAFT on next employee edit) and
-    two valid skip paths inside the post-approval segment when a half is
-    missed during its review window. See cycle_utils.is_review_window_open
-    for the time gate.
+    """Goal lifecycle. Linear from DRAFT through the final cycle's
+    mentor-reviewed state, with one looping branch (CHANGES_REQUESTED →
+    DRAFT on next employee edit) and skip paths inside the post-approval
+    segment when an earlier cycle is missed during its review window.
+    See cycle_utils.is_review_window_open for the time gate.
+
+    Two parallel cycle families coexist on the same string column,
+    keyed off the org's cycle_type:
+        - half_yearly orgs use the H1/H2 states (4 review states total).
+        - quarterly  orgs use the Q1..Q4 states (8 review states total).
+    A single goal only ever moves through one family — never both.
     """
     DRAFT              = "draft"
     PENDING_APPROVAL   = "pending_approval"
     CHANGES_REQUESTED  = "changes_requested"
     APPROVED           = "approved"
+    # Half-yearly cadence
     H1_SELF_REVIEWED   = "h1_self_reviewed"
     H1_MENTOR_REVIEWED = "h1_mentor_reviewed"
     H2_SELF_REVIEWED   = "h2_self_reviewed"
     H2_MENTOR_REVIEWED = "h2_mentor_reviewed"
+    # Quarterly cadence
+    Q1_SELF_REVIEWED   = "q1_self_reviewed"
+    Q1_MENTOR_REVIEWED = "q1_mentor_reviewed"
+    Q2_SELF_REVIEWED   = "q2_self_reviewed"
+    Q2_MENTOR_REVIEWED = "q2_mentor_reviewed"
+    Q3_SELF_REVIEWED   = "q3_self_reviewed"
+    Q3_MENTOR_REVIEWED = "q3_mentor_reviewed"
+    Q4_SELF_REVIEWED   = "q4_self_reviewed"
+    Q4_MENTOR_REVIEWED = "q4_mentor_reviewed"
 
 
 # Convenience set used across routes / aggregators to identify the
@@ -32,6 +48,14 @@ POST_APPROVAL_STATES: frozenset[str] = frozenset({
     ApprovalStatus.H1_MENTOR_REVIEWED.value,
     ApprovalStatus.H2_SELF_REVIEWED.value,
     ApprovalStatus.H2_MENTOR_REVIEWED.value,
+    ApprovalStatus.Q1_SELF_REVIEWED.value,
+    ApprovalStatus.Q1_MENTOR_REVIEWED.value,
+    ApprovalStatus.Q2_SELF_REVIEWED.value,
+    ApprovalStatus.Q2_MENTOR_REVIEWED.value,
+    ApprovalStatus.Q3_SELF_REVIEWED.value,
+    ApprovalStatus.Q3_MENTOR_REVIEWED.value,
+    ApprovalStatus.Q4_SELF_REVIEWED.value,
+    ApprovalStatus.Q4_MENTOR_REVIEWED.value,
 })
 
 

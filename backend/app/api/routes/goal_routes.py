@@ -46,7 +46,11 @@ from app.schemas.goal_schemas import (
     GoalMentorReviewDraft,
     TeamGoalResponse,
 )
-from app.core.cycle_utils import get_goal_cycle_name, is_review_window_open
+from app.core.cycle_utils import (
+    cycles_before,
+    get_goal_cycle_name,
+    is_review_window_open,
+)
 
 router = APIRouter()
 
@@ -80,6 +84,31 @@ def _get_settings(db: DbSession, org_id: int) -> SystemSettings:
             detail="System settings have not been initialized for this organization.",
         )
     return settings
+
+
+def _self_reviewed_state(cycle_code: str) -> str:
+    """`{cycle}_self_reviewed` ApprovalStatus value: "h1" → "h1_self_reviewed"."""
+    return f"{cycle_code.lower()}_self_reviewed"
+
+
+def _mentor_reviewed_state(cycle_code: str) -> str:
+    """`{cycle}_mentor_reviewed` ApprovalStatus value."""
+    return f"{cycle_code.lower()}_mentor_reviewed"
+
+
+def _self_review_allowed_states(cycle_code: str) -> set[str]:
+    """States from which submitting (or drafting) a self-review for
+    `cycle_code` is permitted.
+
+    Always includes APPROVED. Plus, for every prior cycle in the same
+    cadence, both its self_reviewed and mentor_reviewed states (so a goal
+    can skip ahead — e.g. an org that missed Q2 entirely can still file
+    Q3 from the q1_mentor_reviewed state)."""
+    allowed = {ApprovalStatus.APPROVED.value}
+    for prior in cycles_before(cycle_code):
+        allowed.add(_self_reviewed_state(prior))
+        allowed.add(_mentor_reviewed_state(prior))
+    return allowed
 
 
 def _assert_annual_gate_open(settings: SystemSettings) -> None:
@@ -665,14 +694,7 @@ def submit_goal_self_review(
 
     # Status gate — which states are allowed to *start* this transition?
     half = cycle_half.value
-    if half == "H1":
-        allowed_states = {ApprovalStatus.APPROVED.value}
-    else:  # H2
-        allowed_states = {
-            ApprovalStatus.APPROVED.value,
-            ApprovalStatus.H1_SELF_REVIEWED.value,
-            ApprovalStatus.H1_MENTOR_REVIEWED.value,
-        }
+    allowed_states = _self_review_allowed_states(half)
     if goal.approval_status not in allowed_states:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -726,11 +748,7 @@ def submit_goal_self_review(
         )
         db.add(review)
     # Advance the goal's lifecycle state.
-    goal.approval_status = (
-        ApprovalStatus.H1_SELF_REVIEWED.value
-        if half == "H1"
-        else ApprovalStatus.H2_SELF_REVIEWED.value
-    )
+    goal.approval_status = _self_reviewed_state(half)
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
@@ -762,14 +780,7 @@ def save_goal_self_review_draft(
         )
 
     half = cycle_half.value
-    if half == "H1":
-        allowed_states = {ApprovalStatus.APPROVED.value}
-    else:
-        allowed_states = {
-            ApprovalStatus.APPROVED.value,
-            ApprovalStatus.H1_SELF_REVIEWED.value,
-            ApprovalStatus.H1_MENTOR_REVIEWED.value,
-        }
+    allowed_states = _self_review_allowed_states(half)
     if goal.approval_status not in allowed_states:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -861,11 +872,7 @@ def submit_goal_mentor_review(
         )
 
     half = cycle_half.value
-    required_state = (
-        ApprovalStatus.H1_SELF_REVIEWED.value
-        if half == "H1"
-        else ApprovalStatus.H2_SELF_REVIEWED.value
-    )
+    required_state = _self_reviewed_state(half)
     if goal.approval_status != required_state:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -929,11 +936,7 @@ def submit_goal_mentor_review(
         )
         db.add(mentor_review)
     # Advance the goal's lifecycle state.
-    goal.approval_status = (
-        ApprovalStatus.H1_MENTOR_REVIEWED.value
-        if half == "H1"
-        else ApprovalStatus.H2_MENTOR_REVIEWED.value
-    )
+    goal.approval_status = _mentor_reviewed_state(half)
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
@@ -965,11 +968,7 @@ def save_goal_mentor_review_draft(
         )
 
     half = cycle_half.value
-    required_state = (
-        ApprovalStatus.H1_SELF_REVIEWED.value
-        if half == "H1"
-        else ApprovalStatus.H2_SELF_REVIEWED.value
-    )
+    required_state = _self_reviewed_state(half)
     if goal.approval_status != required_state:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

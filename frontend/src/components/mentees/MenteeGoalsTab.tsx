@@ -23,6 +23,7 @@ import { isPostApproved } from "../../utils/goalStatus";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { TeamGoalCard } from "../goals/TeamGoalCard";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../goals/CriteriaChecklist";
@@ -119,16 +120,36 @@ function FeedbackModal({ goal, onSend, onClose, isSaving, error }: FeedbackModal
 type StatusFilter = "all" | ApprovalStatus;
 type ViewMode = "grid" | "table";
 
-const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "pending_approval", label: "Pending Approval" },
-  { value: "changes_requested", label: "Changes Requested" },
-  { value: "approved", label: "Approved" },
-  { value: "h1_self_reviewed", label: "H1 Self-Reviewed" },
-  { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
-  { value: "h2_self_reviewed", label: "H2 Self-Reviewed" },
-  { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
-];
+function buildStatusFilters(
+  cycleType: string | null,
+): { value: StatusFilter; label: string }[] {
+  const base: { value: StatusFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "pending_approval", label: "Pending Approval" },
+    { value: "changes_requested", label: "Changes Requested" },
+    { value: "approved", label: "Approved" },
+  ];
+  if (cycleType === "quarterly") {
+    return [
+      ...base,
+      { value: "q1_self_reviewed",   label: "Q1 Self-Reviewed" },
+      { value: "q1_mentor_reviewed", label: "Q1 Mentor-Reviewed" },
+      { value: "q2_self_reviewed",   label: "Q2 Self-Reviewed" },
+      { value: "q2_mentor_reviewed", label: "Q2 Mentor-Reviewed" },
+      { value: "q3_self_reviewed",   label: "Q3 Self-Reviewed" },
+      { value: "q3_mentor_reviewed", label: "Q3 Mentor-Reviewed" },
+      { value: "q4_self_reviewed",   label: "Q4 Self-Reviewed" },
+      { value: "q4_mentor_reviewed", label: "Q4 Mentor-Reviewed" },
+    ];
+  }
+  return [
+    ...base,
+    { value: "h1_self_reviewed",   label: "H1 Self-Reviewed" },
+    { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
+    { value: "h2_self_reviewed",   label: "H2 Self-Reviewed" },
+    { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
+  ];
+}
 
 type MenteeGoalsSortKey = "title" | "fy_year" | "approval_status";
 
@@ -156,6 +177,8 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
   const toast = useToast();
   const snackbar = useSnackbar();
   const confirm = useConfirm();
+  const { settings } = useSystemSettings();
+  const cycleType = settings?.cycle_type ?? null;
 
   const [isActing, setIsActing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -338,7 +361,7 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
             >
-              {STATUS_FILTERS.map((f) => (
+              {buildStatusFilters(cycleType).map((f) => (
                 <option key={f.value} value={f.value}>
                   {f.label}
                   {f.value !== "all" &&

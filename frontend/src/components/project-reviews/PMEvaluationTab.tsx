@@ -66,6 +66,9 @@ interface UnifiedEvalRow {
   user_id: number | null;
   cycle: string | null;
   performance_group: string | null;
+  /** True iff a real draft has been saved (not just a pre-seeded
+   *  placeholder pending row). Drives the Draft pill + filter. */
+  has_draft_content: boolean;
   // Secondary-specific
   secondaryReview?: ProjectReviewResponse;
   existingImpact?: string;
@@ -87,6 +90,10 @@ function EvalCard({
 }: { readonly row: UnifiedEvalRow; readonly onAction: (row: UnifiedEvalRow) => void }) {
   const isPrimary = row.type === "primary";
   const isDone = row.review_status === "reviewed" || row.review_status === "submitted";
+  // Primary pending row with PM-typed content == draft saved. Backend sets
+  // has_draft_content=true only when at least one comment / rating / impact
+  // statement is filled, so empty placeholder pending rows stay "Pending".
+  const hasDraft = isPrimary && !isDone && row.has_draft_content;
 
   return (
     <div className={`rounded-xl border bg-surface p-4 shadow-sm flex flex-col gap-3 ${isDone ? "border-green-200 bg-green-50/30" : "border-border"}`}>
@@ -101,6 +108,10 @@ function EvalCard({
         {isDone ? (
           <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
             <CheckCircle2 className="h-3 w-3" /> {row.review_status === "submitted" ? "Submitted" : "Reviewed"}
+          </span>
+        ) : hasDraft ? (
+          <span className="flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-bold uppercase text-brand">
+            <Pencil className="h-3 w-3" /> Draft
           </span>
         ) : (
           <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
@@ -223,6 +234,7 @@ export function PMEvaluationTab() {
       user_id: c.user_id,
       cycle: c.cycle,
       performance_group: c.performance_group ?? null,
+      has_draft_content: !!c.has_draft_content,
     });
   }
 
@@ -243,6 +255,7 @@ export function PMEvaluationTab() {
       user_id: r.user_id,
       cycle: r.cycle,
       performance_group: null,
+      has_draft_content: false, // draft-pill semantics are PM-specific for now
       secondaryReview: r,
       existingImpact: myEval?.impact_statement ?? "",
     });
@@ -258,7 +271,14 @@ export function PMEvaluationTab() {
   const filteredRows = unifiedRows.filter((r) => {
     if (cycleFilter !== "all" && cycleFilter !== "" && r.cycle !== cycleFilter) return false;
     if (typeFilter !== "all" && r.type !== typeFilter) return false;
-    if (statusFilter === "pending" && r.review_status !== "pending") return false;
+    // Status:
+    //   pending → row is pending AND no draft content has been typed yet
+    //   draft   → row is pending AND has_draft_content == true
+    //   done    → submitted / reviewed
+    if (statusFilter === "pending"
+        && (r.review_status !== "pending" || r.has_draft_content)) return false;
+    if (statusFilter === "draft"
+        && (r.review_status !== "pending" || !r.has_draft_content)) return false;
     if (statusFilter === "done" && r.review_status === "pending") return false;
     if (deptFilter !== "all" && r.department_name !== deptFilter) return false;
     if (projectFilter !== "all" && r.project_name !== projectFilter) return false;
@@ -338,6 +358,11 @@ export function PMEvaluationTab() {
         evalTarget.user_id!,
         payload,
       );
+      // Refresh the queue so the card picks up the newly-created review_id.
+      // Without this, the next time the PM opens the modal the draft fields
+      // wouldn't preload (preload condition keys off review_id) AND the row
+      // button stays "Evaluate" instead of flipping to "Continue Evaluation".
+      await loadData();
       toast.success("Draft saved.");
     } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsDraftSaving(false); }
   };
@@ -412,6 +437,7 @@ export function PMEvaluationTab() {
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
               <option value="all">All</option>
               <option value="pending">Pending</option>
+              <option value="draft">Draft</option>
               <option value="done">Completed</option>
             </select>
           </div>
@@ -486,6 +512,7 @@ export function PMEvaluationTab() {
             <tbody className="divide-y divide-border/50">
               {sortedRows.map((r) => {
                 const isDone = r.review_status !== "pending";
+                const rowHasDraft = r.type === "primary" && !isDone && r.has_draft_content;
                 return (
                   <tr key={r.key} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-5 py-3">
@@ -513,6 +540,10 @@ export function PMEvaluationTab() {
                       {isDone ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
                           <CheckCircle2 className="h-3 w-3" /> {r.review_status === "submitted" ? "Submitted" : "Reviewed"}
+                        </span>
+                      ) : rowHasDraft ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold uppercase text-brand">
+                          <Pencil className="h-3 w-3" /> Draft
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">

@@ -33,13 +33,20 @@ import {
 } from "../../services/project-review.service";
 import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
+import { halfDisplayLabel } from "../../utils/goalStatus";
 import { getOwnerRole } from "../../utils/goalOwner";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
-function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
-  return goal.fy_year ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}` : cycleHalf;
+function cycleLabel(
+  goal: Goal,
+  cycleHalf: SelfReviewCycleHalf,
+  cycleType: string | null,
+): string {
+  const display = halfDisplayLabel(cycleHalf, cycleType);
+  return goal.fy_year ? `${display} ${formatFyYearSpan(goal.fy_year)}` : display;
 }
 
 // ── Props ────────────────────────────────────────────────────────────
@@ -75,6 +82,9 @@ export function GoalMentorReviewModal({
   isDraftSaving = false,
   error,
 }: GoalMentorReviewModalProps) {
+  const { settings } = useSystemSettings();
+  const cycleType = settings?.cycle_type ?? null;
+
   // Use the mentee's submitted self-review (drafts are owner-only).
   const selfReview =
     goal && cycleHalf
@@ -145,7 +155,7 @@ export function GoalMentorReviewModal({
     await onSaveDraft(cycleHalf, { mentor_overall_review: overall });
   };
 
-  const label = cycleLabel(goal, cycleHalf);
+  const label = cycleLabel(goal, cycleHalf, cycleType);
   const titleSuffix = isReadOnly
     ? " (Submitted)"
     : isDraft

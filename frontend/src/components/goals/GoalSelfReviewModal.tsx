@@ -33,15 +33,22 @@ import {
 import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
 import { getOwnerRole, getOwnerName } from "../../utils/goalOwner";
+import { halfDisplayLabel } from "../../utils/goalStatus";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
-function cycleLabel(goal: Goal, cycleHalf: SelfReviewCycleHalf): string {
-  // "H1 FY 2026-27" / "H2 FY 2026-27" — stable across grid/table/mentor views.
+function cycleLabel(
+  goal: Goal,
+  cycleHalf: SelfReviewCycleHalf,
+  cycleType: string | null,
+): string {
+  // "H1/Q1 FY 2026-27" — display token varies with org cycle_type.
+  const display = halfDisplayLabel(cycleHalf, cycleType);
   return goal.fy_year
-    ? `${cycleHalf} ${formatFyYearSpan(goal.fy_year)}`
-    : cycleHalf;
+    ? `${display} ${formatFyYearSpan(goal.fy_year)}`
+    : display;
 }
 
 /** Adapt the /users/me/expectations payload into the shape ExpectationPanel
@@ -101,6 +108,9 @@ export function GoalSelfReviewModal({
   error,
   readOnly = false,
 }: GoalSelfReviewModalProps) {
+  const { settings } = useSystemSettings();
+  const cycleType = settings?.cycle_type ?? null;
+
   const existing =
     goal && cycleHalf
       ? goal.self_reviews.find((sr) => sr.cycle_half === cycleHalf) ?? null
@@ -177,7 +187,7 @@ export function GoalSelfReviewModal({
       : isDraft
         ? " (Draft)"
         : "";
-  const title = `Self Review · ${cycleLabel(goal, cycleHalf)}${titleSuffix}`;
+  const title = `Self Review · ${cycleLabel(goal, cycleHalf, cycleType)}${titleSuffix}`;
 
   // Pick the right expectation source for the rubric panels.
   let expectationForPanel: RoleExpectation | null;
@@ -272,7 +282,7 @@ export function GoalSelfReviewModal({
           {!isLocked && (
             <p className="text-xs text-text-muted">
               Reflect on your delivery against this goal for{" "}
-              <strong>{cycleLabel(goal, cycleHalf)}</strong> in a single
+              <strong>{cycleLabel(goal, cycleHalf, cycleType)}</strong> in a single
               paragraph. Use the role expectations above as a guide. Once
               submitted, your mentor will review this entry.
             </p>

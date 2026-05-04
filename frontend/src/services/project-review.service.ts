@@ -92,6 +92,10 @@ export interface PMPendingReviewCard {
   review_status: string | null;
   performance_group: string | null;
   cycle: string | null;
+  /** True iff the row is pending AND the PM has typed any content into
+   *  it. Backend distinguishes this from empty placeholder rows so the
+   *  Draft pill / filter only fires on actual saved drafts. */
+  has_draft_content: boolean;
 }
 
 export interface RoleExpectation {

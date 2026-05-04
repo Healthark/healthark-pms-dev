@@ -50,6 +50,36 @@ router = APIRouter()
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+_DRAFT_COMMENT_FIELDS = (
+    "comment_task_execution",
+    "comment_ownership",
+    "comment_project_management",
+    "comment_client_deliverables",
+    "comment_communication",
+    "comment_mentoring",
+    "comment_competency_skills",
+)
+
+
+def _pm_review_has_draft_content(review: ProjectReview) -> bool:
+    """True iff the PM has typed anything into this review row.
+
+    Distinguishes a saved draft from the empty placeholder rows that
+    seed.py / the queue pre-creates for upcoming cycles. A row counts as
+    a draft if any of: rating selected, impact statement filled, or any
+    per-competency comment present (after stripping whitespace).
+    """
+    if review.performance_group:
+        return True
+    if review.impact_statement and review.impact_statement.strip():
+        return True
+    for f in _DRAFT_COMMENT_FIELDS:
+        v = getattr(review, f, None)
+        if v and v.strip():
+            return True
+    return False
+
+
 def _get_active_cycle(db: DbSession, org_id: int) -> str:
     """Return the admin-configured active cycle name from SystemSettings."""
     settings = db.query(SystemSettings).filter(
@@ -312,6 +342,7 @@ def get_pm_evaluation_queue(
                     review_status=review.status,
                     performance_group=review.performance_group,
                     cycle=review.cycle,
+                    has_draft_content=_pm_review_has_draft_content(review),
                 ))
 
             # Placeholder for the active cycle when no review row exists yet
@@ -330,6 +361,7 @@ def get_pm_evaluation_queue(
                     review_status=None,
                     performance_group=None,
                     cycle=active_cycle,
+                    has_draft_content=False,
                 ))
 
     return cards

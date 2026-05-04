@@ -43,17 +43,39 @@ import { isPostApproved } from "../utils/goalStatus";
 
 type ApprovalFilter = "all" | ApprovalStatus;
 
-const FILTER_CONFIG: { value: ApprovalFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "draft", label: "Draft" },
-  { value: "pending_approval", label: "Pending Approval" },
-  { value: "changes_requested", label: "Changes Requested" },
-  { value: "approved", label: "Approved" },
-  { value: "h1_self_reviewed", label: "H1 Self-Reviewed" },
-  { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
-  { value: "h2_self_reviewed", label: "H2 Self-Reviewed" },
-  { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
-];
+/** Build the status filter options. Half-yearly orgs see H1/H2 self/mentor
+ *  options; quarterly orgs see Q1..Q4 self/mentor options instead. */
+function buildFilterConfig(
+  cycleType: string | null,
+): { value: ApprovalFilter; label: string }[] {
+  const base: { value: ApprovalFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "draft", label: "Draft" },
+    { value: "pending_approval", label: "Pending Approval" },
+    { value: "changes_requested", label: "Changes Requested" },
+    { value: "approved", label: "Approved" },
+  ];
+  if (cycleType === "quarterly") {
+    return [
+      ...base,
+      { value: "q1_self_reviewed",   label: "Q1 Self-Reviewed" },
+      { value: "q1_mentor_reviewed", label: "Q1 Mentor-Reviewed" },
+      { value: "q2_self_reviewed",   label: "Q2 Self-Reviewed" },
+      { value: "q2_mentor_reviewed", label: "Q2 Mentor-Reviewed" },
+      { value: "q3_self_reviewed",   label: "Q3 Self-Reviewed" },
+      { value: "q3_mentor_reviewed", label: "Q3 Mentor-Reviewed" },
+      { value: "q4_self_reviewed",   label: "Q4 Self-Reviewed" },
+      { value: "q4_mentor_reviewed", label: "Q4 Mentor-Reviewed" },
+    ];
+  }
+  return [
+    ...base,
+    { value: "h1_self_reviewed",   label: "H1 Self-Reviewed" },
+    { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
+    { value: "h2_self_reviewed",   label: "H2 Self-Reviewed" },
+    { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
+  ];
+}
 
 type ActiveTab = "my" | "team";
 type ViewMode = "grid" | "table";
@@ -554,7 +576,7 @@ export function AnnualGoals() {
                         onChange={(e) => setApprovalFilter(e.target.value as ApprovalFilter)}
                         className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
                       >
-                        {FILTER_CONFIG.map((f) => (
+                        {buildFilterConfig(settings?.cycle_type ?? null).map((f) => (
                           <option key={f.value} value={f.value}>{f.label}</option>
                         ))}
                       </select>

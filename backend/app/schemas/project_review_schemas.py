@@ -172,6 +172,11 @@ class PMPendingReviewCard(BaseModel):
     review_status: Optional[str] = None
     performance_group: Optional[str] = None
     cycle: Optional[str] = None
+    # True iff the row is pending AND the PM has typed any content into
+    # it (rating, impact statement, or any per-competency comment). Pre-
+    # seeded placeholder pending rows have review_id != null but no
+    # content, so the existence of the row alone isn't a draft signal.
+    has_draft_content: bool = False
 
 
 # =====================================================================
