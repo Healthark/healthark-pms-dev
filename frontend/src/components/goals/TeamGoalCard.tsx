@@ -17,6 +17,9 @@ interface TeamGoalCardProps {
     cycleHalf: SelfReviewCycleHalf,
   ) => void;
   readonly isActing: boolean;
+  /** Forwarded to the status badge so mentor-facing views can show
+   *  "Mentor Review Pending" instead of "Self-Reviewed" for H1/H2. */
+  readonly statusViewerRole?: "self" | "mentor";
 }
 
 export function TeamGoalCard({
@@ -25,6 +28,7 @@ export function TeamGoalCard({
   onRequestChanges,
   onSelectHalf,
   isActing,
+  statusViewerRole,
 }: TeamGoalCardProps) {
   const isSubmitted = goal.approval_status === "pending_approval";
   const isApproved = isPostApproved(goal.approval_status);
@@ -70,7 +74,10 @@ export function TeamGoalCard({
 
       {/* Status badge */}
       <div className="flex flex-wrap items-center gap-2">
-        <ApprovalStatusBadge status={goal.approval_status} />
+        <ApprovalStatusBadge
+          status={goal.approval_status}
+          viewerRole={statusViewerRole}
+        />
       </div>
 
       {/* Footer: workflow actions */}

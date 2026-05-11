@@ -154,9 +154,9 @@ function buildStatusFilters(
   }
   return [
     ...base,
-    { value: "h1_self_reviewed",   label: "H1 Self-Reviewed" },
+    { value: "h1_self_reviewed",   label: "H1 Mentor Review Pending" },
     { value: "h1_mentor_reviewed", label: "H1 Mentor-Reviewed" },
-    { value: "h2_self_reviewed",   label: "H2 Self-Reviewed" },
+    { value: "h2_self_reviewed",   label: "H2 Mentor Review Pending" },
     { value: "h2_mentor_reviewed", label: "H2 Mentor-Reviewed" },
   ];
 }
@@ -626,6 +626,7 @@ export function TeamGoalsTab() {
               }}
               onSelectHalf={openReview}
               isActing={isActing}
+              statusViewerRole="mentor"
             />
           ))}
         </div>
@@ -702,7 +703,10 @@ export function TeamGoalsTab() {
 
                       {/* Status badge */}
                       <td className="px-4 py-3">
-                        <ApprovalStatusBadge status={goal.approval_status} />
+                        <ApprovalStatusBadge
+                          status={goal.approval_status}
+                          viewerRole="mentor"
+                        />
                       </td>
 
                       {/* Actions — approval workflow + read-only self-review view */}

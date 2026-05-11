@@ -21,7 +21,7 @@ import {
   Check,
   Circle,
   CheckCircle2,
-  Eye,
+  Pencil,
 } from "lucide-react";
 import type { Goal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { formatFyYearSpan } from "../../utils/fy";
@@ -248,7 +248,7 @@ export function SelfReviewCycleMenu({
                 // Status-indicator icons (the row click target opens the
                 // mentor review modal):
                 //   CheckCircle2 — mentor review already submitted.
-                //   Eye          — self-review filed; mentor review pending.
+                //   Pencil       — self-review filed; mentor review pending.
                 //   Circle       — no self-review yet (row is disabled).
                 (() => {
                   const mentorRow = goal.mentor_reviews.find(
@@ -260,7 +260,7 @@ export function SelfReviewCycleMenu({
                     return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
                   }
                   if (submitted) {
-                    return <Eye className="h-3.5 w-3.5 text-text-muted shrink-0" />;
+                    return <Pencil className="h-3.5 w-3.5 text-text-muted shrink-0" />;
                   }
                   return <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />;
                 })()

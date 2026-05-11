@@ -4,6 +4,9 @@ import { halfDisplayLabel } from "../../utils/goalStatus";
 
 interface ApprovalStatusBadgeProps {
   readonly status: ApprovalStatus;
+  /** "mentor" relabels `h1/h2_self_reviewed` as "H1/H2 Mentor Review Pending"
+   *  so mentors see the action they owe rather than the mentee's last move. */
+  readonly viewerRole?: "self" | "mentor";
 }
 
 const STATIC_CONFIG: Partial<
@@ -35,7 +38,10 @@ const REVIEW_STATE_CLS: Record<string, string> = {
 
 const REVIEW_STATE_RE = /^(h[12]|q[1-4])_(self|mentor)_reviewed$/;
 
-export function ApprovalStatusBadge({ status }: ApprovalStatusBadgeProps) {
+export function ApprovalStatusBadge({
+  status,
+  viewerRole = "self",
+}: ApprovalStatusBadgeProps) {
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
 
@@ -49,7 +55,15 @@ export function ApprovalStatusBadge({ status }: ApprovalStatusBadgeProps) {
     if (m) {
       const cycle = m[1].toUpperCase() as
         | "H1" | "H2" | "Q1" | "Q2" | "Q3" | "Q4";
-      const action = m[2] === "self" ? "Self-Reviewed" : "Mentor-Reviewed";
+      const isMentorPending =
+        viewerRole === "mentor" &&
+        m[2] === "self" &&
+        (cycle === "H1" || cycle === "H2");
+      const action = isMentorPending
+        ? "Mentor Review Pending"
+        : m[2] === "self"
+          ? "Self-Reviewed"
+          : "Mentor-Reviewed";
       label = `${halfDisplayLabel(cycle, cycleType)} ${action}`;
       cls = REVIEW_STATE_CLS[status] ?? STATIC_CONFIG.draft!.cls;
     } else {
