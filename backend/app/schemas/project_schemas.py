@@ -99,6 +99,20 @@ class ProjectCreate(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _assignment_joined_after_start(self) -> "ProjectCreate":
+        """Each member's joined date (assigned_date) must be on or after the
+        project's start_date. Only checked when both are set — the fields
+        remain individually optional."""
+        if self.start_date is None:
+            return self
+        for a in self.assignments:
+            if a.assigned_date is not None and a.assigned_date < self.start_date:
+                raise ValueError(
+                    "A member's Joined Date cannot be earlier than the project Start Date."
+                )
+        return self
+
+    @model_validator(mode="after")
     def _no_reviewer_role_overlap(self) -> "ProjectCreate":
         """The PM, the senior who reviews them ("Reports To"), and the
         Secondary evaluator must be three distinct people. Allowing any

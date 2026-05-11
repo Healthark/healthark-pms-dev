@@ -17,7 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Loader2, UserPlus, Trash2 } from "lucide-react";
+import { X, Loader2, UserPlus, Trash2, Pencil } from "lucide-react";
 import {
   projectService,
   type ProjectDetail,
@@ -53,6 +53,10 @@ interface DraftAssignment {
   department_id: string;
   is_pm: boolean;
   assigned_date: string;
+  /** When set, this draft is an in-place edit of the existing assignment
+   *  with this id. Save will PATCH instead of POST; X will restore the
+   *  original read-only row by simply dropping the draft. */
+  existingId?: number;
 }
 
 let nextTemp = 0;
@@ -192,10 +196,30 @@ export function ProjectModal({
   };
 
   const removeDraft = (id: string) => {
+    const target = draftAssignments.find((a) => a.tempId === id);
+    if (!target) return;
+    // For an edit-in-place draft, "X" means cancel the edit — drop the
+    // draft and the original read-only row reappears via the filter.
+    // No PM block here because the original PM is preserved untouched.
+    if (target.existingId !== undefined) {
+      setDraftAssignments((prev) => prev.filter((a) => a.tempId !== id));
+      return;
+    }
+    // A project must always have at least one PM. Block removing a new
+    // draft marked as PM.
+    if (target.is_pm) {
+      snackbar.error("PM cannot be removed.");
+      return;
+    }
     setDraftAssignments((prev) => prev.filter((a) => a.tempId !== id));
   };
 
   const removeExisting = async (assignmentId: number) => {
+    const target = existingAssignments.find((a) => a.id === assignmentId);
+    if (target?.evaluator_type === "Primary") {
+      snackbar.error("PM cannot be removed.");
+      return;
+    }
     try {
       await projectService.removeAssignment(assignmentId);
       setExistingAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
@@ -204,13 +228,48 @@ export function ProjectModal({
     }
   };
 
+  /** Promote an existing assignment into draftAssignments for in-place
+   *  editing. The original row in existingAssignments is hidden by the
+   *  render filter while a draft with this existingId is present, so
+   *  no state copy is needed — dropping the draft restores the read-only
+   *  view automatically. */
+  const startEditExisting = (a: AssignmentResponse) => {
+    setDraftAssignments((prev) => [
+      ...prev,
+      {
+        tempId: tempId(),
+        existingId: a.id,
+        user_id: String(a.user_id),
+        assignment_role: a.assignment_role ?? "",
+        department_id: a.department_id ? String(a.department_id) : "",
+        is_pm: a.evaluator_type === "Primary",
+        assigned_date: a.assigned_date ?? "",
+      },
+    ]);
+  };
+
   // ── Computed ────────────────────────────────────────────────────
+  // Existing IDs currently in edit mode — their read-only rows are
+  // hidden in favor of the matching draft, and any PM / "already
+  // assigned" derivations must ignore them so the draft acts as
+  // the source of truth for those checks.
+  const editingExistingIds = new Set(
+    draftAssignments
+      .map((d) => d.existingId)
+      .filter((id): id is number => id !== undefined),
+  );
+
+  const visibleExistingAssignments = existingAssignments.filter(
+    (a) => !editingExistingIds.has(a.id),
+  );
+
   const assignedUserIds = new Set([
-    ...existingAssignments.map((a) => a.user_id),
+    ...visibleExistingAssignments.map((a) => a.user_id),
     ...draftAssignments.filter((a) => a.user_id).map((a) => Number(a.user_id)),
   ]);
 
-  const existingPrimary = existingAssignments.find((a) => a.evaluator_type === "Primary") ?? null;
+  const existingPrimary =
+    visibleExistingAssignments.find((a) => a.evaluator_type === "Primary") ?? null;
   const draftPrimary = draftAssignments.find((a) => a.is_pm) ?? null;
   const hasPrimary = !!existingPrimary || !!draftPrimary;
 
@@ -229,6 +288,12 @@ export function ProjectModal({
   const secondaryConflictWithReportsTo =
     secondaryEvaluatorId !== null && secondaryEvaluatorId === reportsToId;
   const endBeforeStart = !!startDate && !!expectedEndDate && expectedEndDate < startDate;
+  // A member's joined date cannot precede the project's start date.
+  // Only enforce when both dates are set on the draft; the field stays
+  // optional, but if filled it must be >= project start.
+  const draftJoinedBeforeStart =
+    !!startDate &&
+    draftAssignments.some((d) => !!d.assigned_date && d.assigned_date < startDate);
 
   // Dropdown exclusions — keep the two reviewer-role pickers from
   // surfacing each other or the PM as candidates.
@@ -247,8 +312,10 @@ export function ProjectModal({
         ? "Project Name is required."
         : endBeforeStart
           ? "End Date cannot be before Start Date."
-          : !isEditing && !hasPrimary
-            ? "Mark exactly one member as PM."
+          : draftJoinedBeforeStart
+            ? "A member's Joined Date cannot be earlier than the project Start Date."
+            : !hasPrimary
+            ? "Project must have at least one PM."
             : !isEditing && reportsToId === null
               ? "PM Reports To is required."
               : reportsToConflict
@@ -280,14 +347,42 @@ export function ProjectModal({
           secondary_evaluator_id: secondaryEvaluatorId,
         });
 
-        for (const draft of draftAssignments) {
-          if (!draft.user_id) continue;
+        // Order matters: PATCH demotions first (any edit-in-place draft
+        // that was the existing PM but is_pm is now false) so the Primary
+        // slot is free before another PATCH/POST tries to claim it. Then
+        // run the remaining PATCHes for in-place edits, then POST any
+        // brand-new draft assignments.
+        const editDrafts = draftAssignments.filter((d) => d.user_id && d.existingId !== undefined);
+        const newDrafts = draftAssignments.filter((d) => d.user_id && d.existingId === undefined);
+        const demotions = editDrafts.filter((d) => {
+          const orig = existingAssignments.find((a) => a.id === d.existingId);
+          return orig?.evaluator_type === "Primary" && !d.is_pm;
+        });
+        const otherEdits = editDrafts.filter((d) => !demotions.includes(d));
+
+        for (const d of demotions) {
+          await projectService.updateAssignment(d.existingId as number, {
+            assignment_role: d.assignment_role || null,
+            department_id: d.department_id ? Number(d.department_id) : null,
+            evaluator_type: null,
+            assigned_date: d.assigned_date || null,
+          });
+        }
+        for (const d of otherEdits) {
+          await projectService.updateAssignment(d.existingId as number, {
+            assignment_role: d.assignment_role || null,
+            department_id: d.department_id ? Number(d.department_id) : null,
+            evaluator_type: d.is_pm ? "Primary" : null,
+            assigned_date: d.assigned_date || null,
+          });
+        }
+        for (const d of newDrafts) {
           await projectService.addAssignment(projectId, {
-            user_id: Number(draft.user_id),
-            assignment_role: draft.assignment_role || null,
-            department_id: draft.department_id ? Number(draft.department_id) : null,
-            evaluator_type: draft.is_pm ? "Primary" : null,
-            assigned_date: draft.assigned_date || null,
+            user_id: Number(d.user_id),
+            assignment_role: d.assignment_role || null,
+            department_id: d.department_id ? Number(d.department_id) : null,
+            evaluator_type: d.is_pm ? "Primary" : null,
+            assigned_date: d.assigned_date || null,
           });
         }
       } else {
@@ -434,8 +529,13 @@ export function ProjectModal({
                   </button>
                 </div>
 
-                {/* Existing Assignments (Edit Mode) */}
-                {existingAssignments.map((a) => (
+                {/* Existing Assignments — read-only rows. Clicking the
+                    pencil promotes the row into draftAssignments below
+                    (same UI as Add Member, prepopulated) so all fields can
+                    be edited. The original row is hidden via the
+                    visibleExistingAssignments filter while its draft is
+                    present. */}
+                {visibleExistingAssignments.map((a) => (
                   <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-slate-50 px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-text-main">{a.user_name}</span>
@@ -450,14 +550,32 @@ export function ProjectModal({
                     {a.assigned_date && (
                       <span className="text-xs text-text-muted shrink-0">Joined: {a.assigned_date}</span>
                     )}
-                    <button type="button" onClick={() => removeExisting(a.id)} className="shrink-0 rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors" aria-label={`Remove ${a.user_name}`}>
+                    <button
+                      type="button"
+                      onClick={() => startEditExisting(a)}
+                      className="shrink-0 rounded-md p-1 text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                      aria-label={`Edit ${a.user_name}`}
+                      title="Edit team member"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeExisting(a.id)}
+                      className="shrink-0 rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                      aria-label={`Remove ${a.user_name}`}
+                    >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 ))}
 
-                {/* Draft Assignments */}
+                {/* Draft Assignments — also hosts edit-in-place rows
+                    (draft.existingId is set); for those the Employee
+                    select is locked because user_id is not editable on
+                    the AssignmentUpdate API. */}
                 {draftAssignments.map((draft) => {
+                  const isEditDraft = draft.existingId !== undefined;
                   const pmDisabled =
                     !draft.is_pm && (!!existingPrimary || !draft.user_id);
                   const pmDisabledReason = !draft.is_pm
@@ -467,16 +585,30 @@ export function ProjectModal({
                         ? "Pick an employee first."
                         : null
                     : null;
+                  const joinedBeforeStart =
+                    !!startDate && !!draft.assigned_date && draft.assigned_date < startDate;
                   return (
-                  <div key={draft.tempId} className="rounded-lg border border-border p-3 space-y-2">
+                  <div
+                    key={draft.tempId}
+                    className={`rounded-lg border p-3 space-y-2 ${
+                      isEditDraft ? "border-brand bg-brand/5" : "border-border"
+                    }`}
+                  >
+                    {isEditDraft && (
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
+                        Editing team member
+                      </p>
+                    )}
                     <div className="grid grid-cols-12 gap-2 items-end">
-                      {/* Employee — 4 cols */}
+                      {/* Employee — 4 cols (locked when editing an existing row) */}
                       <div className="col-span-4">
                         <label className={LABEL_CLS}>Employee</label>
                         <select
                           className={INPUT_CLS}
                           value={draft.user_id}
+                          disabled={isEditDraft}
                           onChange={(e) => handleUserSelect(draft.tempId, e.target.value)}
+                          title={isEditDraft ? "Change the employee by removing this member and adding the new one." : undefined}
                         >
                           <option value="">Select…</option>
                           {users
@@ -557,8 +689,15 @@ export function ProjectModal({
                           type="date"
                           className={INPUT_CLS}
                           value={draft.assigned_date}
+                          min={startDate || undefined}
+                          aria-invalid={joinedBeforeStart}
                           onChange={(e) => updateDraft(draft.tempId, "assigned_date", e.target.value)}
                         />
+                        {joinedBeforeStart && (
+                          <p className="mt-1 text-xs text-red-600">
+                            Cannot be earlier than Start Date.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

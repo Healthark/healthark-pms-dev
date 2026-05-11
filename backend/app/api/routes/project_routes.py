@@ -434,6 +434,18 @@ def add_assignment(
             detail="This user is already assigned to this project.",
         )
 
+    # A member's joined date cannot precede the project's start date.
+    # Only enforced when both are set; both fields remain individually optional.
+    if (
+        project.start_date is not None
+        and assignment_in.assigned_date is not None
+        and assignment_in.assigned_date < project.start_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A member's Joined Date cannot be earlier than the project Start Date.",
+        )
+
     if assignment_in.evaluator_type == "Primary":
         existing_primary = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == project_id,
@@ -500,6 +512,23 @@ def update_assignment(
 
     update_data = assignment_in.model_dump(exclude_unset=True)
 
+    # Joined Date guard — when the client is setting/changing the assigned
+    # date, the new value must not precede the project's start date.
+    if "assigned_date" in update_data and update_data["assigned_date"] is not None:
+        parent_project = db.query(Project).filter(
+            Project.id == assignment.project_id,
+            Project.org_id == current_user.org_id,
+        ).first()
+        if (
+            parent_project is not None
+            and parent_project.start_date is not None
+            and update_data["assigned_date"] < parent_project.start_date
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member's Joined Date cannot be earlier than the project Start Date.",
+            )
+
     if update_data.get("evaluator_type") == "Primary":
         existing_primary = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == assignment.project_id,
@@ -559,6 +588,16 @@ def remove_assignment(
 
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
+
+    # A project must always have a PM — refuse to drop the Primary
+    # assignment. To swap PMs the admin must first promote another member
+    # to Primary (the PATCH endpoint clears the prior Primary in the same
+    # call) and then the old non-PM member can be removed normally.
+    if assignment.evaluator_type == "Primary":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PM cannot be removed.",
+        )
 
     db.delete(assignment)
     db.commit()
