@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Lock } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
@@ -26,7 +26,11 @@ export function AnnualReviews() {
 
   const isMentor = user?.has_mentees ?? false;
   const activeCycle = settings?.active_cycle_name ?? "";
-  const submissionsOpen = settings?.reviews_submission_open ?? false;
+  // Admin-controlled gate for the Self-Review button. Mirrors the
+  // annual_goals_edit_enabled pattern used on the Annual Goals page —
+  // when off the button is replaced with a "submissions closed" indicator
+  // and the backend rejects writes via _assert_module_enabled().
+  const moduleEnabled = settings?.annual_reviews_enabled ?? false;
 
   const fyLabel = settings?.active_cycle_name
     ? formatFyLabel(settings.active_cycle_name)
@@ -66,7 +70,7 @@ export function AnnualReviews() {
   // is still a draft. Past-draft statuses lock the modal closed.
   const canStart =
     !!activeCycle &&
-    submissionsOpen &&
+    moduleEnabled &&
     (!currentReview || isCurrentDraft) &&
     !isLoading;
 
@@ -151,19 +155,25 @@ export function AnnualReviews() {
             final rating.
           </p>
         </div>
-        {activeTab === "my" && canStart && (
-          <button
-            type="button"
-            onClick={() => {
-              setFormError("");
-              setShowForm(true);
-            }}
-            className="shrink-0 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {isCurrentDraft ? "Continue Draft" : "Self-Review"}
-          </button>
-        )}
+        {activeTab === "my" &&
+          (canStart ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFormError("");
+                setShowForm(true);
+              }}
+              className="shrink-0 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {isCurrentDraft ? "Continue Draft" : "Self-Review"}
+            </button>
+          ) : !moduleEnabled ? (
+            <div className="shrink-0 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Annual review submissions are currently closed.
+            </div>
+          ) : null)}
       </div>
 
       {/* Tab container */}
