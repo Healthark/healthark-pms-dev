@@ -21,7 +21,6 @@ import {
   Check,
   Circle,
   CheckCircle2,
-  Pencil,
 } from "lucide-react";
 import type { Goal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { formatFyYearSpan } from "../../utils/fy";
@@ -247,9 +246,9 @@ export function SelfReviewCycleMenu({
               {mode === "mentor" ? (
                 // Status-indicator icons (the row click target opens the
                 // mentor review modal):
-                //   CheckCircle2 — mentor review already submitted.
-                //   Pencil       — self-review filed; mentor review pending.
-                //   Circle       — no self-review yet (row is disabled).
+                //   CheckCircle2  — mentor review already submitted.
+                //   ClipboardCheck — self-review filed; mentor review pending.
+                //   Circle        — no self-review yet (row is disabled).
                 (() => {
                   const mentorRow = goal.mentor_reviews.find(
                     (mr) => mr.cycle_half === half,
@@ -260,7 +259,7 @@ export function SelfReviewCycleMenu({
                     return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
                   }
                   if (submitted) {
-                    return <Pencil className="h-3.5 w-3.5 text-text-muted shrink-0" />;
+                    return <ClipboardCheck className="h-3.5 w-3.5 text-text-muted shrink-0" />;
                   }
                   return <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />;
                 })()
@@ -287,7 +286,6 @@ export function SelfReviewCycleMenu({
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <ClipboardCheck className="h-3 w-3" />
         {triggerLabel}
         <ChevronDown
           className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
