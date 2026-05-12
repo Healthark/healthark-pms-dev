@@ -14,7 +14,9 @@ import {
   type SelfReviewDraftPayload,
 } from "../services/annual-review.service";
 import { getErrorMessage } from "../utils/errors";
-import { formatFyLabel } from "../utils/fy";
+import { formatFyLabel, extractFyToken } from "../utils/fy";
+import { ExportExcelButton } from "../components/exports/ExportExcelButton";
+import { exportService } from "../services/export.service";
 
 type ActiveTab = "my" | "team";
 
@@ -35,6 +37,9 @@ export function AnnualReviews() {
   const fyLabel = settings?.active_cycle_name
     ? formatFyLabel(settings.active_cycle_name)
     : null;
+  const exportFy = settings?.active_cycle_name
+    ? extractFyToken(settings.active_cycle_name)
+    : undefined;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
 
@@ -155,25 +160,33 @@ export function AnnualReviews() {
             final rating.
           </p>
         </div>
-        {activeTab === "my" &&
-          (canStart ? (
-            <button
-              type="button"
-              onClick={() => {
-                setFormError("");
-                setShowForm(true);
-              }}
-              className="shrink-0 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              {isCurrentDraft ? "Continue Draft" : "Self-Review"}
-            </button>
-          ) : !moduleEnabled ? (
-            <div className="shrink-0 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              Annual review submissions are currently closed.
-            </div>
-          ) : null)}
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportExcelButton
+            label="Export Reviews"
+            onDownload={() =>
+              exportService.downloadAnnualReviews({ fy: exportFy }, "inline")
+            }
+          />
+          {activeTab === "my" &&
+            (canStart ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormError("");
+                  setShowForm(true);
+                }}
+                className="shrink-0 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {isCurrentDraft ? "Continue Draft" : "Self-Review"}
+              </button>
+            ) : !moduleEnabled ? (
+              <div className="shrink-0 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Annual review submissions are currently closed.
+              </div>
+            ) : null)}
+        </div>
       </div>
 
       {/* Tab container */}

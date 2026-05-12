@@ -12,6 +12,8 @@ import {
   type SortKind,
   type SortState,
 } from "../../utils/sort";
+import { ExportExcelButton } from "../exports/ExportExcelButton";
+import { exportService } from "../../services/export.service";
 
 interface UsersTabProps {
   readonly users: UserResponse[];
@@ -187,6 +189,12 @@ export function UsersTab({
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
+        </div>
+        <div className="ml-auto">
+          <ExportExcelButton
+            label="Export Users"
+            onDownload={() => exportService.downloadUsers(undefined, "inline")}
+          />
         </div>
       </div>
 

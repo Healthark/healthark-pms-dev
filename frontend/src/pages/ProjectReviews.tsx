@@ -40,6 +40,9 @@ import {
 } from "../components/project-reviews/MyReviewsSkeletons";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
+import { ExportExcelButton } from "../components/exports/ExportExcelButton";
+import { exportService } from "../services/export.service";
+import { extractFyToken } from "../utils/fy";
 
 type ActiveTab = "my" | "evaluate";
 type ViewMode = "grid" | "table";
@@ -188,13 +191,28 @@ export function ProjectReviews() {
   return (
     <div className="flex flex-col gap-6 pb-10 animate-in fade-in duration-500">
       {/* ── Page Header ── */}
-      <div>
-        <h1 className="font-display text-xl font-semibold text-text-main">
-          Project Reviews
-        </h1>
-        <p className="mt-0.5 text-sm text-text-muted">
-          Project-specific performance feedback and evaluations.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-xl font-semibold text-text-main">
+            Project Reviews
+          </h1>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Project-specific performance feedback and evaluations.
+          </p>
+        </div>
+        <ExportExcelButton
+          label="Export Project Reviews"
+          onDownload={() =>
+            exportService.downloadProjectReviews(
+              {
+                fy: settings?.active_cycle_name
+                  ? extractFyToken(settings.active_cycle_name)
+                  : undefined,
+              },
+              "inline",
+            )
+          }
+        />
       </div>
 
       {/* ── Main Content Container ── */}

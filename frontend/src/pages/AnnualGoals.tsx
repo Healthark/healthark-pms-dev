@@ -30,12 +30,14 @@ import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
-import { formatFyYearSpan } from "../utils/fy";
+import { formatFyYearSpan, extractFyToken } from "../utils/fy";
 import {
   profileService,
   type UserRoleExpectation,
 } from "../services/profile.service";
 import { isPostApproved } from "../utils/goalStatus";
+import { ExportExcelButton } from "../components/exports/ExportExcelButton";
+import { exportService } from "../services/export.service";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -439,27 +441,42 @@ export function AnnualGoals() {
           </p>
         </div>
 
-        {activeTab === "my" &&
-          (user?.has_mentor === false ? (
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              No mentor assigned — goal creation is disabled.
-            </div>
-          ) : annualGoalsEditEnabled ? (
-            <button
-              type="button"
-              onClick={openAdd}
-              className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add Goal
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              Goal submissions are currently closed.
-            </div>
-          ))}
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportExcelButton
+            label="Export Goals"
+            onDownload={() =>
+              exportService.downloadGoals(
+                {
+                  fy: settings?.active_cycle_name
+                    ? extractFyToken(settings.active_cycle_name)
+                    : undefined,
+                },
+                "inline",
+              )
+            }
+          />
+          {activeTab === "my" &&
+            (user?.has_mentor === false ? (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                No mentor assigned — goal creation is disabled.
+              </div>
+            ) : annualGoalsEditEnabled ? (
+              <button
+                type="button"
+                onClick={openAdd}
+                className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Goal
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Goal submissions are currently closed.
+              </div>
+            ))}
+        </div>
       </div>
 
       {/* Tab container */}

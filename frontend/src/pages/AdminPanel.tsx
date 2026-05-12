@@ -21,6 +21,8 @@ import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/Project
 import { UserModal } from "../components/admin/UserModal";
 import { ManagementTab } from "../components/project-reviews/ManagementTab";
 import { ManagementReviewTab } from "../components/admin/ManagementReviewTab";
+import { ExportsTab } from "../components/admin/ExportsTab";
+import { canExport } from "../utils/exportEligibility";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
@@ -72,6 +74,8 @@ export default function AdminPanel() {
   // endpoint, so this is purely a UI affordance.
   const canSeeManagementReview =
     user?.role === "Admin" && user?.is_management === true;
+  // HR-or-management gate for the Export tab + button (backend re-checks).
+  const canSeeExport = canExport(user);
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -306,14 +310,16 @@ export default function AdminPanel() {
               Management Review
             </button>
           )}
-          <button
-            type="button"
-            className={tabCls("export")}
-            onClick={() => setActiveTab("export")}
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            Export
-          </button>
+          {canSeeExport && (
+            <button
+              type="button"
+              className={tabCls("export")}
+              onClick={() => setActiveTab("export")}
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Export
+            </button>
+          )}
           <button
             type="button"
             className={tabCls("settings")}
@@ -350,17 +356,7 @@ export default function AdminPanel() {
           <ManagementReviewTab />
         )}
 
-        {activeTab === "export" && (
-          <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
-            <Download className="h-10 w-10 text-text-muted" aria-hidden="true" />
-            <h2 className="font-display text-lg font-semibold text-text-main">
-              Export
-            </h2>
-            <p className="max-w-md text-sm text-text-muted">
-              Export workflows will be configured here. The detailed flow is yet to be defined.
-            </p>
-          </div>
-        )}
+        {activeTab === "export" && canSeeExport && <ExportsTab />}
 
         {activeTab === "settings" && (
           <SystemSettingsTab

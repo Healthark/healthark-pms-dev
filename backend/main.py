@@ -15,6 +15,7 @@ from app.api.routes import project_routes
 from app.api.routes import project_review_routes
 from app.api.routes import mentee_routes
 from app.api.routes import feedback_360_routes
+from app.api.routes import export_routes
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -67,6 +68,7 @@ app.include_router(project_routes.router,        prefix=f"{settings.API_V1_STR}/
 app.include_router(project_review_routes.router, prefix=f"{settings.API_V1_STR}/project-reviews", tags=["Project Reviews"])
 app.include_router(mentee_routes.router,         prefix=f"{settings.API_V1_STR}/mentees",         tags=["Mentees"])
 app.include_router(feedback_360_routes.router,   prefix=f"{settings.API_V1_STR}/feedback-360",    tags=["360 Feedback"])
+app.include_router(export_routes.router,         prefix=f"{settings.API_V1_STR}/exports",         tags=["Exports"])
 
 @app.get("/")
 def root():

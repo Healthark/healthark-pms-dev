@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.models.user_models import User
 from app.models.organization_models import Organization
 from app.models.password_reset_token_models import PasswordResetToken
+from app.models.reference_models import Department
 from app.schemas.auth_schemas import (
     SessionResponse,
     TokenResponse,
@@ -59,6 +60,13 @@ def _build_session(user: User, db: Session) -> dict:
         User.is_deleted == False,  # noqa: E712
     ).first() is not None
 
+    # Department name is surfaced so the frontend can gate HR-only UI
+    # (e.g. the Excel export button) without an extra round-trip.
+    department_name: str | None = None
+    if user.department_id is not None:
+        dept = db.query(Department).filter(Department.id == user.department_id).first()
+        department_name = dept.name if dept else None
+
     return {
         "user_id": user.id,
         "full_name": user.full_name,
@@ -69,6 +77,8 @@ def _build_session(user: User, db: Session) -> dict:
         "has_mentor": has_mentor,
         "must_change_password": bool(user.must_change_password),
         "is_management": bool(user.is_management) and user.role == "Admin",
+        "department_id": user.department_id,
+        "department_name": department_name,
     }
 
 

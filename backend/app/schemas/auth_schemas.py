@@ -49,6 +49,11 @@ class SessionResponse(BaseModel):
     # Management Review tab in the admin panel and the finalize/override
     # actions on annual reviews.
     is_management: bool = False
+    # Department the user belongs to. `department_name` is surfaced so the
+    # frontend can gate HR-only UI (e.g. the Excel Export button) without
+    # an extra round-trip. Either can be null for users with no department.
+    department_id: int | None = None
+    department_name: str | None = None
 
 
 # 2. The Outgoing Response (What we send back to React)

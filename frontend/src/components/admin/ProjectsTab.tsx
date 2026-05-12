@@ -25,6 +25,10 @@ import {
 } from "../../services/project.service";
 import { adminService, type UserResponse } from "../../services/admin.service";
 import { getErrorMessage } from "../../utils/errors";
+import { exportService } from "../../services/export.service";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { extractFyToken } from "../../utils/fy";
+import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { ProjectModal } from "./ProjectModal";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
@@ -94,6 +98,10 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const toast = useToast();
   const snackbar = useSnackbar();
   const confirm = useConfirm();
+  const { settings } = useSystemSettings();
+  const exportFy = settings?.active_cycle_name
+    ? extractFyToken(settings.active_cycle_name)
+    : undefined;
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -259,6 +267,12 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
               </option>
             ))}
           </select>
+        </div>
+        <div className="ml-auto">
+          <ExportExcelButton
+            label="Export Projects"
+            onDownload={() => exportService.downloadProjects(exportFy, "inline")}
+          />
         </div>
       </div>
 

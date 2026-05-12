@@ -24,6 +24,11 @@ export interface SessionClaims {
   // Management Review tab and its inline rating actions. Backend also
   // gates the corresponding endpoints so this is purely a UI affordance.
   is_management: boolean;
+  // Surfaced from the backend so the frontend can gate HR-only UI
+  // (e.g. the Excel Export button) without an extra round-trip. Either
+  // may be null for users with no department assigned.
+  department_id: number | null;
+  department_name: string | null;
 }
 
 // After C12 the JWT lives in an HttpOnly cookie and is NEVER surfaced to JS.
