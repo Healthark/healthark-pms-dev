@@ -13,7 +13,10 @@ import {
   Eye, LayoutGrid, Loader2, Lock, Search, Table2, UserCircle,
   ClipboardCheck,
 } from "lucide-react";
-import type { AnnualReview } from "../../services/annual-review.service";
+import type {
+  AnnualReview,
+  ReviewStatus,
+} from "../../services/annual-review.service";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
@@ -32,6 +35,15 @@ function FinalRatingHiddenBadge() {
 
 type ViewMode = "grid" | "table";
 type SortKey = "cycle_name" | "status" | "self_performance_rating";
+type StatusFilter = "all" | ReviewStatus;
+
+const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "pending_mentor", label: "Pending Mentor" },
+  { value: "pending_management", label: "Pending Management" },
+  { value: "completed", label: "Completed" },
+];
 
 const SORT_CONFIG: Record<
   SortKey,
@@ -144,6 +156,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [yearFilter, setYearFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
   const [viewTarget, setViewTarget] = useState<AnnualReview | null>(null);
@@ -156,6 +169,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
     .filter(
       (r) => yearFilter === "all" || extractFyToken(r.cycle_name) === yearFilter,
     )
+    .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter(
       (r) =>
         searchQuery.trim() === "" ||
@@ -183,58 +197,76 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by cycle…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-            />
-          </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
-            <button
-              type="button"
-              className={viewBtnCls("grid")}
-              onClick={() => setViewMode("grid")}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Cards
-            </button>
-            <button
-              type="button"
-              className={viewBtnCls("table")}
-              onClick={() => setViewMode("table")}
-            >
-              <Table2 className="h-3.5 w-3.5" /> Table
-            </button>
-          </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative max-w-xs flex-1 min-w-[180px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search by cycle…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+          />
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="self-review-year-filter"
-              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-            >
-              Year
-            </label>
-            <select
-              id="self-review-year-filter"
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
-            >
-              <option value="all">All Years</option>
-              {availableYears.map((y) => (
-                <option key={y} value={y}>
-                  {formatFyLabel(y)}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="self-review-year-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Year
+          </label>
+          <select
+            id="self-review-year-filter"
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+          >
+            <option value="all">All</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>
+                {formatFyLabel(y)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="self-review-status-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Status
+          </label>
+          <select
+            id="self-review-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+          >
+            {STATUS_FILTER_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+          <button
+            type="button"
+            className={viewBtnCls("grid")}
+            onClick={() => setViewMode("grid")}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> Cards
+          </button>
+          <button
+            type="button"
+            className={viewBtnCls("table")}
+            onClick={() => setViewMode("table")}
+          >
+            <Table2 className="h-3.5 w-3.5" /> Table
+          </button>
         </div>
       </div>
 

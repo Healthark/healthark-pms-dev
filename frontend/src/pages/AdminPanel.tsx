@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  UserPlus, Users, Settings, FolderOpen, BarChart2, ShieldCheck, Plus,
+  UserPlus, Users, Settings, FolderOpen, BarChart2, ShieldCheck, Plus, Download,
 } from "lucide-react";
 
 import {
@@ -33,6 +33,7 @@ type ActiveTab =
   | "projects"
   | "reviews"
   | "management_review"
+  | "export"
   | "settings";
 
 export default function AdminPanel() {
@@ -307,6 +308,14 @@ export default function AdminPanel() {
           )}
           <button
             type="button"
+            className={tabCls("export")}
+            onClick={() => setActiveTab("export")}
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Export
+          </button>
+          <button
+            type="button"
             className={tabCls("settings")}
             onClick={() => setActiveTab("settings")}
           >
@@ -318,6 +327,8 @@ export default function AdminPanel() {
         {activeTab === "users" && (
           <UsersTab
             users={users}
+            departments={departments}
+            designations={designations}
             isLoading={isLoading}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -337,6 +348,18 @@ export default function AdminPanel() {
 
         {activeTab === "management_review" && canSeeManagementReview && (
           <ManagementReviewTab />
+        )}
+
+        {activeTab === "export" && (
+          <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
+            <Download className="h-10 w-10 text-text-muted" aria-hidden="true" />
+            <h2 className="font-display text-lg font-semibold text-text-main">
+              Export
+            </h2>
+            <p className="max-w-md text-sm text-text-muted">
+              Export workflows will be configured here. The detailed flow is yet to be defined.
+            </p>
+          </div>
         )}
 
         {activeTab === "settings" && (

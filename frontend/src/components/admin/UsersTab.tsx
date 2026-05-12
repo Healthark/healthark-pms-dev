@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { Search, Pencil, UserX, UserCheck } from "lucide-react";
-import type { UserResponse } from "../../services/admin.service";
+import type {
+  UserResponse,
+  DepartmentBrief,
+  DesignationBrief,
+} from "../../services/admin.service";
 import { StatusBadge } from "./StatusBadge";
 import { SortableHeader } from "../SortableHeader";
 import {
@@ -11,6 +15,8 @@ import {
 
 interface UsersTabProps {
   readonly users: UserResponse[];
+  readonly departments: DepartmentBrief[];
+  readonly designations: DesignationBrief[];
   readonly isLoading: boolean;
   readonly searchQuery: string;
   readonly onSearchChange: (query: string) => void;
@@ -29,15 +35,17 @@ type UsersSortKey =
 
 type RoleFilter = "all" | "Admin" | "Staff";
 type StatusFilter = "all" | "active" | "inactive";
+type DepartmentFilter = "all" | number;
+type DesignationFilter = "all" | number;
 
 const ROLE_OPTIONS: { value: RoleFilter; label: string }[] = [
-  { value: "all", label: "All Roles" },
+  { value: "all", label: "All" },
   { value: "Admin", label: "Admin" },
   { value: "Staff", label: "Staff" },
 ];
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All Statuses" },
+  { value: "all", label: "All" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
@@ -65,6 +73,8 @@ const FILTER_SELECT_CLS =
 
 export function UsersTab({
   users,
+  departments,
+  designations,
   isLoading,
   searchQuery,
   onSearchChange,
@@ -75,6 +85,8 @@ export function UsersTab({
   const [sort, setSort] = useState<SortState<UsersSortKey> | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("all");
+  const [designationFilter, setDesignationFilter] = useState<DesignationFilter>("all");
 
   const visibleUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -89,6 +101,8 @@ export function UsersTab({
       if (roleFilter !== "all" && u.role !== roleFilter) return false;
       if (statusFilter === "active" && u.is_deleted) return false;
       if (statusFilter === "inactive" && !u.is_deleted) return false;
+      if (departmentFilter !== "all" && u.department?.id !== departmentFilter) return false;
+      if (designationFilter !== "all" && u.designation?.id !== designationFilter) return false;
       return true;
     });
     if (!sort) return filtered;
@@ -96,7 +110,7 @@ export function UsersTab({
     return filtered.slice().sort((a, b) =>
       compareValues(get(a, users), get(b, users), kind, sort.direction),
     );
-  }, [users, searchQuery, roleFilter, statusFilter, sort]);
+  }, [users, searchQuery, roleFilter, statusFilter, departmentFilter, designationFilter, sort]);
 
   return (
     <div>
@@ -139,6 +153,38 @@ export function UsersTab({
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="user-department-filter" className={FILTER_LABEL_CLS}>Department</label>
+          <select
+            id="user-department-filter"
+            value={departmentFilter}
+            onChange={(e) =>
+              setDepartmentFilter(e.target.value === "all" ? "all" : Number(e.target.value))
+            }
+            className={`${FILTER_SELECT_CLS} min-w-[160px]`}
+          >
+            <option value="all">All</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="user-designation-filter" className={FILTER_LABEL_CLS}>Designation</label>
+          <select
+            id="user-designation-filter"
+            value={designationFilter}
+            onChange={(e) =>
+              setDesignationFilter(e.target.value === "all" ? "all" : Number(e.target.value))
+            }
+            className={`${FILTER_SELECT_CLS} min-w-[160px]`}
+          >
+            <option value="all">All</option>
+            {designations.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>

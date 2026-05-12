@@ -167,8 +167,8 @@ export function ManagementReviewTab() {
   return (
     <div>
       {/* Toolbar */}
-      <div className="border-b border-border px-5 py-4 flex flex-col gap-3">
-        <div className="relative max-w-sm">
+      <div className="border-b border-border px-5 py-4 flex items-center gap-4 flex-wrap">
+        <div className="relative max-w-sm flex-1 min-w-[200px]">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
             aria-hidden="true"
@@ -183,69 +183,67 @@ export function ManagementReviewTab() {
           />
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="mgmt-review-dept-filter"
-              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-            >
-              Dept
-            </label>
-            <select
-              id="mgmt-review-dept-filter"
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
-            >
-              <option value="all">All Depts</option>
-              {availableDepts.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="mgmt-review-dept-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Dept
+          </label>
+          <select
+            id="mgmt-review-dept-filter"
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
+          >
+            <option value="all">All</option>
+            {availableDepts.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="mgmt-review-mentor-filter"
-              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-            >
-              Mentor
-            </label>
-            <select
-              id="mgmt-review-mentor-filter"
-              value={mentorFilter}
-              onChange={(e) => setMentorFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
-            >
-              <option value="all">All Mentors</option>
-              {availableMentors.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="mgmt-review-mentor-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Mentor
+          </label>
+          <select
+            id="mgmt-review-mentor-filter"
+            value={mentorFilter}
+            onChange={(e) => setMentorFilter(e.target.value)}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+          >
+            <option value="all">All</option>
+            {availableMentors.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="mgmt-review-status-filter"
-              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-            >
-              Status
-            </label>
-            <select
-              id="mgmt-review-status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
-            >
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="rated">Rated</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="mgmt-review-status-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Status
+          </label>
+          <select
+            id="mgmt-review-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+          >
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="rated">Rated</option>
+          </select>
         </div>
       </div>
 
