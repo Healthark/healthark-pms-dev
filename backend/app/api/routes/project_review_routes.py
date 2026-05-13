@@ -27,7 +27,9 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
-from app.models.project_models import Project, ProjectAssignment
+from app.models.project_models import (
+    Project, ProjectAssignment, PROJECT_STATUS_COMPLETED,
+)
 from app.models.project_review_models import (
     ProjectReview, ProjectReviewStatus,
     ProjectReviewEvaluator, EvaluatorStatus,
@@ -184,6 +186,7 @@ def get_my_projects(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
             Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
         )
         .all()
     )
@@ -289,6 +292,7 @@ def get_pm_evaluation_queue(
         project = db.query(Project).filter(
             Project.id == pm_a.project_id,
             Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
         ).first()
         if not project:
             continue
@@ -434,6 +438,19 @@ def submit_pm_evaluation(
             detail="You are not the Project Manager for this project.",
         )
 
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot submit reviews on a completed project.",
+        )
+
     # Verify the target user is assigned to this project
     target_assignment = db.query(ProjectAssignment).filter(
         ProjectAssignment.org_id == current_user.org_id,
@@ -541,6 +558,19 @@ def save_pm_evaluation_draft(
             detail="You are not the Project Manager for this project.",
         )
 
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot submit reviews on a completed project.",
+        )
+
     target_assignment = db.query(ProjectAssignment).filter(
         ProjectAssignment.org_id == current_user.org_id,
         ProjectAssignment.project_id == project_id,
@@ -627,6 +657,7 @@ def get_secondary_evaluation_queue(
             Project.org_id == current_user.org_id,
             Project.secondary_evaluator_id == current_user.id,
             Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
         )
         .all()
     )
@@ -683,6 +714,11 @@ def submit_secondary_evaluation(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the Secondary evaluator for this project.",
+        )
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot submit reviews on a completed project.",
         )
 
     if review.user_id == current_user.id:
@@ -763,6 +799,11 @@ def save_secondary_draft(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the Secondary evaluator for this project.",
+        )
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot submit reviews on a completed project.",
         )
     if review.user_id == current_user.id:
         raise HTTPException(

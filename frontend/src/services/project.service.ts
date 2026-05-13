@@ -58,6 +58,9 @@ export interface ProjectResponse {
   pm_name: string | null;
   secondary_evaluator_id: number | null;
   secondary_evaluator_name: string | null;
+  status: "active" | "completed";
+  completed_at: string | null;
+  completed_by_name: string | null;
   is_deleted: boolean;
   created_at: string;
   updated_at: string | null;
@@ -94,8 +97,10 @@ export interface ProjectUpdatePayload {
 // ── Service ─────────────────────────────────────────────────────────
 
 export const projectService = {
-  listProjects: async (): Promise<ProjectResponse[]> => {
-    const res = await apiClient.get<ProjectResponse[]>("/projects/");
+  listProjects: async (includeCompleted = false): Promise<ProjectResponse[]> => {
+    const res = await apiClient.get<ProjectResponse[]>("/projects/", {
+      params: includeCompleted ? { include_completed: true } : undefined,
+    });
     return res.data;
   },
 
@@ -130,5 +135,24 @@ export const projectService = {
 
   removeAssignment: async (assignmentId: number): Promise<void> => {
     await apiClient.delete(`/projects/assignments/${assignmentId}`);
+  },
+
+  /** Admin-only. Marks the project completed. Idempotent — re-completing
+   *  an already-completed project returns its current state. The team
+   *  list is preserved across complete/reopen. */
+  markComplete: async (projectId: number): Promise<ProjectResponse> => {
+    const res = await apiClient.post<ProjectResponse>(
+      `/projects/${projectId}/complete`,
+    );
+    return res.data;
+  },
+
+  /** Admin-only. Re-opens a completed project. Idempotent. The team
+   *  list (preserved on complete) returns intact. */
+  reopen: async (projectId: number): Promise<ProjectResponse> => {
+    const res = await apiClient.post<ProjectResponse>(
+      `/projects/${projectId}/reopen`,
+    );
+    return res.data;
   },
 };

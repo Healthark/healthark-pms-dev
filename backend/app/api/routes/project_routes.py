@@ -14,12 +14,16 @@ Changes:
     - department_name resolved in assignment responses
 """
 
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func
 
 from app.api.dependencies import DbSession, CurrentUser
-from app.models.project_models import Project, ProjectAssignment
+from app.models.project_models import (
+    Project, ProjectAssignment,
+    PROJECT_STATUS_ACTIVE, PROJECT_STATUS_COMPLETED,
+)
 from app.models.user_models import User
 from app.models.reference_models import Department
 from app.schemas.project_schemas import (
@@ -75,6 +79,7 @@ def _build_project_response(
     resp.member_count = count
     resp.reports_to_name = _resolve_user_name(db, project.reports_to_id)
     resp.secondary_evaluator_name = _resolve_user_name(db, project.secondary_evaluator_id)
+    resp.completed_by_name = _resolve_user_name(db, project.completed_by_id)
     resp.pm_id = pm_id
     resp.pm_name = pm_name
     return resp
@@ -126,19 +131,24 @@ def _auto_fill_assignment(assignment_in: AssignmentCreate, db: DbSession) -> Ass
 def list_projects(
     db: DbSession,
     current_user: CurrentUser,
+    include_completed: bool = False,
 ):
-    """List all active projects with member counts."""
+    """List projects with member counts.
+
+    Defaults to active-only. Pass ``?include_completed=true`` to include
+    completed projects too (admins use this when reviewing the archive
+    or re-opening). ``is_deleted`` rows are always excluded.
+    """
     _require_admin(current_user)
 
-    projects = (
-        db.query(Project)
-        .filter(
-            Project.org_id == current_user.org_id,
-            Project.is_deleted == False,  # noqa: E712
-        )
-        .order_by(Project.created_at.desc())
-        .all()
+    q = db.query(Project).filter(
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
     )
+    if not include_completed:
+        q = q.filter(Project.status == PROJECT_STATUS_ACTIVE)
+
+    projects = q.order_by(Project.created_at.desc()).all()
 
     count_map = dict(
         db.query(ProjectAssignment.project_id, func.count(ProjectAssignment.id))
@@ -237,6 +247,9 @@ def create_project(
         reports_to_name=_resolve_user_name(db, new_project.reports_to_id),
         secondary_evaluator_id=new_project.secondary_evaluator_id,
         secondary_evaluator_name=_resolve_user_name(db, new_project.secondary_evaluator_id),
+        status=new_project.status,
+        completed_at=new_project.completed_at,
+        completed_by_name=_resolve_user_name(db, new_project.completed_by_id),
         pm_id=pm_assignment.user_id if pm_assignment else None,
         pm_name=pm_assignment.user_name if pm_assignment else None,
         is_deleted=new_project.is_deleted,
@@ -280,6 +293,9 @@ def get_project_detail(
         reports_to_name=_resolve_user_name(db, project.reports_to_id),
         secondary_evaluator_id=project.secondary_evaluator_id,
         secondary_evaluator_name=_resolve_user_name(db, project.secondary_evaluator_id),
+        status=project.status,
+        completed_at=project.completed_at,
+        completed_by_name=_resolve_user_name(db, project.completed_by_id),
         pm_id=pm_assignment.user_id if pm_assignment else None,
         pm_name=pm_assignment.user_name if pm_assignment else None,
         is_deleted=project.is_deleted,
@@ -421,6 +437,12 @@ def add_assignment(
 
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot assign members to a completed project. Re-open it first.",
+        )
 
     existing = db.query(ProjectAssignment).filter(
         ProjectAssignment.project_id == project_id,
@@ -602,3 +624,92 @@ def remove_assignment(
     db.delete(assignment)
     db.commit()
     return None
+
+
+# =====================================================================
+# PROJECT LIFECYCLE
+# =====================================================================
+
+@router.post("/{project_id}/complete", response_model=ProjectResponse)
+def complete_project(
+    project_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Mark a project as completed (Admin-only).
+
+    Flips ``status`` to "completed" and stamps ``completed_at`` /
+    ``completed_by_id``. The team list is intentionally preserved —
+    re-open is a single status flip. New assignments and new project
+    reviews are blocked while completed; in-flight history stays
+    queryable.
+
+    Idempotent: re-completing an already-completed project returns
+    the current state without rewriting ``completed_at``.
+    """
+    _require_admin(current_user)
+
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+    count = db.query(func.count(ProjectAssignment.id)).filter(
+        ProjectAssignment.project_id == project.id,
+        ProjectAssignment.org_id == current_user.org_id,
+    ).scalar() or 0
+
+    if project.status != PROJECT_STATUS_COMPLETED:
+        project.status = PROJECT_STATUS_COMPLETED
+        project.completed_at = datetime.now(timezone.utc)
+        project.completed_by_id = current_user.id
+        db.commit()
+        db.refresh(project)
+
+    pm_id, pm_name = _resolve_project_pm(db, project.id, current_user.org_id)
+    return _build_project_response(project, db, count, pm_id=pm_id, pm_name=pm_name)
+
+
+@router.post("/{project_id}/reopen", response_model=ProjectResponse)
+def reopen_project(
+    project_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Re-open a completed project (Admin-only).
+
+    Clears ``status`` / ``completed_at`` / ``completed_by_id``. The team
+    list is unchanged from when the project was completed (this version
+    does not soft-end assignments), so the project returns to active
+    with its prior PM and members intact.
+
+    Idempotent: re-opening an already-active project returns the
+    current state without changing the timestamps.
+    """
+    _require_admin(current_user)
+
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+
+    count = db.query(func.count(ProjectAssignment.id)).filter(
+        ProjectAssignment.project_id == project.id,
+        ProjectAssignment.org_id == current_user.org_id,
+    ).scalar() or 0
+
+    if project.status == PROJECT_STATUS_COMPLETED:
+        project.status = PROJECT_STATUS_ACTIVE
+        project.completed_at = None
+        project.completed_by_id = None
+        db.commit()
+        db.refresh(project)
+
+    pm_id, pm_name = _resolve_project_pm(db, project.id, current_user.org_id)
+    return _build_project_response(project, db, count, pm_id=pm_id, pm_name=pm_name)

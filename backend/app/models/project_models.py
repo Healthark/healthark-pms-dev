@@ -20,6 +20,12 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
+# Project lifecycle states. Plain string column rather than a DB enum so the
+# value stays Pydantic-friendly and migration-portable.
+PROJECT_STATUS_ACTIVE = "active"
+PROJECT_STATUS_COMPLETED = "completed"
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -41,6 +47,13 @@ class Project(Base):
     # project member (no ProjectAssignment row required).
     secondary_evaluator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
+    # Lifecycle. "active" by default. Admin flips to "completed" via the
+    # dedicated /complete endpoint, which only changes these three fields;
+    # the team list is preserved so re-open is a simple status flip.
+    status = Column(String, nullable=False, server_default=PROJECT_STATUS_ACTIVE)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    completed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -53,6 +66,7 @@ class Project(Base):
     organization = relationship("Organization")
     reports_to = relationship("User", foreign_keys=[reports_to_id])
     secondary_evaluator = relationship("User", foreign_keys=[secondary_evaluator_id])
+    completed_by = relationship("User", foreign_keys=[completed_by_id])
     assignments = relationship(
         "ProjectAssignment",
         back_populates="project",

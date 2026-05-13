@@ -170,6 +170,9 @@ class ProjectResponse(BaseModel):
     pm_name: Optional[str] = None
     secondary_evaluator_id: Optional[int] = None
     secondary_evaluator_name: Optional[str] = None
+    status: str = "active"
+    completed_at: Optional[datetime] = None
+    completed_by_name: Optional[str] = None
     is_deleted: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
