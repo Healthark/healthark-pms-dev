@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -24,6 +25,10 @@ interface NavItemData {
   readonly icon: LucideIcon;
   readonly feature?: string;
   readonly requiredRole?: readonly string[];
+  // Sub-role gate: item only renders when user.is_management === true.
+  // Backend also enforces this on the underlying endpoints, so it's purely
+  // a UI affordance.
+  readonly requireManagement?: boolean;
 }
 
 // Single-tenant deployment — only Healthark is populated. Kept as a
@@ -85,6 +90,7 @@ const MAIN_NAV: NavItemData[] = [
   { id: "annual-reviews", path: "/annual-reviews", label: "Annual Reviews", icon: FileText, feature: "annual_reviews" },
   { id: "my-mentees", path: "/my-mentees", label: "My Mentees", icon: Users, feature: "mentoring" },
   { id: "feedback", path: "/feedback", label: "360 Feedback", icon: MessagesSquare, feature: "feedback_360" },
+  { id: "management-reviews", path: "/management-reviews", label: "Management Reviews", icon: ShieldCheck, feature: "admin", requiredRole: ["Admin"], requireManagement: true },
   { id: "admin", path: "/admin", label: "Admin Panel", icon: Settings, feature: "admin", requiredRole: ["Admin"] },
 ];
 
@@ -113,6 +119,9 @@ export function Sidebar() {
   const isVisible = (item: NavItemData): boolean => {
     if (item.feature && !hasFeature(item.feature)) return false;
     if (item.requiredRole && !item.requiredRole.includes(user?.role ?? "")) {
+      return false;
+    }
+    if (item.requireManagement && user?.is_management !== true) {
       return false;
     }
     return true;

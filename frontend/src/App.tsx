@@ -12,6 +12,7 @@ import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { AnnualGoals } from "./pages/AnnualGoals";
 import AdminPanel from "./pages/AdminPanel";
+import ManagementReviews from "./pages/ManagementReviews";
 import { Profile } from "./pages/Profile";
 import Unauthorized from "./pages/Unauthorized";
 import { AnnualReviews } from "./pages/AnnualReviews";
@@ -121,6 +122,7 @@ export default function App() {
             </Route>
 
             <Route element={<ProtectedRoute requiredFeature="admin" requiredRole={["Admin"]}/>}>
+              <Route path="/management-reviews" element={<ManagementReviews />} />
               <Route path="/admin" element={<AdminPanel />} />
             </Route>
 

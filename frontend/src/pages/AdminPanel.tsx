@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  UserPlus, Users, Settings, FolderOpen, BarChart2, ShieldCheck, Plus, Download,
+  UserPlus, Users, Settings, FolderOpen, Plus, Download,
 } from "lucide-react";
 
 import {
@@ -19,8 +19,6 @@ import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/ProjectsTab";
 import { UserModal } from "../components/admin/UserModal";
-import { ManagementTab } from "../components/project-reviews/ManagementTab";
-import { ManagementReviewTab } from "../components/admin/ManagementReviewTab";
 import { ExportsTab } from "../components/admin/ExportsTab";
 import { canExport } from "../utils/exportEligibility";
 import { useSystemSettings } from "../hooks/useSystemSettings";
@@ -33,8 +31,6 @@ import { useAuth } from "../hooks/useAuth";
 type ActiveTab =
   | "users"
   | "projects"
-  | "reviews"
-  | "management_review"
   | "export"
   | "settings";
 
@@ -70,10 +66,6 @@ export default function AdminPanel() {
   const projectsTabRef = useRef<ProjectsTabHandle>(null);
 
   const { user } = useAuth();
-  // Sub-role gate. The backend also enforces this on every management
-  // endpoint, so this is purely a UI affordance.
-  const canSeeManagementReview =
-    user?.role === "Admin" && user?.is_management === true;
   // HR-or-management gate for the Export tab + button (backend re-checks).
   const canSeeExport = canExport(user);
   // ── Bootstrap ─────────────────────────────────────────────────────────────
@@ -292,24 +284,6 @@ export default function AdminPanel() {
             <FolderOpen className="h-4 w-4" aria-hidden="true" />
             Projects
           </button>
-          <button
-            type="button"
-            className={tabCls("reviews")}
-            onClick={() => setActiveTab("reviews")}
-          >
-            <BarChart2 className="h-4 w-4" aria-hidden="true" />
-            Reviews
-          </button>
-          {canSeeManagementReview && (
-            <button
-              type="button"
-              className={tabCls("management_review")}
-              onClick={() => setActiveTab("management_review")}
-            >
-              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-              Management Review
-            </button>
-          )}
           {canSeeExport && (
             <button
               type="button"
@@ -345,16 +319,6 @@ export default function AdminPanel() {
         )}
 
         {activeTab === "projects" && <ProjectsTab ref={projectsTabRef} />}
-
-        {activeTab === "reviews" && (
-          <div className="p-5">
-            <ManagementTab />
-          </div>
-        )}
-
-        {activeTab === "management_review" && canSeeManagementReview && (
-          <ManagementReviewTab />
-        )}
 
         {activeTab === "export" && canSeeExport && <ExportsTab />}
 
