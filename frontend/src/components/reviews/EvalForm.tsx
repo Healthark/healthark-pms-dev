@@ -1,26 +1,21 @@
 /**
  * EvalForm — pure form body for the mentor's annual evaluation.
  *
- * The original EvalModal mixed shell (centered overlay) and form. We split
- * those: this component owns the inputs, dirty-tracking, and the
- * auto-save-on-unmount behaviour; the centered modal (EvalModal) and the
- * right-anchored drawer (EvalDrawer) each wrap it with their own chrome.
- *
- * Auto-save semantics:
- *   - "Dirty" means the local mentorReview/rating differ from what the
- *     server-side draft currently holds.
- *   - On unmount: if dirty AND the close was implicit (route change, tab
- *     change, parent unmount), fire `onSaveDraft` so the user doesn't lose
- *     their typing. The component is unmounting so we don't await the
- *     promise — the network call goes through, the response is ignored.
- *   - Cancel and the X button set `bypassAutoSaveRef.current = true` before
- *     calling `onClose`, so explicit dismissal does NOT auto-save.
- *   - Submit/Save Draft persist their values via the explicit handlers and
- *     also reset the dirty baseline.
+ * Auto-save semantics (debounced):
+ *   - Field changes are mirrored to a server-side draft 1500ms after the
+ *     last edit, via a TanStack v5 useMutation. No more "fire on unmount" —
+ *     unmount only cancels any pending debounced call so the form never
+ *     resurrects deleted typing.
+ *   - The explicit "Save Draft" button forces an immediate save.
+ *   - Cancel/X cancels any pending autosave (matches the prior "explicit
+ *     dismiss does not auto-save" behaviour).
+ *   - Submit cancels any pending autosave; the server replaces the draft
+ *     with the final values anyway.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Save, Send, X } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import type {
   MenteeAnnualReview,
   MentorEvalPayload,
@@ -28,9 +23,12 @@ import type {
 } from "../../services/annual-review.service";
 import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
 import { formatFyLabel } from "../../utils/fy";
+import { useDebounce } from "../../hooks/useDebounce";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+
+const AUTOSAVE_DEBOUNCE_MS = 1500;
 
 export interface EvalFormProps {
   readonly review: MenteeAnnualReview;
@@ -44,8 +42,27 @@ export interface EvalFormProps {
   ) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
+  /**
+   * Optional external "saving draft" indicator. The component now owns its
+   * own draft mutation, so this prop is OR'd with the local mutation's
+   * pending state for backwards compatibility with parents that still
+   * track this separately.
+   */
   readonly isDraftSaving?: boolean;
   readonly error: string;
+}
+
+function buildDraftPayload(
+  mentorReview: string,
+  rating: number | "",
+): MentorEvalDraftPayload {
+  const payload: MentorEvalDraftPayload = {
+    mentor_overall_review: mentorReview,
+  };
+  if (typeof rating === "number") {
+    payload.mentor_performance_rating = rating;
+  }
+  return payload;
 }
 
 export function EvalForm({
@@ -54,7 +71,7 @@ export function EvalForm({
   onSaveDraft,
   onClose,
   isSaving,
-  isDraftSaving = false,
+  isDraftSaving: externalIsDraftSaving = false,
   error,
 }: EvalFormProps) {
   const [mentorReview, setMentorReview] = useState(
@@ -64,24 +81,17 @@ export function EvalForm({
     review.mentor_performance_rating_draft ?? "",
   );
 
-  // Baseline = the current server-side draft. Used to compute "dirty" so
-  // we don't auto-save when nothing changed.
+  // Baseline = what the server-side draft currently holds. We only autosave
+  // when the local values diverge from this; after a successful save, we
+  // reset it so a follow-up no-op edit doesn't re-fire.
   const baselineRef = useRef({
     mentorReview: review.mentor_overall_review_draft ?? "",
     rating: (review.mentor_performance_rating_draft ?? "") as number | "",
   });
 
-  // When Cancel/X fires, set this to skip the auto-save in the cleanup.
-  const bypassAutoSaveRef = useRef(false);
-
-  // Latest values exposed to the cleanup effect via a ref so the cleanup
-  // sees the values at unmount time, not at mount time.
-  const latestRef = useRef({ mentorReview, rating });
-  useEffect(() => {
-    latestRef.current = { mentorReview, rating };
-  }, [mentorReview, rating]);
-
-  // Re-seed when the review prop changes (different mentee).
+  // Re-seed when the review prop changes (different mentee). Skip the
+  // first-render autosave for the freshly-seeded values.
+  const skipNextAutosaveRef = useRef(true);
   useEffect(() => {
     const seededReview = review.mentor_overall_review_draft ?? "";
     const seededRating = (review.mentor_performance_rating_draft ?? "") as
@@ -93,69 +103,85 @@ export function EvalForm({
       mentorReview: seededReview,
       rating: seededRating,
     };
-    bypassAutoSaveRef.current = false;
+    skipNextAutosaveRef.current = true;
   }, [
     review.id,
     review.mentor_overall_review_draft,
     review.mentor_performance_rating_draft,
   ]);
 
-  // Auto-save-on-unmount. Captures `review.id` and `onSaveDraft` so the
-  // cleanup can call into the latest references after the parent has
-  // already begun unmounting.
-  const reviewIdRef = useRef(review.id);
-  reviewIdRef.current = review.id;
-  const saveDraftRef = useRef(onSaveDraft);
-  saveDraftRef.current = onSaveDraft;
+  const saveDraftMutation = useMutation({
+    mutationFn: async (vars: {
+      reviewId: number;
+      payload: MentorEvalDraftPayload;
+    }) => {
+      if (!onSaveDraft) return;
+      await onSaveDraft(vars.reviewId, vars.payload);
+    },
+    onSuccess: (_data, vars) => {
+      baselineRef.current = {
+        mentorReview: vars.payload.mentor_overall_review ?? "",
+        rating:
+          typeof vars.payload.mentor_performance_rating === "number"
+            ? vars.payload.mentor_performance_rating
+            : "",
+      };
+    },
+  });
+
+  const [debouncedAutosave, cancelAutosave] = useDebounce(
+    (reviewId: number, nextReview: string, nextRating: number | "") => {
+      saveDraftMutation.mutate({
+        reviewId,
+        payload: buildDraftPayload(nextReview, nextRating),
+      });
+    },
+    AUTOSAVE_DEBOUNCE_MS,
+  );
+
+  // Field-change watcher: trigger debounced autosave when the local state
+  // diverges from the last-persisted baseline. Skip after a reseed so we
+  // don't fire on the initial hydration.
   useEffect(() => {
-    return () => {
-      if (bypassAutoSaveRef.current) return;
-      const baseline = baselineRef.current;
-      const latest = latestRef.current;
-      const isDirty =
-        latest.mentorReview !== baseline.mentorReview ||
-        latest.rating !== baseline.rating;
-      if (!isDirty) return;
-      const save = saveDraftRef.current;
-      if (!save) return;
-      const payload: MentorEvalDraftPayload = {};
-      payload.mentor_overall_review = latest.mentorReview;
-      if (typeof latest.rating === "number") {
-        payload.mentor_performance_rating = latest.rating;
-      }
-      // Fire-and-forget — component is unmounting; we don't await.
-      void save(reviewIdRef.current, payload);
-    };
-  }, []);
+    if (!onSaveDraft) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    const baseline = baselineRef.current;
+    const isDirty =
+      mentorReview !== baseline.mentorReview || rating !== baseline.rating;
+    if (!isDirty) return;
+    debouncedAutosave(review.id, mentorReview, rating);
+  }, [mentorReview, rating, review.id, onSaveDraft, debouncedAutosave]);
 
   const allFilled =
     mentorReview.trim().length > 0 && typeof rating === "number";
 
   const closeWithoutAutoSave = () => {
-    bypassAutoSaveRef.current = true;
+    cancelAutosave();
     onClose();
   };
 
   const handleSubmit = async () => {
     if (typeof rating !== "number") return;
-    bypassAutoSaveRef.current = true; // submit replaces the draft anyway
+    cancelAutosave(); // submit replaces the draft anyway
     await onSubmit(review.id, {
       mentor_overall_review: mentorReview,
       mentor_performance_rating: rating,
     });
   };
 
-  const handleSaveDraft = async () => {
+  const handleSaveDraft = () => {
     if (!onSaveDraft) return;
-    const payload: MentorEvalDraftPayload = {};
-    payload.mentor_overall_review = mentorReview;
-    if (typeof rating === "number") {
-      payload.mentor_performance_rating = rating;
-    }
-    await onSaveDraft(review.id, payload);
-    // Reset baseline so subsequent auto-save only fires on further edits.
-    baselineRef.current = { mentorReview, rating };
+    cancelAutosave();
+    saveDraftMutation.mutate({
+      reviewId: review.id,
+      payload: buildDraftPayload(mentorReview, rating),
+    });
   };
+
+  const isDraftSaving = saveDraftMutation.isPending || externalIsDraftSaving;
 
   return (
     <>

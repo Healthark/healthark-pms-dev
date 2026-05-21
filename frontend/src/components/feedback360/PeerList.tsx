@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
@@ -9,6 +9,7 @@ import {
   Send,
   UserCircle,
 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   feedback360Service,
   type FeedbackPeer,
@@ -18,15 +19,16 @@ import { getErrorMessage } from "../../utils/errors";
 /**
  * Give Feedback tab — every active org user (excluding self), with a
  * search + filter toolbar. Each row links to /feedback/give/:user_id.
- * The destination page auto-detects whether the user has already
- * submitted on that peer:
- *   - Not yet submitted → submit mode (sliders enabled)
- *   - Already submitted → read-only mode (sliders disabled, no submit)
  *
- * The worked-with chip is purely a disclosure: it does not change what
- * the reviewer can do, but the colour matches the bar colour the
- * rating will eventually populate on the aggregate view.
+ * Org-sized peer lists can reach 500+ rows, so the visible cards are
+ * rendered through @tanstack/react-virtual v3. We virtualize at the
+ * row level and pair items into a 2-column inner grid so the original
+ * desktop layout is preserved.
  */
+const ROW_GAP_PX = 8; // matches the old `gap-2` between cards
+const ESTIMATED_ROW_PX = 76; // ~card height + vertical padding
+const OVERSCAN = 6;
+
 export function PeerList() {
   const [peers, setPeers] = useState<FeedbackPeer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,6 +68,27 @@ export function PeerList() {
     });
   }, [peers, search, filter]);
 
+  // Pair items so each virtual row owns up to 2 cards. This keeps the
+  // existing desktop 2-col grid look while letting us virtualize a
+  // straight row index.
+  const pairs = useMemo(() => {
+    const out: FeedbackPeer[][] = [];
+    for (let i = 0; i < filtered.length; i += 2) {
+      out.push(filtered.slice(i, i + 2));
+    }
+    return out;
+  }, [filtered]);
+
+  const parentRef = useRef<HTMLDivElement | null>(null);
+
+  const virtualizer = useVirtualizer({
+    count: pairs.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ESTIMATED_ROW_PX,
+    gap: ROW_GAP_PX,
+    overscan: OVERSCAN,
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16 text-sm text-text-muted">
@@ -88,6 +111,8 @@ export function PeerList() {
       </div>
     );
   }
+
+  const virtualRows = virtualizer.getVirtualItems();
 
   return (
     <div className="space-y-4">
@@ -126,10 +151,47 @@ export function PeerList() {
           No employees match the current filter.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {filtered.map((p) => (
-            <PeerRow key={p.user_id} peer={p} />
-          ))}
+        <div
+          ref={parentRef}
+          className="rounded-lg border border-border bg-surface"
+          style={{
+            height: 640,
+            overflow: "auto",
+            position: "relative",
+            contain: "strict",
+          }}
+        >
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {virtualRows.map((virtualRow) => {
+              const row = pairs[virtualRow.index];
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <div className="grid grid-cols-1 gap-2 px-2 sm:grid-cols-2">
+                    {row.map((p) => (
+                      <PeerRow key={p.user_id} peer={p} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
