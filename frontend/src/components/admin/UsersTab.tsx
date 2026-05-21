@@ -14,17 +14,18 @@ import {
 } from "../../utils/sort";
 import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { exportService } from "../../services/export.service";
+import { useDeactivateUser, useReactivateUser, useUsers } from "../../queries/users";
+import { useConfirm } from "../../hooks/useConfirm";
+import { useToast } from "../../hooks/useToast";
+import { useSnackbar } from "../../hooks/useSnackbar";
+import { getErrorMessage } from "../../utils/errors";
 
 interface UsersTabProps {
-  readonly users: UserResponse[];
   readonly departments: DepartmentBrief[];
   readonly designations: DesignationBrief[];
-  readonly isLoading: boolean;
   readonly searchQuery: string;
   readonly onSearchChange: (query: string) => void;
   readonly onEdit: (user: UserResponse) => void;
-  readonly onDeactivate: (user: UserResponse) => void;
-  readonly onReactivate: (user: UserResponse) => void;
 }
 
 type UsersSortKey =
@@ -74,21 +75,56 @@ const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
 
 export function UsersTab({
-  users,
   departments,
   designations,
-  isLoading,
   searchQuery,
   onSearchChange,
   onEdit,
-  onDeactivate,
-  onReactivate,
 }: UsersTabProps) {
+  const { data: users = [], isLoading } = useUsers();
+  const deactivateMutation = useDeactivateUser();
+  const reactivateMutation = useReactivateUser();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const snackbar = useSnackbar();
+
   const [sort, setSort] = useState<SortState<UsersSortKey> | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("all");
   const [designationFilter, setDesignationFilter] = useState<DesignationFilter>("all");
+
+  const handleDeactivate = async (user: UserResponse) => {
+    const ok = await confirm({
+      title: "Deactivate user?",
+      message: `Deactivate ${user.full_name}? They will no longer be able to log in. This can be reversed by reactivating the user.`,
+      variant: "danger",
+      confirmText: "Deactivate",
+    });
+    if (!ok) return;
+    try {
+      await deactivateMutation.mutateAsync(user.id);
+      toast.success(`${user.full_name} deactivated.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
+    }
+  };
+
+  const handleReactivate = async (user: UserResponse) => {
+    const ok = await confirm({
+      title: "Reactivate user?",
+      message: `Reactivate ${user.full_name}? They will regain access immediately using their previous password. Historical goals, reviews, and mentor assignment are preserved.`,
+      variant: "default",
+      confirmText: "Reactivate",
+    });
+    if (!ok) return;
+    try {
+      const updated = await reactivateMutation.mutateAsync(user.id);
+      toast.success(`${updated.full_name} reactivated.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
+    }
+  };
 
   const visibleUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -296,7 +332,7 @@ export function UsersTab({
                         {!user.is_deleted && (
                           <button
                             type="button"
-                            onClick={() => onDeactivate(user)}
+                            onClick={() => handleDeactivate(user)}
                             title="Deactivate user"
                             className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
                           >
@@ -306,7 +342,7 @@ export function UsersTab({
                         {user.is_deleted && (
                           <button
                             type="button"
-                            onClick={() => onReactivate(user)}
+                            onClick={() => handleReactivate(user)}
                             title="Reactivate user"
                             className="rounded-md p-1.5 text-text-muted hover:bg-green-50 hover:text-green-600 transition-colors"
                           >

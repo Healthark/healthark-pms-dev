@@ -1,5 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./queries/queryClient";
 import { AuthProvider } from "./contexts/AuthProvider";
 import { SystemSettingsProvider } from "./contexts/SystemSettingsProvider";
 import { ToastProvider } from "./contexts/ToastProvider";
@@ -19,16 +21,18 @@ if (!root) {
 // component anywhere in the tree can trigger them without prop drilling.
 createRoot(root).render(
   <StrictMode>
-    <AuthProvider>
-      <SystemSettingsProvider>
-        <ToastProvider>
-          <SnackbarProvider>
-            <ConfirmProvider>
-              <App />
-            </ConfirmProvider>
-          </SnackbarProvider>
-        </ToastProvider>
-      </SystemSettingsProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <SystemSettingsProvider>
+          <ToastProvider>
+            <SnackbarProvider>
+              <ConfirmProvider>
+                <App />
+              </ConfirmProvider>
+            </SnackbarProvider>
+          </ToastProvider>
+        </SystemSettingsProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );

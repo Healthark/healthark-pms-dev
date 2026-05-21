@@ -24,8 +24,8 @@ import { canExport } from "../utils/exportEligibility";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
-import { useConfirm } from "../hooks/useConfirm";
 import { useAuth } from "../hooks/useAuth";
+import { useCreateUser, useUpdateUser } from "../queries/users";
 
 
 type ActiveTab =
@@ -35,19 +35,17 @@ type ActiveTab =
   | "settings";
 
 export default function AdminPanel() {
-  // ── Data ──────────────────────────────────────────────────────────────────
-  const [users, setUsers] = useState<UserResponse[]>([]);
+  // ── Reference data + settings (still local — not shared cross-page) ───────
   const [departments, setDepartments] = useState<DepartmentBrief[]>([]);
   const [designations, setDesignations] = useState<DesignationBrief[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>("users");
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [modalError, setModalError] = useState("");
 
   // Settings form state
@@ -61,24 +59,26 @@ export default function AdminPanel() {
   const { refreshSettings } = useSystemSettings();
   const toast = useToast();
   const snackbar = useSnackbar();
-  const confirm = useConfirm();
 
   const projectsTabRef = useRef<ProjectsTabHandle>(null);
 
   const { user } = useAuth();
   // HR-or-management gate for the Export tab + button (backend re-checks).
   const canSeeExport = canExport(user);
-  // ── Bootstrap ─────────────────────────────────────────────────────────────
+
+  // ── User mutations (shared cache via ['users']) ───────────────────────────
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const isSavingUser = createUserMutation.isPending || updateUserMutation.isPending;
+
+  // ── Bootstrap (reference data + settings only — users come from useUsers) ─
   const loadData = useCallback(async () => {
-    setIsLoading(true);
     try {
-      const [usersData, deptData, desigData, settingsData] = await Promise.all([
-        adminService.getUsers(),
+      const [deptData, desigData, settingsData] = await Promise.all([
         adminService.getDepartments(),
         adminService.getDesignations(),
         adminService.getSettings(),
       ]);
-      setUsers(usersData);
       setDepartments(deptData);
       setDesignations(desigData);
       setSettings(settingsData);
@@ -90,20 +90,12 @@ export default function AdminPanel() {
       setAnnualReviewFinalRatingVisible(settingsData.annual_review_final_rating_visible ?? false);
     } catch {
       // Errors handled per-operation below
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  // ── Derived ───────────────────────────────────────────────────────────────
-  // Any active user can mentor — Manager/Principal/Admin gating is a UX
-  // choice that fights real-world team structures (a senior IC can mentor a
-  // junior IC without being a "Manager"). Filter here is just the active set.
-  const mentorOptions = users.filter((u) => !u.is_deleted);
 
   // ── User handlers ─────────────────────────────────────────────────────────
   const openAddModal = () => {
@@ -125,75 +117,30 @@ export default function AdminPanel() {
   const handleSaveUser = async (
     payload: UserCreatePayload | UserUpdatePayload,
   ) => {
-    setIsSaving(true);
     setModalError("");
     try {
       if (editingUser) {
-        const updated = await adminService.updateUser(
-          editingUser.id,
-          payload as UserUpdatePayload,
-        );
-        setUsers((prev) =>
-          prev.map((u) => (u.id === updated.id ? updated : u)),
-        );
+        const updated = await updateUserMutation.mutateAsync({
+          userId: editingUser.id,
+          payload: payload as UserUpdatePayload,
+        });
         closeUserModal();
         toast.success(`${updated.full_name} updated.`);
       } else {
-        const created = await adminService.createUser(
+        const created = await createUserMutation.mutateAsync(
           payload as UserCreatePayload,
         );
-        setUsers((prev) => [created, ...prev]);
         closeUserModal();
         toast.success(`${created.full_name} created.`);
       }
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeactivate = async (user: UserResponse) => {
-    const ok = await confirm({
-      title: "Deactivate user?",
-      message: `Deactivate ${user.full_name}? They will no longer be able to log in. This can be reversed by reactivating the user.`,
-      variant: "danger",
-      confirmText: "Deactivate",
-    });
-    if (!ok) return;
-
-    try {
-      await adminService.deactivateUser(user.id);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, is_deleted: true } : u)),
-      );
-      toast.success(`${user.full_name} deactivated.`);
-    } catch (err) {
-      snackbar.error(getErrorMessage(err));
-    }
-  };
-
-  const handleReactivate = async (user: UserResponse) => {
-    const ok = await confirm({
-      title: "Reactivate user?",
-      message: `Reactivate ${user.full_name}? They will regain access immediately using their previous password. Historical goals, reviews, and mentor assignment are preserved.`,
-      variant: "default",
-      confirmText: "Reactivate",
-    });
-    if (!ok) return;
-
-    try {
-      const updated = await adminService.reactivateUser(user.id);
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-      toast.success(`${updated.full_name} reactivated.`);
-    } catch (err) {
-      snackbar.error(getErrorMessage(err));
     }
   };
 
   // ── Settings handler ──────────────────────────────────────────────────────
   const handleSaveSettings = async () => {
-    setIsSaving(true);
+    setIsSavingSettings(true);
     try {
       const payload: AdminSettingsUpdatePayload = {
         cycle_type: cycleType,
@@ -218,7 +165,7 @@ export default function AdminPanel() {
     } catch (err) {
       snackbar.error(getErrorMessage(err));
     } finally {
-      setIsSaving(false);
+      setIsSavingSettings(false);
     }
   };
 
@@ -306,15 +253,11 @@ export default function AdminPanel() {
 
         {activeTab === "users" && (
           <UsersTab
-            users={users}
             departments={departments}
             designations={designations}
-            isLoading={isLoading}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onEdit={openEditModal}
-            onDeactivate={handleDeactivate}
-            onReactivate={handleReactivate}
           />
         )}
 
@@ -336,7 +279,7 @@ export default function AdminPanel() {
             annualReviewFinalRatingVisible={annualReviewFinalRatingVisible}
             onAnnualReviewFinalRatingVisibleChange={setAnnualReviewFinalRatingVisible}
             onSave={handleSaveSettings}
-            isSaving={isSaving}
+            isSaving={isSavingSettings}
           />
         )}
       </div>
@@ -349,8 +292,7 @@ export default function AdminPanel() {
         editingUser={editingUser}
         departments={departments}
         designations={designations}
-        managers={mentorOptions}
-        isSaving={isSaving}
+        isSaving={isSavingUser}
         error={modalError}
       />
 

@@ -17,10 +17,10 @@
  *     stacks correctly above the drawer.
  *   - Width: ~35% of viewport on desktop with a 28rem floor, full-width
  *     on mobile.
- *   - Auto-save-on-implicit-close lives in `EvalForm`'s cleanup effect:
- *     when the parent component unmounts (e.g. mentee tab switched from
- *     Annual Summary to Projects), unsaved edits get persisted as a
- *     draft via fire-and-forget `onSaveDraft`.
+ *   - Auto-save lives in `EvalForm` and fires on a 1500ms debounce
+ *     after the last field change via a TanStack v5 useMutation. When
+ *     the drawer (and therefore EvalForm) unmounts, any pending save is
+ *     cancelled so dismissed edits don't ghost-write to the server.
  */
 
 import { useEffect, useRef } from "react";

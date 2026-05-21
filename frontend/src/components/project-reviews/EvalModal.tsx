@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Info, Loader2, Pencil, Save, Send, X } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import {
   projectReviewService,
   type PMEvaluationPayload,
@@ -9,6 +10,9 @@ import {
   type RoleExpectation,
 } from "../../services/project-review.service";
 import { ExpectationPanel } from "./ExpectationPanel";
+import { useDebounce } from "../../hooks/useDebounce";
+
+const AUTOSAVE_DEBOUNCE_MS = 1500;
 
 /**
  * Minimal header data the modal needs to render its title + context line.
@@ -72,7 +76,7 @@ export function EvalModal({
   onSaveDraft,
   onClose,
   isSaving,
-  isDraftSaving = false,
+  isDraftSaving: externalIsDraftSaving = false,
   error,
 }: EvalModalProps) {
   // Pre-load whenever a review row already exists. That covers three
@@ -88,8 +92,15 @@ export function EvalModal({
   const [performanceGroup, setPerformanceGroup] = useState<PerformanceGroup | "">("");
   const [impactStatement, setImpactStatement] = useState("");
 
+  // Field-change autosave guard: skip while preload is in flight (would
+  // race with the GET) and skip until the user has actually edited a field.
+  const skipNextAutosaveRef = useRef(true);
+
   useEffect(() => {
-    if (!shouldPreload || card.review_id == null) return;
+    if (!shouldPreload || card.review_id == null) {
+      skipNextAutosaveRef.current = true;
+      return;
+    }
     setIsLoadingReview(true);
     projectReviewService
       .getReview(card.review_id)
@@ -105,6 +116,7 @@ export function EvalModal({
         });
         setPerformanceGroup((review.performance_group ?? "") as PerformanceGroup | "");
         setImpactStatement(review.impact_statement ?? "");
+        skipNextAutosaveRef.current = true;
       })
       .catch(() => setFetchError("Failed to load evaluation data."))
       .finally(() => setIsLoadingReview(false));
@@ -113,10 +125,93 @@ export function EvalModal({
 
   const setComment = (key: CompKey, value: string) =>
     setComments((prev) => ({ ...prev, [key]: value }));
+
+  const buildDraftPayload = (): PMEvaluationDraftPayload => {
+    const payload: PMEvaluationDraftPayload = {
+      impact_statement: impactStatement,
+      comment_task_execution: comments.task_execution,
+      comment_ownership: comments.ownership,
+      comment_project_management: comments.project_management,
+      comment_client_deliverables: comments.client_deliverables,
+      comment_communication: comments.communication,
+      comment_mentoring: comments.mentoring,
+      comment_competency_skills: comments.competency_skills,
+    };
+    if (performanceGroup !== "") {
+      payload.performance_group = performanceGroup;
+    }
+    return payload;
+  };
+
+  const saveDraftMutation = useMutation({
+    mutationFn: async (payload: PMEvaluationDraftPayload) => {
+      if (!onSaveDraft) return;
+      await onSaveDraft(payload);
+    },
+  });
+
+  const [debouncedAutosave, cancelAutosave] = useDebounce(
+    (payload: PMEvaluationDraftPayload) => {
+      saveDraftMutation.mutate(payload);
+    },
+    AUTOSAVE_DEBOUNCE_MS,
+  );
+
+  // Debounced autosave on field changes. Skipped for the read-only viewer,
+  // the edit-mode submit-only flow, and the initial hydration pass.
+  useEffect(() => {
+    if (readOnly || !onSaveDraft || isLoadingReview || fetchError) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    debouncedAutosave(buildDraftPayload());
+    // We intentionally exclude buildDraftPayload from deps — it's a fresh
+    // closure each render but only the latest field values matter, and
+    // `debouncedAutosave`'s identity is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    comments,
+    performanceGroup,
+    impactStatement,
+    readOnly,
+    onSaveDraft,
+    isLoadingReview,
+    fetchError,
+    debouncedAutosave,
+  ]);
+
+  const isDraftSaving = saveDraftMutation.isPending || externalIsDraftSaving;
+
   const allFilled =
     COMPETENCIES.every((c) => comments[c.key].trim().length > 0) &&
     performanceGroup !== "" &&
     impactStatement.trim().length > 0;
+
+  const handleManualSaveDraft = () => {
+    cancelAutosave();
+    saveDraftMutation.mutate(buildDraftPayload());
+  };
+
+  const handleClose = () => {
+    cancelAutosave();
+    onClose();
+  };
+
+  const handleSubmit = () => {
+    cancelAutosave(); // submit replaces the draft
+    onSubmit({
+      performance_group: performanceGroup as PerformanceGroup,
+      impact_statement: impactStatement,
+      comment_task_execution: comments.task_execution,
+      comment_ownership: comments.ownership,
+      comment_project_management: comments.project_management,
+      comment_client_deliverables: comments.client_deliverables,
+      comment_communication: comments.communication,
+      comment_mentoring: comments.mentoring,
+      comment_competency_skills: comments.competency_skills,
+    });
+  };
 
   const title = readOnly
     ? `Evaluation: ${card.employee_name}`
@@ -156,7 +251,7 @@ export function EvalModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"
           >
             <X className="h-5 w-5" />
@@ -279,7 +374,7 @@ export function EvalModal({
         <div className="flex justify-end gap-3 border-t border-border px-6 py-4 shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
           >
             {readOnly ? "Close" : "Cancel"}
@@ -287,22 +382,7 @@ export function EvalModal({
           {!readOnly && onSaveDraft && (
             <button
               type="button"
-              onClick={() => {
-                const payload: PMEvaluationDraftPayload = {
-                  impact_statement: impactStatement,
-                  comment_task_execution: comments.task_execution,
-                  comment_ownership: comments.ownership,
-                  comment_project_management: comments.project_management,
-                  comment_client_deliverables: comments.client_deliverables,
-                  comment_communication: comments.communication,
-                  comment_mentoring: comments.mentoring,
-                  comment_competency_skills: comments.competency_skills,
-                };
-                if (performanceGroup !== "") {
-                  payload.performance_group = performanceGroup;
-                }
-                onSaveDraft(payload);
-              }}
+              onClick={handleManualSaveDraft}
               disabled={isSaving || isDraftSaving || isLoadingReview || !!fetchError}
               className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
             >
@@ -317,19 +397,7 @@ export function EvalModal({
           {!readOnly && (
             <button
               type="button"
-              onClick={() =>
-                onSubmit({
-                  performance_group: performanceGroup as PerformanceGroup,
-                  impact_statement: impactStatement,
-                  comment_task_execution: comments.task_execution,
-                  comment_ownership: comments.ownership,
-                  comment_project_management: comments.project_management,
-                  comment_client_deliverables: comments.client_deliverables,
-                  comment_communication: comments.communication,
-                  comment_mentoring: comments.mentoring,
-                  comment_competency_skills: comments.competency_skills,
-                })
-              }
+              onClick={handleSubmit}
               disabled={isSaving || isDraftSaving || !allFilled || isLoadingReview || !!fetchError}
               className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity ${
                 isEditMode ? "bg-amber-500" : "bg-brand"

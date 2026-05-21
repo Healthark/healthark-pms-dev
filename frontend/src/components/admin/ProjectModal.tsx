@@ -500,7 +500,6 @@ export function ProjectModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <UserCombobox
-                  users={users}
                   value={reportsToId}
                   onChange={setReportsToId}
                   label="PM Reports To"
@@ -508,7 +507,6 @@ export function ProjectModal({
                   excludeIds={reportsToExclude}
                 />
                 <UserCombobox
-                  users={users}
                   value={secondaryEvaluatorId}
                   onChange={setSecondaryEvaluatorId}
                   label="Secondary Evaluator"

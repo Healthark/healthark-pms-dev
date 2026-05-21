@@ -18,13 +18,13 @@ import {
 import type { KeyboardEvent } from "react";
 import { ChevronDown, Check, X } from "lucide-react";
 import type { UserResponse } from "../../services/admin.service";
+import { useUsers } from "../../queries/users";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 pr-8 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 export interface UserComboboxProps {
-  readonly users: readonly UserResponse[];
   readonly value: number | null;
   readonly onChange: (userId: number | null) => void;
   readonly label: string;
@@ -34,6 +34,8 @@ export interface UserComboboxProps {
   readonly error?: string | null;
   /** Hide these user ids from the suggestion list. */
   readonly excludeIds?: readonly number[];
+  /** Optional narrowing predicate, e.g. active-only mentors. */
+  readonly filter?: (user: UserResponse) => boolean;
 }
 
 function userLabel(u: UserResponse): string {
@@ -41,7 +43,6 @@ function userLabel(u: UserResponse): string {
 }
 
 export function UserCombobox({
-  users,
   value,
   onChange,
   label,
@@ -50,7 +51,13 @@ export function UserCombobox({
   disabled = false,
   error = null,
   excludeIds,
+  filter,
 }: UserComboboxProps) {
+  const { data: allUsers = [] } = useUsers();
+  const users = useMemo(
+    () => (filter ? allUsers.filter(filter) : allUsers),
+    [allUsers, filter],
+  );
   const id = useId();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);

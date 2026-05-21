@@ -26,8 +26,8 @@ import {
   projectService,
   type ProjectResponse,
 } from "../../services/project.service";
-import { adminService, type UserResponse } from "../../services/admin.service";
 import { getErrorMessage } from "../../utils/errors";
+import { useUsers } from "../../queries/users";
 import { exportService } from "../../services/export.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { extractFyToken } from "../../utils/fy";
@@ -93,8 +93,7 @@ interface ProjectsTabProps {
 
 export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
-  const [users, setUsers] = useState<UserResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
@@ -111,27 +110,32 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     ? extractFyToken(settings.active_cycle_name)
     : undefined;
 
+  // Shared ['users'] cache — stays in sync after admin user mutations.
+  // Same active-only filter that used to live in the old loadData.
+  const { data: allUsers = [], isLoading: isUsersLoading } = useUsers();
+  const users = useMemo(
+    () => allUsers.filter((u) => !u.is_deleted),
+    [allUsers],
+  );
+  const isLoading = isProjectsLoading || isUsersLoading;
+
   // Always fetch with include_completed=true so toggling the status filter
   // is purely client-side and never re-hits the API.
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
+  const loadProjects = useCallback(async () => {
+    setIsProjectsLoading(true);
     try {
-      const [projectsData, usersData] = await Promise.all([
-        projectService.listProjects(true),
-        adminService.getUsers(),
-      ]);
+      const projectsData = await projectService.listProjects(true);
       setProjects(projectsData);
-      setUsers(usersData.filter((u) => !u.is_deleted));
     } catch {
       // stays empty
     } finally {
-      setIsLoading(false);
+      setIsProjectsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    void loadProjects();
+  }, [loadProjects]);
 
   const handleDelete = async (project: ProjectResponse) => {
     const ok = await confirm({
@@ -209,7 +213,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
 
   const handleModalSave = () => {
     handleModalClose();
-    void loadData();
+    void loadProjects();
   };
 
   const availableYears = useMemo(

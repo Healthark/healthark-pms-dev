@@ -21,10 +21,11 @@ interface UserModalProps {
   readonly editingUser: UserResponse | null;
   readonly departments: DepartmentBrief[];
   readonly designations: DesignationBrief[];
-  readonly managers: UserResponse[]; // Consider renaming this prop to 'potentialMentors' in the future
   readonly isSaving: boolean;
   readonly error: string;
 }
+
+const isActiveUser = (u: UserResponse) => !u.is_deleted;
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
@@ -37,7 +38,6 @@ export function UserModal({
   editingUser,
   departments,
   designations,
-  managers,
   isSaving,
   error,
 }: UserModalProps) {
@@ -262,12 +262,12 @@ export function UserModal({
           </div>
 
           <UserCombobox
-            users={managers}
             value={form.mentor_id ? Number(form.mentor_id) : null}
             onChange={(id) => set("mentor_id", id !== null ? String(id) : "")}
             label="Assigned Mentor / Line Manager"
             placeholder="Search by name, email, or role…"
             excludeIds={editingUser ? [editingUser.id] : undefined}
+            filter={isActiveUser}
           />
 
           {!isEditing && (
