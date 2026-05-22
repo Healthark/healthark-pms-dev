@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AuthContext, type AuthContextType } from "./AuthContext";
 import { authService, type AuthResponse } from "../services/auth.service";
+import { useSessionQuery } from "../queries/session";
 
 // Maps outside the component and acts as source of truth.
 // Single-tenant deployment — only Healthark is populated. Kept as a
@@ -31,12 +33,14 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
+  const queryClient = useQueryClient();
+
   /**
    * Lazy initializer: runs exactly once on mount.
    * After C12 the JWT lives in an HttpOnly cookie that JS cannot read, so
    * "am I logged in?" is no longer derivable synchronously. We hydrate the
    * cached claims from localStorage (so the UI can skip the login flash for
-   * likely-authenticated users) and let the `refreshSession` effect below
+   * likely-authenticated users) and let the `['session']` query below
    * confirm against the server. If the cookie is gone/expired, /auth/session
    * 401s, the axios interceptor runs forceLogout(), and the user state here
    * gets cleared via the storage event.
@@ -76,38 +80,50 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
     localStorage.removeItem("user");
     localStorage.removeItem("csrf_token");
     setUser(null);
-  }, []);
+    // Evict every domain's cached data so no prior-user payload (users,
+    // settings, dashboard, etc.) survives into the next sign-in. This is
+    // the security/correctness benefit of moving server-state into TanStack.
+    queryClient.clear();
+  }, [queryClient]);
 
   /**
-   * Re-pull live auth claims and merge them into state + localStorage. Used
-   * on app mount and exposed via the context so consumers can force a
-   * refresh after actions that change claims (e.g. self-service password
-   * change clears `must_change_password`).
-   *
-   * No token-presence check — we can't read the HttpOnly cookie. Instead we
-   * always ask the server; a 401 tells us the session is dead and the axios
-   * interceptor's forceLogout() wipes local state. That makes this call the
-   * authoritative bootstrap even for "fresh tab" users whose localStorage
-   * has stale claims from a previous logged-in session.
+   * Live session claims via TanStack Query (cache key `['session']`).
+   * Replaces the prior manual `useEffect(refreshSession, [])` so that:
+   *   - React StrictMode no longer double-fires the bootstrap GET in dev.
+   *   - Concurrent consumers (e.g. multiple providers mounting near
+   *     simultaneously) dedupe to a single network call.
+   *   - The cache persists across route navigations within `staleTime`.
    */
-  const refreshSession = useCallback(async (): Promise<void> => {
+  const sessionQuery = useSessionQuery();
+
+  /**
+   * Merge fresh server claims into the existing user state on success.
+   * Preserves the login-time fields (notably `csrf_token`) that aren't
+   * present on the /auth/session response — mirrors the prior merge
+   * semantics of `refreshSession()`.
+   */
+  useEffect(() => {
+    if (!sessionQuery.data) return;
+    setUser((prev) => ({ ...(prev ?? {}), ...sessionQuery.data } as AuthResponse));
     try {
-      const claims = await authService.getSession();
-      setUser((prev) => ({ ...(prev ?? {}), ...claims } as AuthResponse));
       const saved = JSON.parse(localStorage.getItem("user") ?? "null");
       localStorage.setItem(
         "user",
-        JSON.stringify({ ...(saved ?? {}), ...claims }),
+        JSON.stringify({ ...(saved ?? {}), ...sessionQuery.data }),
       );
     } catch {
-      /* 401/403 handled by the axios interceptor (forceLogout); other errors
-         leave cached claims alone so a flaky network doesn't kick the user out */
+      /* localStorage write best-effort — quota/disabled cases are non-fatal */
     }
-  }, []);
+  }, [sessionQuery.data]);
 
-  useEffect(() => {
-    void refreshSession();
-  }, [refreshSession]);
+  /**
+   * Public `refreshSession()` API — preserved for the 22+ consumers that
+   * call it after actions that mutate claims (password change, etc.).
+   * Backed by the query's refetch under the hood.
+   */
+  const refreshSession = useCallback(async (): Promise<void> => {
+    await sessionQuery.refetch();
+  }, [sessionQuery]);
 
   /**
    * Multi-tab session sync. When another tab logs out (or logs in as a
@@ -136,7 +152,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
 
   /**
    * Dynamic Theming Sync
-   * Automatically updates the CSS variables on the root document whenever 
+   * Automatically updates the CSS variables on the root document whenever
    * the authenticated organization changes.
    */
   useEffect(() => {
