@@ -10,7 +10,6 @@ import {
   type UserUpdatePayload,
   type DepartmentBrief,
   type DesignationBrief,
-  type SystemSettings,
   type AdminSettingsUpdatePayload,
 } from "../services/admin.service";
 import type { CycleType } from "../services/system-settings.service";
@@ -21,11 +20,11 @@ import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/Project
 import { UserModal } from "../components/admin/UserModal";
 import { ExportsTab } from "../components/admin/ExportsTab";
 import { canExport } from "../utils/exportEligibility";
-import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
 import { useAuth } from "../hooks/useAuth";
 import { useCreateUser, useUpdateUser } from "../queries/users";
+import { useAdminSettings, useUpdateAdminSettings } from "../queries/adminSettings";
 
 
 type ActiveTab =
@@ -35,20 +34,19 @@ type ActiveTab =
   | "settings";
 
 export default function AdminPanel() {
-  // ── Reference data + settings (still local — not shared cross-page) ───────
+  // ── Reference data (departments + designations — not migrated yet) ────────
   const [departments, setDepartments] = useState<DepartmentBrief[]>([]);
   const [designations, setDesignations] = useState<DesignationBrief[]>([]);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>("users");
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [modalError, setModalError] = useState("");
 
-  // Settings form state
+  // Settings form state — local because users edit these; hydrated from
+  // the ['admin-settings'] query whenever fresh data arrives.
   const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
   const [fiscalStartMonth, setFiscalStartMonth] = useState(4);
   const [annualReviewsEnabled, setAnnualReviewsEnabled] = useState(false);
@@ -56,7 +54,6 @@ export default function AdminPanel() {
   const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
   const [annualReviewFinalRatingVisible, setAnnualReviewFinalRatingVisible] = useState(false);
 
-  const { refreshSettings } = useSystemSettings();
   const toast = useToast();
   const snackbar = useSnackbar();
 
@@ -71,31 +68,40 @@ export default function AdminPanel() {
   const updateUserMutation = useUpdateUser();
   const isSavingUser = createUserMutation.isPending || updateUserMutation.isPending;
 
-  // ── Bootstrap (reference data + settings only — users come from useUsers) ─
-  const loadData = useCallback(async () => {
+  // ── Admin settings (shared cache via ['admin-settings']) ──────────────────
+  const { data: adminSettings } = useAdminSettings();
+  const updateAdminSettingsMutation = useUpdateAdminSettings();
+  const isSavingSettings = updateAdminSettingsMutation.isPending;
+
+  // Hydrate form fields whenever the query produces a new snapshot — both
+  // on initial load and after a mutation refetch.
+  useEffect(() => {
+    if (!adminSettings) return;
+    setCycleType((adminSettings.cycle_type as CycleType) ?? "half_yearly");
+    setFiscalStartMonth(adminSettings.fiscal_start_month ?? 4);
+    setAnnualReviewsEnabled(adminSettings.annual_reviews_enabled ?? false);
+    setAnnualGoalsEditEnabled(adminSettings.annual_goals_edit_enabled ?? false);
+    setProjectRatingsVisible(adminSettings.project_ratings_visible ?? false);
+    setAnnualReviewFinalRatingVisible(adminSettings.annual_review_final_rating_visible ?? false);
+  }, [adminSettings]);
+
+  // ── Bootstrap reference data (departments + designations only) ────────────
+  const loadReferenceData = useCallback(async () => {
     try {
-      const [deptData, desigData, settingsData] = await Promise.all([
+      const [deptData, desigData] = await Promise.all([
         adminService.getDepartments(),
         adminService.getDesignations(),
-        adminService.getSettings(),
       ]);
       setDepartments(deptData);
       setDesignations(desigData);
-      setSettings(settingsData);
-      setCycleType((settingsData.cycle_type as CycleType) ?? "half_yearly");
-      setFiscalStartMonth(settingsData.fiscal_start_month ?? 4);
-      setAnnualReviewsEnabled(settingsData.annual_reviews_enabled ?? false);
-      setAnnualGoalsEditEnabled(settingsData.annual_goals_edit_enabled ?? false);
-      setProjectRatingsVisible(settingsData.project_ratings_visible ?? false);
-      setAnnualReviewFinalRatingVisible(settingsData.annual_review_final_rating_visible ?? false);
     } catch {
       // Errors handled per-operation below
     }
   }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    void loadReferenceData();
+  }, [loadReferenceData]);
 
   // ── User handlers ─────────────────────────────────────────────────────────
   const openAddModal = () => {
@@ -139,33 +145,23 @@ export default function AdminPanel() {
   };
 
   // ── Settings handler ──────────────────────────────────────────────────────
+  // The mutation invalidates both ['admin-settings'] and ['system-settings'],
+  // so the form re-hydrates via the useEffect above and every consumer of
+  // useSystemSettings() picks up the new value on its next render.
   const handleSaveSettings = async () => {
-    setIsSavingSettings(true);
+    const payload: AdminSettingsUpdatePayload = {
+      cycle_type: cycleType,
+      fiscal_start_month: fiscalStartMonth,
+      annual_reviews_enabled: annualReviewsEnabled,
+      annual_goals_edit_enabled: annualGoalsEditEnabled,
+      project_ratings_visible: projectRatingsVisible,
+      annual_review_final_rating_visible: annualReviewFinalRatingVisible,
+    };
     try {
-      const payload: AdminSettingsUpdatePayload = {
-        cycle_type: cycleType,
-        fiscal_start_month: fiscalStartMonth,
-        annual_reviews_enabled: annualReviewsEnabled,
-        annual_goals_edit_enabled: annualGoalsEditEnabled,
-        project_ratings_visible: projectRatingsVisible,
-        annual_review_final_rating_visible: annualReviewFinalRatingVisible,
-      };
-      await adminService.updateSettings(payload);
-      // Re-fetch from DB so local state always reflects what was actually persisted.
-      const fresh = await adminService.getSettings();
-      setSettings(fresh);
-      setCycleType((fresh.cycle_type as CycleType) ?? "half_yearly");
-      setFiscalStartMonth(fresh.fiscal_start_month ?? 4);
-      setAnnualReviewsEnabled(fresh.annual_reviews_enabled ?? false);
-      setAnnualGoalsEditEnabled(fresh.annual_goals_edit_enabled ?? false);
-      setProjectRatingsVisible(fresh.project_ratings_visible ?? false);
-      setAnnualReviewFinalRatingVisible(fresh.annual_review_final_rating_visible ?? false);
-      await refreshSettings();
+      await updateAdminSettingsMutation.mutateAsync(payload);
       toast.success("Configuration saved.");
     } catch (err) {
       snackbar.error(getErrorMessage(err));
-    } finally {
-      setIsSavingSettings(false);
     }
   };
 
@@ -267,7 +263,7 @@ export default function AdminPanel() {
 
         {activeTab === "settings" && (
           <SystemSettingsTab
-            activeCycleName={settings?.active_cycle ?? ""}
+            activeCycleName={adminSettings?.active_cycle ?? ""}
             cycleType={cycleType}
             fiscalStartMonth={fiscalStartMonth}
             annualReviewsEnabled={annualReviewsEnabled}
