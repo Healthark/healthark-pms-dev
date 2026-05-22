@@ -25,15 +25,16 @@ import {
   type AssignmentCreatePayload,
 } from "../../services/project.service";
 import {
-  adminService,
   type UserResponse,
-  type DepartmentBrief,
-  type DesignationBrief,
 } from "../../services/admin.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { UserCombobox } from "../common/UserCombobox";
+import {
+  useDepartments,
+  useDesignations,
+} from "../../queries/adminReferenceData";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
@@ -87,9 +88,9 @@ export function ProjectModal({
   const [reportsToId, setReportsToId] = useState<number | null>(null);
   const [secondaryEvaluatorId, setSecondaryEvaluatorId] = useState<number | null>(null);
 
-  // ── Reference Data ──────────────────────────────────────────────
-  const [departments, setDepartments] = useState<DepartmentBrief[]>([]);
-  const [designations, setDesignations] = useState<DesignationBrief[]>([]);
+  // ── Reference Data (shared cache via ['admin', 'departments|designations']) ─
+  const { data: departments = [] } = useDepartments();
+  const { data: designations = [] } = useDesignations();
 
   // ── Assignment State ────────────────────────────────────────────
   const [draftAssignments, setDraftAssignments] = useState<DraftAssignment[]>([]);
@@ -103,23 +104,7 @@ export function ProjectModal({
   const toast = useToast();
   const snackbar = useSnackbar();
 
-  // ── Load reference data + existing project ──────────────────────
-  useEffect(() => {
-    const loadRefs = async () => {
-      try {
-        const [deptData, desigData] = await Promise.all([
-          adminService.getDepartments(),
-          adminService.getDesignations(),
-        ]);
-        setDepartments(deptData);
-        setDesignations(desigData);
-      } catch {
-        // dropdowns stay empty
-      }
-    };
-    void loadRefs();
-  }, []);
-
+  // ── Load existing project (reference data now via shared hooks above) ──
   useEffect(() => {
     if (!isEditing) return;
     setIsLoading(true);
