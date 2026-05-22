@@ -1,15 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   UserPlus, Users, Settings, FolderOpen, Plus, Download,
 } from "lucide-react";
 
 import {
-  adminService,
   type UserResponse,
   type UserCreatePayload,
   type UserUpdatePayload,
-  type DepartmentBrief,
-  type DesignationBrief,
   type AdminSettingsUpdatePayload,
 } from "../services/admin.service";
 import type { CycleType } from "../services/system-settings.service";
@@ -25,6 +22,7 @@ import { useSnackbar } from "../hooks/useSnackbar";
 import { useAuth } from "../hooks/useAuth";
 import { useCreateUser, useUpdateUser } from "../queries/users";
 import { useAdminSettings, useUpdateAdminSettings } from "../queries/adminSettings";
+import { useDepartments, useDesignations } from "../queries/adminReferenceData";
 
 
 type ActiveTab =
@@ -34,9 +32,9 @@ type ActiveTab =
   | "settings";
 
 export default function AdminPanel() {
-  // ── Reference data (departments + designations — not migrated yet) ────────
-  const [departments, setDepartments] = useState<DepartmentBrief[]>([]);
-  const [designations, setDesignations] = useState<DesignationBrief[]>([]);
+  // ── Reference data (shared cache via ['admin', 'departments|designations']) ─
+  const { data: departments = [] } = useDepartments();
+  const { data: designations = [] } = useDesignations();
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>("users");
@@ -84,24 +82,6 @@ export default function AdminPanel() {
     setProjectRatingsVisible(adminSettings.project_ratings_visible ?? false);
     setAnnualReviewFinalRatingVisible(adminSettings.annual_review_final_rating_visible ?? false);
   }, [adminSettings]);
-
-  // ── Bootstrap reference data (departments + designations only) ────────────
-  const loadReferenceData = useCallback(async () => {
-    try {
-      const [deptData, desigData] = await Promise.all([
-        adminService.getDepartments(),
-        adminService.getDesignations(),
-      ]);
-      setDepartments(deptData);
-      setDesignations(desigData);
-    } catch {
-      // Errors handled per-operation below
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadReferenceData();
-  }, [loadReferenceData]);
 
   // ── User handlers ─────────────────────────────────────────────────────────
   const openAddModal = () => {
