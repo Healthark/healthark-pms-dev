@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Bell, CalendarDays } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
-import {
-  notificationService,
-  type TopbarSummary,
-} from "../services/notification.service";
 import { NotificationDropdown } from "../components/layout/NotificationDropdown";
+import {
+  useMarkAllRead,
+  useNotificationsSummary,
+} from "../queries/notifications";
 
 export function Topbar() {
   const { user } = useAuth();
@@ -17,20 +17,12 @@ export function Topbar() {
   // the Topbar updates instantly without a full page reload.
   const { settings, isLoading: settingsLoading } = useSystemSettings();
 
-  // ── Notifications — from the lightweight summary endpoint ─────────
-  const [summary, setSummary] = useState<TopbarSummary | null>(null);
+  // ── Notifications — shared TanStack cache via ['notifications', 'summary']
+  const { data: summary } = useNotificationsSummary();
+  const markAllReadMutation = useMarkAllRead();
+
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
-
-  // Fetch notification summary once on mount — single round-trip
-  useEffect(() => {
-    notificationService
-      .getSummary()
-      .then(setSummary)
-      .catch(() => {
-        // Silently fail — Topbar stays functional without notification data
-      });
-  }, []);
 
   const handleBellClick = useCallback(() => {
     if (anchorRect) {
@@ -44,21 +36,12 @@ export function Topbar() {
 
   const handleClose = useCallback(() => setAnchorRect(null), []);
 
+  // Invalidation-only — the badge clears after the server round-trip
+  // refreshes the summary cache. Matches the strict pattern established
+  // by the other Phase B/C mutations (no manual cache writes).
   const handleMarkAllRead = useCallback(async () => {
-    await notificationService.markAllRead();
-    // Optimistically clear unread badge; update local state
-    setSummary((prev) =>
-      prev
-        ? {
-            ...prev,
-            user_notifications: prev.user_notifications.map((n) => ({
-              ...n,
-              is_read: true,
-            })),
-          }
-        : prev,
-    );
-  }, []);
+    await markAllReadMutation.mutateAsync();
+  }, [markAllReadMutation]);
 
   const unreadUserCount =
     summary?.user_notifications.filter((n) => !n.is_read).length ?? 0;
