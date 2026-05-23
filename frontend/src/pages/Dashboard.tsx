@@ -1,9 +1,5 @@
-import { useState, useEffect } from "react";
-import {
-  dashboardService,
-  type DashboardSummary,
-} from "../services/dashboard.service";
 import { useAuth } from "../hooks/useAuth";
+import { useDashboardSummary } from "../queries/dashboard";
 import { ActionItemsWidget } from "../components/dashboard/ActionItemsWidget";
 import { GoalsWidget } from "../components/dashboard/GoalsWidget";
 import { MyAnnualReviewWidget } from "../components/dashboard/MyAnnualReviewWidget";
@@ -53,17 +49,9 @@ function SectionHeader({
 
 export function Dashboard() {
   const { user, hasFeature } = useAuth();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    dashboardService
-      .getSummary()
-      .then(setSummary)
-      .catch(() => setError(true))
-      .finally(() => setIsLoading(false));
-  }, []);
+  // ['dashboard', 'summary'] — shared TanStack cache. Default 60s staleTime
+  // means route navigations back to /dashboard within a minute are free.
+  const { data: summary, isPending, isError } = useDashboardSummary();
 
   // Layer flags — drive which sections render. The Mentor layer light up
   // additively on top of Personal; both feature-gating ("mentoring" must be
@@ -72,7 +60,7 @@ export function Dashboard() {
   const showMentorLayer =
     hasFeature("mentoring") && (user?.has_mentees ?? false);
 
-  if (error) {
+  if (isError) {
     return (
       <div className="flex items-center justify-center h-full text-text-muted">
         <p className="text-sm">
@@ -86,7 +74,7 @@ export function Dashboard() {
   // page doesn't reflow on data arrival. We only show the Personal grid in
   // the loading state; the Mentor section can fade in once we know the
   // gate flags from `user`.
-  if (isLoading || !summary) {
+  if (isPending || !summary) {
     return (
       <div className="space-y-6">
         <div>
