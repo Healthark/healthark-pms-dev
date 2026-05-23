@@ -12,22 +12,26 @@
 
 import {
   useState,
-  useEffect,
   useCallback,
   useImperativeHandle,
   useMemo,
   type Ref,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Search, Pencil, Trash2, Users, FolderOpen,
   CheckCircle2, RotateCcw,
 } from "lucide-react";
-import {
-  projectService,
-  type ProjectResponse,
-} from "../../services/project.service";
+import { type ProjectResponse } from "../../services/project.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useUsers } from "../../queries/users";
+import {
+  adminProjectsQueryKey,
+  useAdminProjects,
+  useDeleteProject,
+  useMarkProjectComplete,
+  useReopenProject,
+} from "../../queries/adminProjects";
 import { exportService } from "../../services/export.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { extractFyToken } from "../../utils/fy";
@@ -92,8 +96,6 @@ interface ProjectsTabProps {
 }
 
 export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
-  const [projects, setProjects] = useState<ProjectResponse[]>([]);
-  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
@@ -105,6 +107,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const toast = useToast();
   const snackbar = useSnackbar();
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const { settings } = useSystemSettings();
   const exportFy = settings?.active_cycle_name
     ? extractFyToken(settings.active_cycle_name)
@@ -117,25 +120,19 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     () => allUsers.filter((u) => !u.is_deleted),
     [allUsers],
   );
+
+  // ['admin', 'projects'] — shared TanStack cache. Always fetches with
+  // include_completed=true so the Active / Completed / All status filter
+  // is a pure client-side narrowing.
+  const { data: projects = [], isLoading: isProjectsLoading } = useAdminProjects();
   const isLoading = isProjectsLoading || isUsersLoading;
 
-  // Always fetch with include_completed=true so toggling the status filter
-  // is purely client-side and never re-hits the API.
-  const loadProjects = useCallback(async () => {
-    setIsProjectsLoading(true);
-    try {
-      const projectsData = await projectService.listProjects(true);
-      setProjects(projectsData);
-    } catch {
-      // stays empty
-    } finally {
-      setIsProjectsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadProjects();
-  }, [loadProjects]);
+  // Mutation hooks — each invalidates ['admin', 'projects'] on success,
+  // which triggers a refetch and updates the table without manual
+  // setState chains.
+  const deleteMutation = useDeleteProject();
+  const markCompleteMutation = useMarkProjectComplete();
+  const reopenMutation = useReopenProject();
 
   const handleDelete = async (project: ProjectResponse) => {
     const ok = await confirm({
@@ -145,10 +142,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
       confirmText: "Delete",
     });
     if (!ok) return;
-
     try {
-      await projectService.deleteProject(project.id);
-      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      await deleteMutation.mutateAsync(project.id);
       toast.success(`"${project.name}" deleted.`);
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
@@ -165,10 +160,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
       confirmText: "Mark Complete",
     });
     if (!ok) return;
-
     try {
-      const updated = await projectService.markComplete(project.id);
-      setProjects((prev) => prev.map((p) => (p.id === project.id ? updated : p)));
+      await markCompleteMutation.mutateAsync(project.id);
       toast.success(`"${project.name}" marked as completed.`);
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
@@ -184,10 +177,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
       confirmText: "Re-open",
     });
     if (!ok) return;
-
     try {
-      const updated = await projectService.reopen(project.id);
-      setProjects((prev) => prev.map((p) => (p.id === project.id ? updated : p)));
+      await reopenMutation.mutateAsync(project.id);
       toast.success(`"${project.name}" re-opened.`);
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
@@ -211,9 +202,13 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     setEditingProjectId(null);
   };
 
+  // ProjectModal owns a compound transaction (project create/update +
+  // assignment CRUD). When it finishes, we just invalidate the list
+  // cache and let TanStack refetch — covers create, update, and any
+  // member-count changes from assignment adds/removes.
   const handleModalSave = () => {
     handleModalClose();
-    void loadProjects();
+    queryClient.invalidateQueries({ queryKey: adminProjectsQueryKey });
   };
 
   const availableYears = useMemo(
