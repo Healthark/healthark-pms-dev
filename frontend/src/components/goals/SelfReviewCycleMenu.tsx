@@ -218,7 +218,7 @@ export function SelfReviewCycleMenu({
                 <span
                   className={`text-[10px] ${
                     submitted
-                      ? "text-green-600"
+                      ? "text-green-600 dark:text-green-300"
                       : isLocked
                         ? "text-text-muted/70"
                         : "text-text-muted"
@@ -256,7 +256,7 @@ export function SelfReviewCycleMenu({
                   const mentorReviewed =
                     mentorRow !== undefined && !mentorRow.is_draft;
                   if (mentorReviewed) {
-                    return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
+                    return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 dark:text-green-400 shrink-0" />;
                   }
                   if (submitted) {
                     return <ClipboardCheck className="h-3.5 w-3.5 text-text-muted shrink-0" />;
@@ -264,7 +264,7 @@ export function SelfReviewCycleMenu({
                   return <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />;
                 })()
               ) : submitted ? (
-                <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                <Check className="h-3.5 w-3.5 text-green-500 dark:text-green-400 shrink-0" />
               ) : isLocked ? (
                 <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />
               ) : (

@@ -143,9 +143,9 @@ export function FeedbackGive() {
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back to 360 Feedback
         </Link>
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-          <p className="text-sm text-red-700">
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+          <p className="text-sm text-red-700 dark:text-red-300">
             {loadError || "Could not load this peer."}
           </p>
         </div>
@@ -184,7 +184,7 @@ export function FeedbackGive() {
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   my.target.worked_with
                     ? "bg-brand/10 text-brand"
-                    : "bg-amber-50 text-amber-700"
+                    : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
                 }`}
               >
                 {my.target.worked_with ? "Worked with" : "Not worked with"}
@@ -198,9 +198,9 @@ export function FeedbackGive() {
         </div>
 
         {isReadOnly && (
-          <div className="mt-4 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 mt-0.5" />
-            <p className="text-xs text-green-800">
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-3 py-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 dark:text-green-300 mt-0.5" />
+            <p className="text-xs text-green-800 dark:text-green-300">
               You've already submitted this review. The slider positions
               below are what you rated. Reviews are submit-once and can't
               be edited or withdrawn.
@@ -212,7 +212,7 @@ export function FeedbackGive() {
       {/* ── Single-container rating table ─────────────────────────── */}
       <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
         {/* Header row — left cell summary, right cell scale labels */}
-        <div className="flex items-stretch border-b border-border bg-slate-50/50">
+        <div className="flex items-stretch border-b border-border bg-surface-muted/50">
           <div className="w-[180px] shrink-0 px-6 py-4 border-r border-border/40">
             <h3 className="text-[14px] font-bold text-brand">
               {isReadOnly ? "Your ratings" : "Rate each statement"}
@@ -253,7 +253,7 @@ export function FeedbackGive() {
             key={group.bucket}
             className={`flex ${gIdx > 0 ? "border-t border-border" : ""}`}
           >
-            <div className="w-[180px] shrink-0 flex items-center justify-end px-5 py-4 border-r border-border/40 bg-slate-50/30">
+            <div className="w-[180px] shrink-0 flex items-center justify-end px-5 py-4 border-r border-border/40 bg-surface-muted/30">
               <span className="italic font-semibold text-[13px] text-text-main text-right leading-tight">
                 {group.bucket}
               </span>
@@ -302,9 +302,9 @@ export function FeedbackGive() {
       </div>
 
       {submitError && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-          <p className="text-sm text-red-700">{submitError}</p>
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+          <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
         </div>
       )}
 
@@ -324,7 +324,7 @@ export function FeedbackGive() {
         <div className="flex gap-3">
           <Link
             to="/feedback"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             {isReadOnly ? "Close" : "Cancel"}
           </Link>

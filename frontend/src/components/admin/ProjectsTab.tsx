@@ -85,7 +85,7 @@ type StatusFilter = "active" | "completed" | "all";
 const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
-  "rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
+  "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
 
 export interface ProjectsTabHandle {
   openCreate: () => void;
@@ -277,7 +277,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
             placeholder="Search by name or code…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label="Search projects"
           />
         </div>
@@ -362,7 +362,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-slate-50 text-left">
+              <tr className="border-b border-border bg-surface-muted text-left">
                 <th className="px-5 py-3">
                   <SortableHeader label="Project" columnKey="name" sort={sort} onSort={setSort} />
                 </th>
@@ -396,7 +396,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
               {visibleProjects.map((project) => (
                 <tr
                   key={project.id}
-                  className="transition-colors hover:bg-slate-50"
+                  className="transition-colors hover:bg-surface-muted"
                 >
                   <td className="px-5 py-3.5">
                     <div className="font-medium text-text-main">
@@ -409,7 +409,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                     )}
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-mono text-text-muted">
+                    <span className="rounded-md bg-surface-hover px-2 py-0.5 text-xs font-mono text-text-muted">
                       {project.project_code}
                     </span>
                   </td>
@@ -442,13 +442,13 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                                 : "")
                             : "Completed"
                         }
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-600"
+                        className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-bold uppercase text-text-muted"
                       >
                         <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                         Completed
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
                         Active
                       </span>
                     )}
@@ -468,7 +468,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                           type="button"
                           onClick={() => handleMarkComplete(project)}
                           title="Mark as completed"
-                          className="rounded-md p-1.5 text-text-muted hover:bg-green-50 hover:text-green-700 transition-colors"
+                          className="rounded-md p-1.5 text-text-muted hover:bg-green-50 dark:hover:bg-green-950/40 hover:text-green-700 dark:text-green-300 transition-colors"
                         >
                           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                         </button>
@@ -477,7 +477,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                           type="button"
                           onClick={() => handleReopen(project)}
                           title="Re-open project"
-                          className="rounded-md p-1.5 text-text-muted hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                          className="rounded-md p-1.5 text-text-muted hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-700 dark:text-amber-300 transition-colors"
                         >
                           <RotateCcw className="h-4 w-4" aria-hidden="true" />
                         </button>
@@ -486,7 +486,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                         type="button"
                         onClick={() => handleDelete(project)}
                         title="Delete project"
-                        className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="rounded-md p-1.5 text-text-muted hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:text-red-300 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>

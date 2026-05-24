@@ -30,7 +30,7 @@ function copyForStatus(
   if (cycle === null) {
     return {
       pillLabel: "Not configured",
-      pillClass: "bg-slate-100 text-text-muted",
+      pillClass: "bg-surface-hover text-text-muted",
       description: "Ask your admin to set the active performance cycle.",
       ctaLabel: null,
     };
@@ -41,7 +41,7 @@ function copyForStatus(
   if (status === null) {
     return {
       pillLabel: "Not started",
-      pillClass: "bg-slate-100 text-text-muted",
+      pillClass: "bg-surface-hover text-text-muted",
       description: `Begin your self-review for ${cycle}.`,
       ctaLabel: "Start self-review",
     };
@@ -51,28 +51,28 @@ function copyForStatus(
     case "draft":
       return {
         pillLabel: "Draft",
-        pillClass: "bg-amber-50 text-amber-700",
+        pillClass: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 dark:bg-amber-950/40 dark:text-amber-300",
         description: `Continue your self-review for ${cycle}.`,
         ctaLabel: "Continue draft",
       };
     case "pending_mentor":
       return {
         pillLabel: "With mentor",
-        pillClass: "bg-blue-50 text-blue-700",
+        pillClass: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 dark:bg-blue-950/40 dark:text-blue-300",
         description: "Submitted — waiting on your mentor's evaluation.",
         ctaLabel: "View submission",
       };
     case "pending_management":
       return {
         pillLabel: "With management",
-        pillClass: "bg-violet-50 text-violet-700",
+        pillClass: "bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 dark:bg-violet-950/40 dark:text-violet-300",
         description: "Mentor reviewed — pending management calibration.",
         ctaLabel: "View submission",
       };
     case "completed":
       return {
         pillLabel: "Completed",
-        pillClass: "bg-green-50 text-green-700",
+        pillClass: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 dark:bg-green-950/40 dark:text-green-300",
         description: "Final rating published.",
         ctaLabel: "View final review",
       };

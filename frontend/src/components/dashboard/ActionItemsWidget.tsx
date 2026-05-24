@@ -18,9 +18,9 @@ interface ActionRow {
 }
 
 const TONE_CLASSES: Record<ActionRow["tone"], string> = {
-  blocking: "bg-red-50 text-red-600",
-  warning: "bg-amber-50 text-amber-600",
-  info: "bg-slate-100 text-text-muted",
+  blocking: "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 dark:bg-red-950/40 dark:text-red-300",
+  warning: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 dark:bg-amber-950/40 dark:text-amber-300",
+  info: "bg-surface-hover text-text-muted",
 };
 
 /**
@@ -122,7 +122,7 @@ export function ActionItemsWidget({ summary }: ActionItemsWidgetProps) {
       {rows.length === 0 ? (
         // Empty state — positive, not a dead card.
         <div className="flex flex-col items-center justify-center gap-1.5 py-4 text-center">
-          <CheckCircle2 className="h-7 w-7 text-green-500" aria-hidden="true" />
+          <CheckCircle2 className="h-7 w-7 text-green-500 dark:text-green-400" aria-hidden="true" />
           <p className="text-sm font-medium text-text-main">You're all caught up</p>
           <p className="text-xs text-text-muted">Nothing on your plate right now.</p>
         </div>
@@ -134,7 +134,7 @@ export function ActionItemsWidget({ summary }: ActionItemsWidgetProps) {
               <li key={row.key}>
                 <Link
                   to={row.to}
-                  className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-slate-50 transition-colors"
+                  className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-surface-muted transition-colors"
                 >
                   <span
                     className={`flex h-7 w-7 items-center justify-center rounded-md ${TONE_CLASSES[row.tone]}`}
@@ -144,7 +144,7 @@ export function ActionItemsWidget({ summary }: ActionItemsWidgetProps) {
                   </span>
                   <span className="flex-1 text-sm text-text-main">{row.label}</span>
                   {row.count > 1 && (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-text-main">
+                    <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-semibold text-text-main">
                       {row.count}
                     </span>
                   )}

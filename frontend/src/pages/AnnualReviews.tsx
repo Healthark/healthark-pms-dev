@@ -181,7 +181,7 @@ export function AnnualReviews() {
                 {isCurrentDraft ? "Continue Draft" : "Self-Review"}
               </button>
             ) : !moduleEnabled ? (
-              <div className="shrink-0 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <div className="shrink-0 flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                 <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 Annual review submissions are currently closed.
               </div>

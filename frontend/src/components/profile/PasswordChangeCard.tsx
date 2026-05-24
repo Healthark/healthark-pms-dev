@@ -17,7 +17,7 @@ import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand pr-10";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand pr-10";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 /** Type-safe error extractor — never uses `as` casting. */
@@ -165,7 +165,7 @@ export function PasswordChangeCard() {
         />
 
         {tooShort && (
-          <p className="text-xs text-amber-600">
+          <p className="text-xs text-amber-600 dark:text-amber-300">
             Password must be at least 8 characters.
           </p>
         )}
@@ -179,7 +179,7 @@ export function PasswordChangeCard() {
         />
 
         {mismatch && (
-          <p className="text-xs text-red-600">Passwords do not match.</p>
+          <p className="text-xs text-red-600 dark:text-red-300">Passwords do not match.</p>
         )}
 
         <button

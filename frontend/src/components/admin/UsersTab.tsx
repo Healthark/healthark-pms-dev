@@ -72,7 +72,7 @@ const USERS_SORT_CONFIG: Record<
 const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
-  "rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
+  "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
 
 export function UsersTab({
   departments,
@@ -164,7 +164,7 @@ export function UsersTab({
             placeholder="Search by name, email or code…"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label="Search users"
           />
         </div>
@@ -243,7 +243,7 @@ export function UsersTab({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-slate-50 text-left">
+              <tr className="border-b border-border bg-surface-muted text-left">
                 <th className="px-5 py-3">
                   <SortableHeader label="Employee" columnKey="full_name" sort={sort} onSort={setSort} />
                 </th>
@@ -284,7 +284,7 @@ export function UsersTab({
                 visibleUsers.map((user) => (
                   <tr
                     key={user.id}
-                    className={`transition-colors hover:bg-slate-50 ${user.is_deleted ? "opacity-60" : ""}`}
+                    className={`transition-colors hover:bg-surface-muted ${user.is_deleted ? "opacity-60" : ""}`}
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
@@ -292,7 +292,7 @@ export function UsersTab({
                           {user.full_name}
                         </span>
                         {user.role === "Admin" && (
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
                             Admin
                           </span>
                         )}
@@ -334,7 +334,7 @@ export function UsersTab({
                             type="button"
                             onClick={() => handleDeactivate(user)}
                             title="Deactivate user"
-                            className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                            className="rounded-md p-1.5 text-text-muted hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:text-red-300 transition-colors"
                           >
                             <UserX className="h-4 w-4" aria-hidden="true" />
                           </button>
@@ -344,7 +344,7 @@ export function UsersTab({
                             type="button"
                             onClick={() => handleReactivate(user)}
                             title="Reactivate user"
-                            className="rounded-md p-1.5 text-text-muted hover:bg-green-50 hover:text-green-600 transition-colors"
+                            className="rounded-md p-1.5 text-text-muted hover:bg-green-50 dark:hover:bg-green-950/40 hover:text-green-600 dark:text-green-300 transition-colors"
                           >
                             <UserCheck className="h-4 w-4" aria-hidden="true" />
                           </button>

@@ -20,7 +20,7 @@ export function ExpectationToggle({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+        className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:text-blue-300 transition-colors"
       >
         <BookOpen className="h-3 w-3" aria-hidden="true" />
         {open ? "Hide" : "View"} Role Expectations
@@ -31,8 +31,8 @@ export function ExpectationToggle({
         )}
       </button>
       {open && (
-        <div className="mt-1.5 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
-          <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">
+        <div className="mt-1.5 rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-100 px-3 py-2">
+          <p className="text-xs text-blue-800 dark:text-blue-300 whitespace-pre-wrap leading-relaxed">
             {text.replace(/ \| /g, "\n• ")}
           </p>
         </div>

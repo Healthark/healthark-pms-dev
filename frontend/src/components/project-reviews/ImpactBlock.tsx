@@ -20,9 +20,9 @@ export function ImpactBlock({
         <div
           className={`${
             compact ? "rounded-lg p-3" : "rounded-xl p-5"
-          } border border-blue-200 bg-blue-50/50`}
+          } border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/50`}
         >
-          <h3 className="text-[12px] font-bold uppercase tracking-widest text-blue-700 mb-2 flex items-center gap-2">
+          <h3 className="text-[12px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
             <MessageSquare className="h-3.5 w-3.5" /> Overall Impact Statement
           </h3>
           <p
@@ -54,7 +54,7 @@ export function ImpactBlock({
                   <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-text-main">
                     <UserCircle className="h-4 w-4 text-text-muted" />
                     {ev.evaluator_name}
-                    <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold tracking-wider text-slate-600 uppercase">
+                    <span className="ml-2 rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-bold tracking-wider text-text-muted uppercase">
                       Secondary
                     </span>
                   </div>

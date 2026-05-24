@@ -21,7 +21,7 @@ import type { UserResponse } from "../../services/admin.service";
 import { useUsers } from "../../queries/users";
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 pr-8 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 pr-8 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 export interface UserComboboxProps {
@@ -132,7 +132,7 @@ export function UserCombobox({
     <div ref={wrapRef} className="relative">
       <label htmlFor={id} className={LABEL_CLS}>
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-red-500 dark:text-red-400"> *</span>}
       </label>
       <div className="relative">
         <input
@@ -166,7 +166,7 @@ export function UserCombobox({
               commit(null);
               inputRef.current?.focus();
             }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted hover:bg-slate-100"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted hover:bg-surface-hover"
             aria-label="Clear selection"
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -183,7 +183,7 @@ export function UserCombobox({
         <ul
           id={`${id}-listbox`}
           role="listbox"
-          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-white py-1 shadow-lg"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg"
         >
           {filtered.map((u, idx) => {
             const isActive = idx === activeIdx;
@@ -216,12 +216,12 @@ export function UserCombobox({
       )}
 
       {open && filtered.length === 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-muted shadow-lg">
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-muted shadow-lg">
           No matching users.
         </div>
       )}
 
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-xs text-red-600 dark:text-red-300">{error}</p>}
     </div>
   );
 }

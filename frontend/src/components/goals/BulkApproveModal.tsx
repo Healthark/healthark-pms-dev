@@ -184,7 +184,7 @@ export function BulkApproveModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-100 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
             aria-label="Close bulk approve"
           >
             <X className="h-5 w-5" />
@@ -194,7 +194,7 @@ export function BulkApproveModal({
         {/* Body */}
         <div className="overflow-y-auto px-6 py-4 flex-1">
           {error && (
-            <p className="mb-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            <p className="mb-3 rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
           )}
@@ -213,7 +213,7 @@ export function BulkApproveModal({
             <>
               {/* Global Select All */}
               {totalPending > 0 && (
-                <label className="flex items-center gap-2 px-3 py-2 mb-2 rounded-lg border border-border bg-slate-50/50 cursor-pointer hover:bg-slate-50">
+                <label className="flex items-center gap-2 px-3 py-2 mb-2 rounded-lg border border-border bg-surface-muted/50 cursor-pointer hover:bg-surface-muted">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -249,7 +249,7 @@ export function BulkApproveModal({
                       {/* Mentee header row */}
                       <div
                         className={`flex items-center gap-2 px-3 py-2 ${
-                          menteeDisabled ? "bg-slate-50/60" : "bg-slate-50/30"
+                          menteeDisabled ? "bg-surface-muted/60" : "bg-surface-muted/30"
                         }`}
                       >
                         <input
@@ -279,7 +279,7 @@ export function BulkApproveModal({
                         <button
                           type="button"
                           onClick={() => toggleCollapse(group.ownerName)}
-                          className="rounded-md p-1 text-text-muted hover:bg-slate-100"
+                          className="rounded-md p-1 text-text-muted hover:bg-surface-hover"
                           aria-label={collapsed ? "Expand goals" : "Collapse goals"}
                           aria-expanded={!collapsed}
                         >
@@ -336,7 +336,7 @@ export function BulkApproveModal({
                                 <p className="text-sm text-text-main line-clamp-1">
                                   {goal.title}
                                 </p>
-                                <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+                                <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                                   <AlertTriangle className="h-3 w-3 shrink-0" />
                                   Awaiting revision
                                 </p>
@@ -364,7 +364,7 @@ export function BulkApproveModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
             >
               Cancel
             </button>

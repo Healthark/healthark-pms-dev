@@ -54,7 +54,7 @@ export function AnnualGoalCard({
         </div>
         <div className="flex items-center gap-1.5">
           {goal.fy_year && (
-            <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+            <span className="text-[11px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
               {formatFyYearSpan(goal.fy_year)}
             </span>
           )}
@@ -96,16 +96,16 @@ export function AnnualGoalCard({
 
       {/* Mentor feedback — only visible when changes have been requested */}
       {isChangesRequired && goal.manager_feedback && (
-        <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2">
           <MessageSquare
-            className="h-4 w-4 text-amber-600 mt-0.5 shrink-0"
+            className="h-4 w-4 text-amber-600 dark:text-amber-300 mt-0.5 shrink-0"
             aria-hidden="true"
           />
           <div>
-            <p className="text-xs font-semibold text-amber-700 mb-0.5">
+            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-0.5">
               Mentor Feedback
             </p>
-            <p className="text-xs text-amber-800">{goal.manager_feedback}</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300">{goal.manager_feedback}</p>
           </div>
         </div>
       )}

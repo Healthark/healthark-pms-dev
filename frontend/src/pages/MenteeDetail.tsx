@@ -228,7 +228,7 @@ export function MenteeDetail() {
       </Link>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
@@ -258,8 +258,8 @@ export function MenteeDetail() {
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
                       data.is_active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-slate-100 text-slate-600"
+                        ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
+                        : "bg-surface-hover text-text-muted"
                     }`}
                   >
                     {data.is_active ? "Active" : "Inactive"}
@@ -268,7 +268,7 @@ export function MenteeDetail() {
                 <p className="mt-0.5 text-sm text-text-muted">{data.role}</p>
               </div>
               {data.pending_actions_count > 0 && (
-                <div className="flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                <div className="flex items-center gap-1.5 rounded-md bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   {data.pending_actions_count} pending
                 </div>

@@ -1,24 +1,45 @@
 @import "tailwindcss";
 
+/**
+ * Dark mode wiring (Tailwind v4 native).
+ *
+ *   - `<html class="dark">` triggers dark variants (`dark:bg-...`) AND
+ *     swaps the CSS variables defined below in the `.dark { ... }` block.
+ *   - The legacy `data-theme="healthark"` attribute set by AuthProvider
+ *     for org branding is orthogonal: same element can carry both
+ *     `data-theme="healthark"` and `class="dark"`.
+ */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* Map Tailwind colors to our dynamic CSS variables */
+  /* Map Tailwind colors to our dynamic CSS variables.
+     EVERY token below is a `var(--name)` so the actual value can be
+     swapped per theme in the :root / .dark blocks. */
+
+  /* Brand (org-driven) */
   --color-brand: var(--brand);
   --color-brand-light: var(--brand-light);
-  --color-accent: var(--accent); /* <-- NEW: Dynamic Accent Color */
-  
-  /* Layout Colors */
-  --color-background: var(--background); /* Made background dynamic too */
-  --color-surface: #FFFFFF;
+  --color-accent: var(--accent);
 
-  /* Text Colors */
-  --color-text-main: #0F172A;
-  --color-text-muted: #64748B;
+  /* Layout surfaces */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);   /* hover/secondary tone — replaces bg-slate-50 */
+  --color-surface-hover: var(--surface-hover);   /* badges/progress tracks — replaces bg-slate-100 */
 
-  /* Status Colors */
+  /* Text */
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+
+  /* Borders */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  /* Status colors stay semantic constants. Components needing dark
+     overrides use the `dark:` prefix inline (e.g. dark:bg-amber-950/30). */
   --color-green: #10B981;
   --color-amber: #F59E0B;
   --color-red: #EF4444;
-  --color-border: #E2E8F0;
 
   /* Typography */
   --font-display: 'Poppins', sans-serif;
@@ -35,12 +56,50 @@
     font-size: 87.5%;
   }
 
-  /* Theme (Healthark - org_id: 1) */
+  /* Light theme — default, also applied for the Healthark org branding. */
   :root, [data-theme="healthark"] {
+    /* Brand */
     --brand: #315C84;
     --brand-light: #EBF1F6;
-    --accent: #0EA5E9; /* Sky Blue — Healthark accent */
+    --accent: #0EA5E9;
+
+    /* Surfaces */
     --background: #F8FAFC;
+    --surface: #FFFFFF;
+    --surface-muted: #F8FAFC;   /* was bg-slate-50 */
+    --surface-hover: #F1F5F9;   /* was bg-slate-100 */
+
+    /* Text */
+    --text-main: #0F172A;
+    --text-muted: #64748B;
+
+    /* Borders */
+    --border: #E2E8F0;
+    --border-strong: #CBD5E1;
+
+    /* Scrollbar thumb tint (rgb triplet so we can apply opacity) */
+    --scrollbar-thumb: 15, 23, 42;
+  }
+
+  /* Dark theme — opt-in via `<html class="dark">`. Brand colors shift
+     slightly lighter so they stay legible on the dark surface. */
+  .dark {
+    --brand: #5B8DB8;
+    --brand-light: #1E3A5F;
+    --accent: #38BDF8;
+
+    --background: #0F172A;
+    --surface: #1E293B;
+    --surface-muted: #273349;
+    --surface-hover: #334155;
+
+    --text-main: #F1F5F9;
+    --text-muted: #94A3B8;
+
+    --border: #334155;
+    --border-strong: #475569;
+
+    --scrollbar-thumb: 226, 232, 240;  /* slate-200 — light on dark */
   }
 
   body {
@@ -48,16 +107,13 @@
   }
 
   /* ── Site-wide minimalist scrollbar ───────────────────────────────
-     Subtle gray, applied to every scroll container automatically.
-     Firefox honours the standardized `scrollbar-*` properties; Chrome,
-     Edge, and Safari fall through to the `::-webkit-scrollbar` pseudos.
-     Track is transparent on both engines so the bar doesn't read as a
-     framed channel. */
+     Subtle thumb, transparent track. Both light + dark themes use the
+     same rule; the `--scrollbar-thumb` rgb triplet swaps under .dark. */
 
   /* Firefox */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(15, 23, 42, 0.18) transparent; /* slate-900 @ 18% */
+    scrollbar-color: rgb(var(--scrollbar-thumb) / 0.18) transparent;
   }
 
   /* WebKit / Chromium / Safari */
@@ -69,13 +125,38 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background-color: rgba(15, 23, 42, 0.18);
+    background-color: rgb(var(--scrollbar-thumb) / 0.18);
     border-radius: 2px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(15, 23, 42, 0.32);
+    background-color: rgb(var(--scrollbar-thumb) / 0.32);
   }
   ::-webkit-scrollbar-corner {
     background: transparent;
+  }
+
+  /* ── Chrome / Edge autofill override ─────────────────────────────
+     Browsers force a white/yellow background on auto-filled inputs
+     via the :-webkit-autofill pseudo-class, ignoring our `bg-surface`
+     class. Pin the background and text color to our theme variables
+     so the input stays consistent in both light and dark themes.
+     The 9999s transition delays the browser's own background fill
+     animation indefinitely so our box-shadow override actually
+     sticks. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text-main);
+    -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+    caret-color: var(--text-main);
+    transition: background-color 9999s ease-in-out 0s,
+                color 9999s ease-in-out 0s;
   }
 }

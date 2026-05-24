@@ -10,7 +10,7 @@ import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
 import { formatFyLabel } from "../../utils/fy";
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 interface SelfReviewFormModalProps {
   readonly cycleName: string;
@@ -96,7 +96,7 @@ export function SelfReviewFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors"
             aria-label="Close"
           >
             <X className="h-5 w-5" aria-hidden="true" />
@@ -105,7 +105,7 @@ export function SelfReviewFormModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {error && (
-            <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
           )}
@@ -138,7 +138,7 @@ export function SelfReviewFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             Cancel
           </button>
@@ -147,7 +147,7 @@ export function SelfReviewFormModal({
               type="button"
               onClick={handleSaveDraft}
               disabled={isSaving || isDraftSaving}
-              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
             >
               {isDraftSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

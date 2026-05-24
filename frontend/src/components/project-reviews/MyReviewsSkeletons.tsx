@@ -11,11 +11,11 @@ export function GridSkeleton() {
       {[1, 2, 3].map((i) => (
         <div key={i} className="rounded-xl border border-border bg-surface p-4">
           <div className="flex justify-between mb-3">
-            <div className="h-4 w-16 rounded bg-slate-100" />
-            <div className="h-4 w-20 rounded-full bg-slate-100" />
+            <div className="h-4 w-16 rounded bg-surface-hover" />
+            <div className="h-4 w-20 rounded-full bg-surface-hover" />
           </div>
-          <div className="h-4 w-3/4 rounded bg-slate-100 mb-2" />
-          <div className="h-3 w-1/2 rounded bg-slate-100" />
+          <div className="h-4 w-3/4 rounded bg-surface-hover mb-2" />
+          <div className="h-3 w-1/2 rounded bg-surface-hover" />
         </div>
       ))}
     </div>
@@ -30,11 +30,11 @@ export function TableSkeleton() {
           key={i}
           className="flex gap-6 px-5 py-3 border-b border-border"
         >
-          <div className="h-4 w-1/4 rounded bg-slate-100" />
-          <div className="h-4 w-16 rounded bg-slate-100" />
-          <div className="h-4 w-1/5 rounded bg-slate-100" />
-          <div className="h-4 w-20 rounded-full bg-slate-100" />
-          <div className="h-4 w-12 rounded bg-slate-100" />
+          <div className="h-4 w-1/4 rounded bg-surface-hover" />
+          <div className="h-4 w-16 rounded bg-surface-hover" />
+          <div className="h-4 w-1/5 rounded bg-surface-hover" />
+          <div className="h-4 w-20 rounded-full bg-surface-hover" />
+          <div className="h-4 w-12 rounded bg-surface-hover" />
         </div>
       ))}
     </div>

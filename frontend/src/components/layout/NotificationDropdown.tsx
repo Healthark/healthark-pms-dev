@@ -16,16 +16,20 @@ const SEVERITY_STYLES: Record<
   NotificationItem["severity"],
   { icon: typeof Info; iconClass: string; bgClass: string }
 > = {
-  info: { icon: Info, iconClass: "text-blue-500", bgClass: "bg-blue-50" },
+  info: {
+    icon: Info,
+    iconClass: "text-blue-500 dark:text-blue-400 dark:text-blue-300",
+    bgClass: "bg-blue-50 dark:bg-blue-950/40",
+  },
   warning: {
     icon: AlertTriangle,
-    iconClass: "text-amber-500",
-    bgClass: "bg-amber-50",
+    iconClass: "text-amber-500 dark:text-amber-400 dark:text-amber-300",
+    bgClass: "bg-amber-50 dark:bg-amber-950/40",
   },
   blocking: {
     icon: AlertTriangle,
-    iconClass: "text-red-500",
-    bgClass: "bg-red-50",
+    iconClass: "text-red-500 dark:text-red-400 dark:text-red-300",
+    bgClass: "bg-red-50 dark:bg-red-950/40",
   },
 };
 
@@ -115,10 +119,10 @@ export function NotificationDropdown({
           {userNotifications.map((n) => (
             <li
               key={n.id}
-              className={`flex items-start gap-3 px-4 py-3 ${n.is_read ? "bg-white" : "bg-blue-50"}`}
+              className={`flex items-start gap-3 px-4 py-3 ${n.is_read ? "bg-surface" : "bg-blue-50 dark:bg-blue-950/40"}`}
             >
               <BellDot
-                className={`h-4 w-4 mt-0.5 shrink-0 ${n.is_read ? "text-text-muted" : "text-blue-500"}`}
+                className={`h-4 w-4 mt-0.5 shrink-0 ${n.is_read ? "text-text-muted" : "text-blue-500 dark:text-blue-400 dark:text-blue-300"}`}
                 aria-hidden="true"
               />
               <p className="text-sm text-text-main">{n.message}</p>

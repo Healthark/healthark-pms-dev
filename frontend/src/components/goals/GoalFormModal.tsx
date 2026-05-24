@@ -62,7 +62,7 @@ function toDateInput(iso: string | null | undefined): string {
 }
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 export function GoalFormModal({
@@ -159,7 +159,7 @@ export function GoalFormModal({
         {/* Body */}
         <div className="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-4">
           {error && (
-            <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
           )}
@@ -201,7 +201,7 @@ export function GoalFormModal({
                 <span className="font-normal text-text-muted text-xs">(Optional)</span>
               </label>
               <div className="relative group">
-                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-default select-none">
+                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-text-muted text-[10px] font-bold cursor-default select-none">
                   i
                 </span>
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
@@ -229,11 +229,11 @@ export function GoalFormModal({
                 {editingGoal.criteria.filter((c) => c.is_completed).length}/
                 {editingGoal.criteria.length} complete)
               </p>
-              <div className="rounded-lg border border-border bg-slate-50 p-3 space-y-1.5">
+              <div className="rounded-lg border border-border bg-surface-muted p-3 space-y-1.5">
                 {editingGoal.criteria.map((c) => (
                   <div key={c.id} className="flex items-center gap-2 text-sm">
                     <span
-                      className={`shrink-0 ${c.is_completed ? "text-green-600" : "text-text-muted"}`}
+                      className={`shrink-0 ${c.is_completed ? "text-green-600 dark:text-green-300" : "text-text-muted"}`}
                     >
                       {c.is_completed ? "✓" : "○"}
                     </span>
@@ -285,7 +285,7 @@ export function GoalFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             Cancel
           </button>

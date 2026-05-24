@@ -37,7 +37,7 @@ import { halfDisplayLabel } from "../../utils/goalStatus";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 function cycleLabel(
   goal: Goal,
@@ -237,7 +237,7 @@ export function GoalSelfReviewModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-100 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
             aria-label="Close self-review"
           >
             <X className="h-5 w-5" />
@@ -247,7 +247,7 @@ export function GoalSelfReviewModal({
         {/* Body */}
         <div className="overflow-y-auto px-6 py-5 space-y-4">
           {error && (
-            <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
           )}
@@ -289,7 +289,7 @@ export function GoalSelfReviewModal({
           )}
 
           {readOnly && !existing && (
-            <p className="rounded-lg bg-slate-50 border border-border px-4 py-3 text-sm text-text-muted">
+            <p className="rounded-lg bg-surface-muted border border-border px-4 py-3 text-sm text-text-muted">
               The mentee has not yet submitted their self-review for this half.
             </p>
           )}
@@ -305,7 +305,7 @@ export function GoalSelfReviewModal({
                 {!isLocked && " *"}
               </label>
               {isLocked ? (
-                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
                   {overall || "—"}
                 </div>
               ) : (
@@ -335,7 +335,7 @@ export function GoalSelfReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
             >
               {isLocked ? "Close" : "Cancel"}
             </button>
@@ -344,7 +344,7 @@ export function GoalSelfReviewModal({
                 type="button"
                 onClick={handleSaveDraft}
                 disabled={isSaving || isDraftSaving}
-                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
               >
                 {isDraftSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

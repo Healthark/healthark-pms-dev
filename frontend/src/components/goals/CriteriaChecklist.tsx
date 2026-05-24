@@ -52,7 +52,7 @@ function ProgressBar({ percent }: { readonly percent: number }) {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+      <div className="flex-1 h-1.5 rounded-full bg-surface-hover overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-300 ${colorClass}`}
           style={{ width: `${percent}%` }}
@@ -151,7 +151,7 @@ function CriterionRow({
         ) : (
           <span
             className={`mt-0.5 text-sm shrink-0 ${
-              criterion.is_completed ? "text-green-600" : "text-text-muted"
+              criterion.is_completed ? "text-green-600 dark:text-green-300" : "text-text-muted"
             }`}
           >
             {criterion.is_completed ? "✓" : "○"}
@@ -200,14 +200,14 @@ function CriterionRow({
             value={proofText}
             onChange={(e) => setProofText(e.target.value)}
             placeholder='e.g. "Certificate uploaded to Drive — link: ..."'
-            className="w-full resize-none rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            className="w-full resize-none rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label={`Proof for "${criterion.title}"`}
           />
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowProof(false)}
-              className="rounded-md px-2.5 py-1 text-xs text-text-muted hover:bg-slate-50 transition-colors"
+              className="rounded-md px-2.5 py-1 text-xs text-text-muted hover:bg-surface-muted transition-colors"
             >
               Cancel
             </button>

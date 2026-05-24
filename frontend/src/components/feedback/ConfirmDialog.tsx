@@ -21,8 +21,8 @@ const CONFIRM_BUTTON_STYLES: Record<ConfirmVariant, string> = {
 
 const ICON_STYLES: Record<ConfirmVariant, string> = {
   default: "text-brand bg-brand/10",
-  danger: "text-red-600 bg-red-50",
-  warning: "text-amber-600 bg-amber-50",
+  danger: "text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40",
+  warning: "text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40",
 };
 
 /**
@@ -87,7 +87,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             {cancelText}
           </button>

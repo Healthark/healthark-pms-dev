@@ -23,7 +23,7 @@ import { useToast } from "../../hooks/useToast";
 type ViewMode = "grid" | "table";
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 // ── Impact Statement Modal ──────────────────────────────────────────
 
@@ -47,7 +47,7 @@ function ImpactModal({ review, onSubmit, onClose, isSaving, error, isEditMode = 
           <div>
             <div className="flex items-center gap-2">
               {isEditMode && (
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">Editing</span>
+                <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Editing</span>
               )}
               <h2 id="secondary-eval-title" className="font-display text-base font-semibold text-text-main">
                 {isEditMode ? "Edit" : "Secondary"} Feedback
@@ -55,13 +55,13 @@ function ImpactModal({ review, onSubmit, onClose, isSaving, error, isEditMode = 
             </div>
             <p className="mt-0.5 text-xs text-text-muted">{review.employee_name} — {review.project_name}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          {error && <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
+          {error && <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">{error}</p>}
           <div>
             <label htmlFor="sec-impact" className="block text-xs font-semibold text-text-main mb-1">Impact Statement *</label>
             <p className="text-xs text-text-muted mb-2">Share your perspective on {review.employee_name}'s contribution to this project.</p>
@@ -77,7 +77,7 @@ function ImpactModal({ review, onSubmit, onClose, isSaving, error, isEditMode = 
         </div>
 
         <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">Cancel</button>
+          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors">Cancel</button>
           <button
             type="button"
             onClick={() => onSubmit(review.id, { impact_statement: impactStatement })}
@@ -106,10 +106,10 @@ function SecondaryCard({
   return (
     <div className="rounded-xl border border-border bg-surface p-4 shadow-sm flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-mono text-text-muted bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+        <span className="text-[11px] font-mono text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border">
           {review.project_code}
         </span>
-        <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+        <span className="flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
           <Clock className="h-3 w-3" /> Pending
         </span>
       </div>
@@ -149,12 +149,12 @@ function SubmittedCard({
   readonly onEdit: (review: ProjectReviewResponse) => void;
 }) {
   return (
-    <div className="rounded-xl border border-green-200 bg-green-50/30 p-4 shadow-sm flex flex-col gap-3">
+    <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30 p-4 shadow-sm flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-mono text-text-muted bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+        <span className="text-[11px] font-mono text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border">
           {review.project_code}
         </span>
-        <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
+        <span className="flex items-center gap-1 rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700 dark:text-green-300">
           <CheckCircle2 className="h-3 w-3" /> Submitted
         </span>
       </div>
@@ -169,7 +169,7 @@ function SubmittedCard({
         <span className="truncate">{review.project_name}</span>
       </div>
 
-      <div className="rounded-md bg-white border border-green-100 px-3 py-2">
+      <div className="rounded-md bg-surface border border-green-100 px-3 py-2">
         <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Your Impact Statement</p>
         <p className="text-[13px] text-text-main whitespace-pre-wrap line-clamp-3">{impactStatement}</p>
       </div>
@@ -178,7 +178,7 @@ function SubmittedCard({
         <button
           type="button"
           onClick={() => onEdit(review)}
-          className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
         >
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
@@ -275,7 +275,7 @@ export function SecondaryEvalTab() {
 
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode ? "bg-brand/10 text-brand" : "text-text-muted hover:bg-slate-100"
+      viewMode === mode ? "bg-brand/10 text-brand" : "text-text-muted hover:bg-surface-hover"
     }`;
 
   if (isLoading) {
@@ -305,7 +305,7 @@ export function SecondaryEvalTab() {
               placeholder="Search employee or project..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand w-56"
+              className="rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand w-56"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -313,7 +313,7 @@ export function SecondaryEvalTab() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer"
             >
               <option value="all">All</option>
               <option value="pending">Pending</option>
@@ -327,7 +327,7 @@ export function SecondaryEvalTab() {
             <select
               value={employeeFilter}
               onChange={(e) => setEmployeeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
             >
               <option value="all">All</option>
               {availableEmployees.map((e) => (
@@ -337,7 +337,7 @@ export function SecondaryEvalTab() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
           <button type="button" className={viewBtnCls("grid")} onClick={() => setViewMode("grid")}>
             <LayoutGrid className="h-3.5 w-3.5" /> Cards
           </button>
@@ -371,7 +371,7 @@ export function SecondaryEvalTab() {
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-border">
+              <tr className="bg-surface-muted/80 border-b border-border">
                 <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</th>
                 <th className="hidden sm:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
@@ -384,7 +384,7 @@ export function SecondaryEvalTab() {
                 const myEval = getMySubmission(r);
                 const isSubmitted = !!myEval;
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr key={r.id} className="hover:bg-surface-muted/60 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <UserCircle className="h-4 w-4 text-text-muted shrink-0" />
@@ -396,17 +396,17 @@ export function SecondaryEvalTab() {
                       <div className="text-[11px] font-mono text-text-muted">{r.project_code}</div>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3">
-                      <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                      <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                         {r.cycle}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       {isSubmitted ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
                           <CheckCircle2 className="h-3 w-3" /> Submitted
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">
                           <Clock className="h-3 w-3" /> Pending
                         </span>
                       )}
@@ -416,7 +416,7 @@ export function SecondaryEvalTab() {
                         <button
                           type="button"
                           onClick={() => openEdit(r)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-[12px] font-medium text-green-700 hover:bg-green-100 transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-3 py-1.5 text-[12px] font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
                         >
                           <Pencil className="h-3 w-3" /> Edit
                         </button>

@@ -54,11 +54,11 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 ${
-          checked ? "bg-brand" : "bg-slate-200"
+          checked ? "bg-brand" : "bg-slate-200 dark:bg-slate-700"
         }`}
       >
         <span
-          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${
+          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface shadow transition duration-200 ${
             checked ? "translate-x-4" : "translate-x-0"
           }`}
         />
@@ -178,9 +178,9 @@ export function SystemSettingsTab({
                 type="text"
                 value={activeCycleName || "System Calculated..."}
                 disabled
-                className="w-full sm:w-64 rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-text-muted cursor-not-allowed"
+                className="w-full sm:w-64 rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-muted cursor-not-allowed"
               />
-              <span className="flex items-center gap-1.5 text-xs text-text-muted bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
+              <span className="flex items-center gap-1.5 text-xs text-text-muted bg-surface-hover px-2 py-1 rounded-md border border-border">
                 <Info className="w-3.5 h-3.5" />
                 System Calculated
               </span>
@@ -202,9 +202,9 @@ export function SystemSettingsTab({
                   type="text"
                   value={cycleType === "half_yearly" ? "Half-Yearly" : cycleType === "annual" ? "Annual" : "Quarterly"}
                   disabled
-                  className="w-full rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-text-muted cursor-not-allowed"
+                  className="w-full rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-muted cursor-not-allowed"
                 />
-                <span className="flex items-center gap-1.5 text-xs text-text-muted bg-gray-100 px-2 py-1 rounded-md border border-gray-200 shrink-0">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted bg-surface-hover px-2 py-1 rounded-md border border-border shrink-0">
                   <Info className="w-3.5 h-3.5" />
                   Read Only
                 </span>
@@ -222,9 +222,9 @@ export function SystemSettingsTab({
                   type="text"
                   value={MONTHS.find((m) => m.value === fiscalStartMonth)?.label ?? "—"}
                   disabled
-                  className="w-full rounded-lg border border-border bg-gray-50 px-3 py-2 text-sm text-text-muted cursor-not-allowed"
+                  className="w-full rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-muted cursor-not-allowed"
                 />
-                <span className="flex items-center gap-1.5 text-xs text-text-muted bg-gray-100 px-2 py-1 rounded-md border border-gray-200 shrink-0">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted bg-surface-hover px-2 py-1 rounded-md border border-border shrink-0">
                   <Info className="w-3.5 h-3.5" />
                   Read Only
                 </span>

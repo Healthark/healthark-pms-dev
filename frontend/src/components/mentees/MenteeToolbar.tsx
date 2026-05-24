@@ -30,7 +30,7 @@ export function MenteeToolbar({
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
       viewMode === mode
         ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-slate-100"
+        : "text-text-muted hover:bg-surface-hover"
     }`;
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -56,7 +56,7 @@ export function MenteeToolbar({
           onClick={() => onOnlyPendingChange(!onlyPending)}
           className={`flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ${
             onlyPending
-              ? "border-amber-300 bg-amber-50 text-amber-700"
+              ? "border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
               : "border-border bg-surface text-text-muted hover:text-text-main"
           }`}
         >
@@ -65,7 +65,7 @@ export function MenteeToolbar({
           {totalPendingActions > 0 && (
             <span
               className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                onlyPending ? "bg-amber-200 text-amber-800" : "bg-slate-100 text-text-muted"
+                onlyPending ? "bg-amber-200 text-amber-800 dark:text-amber-300" : "bg-surface-hover text-text-muted"
               }`}
             >
               {totalPendingActions}

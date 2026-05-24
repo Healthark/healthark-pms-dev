@@ -28,7 +28,7 @@ interface UserModalProps {
 const isActiveUser = (u: UserResponse) => !u.is_deleted;
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 export function UserModal({
@@ -138,7 +138,7 @@ export function UserModal({
 
         <div className="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-4">
           {error && (
-            <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
           )}
@@ -264,8 +264,7 @@ export function UserModal({
           <UserCombobox
             value={form.mentor_id ? Number(form.mentor_id) : null}
             onChange={(id) => set("mentor_id", id !== null ? String(id) : "")}
-            label="Assigned Mentor / Line Manager"
-            placeholder="Search by name, email, or role…"
+            label="Assigned Mentor"
             excludeIds={editingUser ? [editingUser.id] : undefined}
             filter={isActiveUser}
           />
@@ -294,7 +293,7 @@ export function UserModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             Cancel
           </button>

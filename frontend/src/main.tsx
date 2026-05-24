@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "./queries/queryClient";
 import { AuthProvider } from "./contexts/AuthProvider";
+import { ThemeProvider } from "./contexts/ThemeProvider";
 import { SystemSettingsProvider } from "./contexts/SystemSettingsProvider";
 import { ToastProvider } from "./contexts/ToastProvider";
 import { SnackbarProvider } from "./contexts/SnackbarProvider";
@@ -29,15 +30,17 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <SystemSettingsProvider>
-          <ToastProvider>
-            <SnackbarProvider>
-              <ConfirmProvider>
-                <App />
-              </ConfirmProvider>
-            </SnackbarProvider>
-          </ToastProvider>
-        </SystemSettingsProvider>
+        <ThemeProvider>
+          <SystemSettingsProvider>
+            <ToastProvider>
+              <SnackbarProvider>
+                <ConfirmProvider>
+                  <App />
+                </ConfirmProvider>
+              </SnackbarProvider>
+            </ToastProvider>
+          </SystemSettingsProvider>
+        </ThemeProvider>
       </AuthProvider>
       <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
     </QueryClientProvider>

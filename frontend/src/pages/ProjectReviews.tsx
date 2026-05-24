@@ -390,7 +390,7 @@ function renderMyReviewsBody(args: {
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-[13px]">
         <thead>
-          <tr className="bg-slate-50/80 border-b border-border">
+          <tr className="bg-surface-muted/80 border-b border-border">
             <th className="text-left px-5 py-2.5">
               <SortableHeader
                 label="Project"
@@ -459,7 +459,7 @@ function renderMyReviewsBody(args: {
               <Fragment key={key}>
                 <tr
                   className={`transition-colors cursor-pointer ${
-                    isExpanded ? "bg-brand/5" : "hover:bg-slate-50/60"
+                    isExpanded ? "bg-brand/5" : "hover:bg-surface-muted/60"
                   }`}
                   onClick={() => onToggleExpandedRow(key)}
                 >
@@ -483,17 +483,17 @@ function renderMyReviewsBody(args: {
                     {card.pm_name ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                       {card.cycle ?? "—"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     {isReviewed ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
                         <CheckCircle2 className="h-3 w-3" /> Reviewed
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">
                         <Clock className="h-3 w-3" /> Pending
                       </span>
                     )}

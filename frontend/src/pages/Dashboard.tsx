@@ -13,13 +13,13 @@ function WidgetSkeleton() {
   return (
     <div className="rounded-xl border border-border bg-surface p-5 shadow-sm animate-pulse">
       <div className="flex items-center gap-2 mb-4">
-        <div className="h-9 w-9 rounded-lg bg-slate-100" />
-        <div className="h-3 w-24 rounded bg-slate-100" />
+        <div className="h-9 w-9 rounded-lg bg-surface-hover" />
+        <div className="h-3 w-24 rounded bg-surface-hover" />
       </div>
-      <div className="h-7 w-16 rounded bg-slate-100 mb-3" />
+      <div className="h-7 w-16 rounded bg-surface-hover mb-3" />
       <div className="space-y-2">
-        <div className="h-2.5 w-full rounded bg-slate-100" />
-        <div className="h-2.5 w-3/4 rounded bg-slate-100" />
+        <div className="h-2.5 w-full rounded bg-surface-hover" />
+        <div className="h-2.5 w-3/4 rounded bg-surface-hover" />
       </div>
     </div>
   );

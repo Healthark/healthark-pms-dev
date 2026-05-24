@@ -3,6 +3,7 @@ import { Bell, CalendarDays } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { NotificationDropdown } from "../components/layout/NotificationDropdown";
+import { ThemeToggle } from "../components/layout/ThemeToggle";
 import {
   useMarkAllRead,
   useNotificationsSummary,
@@ -63,7 +64,7 @@ export function Topbar() {
       <div className="flex items-center gap-3">
         {/* Active Cycle Badge — driven by SystemSettings context */}
         {settingsLoading ? (
-          <span className="hidden sm:inline-flex items-center rounded-full border border-border bg-gray-50 px-2.5 py-0.5 text-xs text-text-muted animate-pulse">
+          <span className="hidden sm:inline-flex items-center rounded-full border border-border bg-surface-muted px-2.5 py-0.5 text-xs text-text-muted animate-pulse">
             Loading...
           </span>
         ) : settings?.active_cycle_name ? (
@@ -74,13 +75,14 @@ export function Topbar() {
         ) : null}
       </div>
 
-      {/* Right — bell + avatar */}
+      {/* Right — theme toggle + bell + avatar */}
       <div className="flex items-center gap-4">
+        <ThemeToggle />
         <button
           ref={bellRef}
           type="button"
           onClick={handleBellClick}
-          className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-slate-50"
+          className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-surface-muted"
           aria-label={
             hasNotifications
               ? `Notifications (${summary?.notifications.length} new)`

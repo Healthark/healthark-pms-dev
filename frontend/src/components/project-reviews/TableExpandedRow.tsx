@@ -41,9 +41,9 @@ export function TableExpandedRow({
       <tr>
         <td
           colSpan={TABLE_COLSPAN}
-          className="px-5 py-6 text-center text-sm text-text-muted bg-slate-50/50"
+          className="px-5 py-6 text-center text-sm text-text-muted bg-surface-muted/50"
         >
-          <Clock className="h-5 w-5 text-amber-500 mx-auto mb-2" />
+          <Clock className="h-5 w-5 text-amber-500 dark:text-amber-400 mx-auto mb-2" />
           Evaluation pending — awaiting PM review.
         </td>
       </tr>
@@ -53,7 +53,7 @@ export function TableExpandedRow({
   if (isFetching) {
     return (
       <tr>
-        <td colSpan={TABLE_COLSPAN} className="px-5 py-6 text-center bg-slate-50/50">
+        <td colSpan={TABLE_COLSPAN} className="px-5 py-6 text-center bg-surface-muted/50">
           <Loader2 className="h-5 w-5 animate-spin text-brand mx-auto" />
         </td>
       </tr>
@@ -65,7 +65,7 @@ export function TableExpandedRow({
       <tr>
         <td
           colSpan={TABLE_COLSPAN}
-          className="px-5 py-4 text-center text-sm text-red-600 bg-red-50/30"
+          className="px-5 py-4 text-center text-sm text-red-600 dark:text-red-300 bg-red-50/30 dark:bg-red-950/30"
         >
           {error || "No data available"}
         </td>
@@ -76,19 +76,19 @@ export function TableExpandedRow({
   return (
     <tr>
       <td colSpan={TABLE_COLSPAN} className="p-0">
-        <div className="border-t border-brand/10 bg-slate-50/40 px-5 py-5 animate-in slide-in-from-top-1 fade-in duration-200">
+        <div className="border-t border-brand/10 bg-surface-muted/40 px-5 py-5 animate-in slide-in-from-top-1 fade-in duration-200">
           <div className="flex flex-col gap-4">
             {projectRatingsVisible && (
-              <div className="flex items-center gap-2.5 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-                <Star className="h-3.5 w-3.5 text-emerald-600" />
+              <div className="flex items-center gap-2.5 rounded-lg border border-emerald-100 bg-emerald-50/50 dark:bg-emerald-950/50 px-3 py-2">
+                <Star className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
                 <span className="text-[13px] text-text-main">
                   Rating:{" "}
-                  <span className="font-bold text-emerald-700">
+                  <span className="font-bold text-emerald-700 dark:text-emerald-300">
                     {details.performance_group ?? "—"}
                   </span>
                 </span>
                 {details.reviewer_name && (
-                  <span className="ml-auto text-[11px] text-emerald-700">
+                  <span className="ml-auto text-[11px] text-emerald-700 dark:text-emerald-300">
                     by {details.reviewer_name}
                   </span>
                 )}

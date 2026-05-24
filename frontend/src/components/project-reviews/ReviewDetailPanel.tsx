@@ -49,7 +49,7 @@ export function ReviewDetailPanel({
             <h3 className="text-[16px] font-bold text-text-main">
               {card.project_name}
             </h3>
-            <span className="text-[11px] font-mono text-text-muted bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+            <span className="text-[11px] font-mono text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border">
               {card.project_code}
             </span>
           </div>
@@ -63,7 +63,7 @@ export function ReviewDetailPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-1.5 text-text-muted hover:bg-slate-100 transition-colors"
+          className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
           aria-label="Close details"
         >
           <X className="h-5 w-5" />
@@ -105,7 +105,7 @@ function renderBody({
   if (isPending) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
-        <Clock className="h-8 w-8 text-amber-500 mb-3" />
+        <Clock className="h-8 w-8 text-amber-500 dark:text-amber-400 mb-3" />
         <p className="font-medium text-text-main">Evaluation Pending</p>
         <p className="mt-1 text-sm text-text-muted">
           Your PM hasn't submitted the evaluation for this cycle yet.
@@ -125,7 +125,7 @@ function renderBody({
   }
   if (error) {
     return (
-      <div className="text-center py-6 text-[13px] text-red-600 bg-red-50 rounded-xl">
+      <div className="text-center py-6 text-[13px] text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded-xl">
         {error}
       </div>
     );
@@ -135,18 +135,18 @@ function renderBody({
   return (
     <div className="flex flex-col gap-6">
       {projectRatingsVisible && (
-        <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-emerald-100 bg-emerald-50/50 dark:bg-emerald-950/50 px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <Star className="h-4 w-4 text-emerald-600" />
+            <Star className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
             <span className="text-[13.5px] text-text-main">
               Project Evaluation Rating:{" "}
-              <span className="font-bold text-emerald-700">
+              <span className="font-bold text-emerald-700 dark:text-emerald-300">
                 {details.performance_group ?? "—"}
               </span>
             </span>
           </div>
           {details.reviewer_name && (
-            <div className="flex items-center gap-1.5 text-[12px] text-emerald-800/80 font-medium bg-emerald-100/50 px-2.5 py-1 rounded-md">
+            <div className="flex items-center gap-1.5 text-[12px] text-emerald-800 dark:text-emerald-300/80 font-medium bg-emerald-100 dark:bg-emerald-900/40/50 px-2.5 py-1 rounded-md">
               <UserCircle className="h-3.5 w-3.5" />
               Evaluated by {details.reviewer_name}
             </div>

@@ -10,21 +10,21 @@ export default function Unauthorized() {
 
   return (
     <main
-      className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4"
+      className="flex min-h-screen flex-col items-center justify-center bg-surface-muted px-4"
       aria-labelledby="unauthorized-heading"
     >
       <div className="text-center">
         <ShieldOff
-          className="mx-auto mb-4 h-16 w-16 text-gray-400"
+          className="mx-auto mb-4 h-16 w-16 text-text-muted"
           aria-hidden="true"
         />
         <h1
           id="unauthorized-heading"
-          className="text-2xl font-semibold text-gray-800"
+          className="text-2xl font-semibold text-text-main"
         >
           Feature Not Available
         </h1>
-        <p className="mt-2 text-gray-500">
+        <p className="mt-2 text-text-muted">
           Your organization does not have access to this module. Contact your
           administrator if you believe this is an error.
         </p>

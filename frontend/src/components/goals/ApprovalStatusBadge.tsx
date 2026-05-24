@@ -12,28 +12,28 @@ interface ApprovalStatusBadgeProps {
 const STATIC_CONFIG: Partial<
   Record<ApprovalStatus, { label: string; cls: string }>
 > = {
-  draft:             { label: "Draft",                cls: "bg-slate-100 text-slate-600" },
-  pending_approval:  { label: "Pending Approval",     cls: "bg-blue-100 text-blue-700" },
-  changes_requested: { label: "Changes Requested",    cls: "bg-amber-100 text-amber-700" },
-  approved:          { label: "Approved",             cls: "bg-emerald-100 text-emerald-700" },
+  draft:             { label: "Draft",                cls: "bg-surface-hover text-text-muted" },
+  pending_approval:  { label: "Pending Approval",     cls: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+  changes_requested: { label: "Changes Requested",    cls: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300" },
+  approved:          { label: "Approved",             cls: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
 };
 
 // Per-cycle hue. Self-reviewed and mentor-reviewed share the cycle's
 // base palette but differ in saturation so a column of badges remains
 // scannable at a glance.
 const REVIEW_STATE_CLS: Record<string, string> = {
-  h1_self_reviewed:   "bg-teal-100 text-teal-700",
-  h1_mentor_reviewed: "bg-cyan-100 text-cyan-700",
-  h2_self_reviewed:   "bg-indigo-100 text-indigo-700",
-  h2_mentor_reviewed: "bg-violet-100 text-violet-700",
-  q1_self_reviewed:   "bg-teal-100 text-teal-700",
-  q1_mentor_reviewed: "bg-cyan-100 text-cyan-700",
-  q2_self_reviewed:   "bg-sky-100 text-sky-700",
-  q2_mentor_reviewed: "bg-blue-100 text-blue-700",
-  q3_self_reviewed:   "bg-indigo-100 text-indigo-700",
-  q3_mentor_reviewed: "bg-violet-100 text-violet-700",
-  q4_self_reviewed:   "bg-fuchsia-100 text-fuchsia-700",
-  q4_mentor_reviewed: "bg-pink-100 text-pink-700",
+  h1_self_reviewed:   "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300",
+  h1_mentor_reviewed: "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300",
+  h2_self_reviewed:   "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300",
+  h2_mentor_reviewed: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300",
+  q1_self_reviewed:   "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300",
+  q1_mentor_reviewed: "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300",
+  q2_self_reviewed:   "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300",
+  q2_mentor_reviewed: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
+  q3_self_reviewed:   "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300",
+  q3_mentor_reviewed: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300",
+  q4_self_reviewed:   "bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-700 dark:text-fuchsia-300",
+  q4_mentor_reviewed: "bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300",
 };
 
 const REVIEW_STATE_RE = /^(h[12]|q[1-4])_(self|mentor)_reviewed$/;

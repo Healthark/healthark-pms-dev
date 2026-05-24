@@ -26,7 +26,7 @@ import { formatFyLabel } from "../../utils/fy";
 import { useDebounce } from "../../hooks/useDebounce";
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 
@@ -199,7 +199,7 @@ export function EvalForm({
         <button
           type="button"
           onClick={closeWithoutAutoSave}
-          className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"
+          className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors"
           aria-label="Close"
         >
           <X className="h-5 w-5" aria-hidden="true" />
@@ -209,7 +209,7 @@ export function EvalForm({
       {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 space-y-6">
         {error && (
-          <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+          <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
             {error}
           </p>
         )}
@@ -222,7 +222,7 @@ export function EvalForm({
         />
 
         <div className="rounded-lg border border-border overflow-hidden">
-          <div className="bg-slate-50 px-4 py-2 border-b border-border">
+          <div className="bg-surface-muted px-4 py-2 border-b border-border">
             <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
               Employee's Self Review
             </p>
@@ -261,7 +261,7 @@ export function EvalForm({
         <button
           type="button"
           onClick={closeWithoutAutoSave}
-          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
         >
           Cancel
         </button>
@@ -270,7 +270,7 @@ export function EvalForm({
             type="button"
             onClick={handleSaveDraft}
             disabled={isSaving || isDraftSaving}
-            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
           >
             {isDraftSaving ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

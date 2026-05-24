@@ -60,25 +60,25 @@ const STATUS_PILL: Record<
 > = {
   none: {
     label: "Not started",
-    cls: "bg-slate-100 text-slate-600",
+    cls: "bg-surface-hover text-text-muted",
   },
   draft: {
     label: "Mentee drafting",
-    cls: "bg-slate-100 text-slate-600",
+    cls: "bg-surface-hover text-text-muted",
   },
   pending_mentor: {
     label: "Awaiting your evaluation",
-    cls: "bg-amber-50 text-amber-700",
+    cls: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300",
   },
   // Both post-mentor states read as "Reviewed" from the mentor's POV —
   // they've done their part; management calibration is a downstream step.
   pending_management: {
     label: "Reviewed",
-    cls: "bg-green-50 text-green-700",
+    cls: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300",
   },
   completed: {
     label: "Reviewed",
-    cls: "bg-green-50 text-green-700",
+    cls: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300",
   },
 };
 
@@ -184,7 +184,7 @@ function HalfPanel({
   readonly mentor: GoalMentorReview | undefined;
 }) {
   return (
-    <div className="rounded-md border border-border bg-slate-50/50 p-3">
+    <div className="rounded-md border border-border bg-surface-muted/50 p-3">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-muted">
         {half}
       </p>
@@ -236,7 +236,7 @@ function GoalSummaryCard({ goal }: { readonly goal: TeamGoal }) {
       <button
         type="button"
         onClick={() => setIsExpanded((v) => !v)}
-        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-slate-50/60 transition-colors rounded-lg"
+        className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-surface-muted/60 transition-colors rounded-lg"
         aria-expanded={isExpanded}
       >
         <div className="min-w-0 flex-1">
@@ -259,7 +259,7 @@ function GoalSummaryCard({ goal }: { readonly goal: TeamGoal }) {
         <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
           {totalCriteria > 0 && (
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-32 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-1.5 w-32 rounded-full bg-surface-hover overflow-hidden">
                 <div
                   className={`h-full rounded-full ${
                     goal.progress_percent === 100
@@ -382,7 +382,7 @@ function ProjectSummaryCard({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full text-left p-4 hover:bg-slate-50/60 transition-colors rounded-lg"
+          className="w-full text-left p-4 hover:bg-surface-muted/60 transition-colors rounded-lg"
           aria-expanded={expanded}
         >
           {headerContent}
@@ -542,7 +542,7 @@ export function MenteeAnnualSummaryTab({
             id="annual-summary-fy"
             value={selectedFy}
             onChange={(e) => setSelectedFy(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer"
           >
             {availableFys.map((fy) => (
               <option key={fy} value={fy}>
@@ -558,7 +558,7 @@ export function MenteeAnnualSummaryTab({
             <>
               {hasMentorDraft && (
                 <span
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700"
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
                   title="An unsubmitted draft is saved for this review"
                 >
                   <Save className="h-3 w-3" />

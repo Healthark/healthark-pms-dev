@@ -59,9 +59,9 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
 
   if (error) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-        <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-        <p className="text-sm text-red-700">{error}</p>
+      <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3">
+        <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
       </div>
     );
   }
@@ -97,7 +97,7 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
   return (
     <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
       {/* ── Header row ────────────────────────────────────────────── */}
-      <div className="flex items-stretch border-b border-border bg-slate-50/50">
+      <div className="flex items-stretch border-b border-border bg-surface-muted/50">
         <div className="w-[180px] shrink-0 px-6 py-4 border-r border-border/40">
           <h3 className="text-[14px] font-bold text-brand">
             {heading ?? "Feedback Ratings"}
@@ -111,7 +111,7 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
               <span className="h-2 w-2 rounded-full bg-brand" />
               Worked with
             </span>
-            <span className="inline-flex items-center gap-1.5 text-amber-700 font-semibold">
+            <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-semibold">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
               Not worked with
             </span>
@@ -150,7 +150,7 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
           }`}
         >
           {/* Bucket cell — vertically centered relative to its questions */}
-          <div className="w-[180px] shrink-0 flex items-center justify-end px-5 py-4 border-r border-border/40 bg-slate-50/30">
+          <div className="w-[180px] shrink-0 flex items-center justify-end px-5 py-4 border-r border-border/40 bg-surface-muted/30">
             <span className="italic font-semibold text-[13px] text-text-main text-right leading-tight">
               {group.bucket}
             </span>
@@ -217,7 +217,7 @@ function Whisker({
   const isWorked = cohortKey === "worked";
   const lineColor = isWorked ? "bg-brand/60" : "bg-amber-500/60";
   const dotColor = isWorked ? "bg-brand" : "bg-amber-500";
-  const placeholderColor = isWorked ? "text-brand/60" : "text-amber-700/70";
+  const placeholderColor = isWorked ? "text-brand/60" : "text-amber-700 dark:text-amber-300/70";
 
   if (!data) {
     return (
