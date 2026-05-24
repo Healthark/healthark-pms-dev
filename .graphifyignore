@@ -7,6 +7,17 @@ env/
 __pycache__/
 node_modules/
 
+graphify-out/
+.graphify_*
+backend/alembic/versions/
+**/__tests__/
+**/*.test.*
+**/*.spec.*
+dist/
+build/
+.next/
+coverage/
+
 # Images
 *.png
 *.jpg

@@ -94,7 +94,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
    *     simultaneously) dedupe to a single network call.
    *   - The cache persists across route navigations within `staleTime`.
    */
-  const sessionQuery = useSessionQuery();
+  const sessionQuery = useSessionQuery(user !== null);
 
   /**
    * Merge fresh server claims into the existing user state on success.

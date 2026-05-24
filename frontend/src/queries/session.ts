@@ -14,7 +14,7 @@ import { authService, type SessionClaims } from "../services/auth.service";
  */
 export const sessionQueryKey = ["session"] as const;
 
-export function useSessionQuery() {
+export function useSessionQuery(enabled: boolean = true) {
   return useQuery<SessionClaims>({
     queryKey: sessionQueryKey,
     queryFn: () => authService.getSession(),
@@ -22,5 +22,12 @@ export function useSessionQuery() {
     // the inevitable redirect that the axios interceptor will do via
     // forceLogout(). Don't retry; let the error path resolve fast.
     retry: false,
+    // Gate auto-fetch on having a logged-in user. After logout we call
+    // queryClient.clear(), which would otherwise trigger an immediate
+    // refetch and race the /auth/logout call — if /auth/session lands
+    // before the cookie is cleared server-side, the stale claims would
+    // re-hydrate `user` and briefly flash the dashboard before the next
+    // 401 forces a hard reload. Manual refetch() still works when disabled.
+    enabled,
   });
 }
