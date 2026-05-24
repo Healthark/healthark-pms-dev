@@ -50,7 +50,7 @@ export function AnnualReviewDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors"
             aria-label="Close"
           >
             <X className="h-5 w-5" aria-hidden="true" />
@@ -61,13 +61,13 @@ export function AnnualReviewDetailModal({
           {/* Status + year */}
           <div className="flex items-center gap-3 flex-wrap">
             <ReviewStatusBadge status={review.status} />
-            <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+            <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
               {formatFyLabel(review.cycle_name)}
             </span>
           </div>
 
           {/* Ratings summary */}
-          <div className="flex items-center gap-6 flex-wrap rounded-lg border border-border bg-slate-50/50 px-4 py-3">
+          <div className="flex items-center gap-6 flex-wrap rounded-lg border border-border bg-surface-muted/50 px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-text-muted">
                 Self Rating
@@ -103,7 +103,7 @@ export function AnnualReviewDetailModal({
 
           {/* Overall Self Review */}
           <div className="rounded-lg border border-border overflow-hidden">
-            <div className="bg-slate-50 px-4 py-2 border-b border-border">
+            <div className="bg-surface-muted px-4 py-2 border-b border-border">
               <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
                 Overall Self Review
               </p>
@@ -115,16 +115,16 @@ export function AnnualReviewDetailModal({
             </div>
           </div>
 
-          {/* Mentor Overall Review */}
+          {/* Mentor Overall Review — same shell as Self Review for visual consistency */}
           {showMentor && review.mentor_overall_review && (
             <div className="rounded-lg border border-border overflow-hidden">
-              <div className="bg-blue-50 px-4 py-2 border-b border-blue-100">
-                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+              <div className="bg-surface-muted px-4 py-2 border-b border-border">
+                <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
                   Mentor Review
                 </p>
               </div>
               <div className="p-4">
-                <p className="text-sm text-blue-900 whitespace-pre-wrap">
+                <p className="text-sm text-text-main whitespace-pre-wrap">
                   {review.mentor_overall_review}
                 </p>
               </div>
@@ -137,7 +137,7 @@ export function AnnualReviewDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             Close
           </button>

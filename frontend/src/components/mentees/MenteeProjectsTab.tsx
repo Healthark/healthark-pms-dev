@@ -74,7 +74,7 @@ const SORT_CONFIG: Record<SortKey, { kind: SortKind; get: (r: MenteeEvalRow) => 
 function StatusBadge({ status }: { readonly status: string | null }) {
   if (status === "reviewed") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
         <CheckCircle2 className="h-3 w-3" /> Reviewed
       </span>
     );
@@ -82,7 +82,7 @@ function StatusBadge({ status }: { readonly status: string | null }) {
   // Null (active-cycle placeholder row) and "pending" both render as
   // Pending — they mean the same thing from the mentor's perspective.
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">
       <Clock className="h-3 w-3" /> Pending
     </span>
   );
@@ -159,7 +159,7 @@ function ActionButton({
       <button
         type="button"
         onClick={() => onEvaluate(row)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-[12px] font-medium text-green-700 hover:bg-green-100 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-3 py-1.5 text-[12px] font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
       >
         <Pencil className="h-3 w-3" /> Edit
       </button>
@@ -169,7 +169,7 @@ function ActionButton({
     <button
       type="button"
       onClick={() => onView(row)}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-[12px] font-medium text-text-main hover:bg-slate-50 transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-text-main hover:bg-surface-muted transition-colors"
     >
       <Eye className="h-3 w-3" /> View
     </button>
@@ -193,12 +193,12 @@ function EvalCard({
   return (
     <div
       className={`rounded-xl border bg-surface p-4 shadow-sm flex flex-col gap-3 ${
-        isDone ? "border-green-200 bg-green-50/30" : "border-border"
+        isDone ? "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30" : "border-border"
       }`}
     >
       <div className="flex items-center justify-between">
         {row.cycle ? (
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-surface-hover text-text-muted">
             {row.cycle}
           </span>
         ) : (
@@ -500,7 +500,7 @@ export function MenteeProjectsTab({
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
       viewMode === mode
         ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-slate-100"
+        : "text-text-muted hover:bg-surface-hover"
     }`;
 
   if (rows.length === 0) {
@@ -542,10 +542,10 @@ export function MenteeProjectsTab({
               placeholder="Search by project name or code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
             />
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
             <button
               type="button"
               className={viewBtnCls("grid")}
@@ -574,7 +574,7 @@ export function MenteeProjectsTab({
               id="mentee-proj-cycle"
               value={cycleFilter}
               onChange={(e) => setCycleFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
             >
               <option value="all">All Cycles</option>
               {availableCycles.map((c) => (
@@ -595,7 +595,7 @@ export function MenteeProjectsTab({
               id="mentee-proj-status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilterValue)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
             >
               <option value="all">All</option>
               <option value="pending">Pending</option>
@@ -607,7 +607,7 @@ export function MenteeProjectsTab({
 
       {/* Impact fetch spinner */}
       {impactLoading && (
-        <div className="rounded-md bg-slate-50 px-4 py-2 text-xs text-text-muted animate-pulse">
+        <div className="rounded-md bg-surface-muted px-4 py-2 text-xs text-text-muted animate-pulse">
           Loading review…
         </div>
       )}
@@ -639,7 +639,7 @@ export function MenteeProjectsTab({
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-border">
+              <tr className="bg-surface-muted/80 border-b border-border">
                 <th className="text-left px-5 py-2.5">
                   <SortableHeader
                     label="Project"
@@ -687,7 +687,7 @@ export function MenteeProjectsTab({
             </thead>
             <tbody className="divide-y divide-border/50">
               {sortedRows.map((r) => (
-                <tr key={r.key} className="hover:bg-slate-50/60 transition-colors">
+                <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
                   <td className="px-5 py-3">
                     <div className="font-medium text-text-main">{r.project_name}</div>
                     <div className="text-[11px] font-mono text-text-muted">

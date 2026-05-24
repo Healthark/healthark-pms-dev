@@ -92,7 +92,7 @@ export function PendingMentorWorkWidget({
 
       {rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-1.5 py-2 text-center">
-          <CheckCircle2 className="h-7 w-7 text-green-500" aria-hidden="true" />
+          <CheckCircle2 className="h-7 w-7 text-green-500 dark:text-green-400" aria-hidden="true" />
           <p className="text-sm font-medium text-text-main">
             No mentor work pending
           </p>
@@ -108,9 +108,9 @@ export function PendingMentorWorkWidget({
             <li key={row.key}>
               <Link
                 to={row.to}
-                className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-surface-muted transition-colors"
               >
-                <span className="flex h-7 w-9 items-center justify-center rounded-md bg-amber-50 text-amber-700 text-xs font-semibold">
+                <span className="flex h-7 w-9 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 dark:bg-amber-950/40 dark:text-amber-300 text-xs font-semibold">
                   {row.count}
                 </span>
                 <span className="flex-1 text-sm text-text-main">{row.label}</span>

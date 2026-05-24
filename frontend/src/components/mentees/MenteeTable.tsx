@@ -37,7 +37,7 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
     <div className="overflow-x-auto rounded-lg border border-border bg-surface">
       <table className="w-full text-[13px]">
         <thead>
-          <tr className="border-b border-border bg-slate-50/80">
+          <tr className="border-b border-border bg-surface-muted/80">
             <th className={thCls}>
               <SortableHeader label="Mentee" columnKey="full_name" sort={sort} onSort={onSort} />
             </th>
@@ -67,7 +67,7 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
             return (
               <tr
                 key={m.user_id}
-                className="border-b border-border last:border-b-0 hover:bg-slate-50/60"
+                className="border-b border-border last:border-b-0 hover:bg-surface-muted/60"
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
@@ -98,7 +98,7 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
                 </td>
                 <td className="px-4 py-3">
                   {hasPending ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                       <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                       {m.pending_actions_count}
                     </span>

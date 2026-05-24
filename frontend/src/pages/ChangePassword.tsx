@@ -25,8 +25,8 @@ export function ChangePassword() {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-md space-y-5">
         <div className="flex flex-col items-center text-center gap-2">
-          <div className="rounded-xl bg-amber-50 p-3">
-            <KeyRound className="h-6 w-6 text-amber-600" aria-hidden="true" />
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3">
+            <KeyRound className="h-6 w-6 text-amber-600 dark:text-amber-300" aria-hidden="true" />
           </div>
           <h1 className="font-display text-lg font-semibold text-text-main">
             Set a new password

@@ -96,17 +96,17 @@ function EvalCard({
   const hasDraft = isPrimary && !isDone && row.has_draft_content;
 
   return (
-    <div className={`rounded-xl border bg-surface p-4 shadow-sm flex flex-col gap-3 ${isDone ? "border-green-200 bg-green-50/30" : "border-border"}`}>
+    <div className={`rounded-xl border bg-surface p-4 shadow-sm flex flex-col gap-3 ${isDone ? "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30" : "border-border"}`}>
       <div className="flex items-center justify-between">
         {row.cycle ? (
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-surface-hover text-text-muted">
             {row.cycle}
           </span>
         ) : (
           <span />
         )}
         {isDone ? (
-          <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
+          <span className="flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700 dark:text-green-300">
             <CheckCircle2 className="h-3 w-3" /> {row.review_status === "submitted" ? "Submitted" : "Reviewed"}
           </span>
         ) : hasDraft ? (
@@ -114,7 +114,7 @@ function EvalCard({
             <Pencil className="h-3 w-3" /> Draft
           </span>
         ) : (
-          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+          <span className="flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
             <Clock className="h-3 w-3" /> Pending
           </span>
         )}
@@ -130,7 +130,7 @@ function EvalCard({
         <span className="truncate">{row.project_name}</span>
         <span className="font-mono text-[11px]">({row.project_code})</span>
         {!isPrimary && (
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-surface-hover text-text-muted">
             Secondary
           </span>
         )}
@@ -146,7 +146,7 @@ function EvalCard({
       <div className="mt-auto pt-2 border-t border-border/60">
         {isDone ? (
           <button type="button" onClick={() => onAction(row)}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors">
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
             <Pencil className="h-3.5 w-3.5" /> Edit
           </button>
         ) : (
@@ -380,7 +380,7 @@ export function PMEvaluationTab() {
   };
 
   const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${viewMode === mode ? "bg-brand/10 text-brand" : "text-text-muted hover:bg-slate-100"}`;
+    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${viewMode === mode ? "bg-brand/10 text-brand" : "text-text-muted hover:bg-surface-hover"}`;
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20 text-sm text-text-muted animate-pulse">Loading evaluation queue…</div>;
@@ -406,9 +406,9 @@ export function PMEvaluationTab() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
             <input type="text" placeholder="Search employee or project..." value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand" />
+              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand" />
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
             <button type="button" className={viewBtnCls("grid")} onClick={() => setViewMode("grid")}><LayoutGrid className="h-3.5 w-3.5" /> Cards</button>
             <button type="button" className={viewBtnCls("table")} onClick={() => setViewMode("table")}><Table2 className="h-3.5 w-3.5" /> Table</button>
           </div>
@@ -417,7 +417,7 @@ export function PMEvaluationTab() {
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
             <select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
               <option value="all">All Cycles</option>
               {availableCycles.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -425,7 +425,7 @@ export function PMEvaluationTab() {
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Type</label>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
               <option value="all">All</option>
               <option value="primary">Primary</option>
               <option value="secondary">Secondary</option>
@@ -434,7 +434,7 @@ export function PMEvaluationTab() {
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
               <option value="all">All</option>
               <option value="pending">Pending</option>
               <option value="draft">Draft</option>
@@ -445,7 +445,7 @@ export function PMEvaluationTab() {
             <div className="flex items-center gap-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Dept</label>
               <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}
-                className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
                 <option value="all">All Depts</option>
                 {availableDepts.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
@@ -455,7 +455,7 @@ export function PMEvaluationTab() {
             <div className="flex items-center gap-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</label>
               <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}
-                className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer">
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer">
                 <option value="all">All Projects</option>
                 {availableProjects.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -464,7 +464,7 @@ export function PMEvaluationTab() {
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</label>
             <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer">
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer">
               <option value="all">All</option>
               {availableEmployees.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
@@ -487,7 +487,7 @@ export function PMEvaluationTab() {
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-border">
+              <tr className="bg-surface-muted/80 border-b border-border">
                 <th className="text-left px-5 py-2.5">
                   <SortableHeader label="Employee" columnKey="employee_name" sort={sort} onSort={setSort} />
                 </th>
@@ -514,7 +514,7 @@ export function PMEvaluationTab() {
                 const isDone = r.review_status !== "pending";
                 const rowHasDraft = r.type === "primary" && !isDone && r.has_draft_content;
                 return (
-                  <tr key={r.key} className="hover:bg-slate-50/60 transition-colors">
+                  <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <UserCircle className="h-4 w-4 text-text-muted shrink-0" />
@@ -525,7 +525,7 @@ export function PMEvaluationTab() {
                       <div className="flex items-center gap-1.5 text-text-main">
                         <span>{r.project_name}</span>
                         {r.type === "secondary" && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-surface-hover text-text-muted">
                             Secondary
                           </span>
                         )}
@@ -538,7 +538,7 @@ export function PMEvaluationTab() {
                     <td className="hidden md:table-cell px-4 py-3 text-text-muted">{r.department_name ?? "—"}</td>
                     <td className="px-4 py-3">
                       {isDone ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
                           <CheckCircle2 className="h-3 w-3" /> {r.review_status === "submitted" ? "Submitted" : "Reviewed"}
                         </span>
                       ) : rowHasDraft ? (
@@ -546,7 +546,7 @@ export function PMEvaluationTab() {
                           <Pencil className="h-3 w-3" /> Draft
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">
                           <Clock className="h-3 w-3" /> Pending
                         </span>
                       )}
@@ -561,7 +561,7 @@ export function PMEvaluationTab() {
                     <td className="px-4 py-3 text-right">
                       {isDone ? (
                         <button type="button" onClick={() => handleAction(r)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-[12px] font-medium text-green-700 hover:bg-green-100 transition-colors">
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-3 py-1.5 text-[12px] font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
                           <Pencil className="h-3 w-3" /> Edit
                         </button>
                       ) : (

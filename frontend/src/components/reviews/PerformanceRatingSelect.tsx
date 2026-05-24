@@ -37,7 +37,7 @@ export function PerformanceRatingSelect({
         {showTooltip && !disabled && (
           <div className="group relative inline-flex items-center">
             <Info className="h-3.5 w-3.5 text-text-muted cursor-default" />
-            <div className="invisible group-hover:visible pointer-events-none absolute top-full left-0 z-50 mt-2 w-72 rounded-lg border border-border bg-white px-3 py-2.5 text-xs text-text-main shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <div className="invisible group-hover:visible pointer-events-none absolute top-full left-0 z-50 mt-2 w-72 rounded-lg border border-border bg-surface px-3 py-2.5 text-xs text-text-main shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
               <div className="absolute left-3 bottom-full border-4 border-transparent border-b-border" />
               <p className="font-semibold mb-1.5">Rating Guide</p>
               <ul className="space-y-1.5 text-text-muted">
@@ -74,7 +74,7 @@ export function PerformanceRatingSelect({
           onChange(v === "" ? "" : Number(v));
         }}
         disabled={disabled}
-        className="w-24 rounded-lg border border-border bg-white px-3 py-2 text-[13px] outline-none focus:border-brand disabled:bg-slate-50 disabled:text-text-muted disabled:cursor-not-allowed"
+        className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] outline-none focus:border-brand disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed"
       >
         <option value="" disabled>
           Select

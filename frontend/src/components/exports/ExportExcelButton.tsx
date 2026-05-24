@@ -50,7 +50,7 @@ export function ExportExcelButton({
       onClick={handleClick}
       disabled={disabled || isDownloading}
       className={
-        `inline-flex items-center gap-2 rounded-lg border border-border bg-white ${padding} ` +
+        `inline-flex items-center gap-2 rounded-lg border border-border bg-surface ${padding} ` +
         "font-medium text-text-main transition-colors hover:bg-surface " +
         "disabled:cursor-not-allowed disabled:opacity-60"
       }

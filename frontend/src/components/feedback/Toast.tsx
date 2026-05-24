@@ -13,15 +13,15 @@ const VARIANT_STYLES: Record<
 > = {
   success: {
     icon: CheckCircle,
-    bg: "bg-green-50",
-    border: "border-green-200",
-    text: "text-green-700",
+    bg: "bg-green-50 dark:bg-green-950/40",
+    border: "border-green-200 dark:border-green-800",
+    text: "text-green-700 dark:text-green-300",
   },
   info: {
     icon: Info,
-    bg: "bg-blue-50",
-    border: "border-blue-200",
-    text: "text-blue-700",
+    bg: "bg-blue-50 dark:bg-blue-950/40",
+    border: "border-blue-200 dark:border-blue-800",
+    text: "text-blue-700 dark:text-blue-300",
   },
 };
 

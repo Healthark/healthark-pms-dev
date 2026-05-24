@@ -22,23 +22,23 @@ const STATUS_CONFIG: Record<
 > = {
   draft: {
     label: "Draft",
-    bgClass: "bg-slate-100",
-    textClass: "text-slate-600",
+    bgClass: "bg-surface-hover",
+    textClass: "text-text-muted",
   },
   pending_mentor: {
     label: "Pending Mentor",
-    bgClass: "bg-amber-50",
-    textClass: "text-amber-700",
+    bgClass: "bg-amber-50 dark:bg-amber-950/40",
+    textClass: "text-amber-700 dark:text-amber-300",
   },
   pending_management: {
     label: "Pending Management",
-    bgClass: "bg-blue-50",
-    textClass: "text-blue-700",
+    bgClass: "bg-blue-50 dark:bg-blue-950/40",
+    textClass: "text-blue-700 dark:text-blue-300",
   },
   completed: {
     label: "Completed",
-    bgClass: "bg-green-50",
-    textClass: "text-green-700",
+    bgClass: "bg-green-50 dark:bg-green-950/40",
+    textClass: "text-green-700 dark:text-green-300",
   },
 };
 

@@ -13,15 +13,15 @@ const VARIANT_STYLES: Record<
 > = {
   error: {
     icon: AlertCircle,
-    bg: "bg-red-50",
-    border: "border-red-200",
-    text: "text-red-700",
+    bg: "bg-red-50 dark:bg-red-950/40",
+    border: "border-red-200 dark:border-red-800",
+    text: "text-red-700 dark:text-red-300",
   },
   warn: {
     icon: AlertTriangle,
-    bg: "bg-amber-50",
-    border: "border-amber-200",
-    text: "text-amber-700",
+    bg: "bg-amber-50 dark:bg-amber-950/40",
+    border: "border-amber-200 dark:border-amber-800",
+    text: "text-amber-700 dark:text-amber-300",
   },
 };
 

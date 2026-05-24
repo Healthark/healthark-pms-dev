@@ -37,7 +37,7 @@ import {
 } from "../../queries/adminReferenceData";
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 interface ProjectModalProps {
@@ -424,7 +424,7 @@ export function ProjectModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors"
             aria-label="Close"
           >
             <X className="h-5 w-5" aria-hidden="true" />
@@ -441,7 +441,7 @@ export function ProjectModal({
           ) : (
             <>
               {error && (
-                <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>
+                <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">{error}</p>
               )}
 
               {/* ── Project Details ────────────────────────────── */}
@@ -478,7 +478,7 @@ export function ProjectModal({
                     aria-invalid={endBeforeStart}
                   />
                   {endBeforeStart && (
-                    <p className="mt-1 text-xs text-red-600">End Date cannot be before Start Date.</p>
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-300">End Date cannot be before Start Date.</p>
                   )}
                 </div>
               </div>
@@ -519,7 +519,7 @@ export function ProjectModal({
                     visibleExistingAssignments filter while its draft is
                     present. */}
                 {visibleExistingAssignments.map((a) => (
-                  <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-slate-50 px-3 py-2">
+                  <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-text-main">{a.user_name}</span>
                       {a.assignment_role && <span className="ml-2 text-xs text-text-muted">({a.assignment_role})</span>}
@@ -545,7 +545,7 @@ export function ProjectModal({
                     <button
                       type="button"
                       onClick={() => removeExisting(a.id)}
-                      className="shrink-0 rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                      className="shrink-0 rounded-md p-1 text-text-muted hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:text-red-300 transition-colors"
                       aria-label={`Remove ${a.user_name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -638,10 +638,10 @@ export function ProjectModal({
                         <label
                           className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-sm ${
                             pmDisabled
-                              ? "border-border bg-slate-50 text-text-muted cursor-not-allowed"
+                              ? "border-border bg-surface-muted text-text-muted cursor-not-allowed"
                               : draft.is_pm
                                 ? "border-brand bg-brand-light text-brand cursor-pointer"
-                                : "border-border bg-white text-text-main cursor-pointer hover:bg-slate-50"
+                                : "border-border bg-surface text-text-main cursor-pointer hover:bg-surface-muted"
                           }`}
                           title={pmDisabledReason ?? undefined}
                         >
@@ -658,7 +658,7 @@ export function ProjectModal({
 
                       {/* Remove — 1 col */}
                       <div className="col-span-1 flex justify-center pb-1">
-                        <button type="button" onClick={() => removeDraft(draft.tempId)} className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600 transition-colors" aria-label="Remove member">
+                        <button type="button" onClick={() => removeDraft(draft.tempId)} className="rounded-md p-1.5 text-text-muted hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:text-red-300 transition-colors" aria-label="Remove member">
                           <X className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
@@ -677,7 +677,7 @@ export function ProjectModal({
                           onChange={(e) => updateDraft(draft.tempId, "assigned_date", e.target.value)}
                         />
                         {joinedBeforeStart && (
-                          <p className="mt-1 text-xs text-red-600">
+                          <p className="mt-1 text-xs text-red-600 dark:text-red-300">
                             Cannot be earlier than Start Date.
                           </p>
                         )}
@@ -699,7 +699,7 @@ export function ProjectModal({
 
         {/* Footer */}
         <div className="flex justify-end gap-3 border-t border-border px-6 py-4 shrink-0">
-          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">
+          <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors">
             Cancel
           </button>
           <button

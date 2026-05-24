@@ -169,7 +169,7 @@ export function Login() {
                 <div
                   role="alert"
                   aria-live="assertive"
-                  className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
+                  className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
                 >
                   {error}
                 </div>
@@ -276,16 +276,16 @@ export function Login() {
 
               {forgotSent ? (
                 <div className="space-y-4">
-                  <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                  <div className="flex items-start gap-3 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 p-4">
                     <CheckCircle2
-                      className="h-5 w-5 shrink-0 text-green-600 mt-0.5"
+                      className="h-5 w-5 shrink-0 text-green-600 dark:text-green-300 mt-0.5"
                       aria-hidden="true"
                     />
                     <div>
-                      <p className="text-sm font-semibold text-green-800">
+                      <p className="text-sm font-semibold text-green-800 dark:text-green-300">
                         Email sent
                       </p>
-                      <p className="mt-0.5 text-xs text-green-700">
+                      <p className="mt-0.5 text-xs text-green-700 dark:text-green-300">
                         We've sent a password-reset link to{" "}
                         <span className="font-medium">{email}</span>. The link
                         expires in 15 minutes.
@@ -307,7 +307,7 @@ export function Login() {
                     <div
                       role="alert"
                       aria-live="assertive"
-                      className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
+                      className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
                     >
                       {forgotError}
                     </div>

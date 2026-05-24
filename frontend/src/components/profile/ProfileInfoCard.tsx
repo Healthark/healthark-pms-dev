@@ -31,15 +31,15 @@ function Skeleton() {
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm animate-pulse">
       <div className="flex flex-col items-center gap-3 mb-6">
-        <div className="h-16 w-16 rounded-full bg-slate-100" />
-        <div className="h-4 w-32 rounded bg-slate-100" />
-        <div className="h-3 w-20 rounded bg-slate-100" />
+        <div className="h-16 w-16 rounded-full bg-surface-hover" />
+        <div className="h-4 w-32 rounded bg-surface-hover" />
+        <div className="h-3 w-20 rounded bg-surface-hover" />
       </div>
       <div className="space-y-4">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3">
-            <div className="h-4 w-4 rounded bg-slate-100" />
-            <div className="h-3 w-full rounded bg-slate-100" />
+            <div className="h-4 w-4 rounded bg-surface-hover" />
+            <div className="h-3 w-full rounded bg-surface-hover" />
           </div>
         ))}
       </div>

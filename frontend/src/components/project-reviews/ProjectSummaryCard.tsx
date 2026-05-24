@@ -28,15 +28,15 @@ export function ProjectSummaryCard({
       }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] font-mono text-text-muted bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+        <span className="text-[11px] font-mono text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border">
           {card.project_code}
         </span>
         {isReviewed ? (
-          <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
+          <span className="flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700 dark:text-green-300">
             <CheckCircle2 className="h-3 w-3" /> Reviewed
           </span>
         ) : (
-          <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+          <span className="flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
             <Clock className="h-3 w-3" /> Pending
           </span>
         )}
@@ -62,7 +62,7 @@ export function ProjectSummaryCard({
           </span>
         )}
         {card.cycle && (
-          <span className="text-[10px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
             {card.cycle}
           </span>
         )}

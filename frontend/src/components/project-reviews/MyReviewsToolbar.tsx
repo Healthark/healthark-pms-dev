@@ -47,7 +47,7 @@ export function MyReviewsToolbar({
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
       viewMode === mode
         ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-slate-100"
+        : "text-text-muted hover:bg-surface-hover"
     }`;
 
   return (
@@ -61,10 +61,10 @@ export function MyReviewsToolbar({
             placeholder="Search projects..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+            className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
           />
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
           <button
             type="button"
             className={viewBtnCls("grid")}
@@ -115,7 +115,7 @@ export function MyReviewsToolbar({
           <select
             value={statusFilter}
             onChange={(e) => onStatusFilterChange(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
           >
             <option value="all">All</option>
             <option value="reviewed">Reviewed</option>
@@ -151,7 +151,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer"
+        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer"
         style={{ minWidth: `${minWidth}px` }}
       >
         <option value="all">{allLabel}</option>

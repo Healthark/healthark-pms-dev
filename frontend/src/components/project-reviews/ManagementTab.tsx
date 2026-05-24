@@ -69,20 +69,20 @@ function generateCycleOptions(
 function StatusBadge({ status }: { readonly status: AdminMemberReviewRow["review_status"] }) {
   if (status === "reviewed") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-green-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-green-700 dark:text-green-300">
         <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Reviewed
       </span>
     );
   }
   if (status === "pending") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
         <Clock className="h-3 w-3" aria-hidden="true" /> Pending
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+    <span className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-text-muted">
       <AlertCircle className="h-3 w-3" aria-hidden="true" /> Not Started
     </span>
   );
@@ -120,7 +120,7 @@ function ProjectCard({
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-slate-50/50 transition-colors"
+        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-surface-muted/50 transition-colors"
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-3 min-w-0">
@@ -132,7 +132,7 @@ function ProjectCard({
               <span className="font-semibold text-sm text-text-main truncate">
                 {summary.project_name}
               </span>
-              <span className="shrink-0 text-[11px] font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-text-muted">
+              <span className="shrink-0 text-[11px] font-mono bg-surface-hover px-1.5 py-0.5 rounded border border-border text-text-muted">
                 {summary.project_code}
               </span>
             </div>
@@ -155,11 +155,11 @@ function ProjectCard({
           {/* Progress bar */}
           <div className="hidden sm:flex flex-col items-end gap-1.5">
             <span
-              className={`text-[12px] font-bold ${allDone ? "text-green-600" : "text-text-muted"}`}
+              className={`text-[12px] font-bold ${allDone ? "text-green-600 dark:text-green-300" : "text-text-muted"}`}
             >
               {summary.reviewed_count}/{summary.total_members} reviewed
             </span>
-            <div className="w-28 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+            <div className="w-28 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   allDone ? "bg-green-500" : "bg-brand"
@@ -189,7 +189,7 @@ function ProjectCard({
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-border">
+                  <tr className="bg-surface-muted/80 border-b border-border">
                     <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                       Employee
                     </th>
@@ -208,7 +208,7 @@ function ProjectCard({
                   {filteredMembers.map((m) => (
                     <tr
                       key={m.user_id}
-                      className="hover:bg-slate-50/40 transition-colors"
+                      className="hover:bg-surface-muted/40 transition-colors"
                     >
                       <td className="px-5 py-3 font-medium text-text-main">
                         {m.employee_name}
@@ -253,14 +253,14 @@ function ManagementSkeleton() {
       {[1, 2, 3].map((i) => (
         <div key={i} className="rounded-xl border border-border bg-surface p-5">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-slate-100 shrink-0" />
+            <div className="h-10 w-10 rounded-lg bg-surface-hover shrink-0" />
             <div className="space-y-2 flex-1">
-              <div className="h-4 w-1/3 rounded bg-slate-100" />
-              <div className="h-3 w-1/4 rounded bg-slate-100" />
+              <div className="h-4 w-1/3 rounded bg-surface-hover" />
+              <div className="h-3 w-1/4 rounded bg-surface-hover" />
             </div>
             <div className="hidden sm:flex flex-col gap-1.5 items-end">
-              <div className="h-3 w-24 rounded bg-slate-100" />
-              <div className="h-1.5 w-28 rounded-full bg-slate-100" />
+              <div className="h-3 w-24 rounded bg-surface-hover" />
+              <div className="h-1.5 w-28 rounded-full bg-surface-hover" />
             </div>
           </div>
         </div>
@@ -317,7 +317,7 @@ export function ManagementTab() {
     totalMembers === 0 ? 0 : Math.round((totalReviewed / totalMembers) * 100);
 
   const SELECT_CLS =
-    "rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer";
+    "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer";
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
@@ -365,11 +365,11 @@ export function ManagementTab() {
             {[
               { label: "Projects", value: totalProjects, color: "text-text-main" },
               { label: "Total Members", value: totalMembers, color: "text-text-main" },
-              { label: "Reviewed", value: totalReviewed, color: "text-green-600" },
+              { label: "Reviewed", value: totalReviewed, color: "text-green-600 dark:text-green-300" },
               {
                 label: "Completion",
                 value: `${overallPct}%`,
-                color: overallPct === 100 ? "text-green-600" : "text-brand",
+                color: overallPct === 100 ? "text-green-600 dark:text-green-300" : "text-brand",
               },
             ].map(({ label, value, color }) => (
               <div
@@ -388,7 +388,7 @@ export function ManagementTab() {
       {isLoading ? (
         <ManagementSkeleton />
       ) : error ? (
-        <div className="rounded-xl border-2 border-dashed border-red-200 py-12 text-center text-sm text-red-600 bg-red-50/30">
+        <div className="rounded-xl border-2 border-dashed border-red-200 dark:border-red-800 py-12 text-center text-sm text-red-600 dark:text-red-300 bg-red-50/30 dark:bg-red-950/30">
           {error}
         </div>
       ) : data.length === 0 ? (
@@ -424,7 +424,7 @@ export function ManagementTab() {
               }).length === 0,
           ) && statusFilter !== "all" && (
             <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center bg-background/50">
-              <CheckCircle2 className="h-8 w-8 text-green-500 mb-2" aria-hidden="true" />
+              <CheckCircle2 className="h-8 w-8 text-green-500 dark:text-green-400 mb-2" aria-hidden="true" />
               <p className="font-display text-sm font-medium text-text-main">
                 {statusFilter === "reviewed"
                   ? "No completed reviews yet for this cycle."

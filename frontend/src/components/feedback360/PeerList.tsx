@@ -98,9 +98,9 @@ export function PeerList() {
   }
   if (error) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-        <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-        <p className="text-sm text-red-700">{error}</p>
+      <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3">
+        <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
       </div>
     );
   }
@@ -124,7 +124,7 @@ export function PeerList() {
             placeholder="Search employees…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+            className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -202,7 +202,7 @@ function PeerRow({ peer }: { readonly peer: FeedbackPeer }) {
   return (
     <Link
       to={`/feedback/give/${peer.user_id}`}
-      className="flex items-center gap-3 rounded-lg border border-border bg-surface p-3 shadow-sm hover:border-brand/40 hover:bg-slate-50/40 transition-colors"
+      className="flex items-center gap-3 rounded-lg border border-border bg-surface p-3 shadow-sm hover:border-brand/40 hover:bg-surface-muted/40 transition-colors"
     >
       <UserCircle className="h-7 w-7 text-text-muted shrink-0" />
       <div className="min-w-0 flex-1">
@@ -218,7 +218,7 @@ function PeerRow({ peer }: { readonly peer: FeedbackPeer }) {
             className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
               peer.worked_with
                 ? "bg-brand/10 text-brand"
-                : "bg-amber-50 text-amber-700"
+                : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
             }`}
           >
             {peer.worked_with ? "Worked with" : "Not worked with"}
@@ -226,7 +226,7 @@ function PeerRow({ peer }: { readonly peer: FeedbackPeer }) {
         </div>
       </div>
       {peer.has_submitted ? (
-        <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700 shrink-0">
+        <span className="inline-flex items-center gap-1 rounded-md bg-green-50 dark:bg-green-950/40 px-2 py-1 text-[11px] font-medium text-green-700 dark:text-green-300 shrink-0">
           <Eye className="h-3 w-3" /> View
           <CheckCircle2 className="h-3 w-3 ml-0.5" />
         </span>
@@ -255,7 +255,7 @@ function FilterChip({
       className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
         active
           ? "bg-brand text-white"
-          : "bg-white border border-border text-text-muted hover:bg-slate-50"
+          : "bg-surface border border-border text-text-muted hover:bg-surface-muted"
       }`}
     >
       {children}

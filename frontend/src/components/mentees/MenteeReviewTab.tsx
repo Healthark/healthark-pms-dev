@@ -81,7 +81,7 @@ export function MenteeReviewTab({ reviews, menteeName }: MenteeReviewTabProps) {
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-[13px]">
           <thead>
-            <tr className="bg-slate-50/80 border-b border-border">
+            <tr className="bg-surface-muted/80 border-b border-border">
               <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Year
               </th>
@@ -108,11 +108,11 @@ export function MenteeReviewTab({ reviews, menteeName }: MenteeReviewTabProps) {
               return (
                 <tr
                   key={r.id}
-                  className="hover:bg-slate-50/60 cursor-pointer transition-colors"
+                  className="hover:bg-surface-muted/60 cursor-pointer transition-colors"
                   onClick={() => setViewing(r)}
                 >
                   <td className="px-5 py-3">
-                    <span className="text-[12px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                       {formatFyLabel(r.cycle_name)}
                     </span>
                   </td>
@@ -149,7 +149,7 @@ export function MenteeReviewTab({ reviews, menteeName }: MenteeReviewTabProps) {
                         <button
                           type="button"
                           onClick={goToSummary}
-                          className="text-[11px] italic text-amber-700 hover:underline"
+                          className="text-[11px] italic text-amber-700 dark:text-amber-300 hover:underline"
                           title="Open the Annual Summary tab to fill this review"
                         >
                           Fill from Summary →

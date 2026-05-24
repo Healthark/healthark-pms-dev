@@ -44,7 +44,7 @@ export function RatingTrack({ value, onChange, disabled }: RatingTrackProps) {
         const selected = value === v;
         const tickBase =
           "absolute top-1/2 h-2 w-2 rounded-full transition-all";
-        const tickColor = selected ? "bg-brand" : "bg-slate-300";
+        const tickColor = selected ? "bg-brand" : "bg-slate-300 dark:bg-slate-600";
         const positionStyle = {
           left: `${pct}%`,
           transform: "translate(-50%, -50%)",

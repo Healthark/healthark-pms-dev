@@ -38,7 +38,7 @@ import { getOwnerRole } from "../../utils/goalOwner";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
 
 function cycleLabel(
   goal: Goal,
@@ -190,7 +190,7 @@ export function GoalMentorReviewModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-100 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
             aria-label="Close mentor review"
           >
             <X className="h-5 w-5" />
@@ -199,7 +199,7 @@ export function GoalMentorReviewModal({
 
         {/* ── Role-expectation reference panels (above the split) ── */}
         {ownerExpectation && (
-          <div className="border-b border-border bg-blue-50/30 px-6 py-3 space-y-2 shrink-0">
+          <div className="border-b border-border bg-blue-50/30 dark:bg-blue-950/30 px-6 py-3 space-y-2 shrink-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
               Mentee role expectations
             </p>
@@ -228,7 +228,7 @@ export function GoalMentorReviewModal({
         <div className="flex flex-1 overflow-hidden min-h-0">
           {/* Left: Mentee self-review (read-only paragraph) */}
           <div className="w-1/2 border-r border-border flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-slate-50/80 shrink-0">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-surface-muted/80 shrink-0">
               <User className="h-4 w-4 text-text-muted" aria-hidden="true" />
               <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
                 Mentee Self Review
@@ -236,11 +236,11 @@ export function GoalMentorReviewModal({
             </div>
             <div className="overflow-y-auto px-5 py-4">
               {selfReview === null ? (
-                <div className="rounded-lg border border-border bg-slate-50 px-4 py-6 text-center text-sm text-text-muted">
+                <div className="rounded-lg border border-border bg-surface-muted px-4 py-6 text-center text-sm text-text-muted">
                   The mentee has not submitted their self-review for this half yet.
                 </div>
               ) : (
-                <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                <div className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
                   {selfReview.self_overall_review || "—"}
                 </div>
               )}
@@ -255,20 +255,20 @@ export function GoalMentorReviewModal({
                 Your Review
               </span>
               {isReadOnly && (
-                <span className="ml-auto text-[10px] font-medium text-green-600 bg-green-50 border border-green-200 rounded px-1.5 py-0.5">
+                <span className="ml-auto text-[10px] font-medium text-green-600 dark:text-green-300 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded px-1.5 py-0.5">
                   Submitted
                 </span>
               )}
             </div>
             <div className="overflow-y-auto px-5 py-4 space-y-3">
               {error && (
-                <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+                <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
                   {error}
                 </p>
               )}
 
               {selfReview === null && !isReadOnly && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
                   You can only submit a mentor review once the mentee has
                   submitted their self-review.
                 </div>
@@ -284,7 +284,7 @@ export function GoalMentorReviewModal({
                     {!isReadOnly && " *"}
                   </label>
                   {isReadOnly ? (
-                    <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                    <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
                       {overall || "—"}
                     </div>
                   ) : (
@@ -318,7 +318,7 @@ export function GoalMentorReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
             >
               {isReadOnly ? "Close" : "Cancel"}
             </button>
@@ -327,7 +327,7 @@ export function GoalMentorReviewModal({
                 type="button"
                 onClick={handleSaveDraft}
                 disabled={isSaving || isDraftSaving}
-                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
               >
                 {isDraftSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

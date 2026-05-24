@@ -50,7 +50,7 @@ const EMPTY_COMMENTS: Record<CompKey, string> = {
 };
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none disabled:bg-slate-50 disabled:text-text-muted disabled:cursor-not-allowed";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed";
 
 interface EvalModalProps {
   readonly card: EvalModalCard;
@@ -230,11 +230,11 @@ export function EvalModal({
           <div>
             <div className="flex items-center gap-2">
               {readOnly ? (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted">
                   View Only
                 </span>
               ) : isEditMode ? (
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
                   Editing
                 </span>
               ) : null}
@@ -252,7 +252,7 @@ export function EvalModal({
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-md p-1.5 text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -262,21 +262,21 @@ export function EvalModal({
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 animate-pulse">
             {COMPETENCIES.map((c) => (
               <div key={c.key} className="space-y-1.5">
-                <div className="h-3 w-48 rounded bg-slate-100" />
-                <div className="h-24 rounded-lg bg-slate-100" />
+                <div className="h-3 w-48 rounded bg-surface-hover" />
+                <div className="h-24 rounded-lg bg-surface-hover" />
               </div>
             ))}
           </div>
         ) : fetchError ? (
           <div className="flex-1 flex items-center justify-center px-6 py-10">
-            <p className="rounded-lg bg-red-50 px-5 py-4 text-sm text-red-600 text-center max-w-sm">
+            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-5 py-4 text-sm text-red-600 dark:text-red-300 text-center max-w-sm">
               {fetchError}
             </p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
             {error && (
-              <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+              <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
                 {error}
               </p>
             )}
@@ -288,7 +288,7 @@ export function EvalModal({
                 {!readOnly && (
                   <div className="group relative inline-flex items-center">
                     <Info className="h-3.5 w-3.5 text-text-muted cursor-default" />
-                    <div className="invisible group-hover:visible pointer-events-none absolute top-full left-0 z-50 mt-2 w-72 rounded-lg border border-border bg-white px-3 py-2.5 text-xs text-text-main shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                    <div className="invisible group-hover:visible pointer-events-none absolute top-full left-0 z-50 mt-2 w-72 rounded-lg border border-border bg-surface px-3 py-2.5 text-xs text-text-main shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                       <div className="absolute left-3 bottom-full border-4 border-transparent border-b-border" />
                       <p className="font-semibold mb-1.5">Rating Guide</p>
                       <ul className="space-y-1.5 text-text-muted">
@@ -317,7 +317,7 @@ export function EvalModal({
                 value={performanceGroup}
                 onChange={(e) => setPerformanceGroup(e.target.value as PerformanceGroup)}
                 disabled={readOnly}
-                className="w-24 rounded-lg border border-border bg-white px-3 py-2 text-[13px] outline-none focus:border-brand disabled:bg-slate-50 disabled:text-text-muted disabled:cursor-not-allowed"
+                className="w-24 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] outline-none focus:border-brand disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed"
               >
                 <option value="" disabled>
                   Select
@@ -375,7 +375,7 @@ export function EvalModal({
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
           >
             {readOnly ? "Close" : "Cancel"}
           </button>
@@ -384,7 +384,7 @@ export function EvalModal({
               type="button"
               onClick={handleManualSaveDraft}
               disabled={isSaving || isDraftSaving || isLoadingReview || !!fetchError}
-              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
             >
               {isDraftSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

@@ -61,7 +61,7 @@ const NavItem = ({
         } ${
           isActive
             ? "bg-brand-light text-brand font-semibold border-l-2 border-accent"
-            : "text-text-muted hover:bg-slate-50 hover:text-text-main font-medium border-l-2 border-transparent"
+            : "text-text-muted hover:bg-surface-muted hover:text-text-main font-medium border-l-2 border-transparent"
         }`
       }
     >
@@ -192,7 +192,7 @@ export function Sidebar() {
         <button
           onClick={handleLogout}
           title={isCollapsed ? "Logout" : undefined}
-          className={`w-full flex items-center rounded-lg text-red-600 hover:bg-red-50 font-medium transition-colors mt-1.5 ${
+          className={`w-full flex items-center rounded-lg text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 font-medium transition-colors mt-1.5 ${
             isCollapsed ? "justify-center py-2.5 px-0" : "px-3 py-2 gap-2.5"
           }`}
         >

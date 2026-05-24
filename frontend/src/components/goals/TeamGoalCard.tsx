@@ -43,7 +43,7 @@ export function TeamGoalCard({
           {goal.owner_name}
         </div>
         {goal.fy_year && (
-          <span className="text-[11px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+          <span className="text-[11px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
             {formatFyYearSpan(goal.fy_year)}
           </span>
         )}
@@ -88,7 +88,7 @@ export function TeamGoalCard({
               type="button"
               onClick={() => onRequestChanges(goal)}
               disabled={isActing}
-              className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 transition-colors"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               Request Changes

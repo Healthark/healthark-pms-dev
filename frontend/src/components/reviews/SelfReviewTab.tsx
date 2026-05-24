@@ -104,7 +104,7 @@ function SelfReviewCard({
       <button
         type="button"
         onClick={() => onView(review)}
-        className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-slate-50 transition-colors"
+        className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
       >
         <Eye className="h-4 w-4" aria-hidden="true" />
         View
@@ -187,7 +187,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
       viewMode === mode
         ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-slate-100"
+        : "text-text-muted hover:bg-surface-hover"
     }`;
 
   if (isLoading) return <LoadingState />;
@@ -205,7 +205,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
             placeholder="Search by cycle…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+            className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
           />
         </div>
 
@@ -220,7 +220,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
             id="self-review-year-filter"
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
           >
             <option value="all">All</option>
             {availableYears.map((y) => (
@@ -242,7 +242,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
             id="self-review-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
           >
             {STATUS_FILTER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -252,7 +252,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
           </select>
         </div>
 
-        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
           <button
             type="button"
             className={viewBtnCls("grid")}
@@ -299,7 +299,7 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-border">
+              <tr className="bg-surface-muted/80 border-b border-border">
                 <th className="text-left px-5 py-2.5">
                   <SortableHeader
                     label="Year"
@@ -336,10 +336,10 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
               {sorted.map((r) => (
                 <tr
                   key={r.id}
-                  className="hover:bg-slate-50/60 transition-colors"
+                  className="hover:bg-surface-muted/60 transition-colors"
                 >
                   <td className="px-5 py-3 font-medium text-text-main">
-                    <span className="text-[12.5px] font-semibold text-text-muted bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="text-[12.5px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                       {formatFyLabel(r.cycle_name)}
                     </span>
                   </td>

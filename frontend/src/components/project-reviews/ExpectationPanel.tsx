@@ -30,18 +30,18 @@ export function ExpectationPanel({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+        className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:text-blue-300 transition-colors"
       >
         <BookOpen className="h-3 w-3" />
         {open ? "Hide" : "View"} Role Expectations
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </button>
       {open && (
-        <div className="mt-1.5 rounded-md bg-blue-50 border border-blue-100 px-3 py-2">
-          <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">
+        <div className="mt-1.5 rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-100 px-3 py-2">
+          <p className="text-xs text-blue-800 dark:text-blue-300 whitespace-pre-wrap leading-relaxed">
             {text.replace(/ \| /g, "\n• ")}
           </p>
-          <p className="mt-1 text-[10px] text-blue-500">
+          <p className="mt-1 text-[10px] text-blue-500 dark:text-blue-400">
             {expectation.department_name} / {expectation.designation_name}
           </p>
         </div>

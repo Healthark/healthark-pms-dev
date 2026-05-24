@@ -80,8 +80,8 @@ export function ResetPassword() {
     return (
       <Shell>
         <div className="flex flex-col items-center text-center">
-          <div className="rounded-full bg-green-50 p-3">
-            <CheckCircle2 className="h-7 w-7 text-green-600" aria-hidden="true" />
+          <div className="rounded-full bg-green-50 dark:bg-green-950/40 p-3">
+            <CheckCircle2 className="h-7 w-7 text-green-600 dark:text-green-300" aria-hidden="true" />
           </div>
           <h1 className="mt-4 font-display text-xl font-semibold text-text-main">
             Password updated
@@ -142,12 +142,12 @@ export function ResetPassword() {
         </p>
 
         {error && (
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3">
             <AlertCircle
-              className="h-4 w-4 shrink-0 text-red-600 mt-0.5"
+              className="h-4 w-4 shrink-0 text-red-600 dark:text-red-300 mt-0.5"
               aria-hidden="true"
             />
-            <p className="text-xs text-red-800">{error}</p>
+            <p className="text-xs text-red-800 dark:text-red-300">{error}</p>
           </div>
         )}
 
@@ -226,7 +226,7 @@ function Field({
           autoComplete={autoComplete}
           minLength={minLength}
           required
-          className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+          className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
     </div>

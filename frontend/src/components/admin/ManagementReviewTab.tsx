@@ -159,7 +159,7 @@ export function ManagementReviewTab() {
   if (loadError) {
     return (
       <div className="p-5">
-        <p className="text-sm text-rose-600">{loadError}</p>
+        <p className="text-sm text-rose-600 dark:text-rose-300">{loadError}</p>
       </div>
     );
   }
@@ -178,7 +178,7 @@ export function ManagementReviewTab() {
             placeholder="Search name, email, mentor…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label="Search management reviews"
           />
         </div>
@@ -194,7 +194,7 @@ export function ManagementReviewTab() {
             id="mgmt-review-dept-filter"
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
           >
             <option value="all">All</option>
             {availableDepts.map((d) => (
@@ -216,7 +216,7 @@ export function ManagementReviewTab() {
             id="mgmt-review-mentor-filter"
             value={mentorFilter}
             onChange={(e) => setMentorFilter(e.target.value)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
           >
             <option value="all">All</option>
             {availableMentors.map((m) => (
@@ -238,7 +238,7 @@ export function ManagementReviewTab() {
             id="mgmt-review-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
           >
             <option value="all">All</option>
             <option value="pending">Pending</option>
@@ -269,7 +269,7 @@ export function ManagementReviewTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-slate-50 text-left">
+              <tr className="border-b border-border bg-surface-muted text-left">
                 {TABLE_HEADERS.map((h) => (
                   <th
                     key={h}
@@ -284,7 +284,7 @@ export function ManagementReviewTab() {
               {filtered.map((r) => (
                 <tr
                   key={r.review_id}
-                  className="transition-colors hover:bg-slate-50"
+                  className="transition-colors hover:bg-surface-muted"
                 >
                   <td className="px-5 py-3.5 font-medium text-text-main">
                     {r.employee_name}
@@ -359,7 +359,7 @@ export function ManagementReviewTab() {
 
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
             <div className="flex items-start justify-between border-b border-border px-5 py-3">
               <div>
                 <h3 className="font-display text-sm font-semibold text-text-main">
@@ -373,7 +373,7 @@ export function ManagementReviewTab() {
               <button
                 type="button"
                 onClick={() => setEditTarget(null)}
-                className="rounded-md p-1 text-text-muted hover:bg-slate-100"
+                className="rounded-md p-1 text-text-muted hover:bg-surface-hover"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -404,7 +404,7 @@ export function ManagementReviewTab() {
                 disabled={isSaving}
               />
               {saveError && (
-                <p className="text-xs text-rose-600">{saveError}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-300">{saveError}</p>
               )}
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
@@ -412,7 +412,7 @@ export function ManagementReviewTab() {
                 type="button"
                 onClick={() => setEditTarget(null)}
                 disabled={isSaving}
-                className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium text-text-main hover:bg-slate-50 disabled:opacity-50"
+                className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium text-text-main hover:bg-surface-muted disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -462,13 +462,13 @@ function ReviewDetailLoader({
   if (error) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-        <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-          <p className="text-sm text-rose-600">{error}</p>
+        <div className="w-full max-w-md rounded-xl bg-surface p-5 shadow-xl">
+          <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
           <div className="mt-3 text-right">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-slate-50"
+              className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-surface-muted"
             >
               Close
             </button>

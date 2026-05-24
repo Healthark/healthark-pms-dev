@@ -32,14 +32,14 @@ function CardSkeleton() {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 shadow-sm animate-pulse">
       <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-full bg-slate-100" />
+        <div className="h-11 w-11 rounded-full bg-surface-hover" />
         <div className="flex-1 space-y-2">
-          <div className="h-3 w-2/3 rounded bg-slate-100" />
-          <div className="h-2.5 w-1/2 rounded bg-slate-100" />
+          <div className="h-3 w-2/3 rounded bg-surface-hover" />
+          <div className="h-2.5 w-1/2 rounded bg-surface-hover" />
         </div>
       </div>
-      <div className="h-24 rounded-md bg-slate-100" />
-      <div className="h-6 rounded-md bg-slate-100" />
+      <div className="h-24 rounded-md bg-surface-hover" />
+      <div className="h-6 rounded-md bg-surface-hover" />
     </div>
   );
 }
@@ -151,7 +151,7 @@ export function MyMentees() {
 
       {/* States */}
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}

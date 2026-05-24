@@ -67,7 +67,7 @@ export function GoalsWidget({ summary }: GoalsWidgetProps) {
           </span>
         </div>
         <div
-          className="h-1.5 w-full rounded-full bg-slate-100"
+          className="h-1.5 w-full rounded-full bg-surface-hover"
           role="progressbar"
           aria-valuenow={completion_percent}
           aria-valuemin={0}
@@ -82,21 +82,21 @@ export function GoalsWidget({ summary }: GoalsWidgetProps) {
 
       {/* Approval-state breakdown */}
       <div className="space-y-2 border-t border-border pt-3">
-        <StatRow label="Draft" count={draft_goals} dotClass="bg-slate-400" />
+        <StatRow label="Draft" count={draft_goals} dotClass="bg-slate-400 dark:bg-slate-500" />
         <StatRow
           label="Awaiting Approval"
           count={submitted_goals}
-          dotClass="bg-blue-400"
+          dotClass="bg-blue-400 dark:bg-blue-500"
         />
         <StatRow
           label="Changes Requested"
           count={changes_requested_goals}
-          dotClass="bg-amber-400"
+          dotClass="bg-amber-400 dark:bg-amber-500"
         />
         <StatRow
           label="Approved"
           count={approved_goals}
-          dotClass="bg-green-400"
+          dotClass="bg-green-400 dark:bg-green-500"
         />
       </div>
 

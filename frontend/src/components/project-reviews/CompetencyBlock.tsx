@@ -96,8 +96,8 @@ export function CompetencyBlock({
             key={comp.key}
             className={`flex flex-col gap-2 ${
               compact
-                ? "rounded-lg bg-slate-50 p-3 border border-slate-100"
-                : "rounded-xl bg-slate-50 p-5 border border-slate-100"
+                ? "rounded-lg bg-surface-muted p-3 border border-border"
+                : "rounded-xl bg-surface-muted p-5 border border-border"
             }`}
           >
             <h3

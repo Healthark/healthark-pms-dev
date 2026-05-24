@@ -18,7 +18,7 @@ import {
 const ALL_CYCLES = "__all__";
 
 const CARD_CLS =
-  "rounded-xl border border-border bg-white shadow-sm";
+  "rounded-xl border border-border bg-surface shadow-sm";
 const CARD_HEADER_CLS =
   "border-b border-border px-5 py-3 flex items-center justify-between";
 const CARD_TITLE_CLS =
@@ -27,7 +27,7 @@ const CARD_BODY_CLS = "px-5 py-4 space-y-3";
 const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
-  "rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
+  "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
 
 function buildFyOptions(activeCycleName: string | null | undefined): string[] {
   // Always include "All cycles" + the active FY + 4 prior years for context.
@@ -76,7 +76,7 @@ function DownloadButton({ label, onClick, disabled }: DownloadButtonProps) {
       onClick={handle}
       disabled={busy || disabled}
       className={
-        "inline-flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 " +
+        "inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 " +
         "text-[13px] font-medium text-text-main transition-colors hover:bg-surface " +
         "disabled:cursor-not-allowed disabled:opacity-60"
       }
@@ -280,7 +280,7 @@ export function ExportsTab() {
                 setEmployeeQuery(e.target.value);
                 setSelectedEmployeeId(null);
               }}
-              className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+              className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
               aria-label="Search employees for export"
             />
           </div>
@@ -313,7 +313,7 @@ export function ExportsTab() {
                           </span>
                         </span>
                         {e.is_deleted && (
-                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-700">
+                          <span className="rounded-full bg-red-50 dark:bg-red-950/40 px-2 py-0.5 text-[11px] text-red-700 dark:text-red-300">
                             Deactivated
                           </span>
                         )}

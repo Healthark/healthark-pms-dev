@@ -44,7 +44,7 @@ export function MenteeCard({ mentee }: MenteeCardProps) {
         </div>
         {hasPending && (
           <span
-            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 shrink-0"
+            className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300 shrink-0"
             title={`${mentee.pending_actions_count} item${
               mentee.pending_actions_count === 1 ? "" : "s"
             } need${mentee.pending_actions_count === 1 ? "s" : ""} your attention`}
@@ -55,14 +55,14 @@ export function MenteeCard({ mentee }: MenteeCardProps) {
         )}
         <span
           className={`flex h-2.5 w-2.5 shrink-0 rounded-full ${
-            mentee.is_active ? "bg-green-500" : "bg-slate-300"
+            mentee.is_active ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"
           }`}
           aria-label={mentee.is_active ? "Active" : "Inactive"}
         />
       </div>
 
       {/* Info grid */}
-      <div className="flex flex-col gap-2 rounded-md bg-slate-50 px-3 py-2.5">
+      <div className="flex flex-col gap-2 rounded-md bg-surface-muted px-3 py-2.5">
         <InfoRow icon={BadgeCheck} label="Emp Code" value={mentee.employee_code} />
         <InfoRow icon={Mail} label="Email" value={mentee.email} />
         <InfoRow icon={Phone} label="Phone" value={mentee.phone} />
