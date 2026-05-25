@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Lock } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
@@ -8,11 +8,15 @@ import { SelfReviewTab } from "../components/reviews/SelfReviewTab";
 import { TeamReviewTab } from "../components/reviews/TeamReviewTab";
 import { SelfReviewFormModal } from "../components/reviews/SelfReviewFormModal";
 import {
-  annualReviewService,
-  type AnnualReview,
   type SelfReviewPayload,
   type SelfReviewDraftPayload,
 } from "../services/annual-review.service";
+import {
+  useMyAnnualReviewHistory,
+  useSubmitSelfReview,
+  useCreateSelfDraft,
+  useSaveSelfDraft,
+} from "../queries/annualReviews";
 import { getErrorMessage } from "../utils/errors";
 import { formatFyLabel, extractFyToken } from "../utils/fy";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
@@ -43,28 +47,17 @@ export function AnnualReviews() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
 
-  const [reviews, setReviews] = useState<AnnualReview[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // ['annual-reviews', 'mine', 'history'] — shared TanStack cache
+  const { data: reviews = [], isLoading } = useMyAnnualReviewHistory();
+  const submitSelfReviewMutation = useSubmitSelfReview();
+  const createSelfDraftMutation = useCreateSelfDraft();
+  const saveSelfDraftMutation = useSaveSelfDraft();
+  const isSaving = submitSelfReviewMutation.isPending;
+  const isDraftSaving =
+    createSelfDraftMutation.isPending || saveSelfDraftMutation.isPending;
 
   const [showForm, setShowForm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [formError, setFormError] = useState("");
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setReviews(await annualReviewService.getMyReviewHistory());
-    } catch {
-      /* stays empty */
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   // Lookup the active-cycle row (if any). May be a draft (still editable),
   // or one of the post-draft statuses (locked).
@@ -89,49 +82,31 @@ export function AnnualReviews() {
       confirmText: "Submit",
     });
     if (!ok) return;
-    setIsSaving(true);
     setFormError("");
     try {
-      const saved = await annualReviewService.submitSelfReview(payload);
-      // submitSelfReview can either create a new row or promote a draft;
-      // upsert into local state by id.
-      setReviews((prev) => {
-        const idx = prev.findIndex((r) => r.id === saved.id);
-        if (idx === -1) return [saved, ...prev];
-        const next = prev.slice();
-        next[idx] = saved;
-        return next;
-      });
+      await submitSelfReviewMutation.mutateAsync(payload);
       setShowForm(false);
       toast.success("Self-review submitted.");
     } catch (err) {
       setFormError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleSaveDraft = async (payload: SelfReviewDraftPayload) => {
-    setIsDraftSaving(true);
     setFormError("");
     try {
-      // First save calls POST /self/draft to create the row; subsequent
-      // saves use PATCH /draft on the existing row.
-      const saved = currentReview
-        ? await annualReviewService.saveDraft(currentReview.id, payload)
-        : await annualReviewService.createSelfDraft(payload);
-      setReviews((prev) => {
-        const idx = prev.findIndex((r) => r.id === saved.id);
-        if (idx === -1) return [saved, ...prev];
-        const next = prev.slice();
-        next[idx] = saved;
-        return next;
-      });
+      // First save creates the draft row; subsequent saves PATCH it.
+      if (currentReview) {
+        await saveSelfDraftMutation.mutateAsync({
+          reviewId: currentReview.id,
+          payload,
+        });
+      } else {
+        await createSelfDraftMutation.mutateAsync(payload);
+      }
       toast.success("Draft saved.");
     } catch (err) {
       setFormError(getErrorMessage(err));
-    } finally {
-      setIsDraftSaving(false);
     }
   };
 

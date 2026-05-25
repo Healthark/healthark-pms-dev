@@ -11,7 +11,7 @@
  * lets management set/override the management rating inline via a modal.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Eye,
   Loader2,
@@ -21,9 +21,13 @@ import {
   X,
 } from "lucide-react";
 import {
-  annualReviewService,
   type CalibrationRow,
 } from "../../services/annual-review.service";
+import {
+  useCalibrationGrid,
+  useSetManagementRating,
+  useAnnualReviewDetail,
+} from "../../queries/annualReviews";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { PerformanceRatingSelect } from "../reviews/PerformanceRatingSelect";
 import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
@@ -50,9 +54,11 @@ const TABLE_HEADERS = [
 ];
 
 export function ManagementReviewTab() {
-  const [rows, setRows] = useState<CalibrationRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  // ['annual-reviews', 'calibration'] — shared TanStack cache
+  const { data: rows = [], isLoading, error } = useCalibrationGrid();
+  const setManagementRatingMutation = useSetManagementRating();
+  const isSaving = setManagementRatingMutation.isPending;
+  const loadError = error ? getErrorMessage(error) : "";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [deptFilter, setDeptFilter] = useState<string>("all");
@@ -61,25 +67,8 @@ export function ManagementReviewTab() {
 
   const [viewReviewId, setViewReviewId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const confirm = useConfirm();
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError("");
-    try {
-      setRows(await annualReviewService.getCalibrationGrid());
-    } catch (err) {
-      setLoadError(getErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const availableDepts = useMemo(
     () =>
@@ -132,18 +121,15 @@ export function ManagementReviewTab() {
       confirmText: isOverwrite ? "Overwrite Rating" : "Publish Rating",
     });
     if (!ok) return;
-    setIsSaving(true);
     setSaveError("");
     try {
-      await annualReviewService.setManagementRating(editTarget.row.review_id, {
-        management_performance_rating: editTarget.draft,
+      await setManagementRatingMutation.mutateAsync({
+        reviewId: editTarget.row.review_id,
+        payload: { management_performance_rating: editTarget.draft },
       });
       setEditTarget(null);
-      await load();
     } catch (err) {
       setSaveError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -439,25 +425,9 @@ function ReviewDetailLoader({
   readonly reviewId: number;
   readonly onClose: () => void;
 }) {
-  const [review, setReview] = useState<
-    Awaited<ReturnType<typeof annualReviewService.getReview>> | null
-  >(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    annualReviewService
-      .getReview(reviewId)
-      .then((r) => {
-        if (alive) setReview(r);
-      })
-      .catch((err) => {
-        if (alive) setError(getErrorMessage(err));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [reviewId]);
+  // ['annual-reviews', 'detail', reviewId] — shared TanStack cache
+  const { data: review, error: queryError } = useAnnualReviewDetail(reviewId);
+  const error = queryError ? getErrorMessage(queryError) : "";
 
   if (error) {
     return (

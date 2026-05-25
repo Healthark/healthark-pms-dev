@@ -13,17 +13,17 @@
  *   draft              → "Awaiting self-review" (mentee hasn't submitted)
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, Eye, LayoutGrid, Search,
   Table2, UserCircle, Users,
 } from "lucide-react";
 import {
-  annualReviewService,
   type MenteeAnnualReview,
   type ReviewStatus,
 } from "../../services/annual-review.service";
+import { useMenteeAnnualReviews } from "../../queries/annualReviews";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
@@ -155,8 +155,8 @@ function EmptyState({ hasFilter }: { readonly hasFilter: boolean }) {
 
 export function TeamReviewTab() {
   const navigate = useNavigate();
-  const [reviews, setReviews] = useState<MenteeAnnualReview[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // ['annual-reviews', 'mentees'] — shared TanStack cache
+  const { data: reviews = [], isLoading } = useMenteeAnnualReviews();
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
@@ -164,21 +164,6 @@ export function TeamReviewTab() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
   const [viewTarget, setViewTarget] = useState<MenteeAnnualReview | null>(null);
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setReviews(await annualReviewService.getMenteeReviews());
-    } catch {
-      /* stays empty */
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const availableYears = Array.from(
     new Set(reviews.map((r) => extractFyToken(r.cycle_name))),

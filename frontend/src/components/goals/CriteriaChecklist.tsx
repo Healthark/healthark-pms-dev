@@ -1,15 +1,16 @@
 /**
  * CriteriaChecklist.tsx — Interactive Key Results Tracker (Story 3.3).
  *
- * Displayed inside the annual goal cards/rows for goals that have criteria. Behavior changes
- * based on the goal's approval_status:
+ * Displayed inside the annual goal cards/rows for goals that have criteria.
+ * Interactivity is gated by:
+ *   - `interactive` prop (parent's call: true for the owner's own goals,
+ *     false for mentor team views)
+ *   - `readOnly` prop (hard override for special read-only surfaces)
+ *   - approval_status post-approval check (only Approved + post-Approved
+ *     review states can have criteria toggled / proof saved)
  *
- *   - Draft / Submitted:     Read-only list (no checkboxes)
- *   - Approved:              Interactive checkboxes + proof input
- *   - Changes Requested:     Read-only (goal is being revised)
- *
- * When a checkbox is toggled, the component calls goalService.updateCriterion
- * and updates the local goal state via the onCriterionUpdate callback.
+ * Mutations go through the shared `useUpdateCriterion` hook so cache
+ * invalidation propagates to every consumer of the goals domain.
  *
  * Placement: src/components/goals/CriteriaChecklist.tsx
  */
@@ -17,7 +18,6 @@
 import { useState, useCallback } from "react";
 import { MessageSquareText, ChevronDown, ChevronUp } from "lucide-react";
 import {
-  goalService,
   type Criterion,
   type ApprovalStatus,
 } from "../../services/goal.service";
@@ -25,17 +25,18 @@ import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { isPostApproved } from "../../utils/goalStatus";
+import { useUpdateCriterion } from "../../queries/goals";
 
 interface CriteriaChecklistProps {
   readonly criteria: Criterion[];
   readonly approvalStatus: ApprovalStatus;
   readonly progressPercent: number;
   /**
-   * Callback to update the parent goal's criteria array after a mutation.
-   * Omit together with `readOnly` to render a non-interactive checklist
-   * (used on the mentor's Team Goals view, where the mentee owns the state).
+   * True if the viewer owns the goal and can toggle criteria + save
+   * proof. Mentor team views pass `false` (or omit) for a read-only
+   * checklist. Combined with `approvalStatus` and `readOnly`.
    */
-  readonly onCriterionUpdate?: (updated: Criterion) => void;
+  readonly interactive?: boolean;
   /** Forces the checklist to render read-only regardless of approval status. */
   readonly readOnly?: boolean;
 }
@@ -75,49 +76,44 @@ function ProgressBar({ percent }: { readonly percent: number }) {
 function CriterionRow({
   criterion,
   canToggle,
-  onUpdate,
 }: {
   readonly criterion: Criterion;
   readonly canToggle: boolean;
-  readonly onUpdate: (updated: Criterion) => void;
 }) {
-  const [isToggling, setIsToggling] = useState(false);
   const [showProof, setShowProof] = useState(false);
   const [proofText, setProofText] = useState(criterion.proof_comments ?? "");
-  const [proofSaving, setProofSaving] = useState(false);
   const toast = useToast();
   const snackbar = useSnackbar();
 
+  const updateCriterion = useUpdateCriterion();
+  const isToggling = updateCriterion.isPending && updateCriterion.variables?.criterionId === criterion.id;
+
   const handleToggle = useCallback(async () => {
     if (!canToggle || isToggling) return;
-    setIsToggling(true);
     try {
-      const updated = await goalService.updateCriterion(criterion.id, {
-        is_completed: !criterion.is_completed,
+      await updateCriterion.mutateAsync({
+        criterionId: criterion.id,
+        payload: { is_completed: !criterion.is_completed },
       });
-      onUpdate(updated);
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
-    } finally {
-      setIsToggling(false);
     }
-  }, [canToggle, isToggling, criterion, onUpdate, snackbar]);
+  }, [canToggle, isToggling, criterion.id, criterion.is_completed, updateCriterion, snackbar]);
 
   const handleSaveProof = useCallback(async () => {
-    setProofSaving(true);
     try {
-      const updated = await goalService.updateCriterion(criterion.id, {
-        proof_comments: proofText.trim() || null,
+      await updateCriterion.mutateAsync({
+        criterionId: criterion.id,
+        payload: { proof_comments: proofText.trim() || null },
       });
-      onUpdate(updated);
       setShowProof(false);
       toast.success("Evidence saved.");
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
-    } finally {
-      setProofSaving(false);
     }
-  }, [criterion.id, proofText, onUpdate, toast, snackbar]);
+  }, [criterion.id, proofText, updateCriterion, toast, snackbar]);
+
+  const isSavingProof = updateCriterion.isPending && updateCriterion.variables?.criterionId === criterion.id && updateCriterion.variables?.payload?.proof_comments !== undefined;
 
   return (
     <li className="space-y-1.5">
@@ -214,10 +210,10 @@ function CriterionRow({
             <button
               type="button"
               onClick={handleSaveProof}
-              disabled={proofSaving}
+              disabled={isSavingProof}
               className="rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {proofSaving ? "Saving…" : "Save Proof"}
+              {isSavingProof ? "Saving…" : "Save Proof"}
             </button>
           </div>
         </div>
@@ -232,12 +228,12 @@ export function CriteriaChecklist({
   criteria,
   approvalStatus,
   progressPercent,
-  onCriterionUpdate,
+  interactive = false,
   readOnly = false,
 }: CriteriaChecklistProps) {
   const [expanded, setExpanded] = useState(false);
   const canToggle =
-    !readOnly && !!onCriterionUpdate && isPostApproved(approvalStatus);
+    interactive && !readOnly && isPostApproved(approvalStatus);
   const completedCount = criteria.filter((c) => c.is_completed).length;
 
   if (criteria.length === 0) return null;
@@ -264,7 +260,6 @@ export function CriteriaChecklist({
             key={c.id}
             criterion={c}
             canToggle={canToggle}
-            onUpdate={onCriterionUpdate ?? (() => {})}
           />
         ))}
       </ul>
