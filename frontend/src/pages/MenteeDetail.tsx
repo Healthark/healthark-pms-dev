@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -13,10 +13,6 @@ import {
   Phone,
 } from "lucide-react";
 import {
-  menteeService,
-  type MenteeDetail as MenteeDetailData,
-} from "../services/mentee.service";
-import {
   type AnnualReview,
   type MenteeAnnualReview,
   type MentorEvalPayload,
@@ -26,6 +22,7 @@ import {
   useSubmitMentorEval,
   useSaveMentorDraft,
 } from "../queries/annualReviews";
+import { useMenteeDetail } from "../queries/mentees";
 import { MenteeGoalsTab } from "../components/mentees/MenteeGoalsTab";
 import { MenteeReviewTab } from "../components/mentees/MenteeReviewTab";
 import { MenteeProjectsTab } from "../components/mentees/MenteeProjectsTab";
@@ -68,58 +65,34 @@ function isTabKey(value: string | null): value is TabKey {
 export function MenteeDetail() {
   const { id } = useParams<{ id: string }>();
   const menteeId = Number(id);
+  const isValidId = !!menteeId && !Number.isNaN(menteeId);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab");
   const activeTab: TabKey = isTabKey(tabFromUrl) ? tabFromUrl : "summary";
 
-  const [data, setData] = useState<MenteeDetailData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Single source of truth for the mentee aggregate — the query is keyed
+  // on `["mentees", id, "detail"]` and invalidated by any goals /
+  // annual-reviews / project-reviews mutation broadcast (see the
+  // `invalidateMentees` helper in `queries/mentees.ts`). That replaces
+  // the old manual `reloadDetail()` callback chain.
+  const {
+    data: data = null,
+    isPending,
+    error: queryError,
+  } = useMenteeDetail(isValidId ? menteeId : null);
+  const isLoading = isValidId && isPending;
+  const error = !isValidId
+    ? "Invalid mentee id."
+    : queryError
+      ? // Axios errors expose `response.status`; 404 means "not your mentee".
+        (queryError as { response?: { status?: number } })?.response?.status === 404
+        ? "This mentee is not assigned to you or doesn't exist."
+        : "Could not load mentee details. Please try again."
+      : null;
 
   // Replace the "/3" segment in the Topbar breadcrumb with the mentee's name.
   usePageTitleOverride(data?.full_name ?? null);
-
-  const loadDetail = useCallback(
-    (options?: { silent?: boolean }) => {
-      if (!menteeId || Number.isNaN(menteeId)) {
-        setError("Invalid mentee id.");
-        setIsLoading(false);
-        return () => {};
-      }
-      let cancelled = false;
-      // silent reload (e.g. after an action) keeps the existing tab content
-      // visible instead of flashing the skeleton.
-      if (!options?.silent) setIsLoading(true);
-      setError(null);
-      menteeService
-        .getDetail(menteeId)
-        .then((d) => {
-          if (!cancelled) setData(d);
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          const msg =
-            err?.response?.status === 404
-              ? "This mentee is not assigned to you or doesn't exist."
-              : "Could not load mentee details. Please try again.";
-          setError(msg);
-        })
-        .finally(() => {
-          if (!cancelled && !options?.silent) setIsLoading(false);
-        });
-      return () => {
-        cancelled = true;
-      };
-    },
-    [menteeId],
-  );
-
-  useEffect(() => loadDetail(), [loadDetail]);
-
-  const reloadDetail = useCallback(() => {
-    loadDetail({ silent: true });
-  }, [loadDetail]);
 
   const setActiveTab = (key: TabKey) => {
     // Preserve any other query params by copying from current search.
@@ -192,7 +165,8 @@ export function MenteeDetail() {
     try {
       await submitMentorEvalMutation.mutateAsync({ reviewId, payload });
       setEvalFy(null);
-      reloadDetail();
+      // Mutation onSuccess broadcast already invalidates ['mentees'] →
+      // this detail query refetches automatically. No manual reload.
     } catch (err) {
       setEvalError(getErrorMessage(err));
     }
@@ -205,7 +179,7 @@ export function MenteeDetail() {
     setEvalError("");
     try {
       await saveMentorDraftMutation.mutateAsync({ reviewId, payload });
-      reloadDetail();
+      // Draft onSuccess also invalidates ['mentees'] — see annualReviews.ts.
       // Fires for both the explicit "Save Draft" click and the implicit
       // auto-save when this page unmounts (route change). The toast
       // provider lives at the app root, so it survives this component
@@ -315,7 +289,6 @@ export function MenteeDetail() {
                 <MenteeGoalsTab
                   goals={data.goals_list}
                   menteeName={data.full_name}
-                  onReload={reloadDetail}
                 />
               )}
               {activeTab === "summary" && (
@@ -335,7 +308,6 @@ export function MenteeDetail() {
                   assignments={data.project_assignments}
                   menteeName={data.full_name}
                   menteeUserId={data.user_id}
-                  onReload={reloadDetail}
                 />
               )}
             </div>

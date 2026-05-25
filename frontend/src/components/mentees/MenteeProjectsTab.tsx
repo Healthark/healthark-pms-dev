@@ -262,14 +262,12 @@ interface MenteeProjectsTabProps {
   readonly menteeName: string;
   /** Needed for the create-path of EvalModal (submitPMEvaluation). */
   readonly menteeUserId: number;
-  readonly onReload: () => void;
 }
 
 export function MenteeProjectsTab({
   assignments,
   menteeName,
   menteeUserId,
-  onReload,
 }: MenteeProjectsTabProps) {
   const { user } = useAuth();
   const currentUserId = user?.user_id ?? null;
@@ -287,9 +285,11 @@ export function MenteeProjectsTab({
   // page when the mentor navigates between surfaces.
   const { data: expectations = [] } = useRoleExpectations();
 
-  // Mutation hooks — invalidate ['project-reviews'] ± dashboard. The
-  // onReload() callback from the parent (MenteeDetail) is still called
-  // so the mentee-detail aggregate refreshes too.
+  // Mutation hooks — each invalidates ['project-reviews'] +
+  // ['mentees'] (see invalidateProjectReviewsAndDashboard /
+  // invalidateProjectReviewDrafts in queries/projectReviews.ts). That
+  // automatically refetches the parent MenteeDetail aggregate — no
+  // manual onReload() chain.
   const submitPMMutation = useSubmitPMEvaluation();
   const savePMDraftMutation = useSavePMDraft();
   const updateReviewMutation = useUpdateReview();
@@ -443,7 +443,6 @@ export function MenteeProjectsTab({
           payload,
         });
       }
-      onReload();
       closeEval();
       toast.success(isEdit ? "Evaluation updated." : "Evaluation submitted.");
     } catch (err) {
@@ -460,7 +459,6 @@ export function MenteeProjectsTab({
         userId: menteeUserId,
         payload,
       });
-      onReload();
       toast.success("Draft saved.");
     } catch (err) {
       setModalError(getErrorMessage(err));
@@ -474,7 +472,6 @@ export function MenteeProjectsTab({
     setModalError("");
     try {
       await saveSecDraftMutation.mutateAsync({ reviewId, payload });
-      onReload();
       toast.success("Draft saved.");
     } catch (err) {
       setModalError(getErrorMessage(err));
@@ -497,7 +494,6 @@ export function MenteeProjectsTab({
       } else {
         await submitSecMutation.mutateAsync({ reviewId, payload });
       }
-      onReload();
       closeImpact();
       toast.success(mine ? "Impact statement updated." : "Impact statement submitted.");
     } catch (err) {

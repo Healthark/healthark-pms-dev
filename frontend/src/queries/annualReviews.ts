@@ -11,6 +11,7 @@ import {
   type ManagementRatingPayload,
 } from "../services/annual-review.service";
 import { dashboardSummaryQueryKey } from "./dashboard";
+import { invalidateMentees } from "./mentees";
 
 /**
  * Strict, shared query keys for the annual-reviews domain.
@@ -76,6 +77,19 @@ function invalidateAnnualReviewsAndDashboard(
 ): void {
   qc.invalidateQueries({ queryKey: annualReviewsQueryKey });
   qc.invalidateQueries({ queryKey: dashboardSummaryQueryKey });
+  // Mentor-side MenteeDetail.reviews_list + MenteeAnnualSummaryTab's
+  // status pill are driven by the same review rows.
+  invalidateMentees(qc);
+}
+
+/** Drafts don't bump dashboard counters but still surface on
+ *  MenteeAnnualSummaryTab (mentor's draft rating/text + the "Draft
+ *  saved" pill ride on the review row inside MenteeDetail.reviews_list). */
+function invalidateAnnualReviewDrafts(
+  qc: ReturnType<typeof useQueryClient>,
+): void {
+  qc.invalidateQueries({ queryKey: annualReviewsQueryKey });
+  invalidateMentees(qc);
 }
 
 export function useSubmitSelfReview() {
@@ -92,11 +106,7 @@ export function useCreateSelfDraft() {
   return useMutation({
     mutationFn: (payload: SelfReviewDraftPayload) =>
       annualReviewService.createSelfDraft(payload),
-    onSuccess: () => {
-      // Drafts don't affect dashboard counters; only refresh the
-      // annual-reviews caches.
-      qc.invalidateQueries({ queryKey: annualReviewsQueryKey });
-    },
+    onSuccess: () => invalidateAnnualReviewDrafts(qc),
   });
 }
 
@@ -110,9 +120,7 @@ export function useSaveSelfDraft() {
       reviewId: number;
       payload: SelfReviewDraftPayload;
     }) => annualReviewService.saveDraft(reviewId, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: annualReviewsQueryKey });
-    },
+    onSuccess: () => invalidateAnnualReviewDrafts(qc),
   });
 }
 

@@ -16,6 +16,7 @@ import {
   type BulkApproveResult,
 } from "../services/goal.service";
 import { dashboardSummaryQueryKey } from "./dashboard";
+import { invalidateMentees } from "./mentees";
 
 /**
  * Strict, shared query keys for the goals domain.
@@ -50,13 +51,24 @@ export function useTeamGoals(goalType?: GoalType) {
 
 // ── Mutations ─────────────────────────────────────────────────────────
 
-/** Invalidate every goals cache + the dashboard summary. Used by mutations
- *  whose result affects both the goal list and the aggregate counters. */
+/** Invalidate every goals cache + the dashboard summary + the mentees
+ *  aggregate. Used by mutations whose result affects the goal list, the
+ *  aggregate counters, AND the inline `goals_list` on a mentor's
+ *  MenteeDetail view. */
 function invalidateGoalsAndDashboard(
   qc: ReturnType<typeof useQueryClient>,
 ): void {
   qc.invalidateQueries({ queryKey: goalsQueryKey });
   qc.invalidateQueries({ queryKey: dashboardSummaryQueryKey });
+  invalidateMentees(qc);
+}
+
+/** Drafts don't bump dashboard counters but still surface inline on
+ *  MenteeDetail (mentee's draft self-review text + criteria progress
+ *  show up in MenteeAnnualSummaryTab). */
+function invalidateGoalDrafts(qc: ReturnType<typeof useQueryClient>): void {
+  qc.invalidateQueries({ queryKey: goalsQueryKey });
+  invalidateMentees(qc);
 }
 
 export function useCreateGoal() {
@@ -117,11 +129,7 @@ export function useSaveSelfReviewDraft() {
       cycleHalf: SelfReviewCycleHalf;
       payload: GoalSelfReviewPayload;
     }) => goalService.saveSelfReviewDraft(goalId, cycleHalf, payload),
-    onSuccess: () => {
-      // Drafts don't affect dashboard counters; only refresh the goals
-      // caches so the editing surface sees the saved state.
-      qc.invalidateQueries({ queryKey: goalsQueryKey });
-    },
+    onSuccess: () => invalidateGoalDrafts(qc),
   });
 }
 
@@ -153,9 +161,7 @@ export function useSaveMentorReviewDraft() {
       cycleHalf: SelfReviewCycleHalf;
       payload: GoalMentorReviewPayload;
     }) => goalService.saveMentorReviewDraft(goalId, cycleHalf, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: goalsQueryKey });
-    },
+    onSuccess: () => invalidateGoalDrafts(qc),
   });
 }
 
@@ -169,9 +175,7 @@ export function useAddCriterion() {
       goalId: number;
       payload: CriterionCreatePayload;
     }): Promise<Criterion> => goalService.addCriterion(goalId, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: goalsQueryKey });
-    },
+    onSuccess: () => invalidateGoalDrafts(qc),
   });
 }
 
