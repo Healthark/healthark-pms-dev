@@ -4,7 +4,8 @@ import type {
   RoleExpectation,
 } from "../../services/project-review.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { useReviewDetails } from "../../hooks/useReviewDetails";
+import { useProjectReviewDetail } from "../../queries/projectReviews";
+import { getErrorMessage } from "../../utils/errors";
 import { CompetencyBlock } from "./CompetencyBlock";
 import { ImpactBlock } from "./ImpactBlock";
 
@@ -26,9 +27,14 @@ export function TableExpandedRow({
   const projectRatingsVisible = settings?.project_ratings_visible ?? false;
 
   const isPending = card.review_status !== "reviewed";
-  const { details, isFetching, error } = useReviewDetails(
-    isPending ? null : card.review_id,
-  );
+  // ['project-reviews', 'detail', reviewId] — shared TanStack cache.
+  // Replaces the prior useReviewDetails reducer hook.
+  const {
+    data: details = null,
+    isPending: isFetching,
+    error: queryError,
+  } = useProjectReviewDetail(isPending ? null : card.review_id);
+  const error = queryError ? getErrorMessage(queryError) : "";
 
   const roleExp = expectations.find(
     (e) =>

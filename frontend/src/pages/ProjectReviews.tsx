@@ -14,7 +14,7 @@
  * picks between Skeleton / Empty / Grid / Table.
  */
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
+import { useState, useMemo, Fragment } from "react";
 import {
   Briefcase,
   CheckCircle2,
@@ -24,10 +24,15 @@ import {
   ChevronDown,
 } from "lucide-react";
 import {
-  projectReviewService,
   type MyProjectCard,
   type RoleExpectation,
 } from "../services/project-review.service";
+import {
+  useMyProjectReviews,
+  useRoleExpectations,
+  usePMQueue,
+  useSecondaryQueue,
+} from "../queries/projectReviews";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { ProjectSummaryCard } from "../components/project-reviews/ProjectSummaryCard";
@@ -94,34 +99,15 @@ export function ProjectReviews() {
   const [projectFilter, setProjectFilter] = useState("all");
   const [sort, setSort] = useState<SortState<MyReviewsSortKey> | null>(null);
 
-  const [cards, setCards] = useState<MyProjectCard[]>([]);
-  const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
-  const [showEvaluateTab, setShowEvaluateTab] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [projectsData, expectationsData, pmQueue, secQueue] =
-        await Promise.all([
-          projectReviewService.getMyProjects(),
-          projectReviewService.getRoleExpectations(),
-          projectReviewService.getPMQueue().catch(() => []),
-          projectReviewService.getSecondaryQueue().catch(() => []),
-        ]);
-      setCards(projectsData);
-      setExpectations(expectationsData);
-      setShowEvaluateTab(pmQueue.length > 0 || secQueue.length > 0);
-    } catch {
-      // Stays empty on error
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  // Shared TanStack caches (each fires 1× per cold load + dedups w/ PMEvaluationTab).
+  const { data: cards = [], isLoading: cardsLoading } = useMyProjectReviews();
+  const { data: expectations = [], isLoading: expectationsLoading } = useRoleExpectations();
+  // PM + Secondary queues only used to gate the "Evaluate" tab visibility.
+  // Tolerate errors silently — non-PM users 403 on /pm-queue.
+  const { data: pmQueue = [] } = usePMQueue();
+  const { data: secQueue = [] } = useSecondaryQueue();
+  const isLoading = cardsLoading || expectationsLoading;
+  const showEvaluateTab = pmQueue.length > 0 || secQueue.length > 0;
 
   // ── Derived filter sources + filtered/sorted cards (memoised) ──────
 

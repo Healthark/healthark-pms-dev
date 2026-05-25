@@ -5,17 +5,21 @@
  * Shows both pending and submitted reviews with edit option.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   UserCircle, Briefcase, Send, Loader2, X, ClipboardList,
   LayoutGrid, Table2, Search, CheckCircle2, Clock, Pencil,
 } from "lucide-react";
 import {
-  projectReviewService,
   type ProjectReviewResponse,
   type SecondaryEvalPayload,
 } from "../../services/project-review.service";
+import {
+  useSecondaryQueue,
+  useSubmitSecondaryEval,
+  useUpdateSecondaryEval,
+} from "../../queries/projectReviews";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
@@ -194,8 +198,9 @@ export function SecondaryEvalTab() {
   const currentUserId = user?.user_id;
   const toast = useToast();
 
-  const [reviews, setReviews] = useState<ProjectReviewResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: reviews = [], isLoading } = useSecondaryQueue();
+  const submitMutation = useSubmitSecondaryEval();
+  const updateMutation = useUpdateSecondaryEval();
 
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
@@ -205,21 +210,8 @@ export function SecondaryEvalTab() {
   const [impactTarget, setImpactTarget] = useState<ProjectReviewResponse | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editImpact, setEditImpact] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const isSaving = submitMutation.isPending || updateMutation.isPending;
   const [modalError, setModalError] = useState("");
-
-  const loadReviews = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setReviews(await projectReviewService.getSecondaryQueue());
-    } catch {
-      // stays empty
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadReviews(); }, [loadReviews]);
 
   const getMySubmission = (review: ProjectReviewResponse) =>
     review.secondary_evaluations?.find((ev) => ev.evaluator_id === currentUserId);
@@ -245,23 +237,19 @@ export function SecondaryEvalTab() {
   });
 
   const handleSubmit = async (reviewId: number, payload: SecondaryEvalPayload) => {
-    setIsSaving(true);
     setModalError("");
     try {
       if (isEditMode) {
-        await projectReviewService.updateSecondaryEval(reviewId, payload);
+        await updateMutation.mutateAsync({ reviewId, payload });
       } else {
-        await projectReviewService.submitSecondaryEval(reviewId, payload);
+        await submitMutation.mutateAsync({ reviewId, payload });
       }
-      await loadReviews();
       setImpactTarget(null);
       setIsEditMode(false);
       setEditImpact("");
       toast.success(isEditMode ? "Impact statement updated." : "Impact statement submitted.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 

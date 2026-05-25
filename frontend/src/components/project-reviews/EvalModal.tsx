@@ -96,6 +96,24 @@ export function EvalModal({
   // race with the GET) and skip until the user has actually edited a field.
   const skipNextAutosaveRef = useRef(true);
 
+  // Latest onSaveDraft kept in a ref so the autosave effect doesn't
+  // re-fire on every parent re-render (which happens whenever a TanStack
+  // query invalidation triggers a refetch — the parent rebuilds the
+  // callback closure each render). Without this ref, the effect's
+  // `[onSaveDraft]` dep would feedback-loop: invalidation → re-render →
+  // new callback ref → effect fires → debouncedAutosave → mutation →
+  // invalidation → repeat.
+  const onSaveDraftRef = useRef(onSaveDraft);
+  useEffect(() => {
+    onSaveDraftRef.current = onSaveDraft;
+  });
+
+  // Last successfully saved payload (JSON-serialized) so the effect can
+  // bail when field values haven't changed since the last save. Same
+  // pattern as EvalForm's `baselineRef`. Critical safety net against
+  // re-render storms from cross-domain invalidation.
+  const lastSavedSerializedRef = useRef<string>("");
+
   useEffect(() => {
     if (!shouldPreload || card.review_id == null) {
       skipNextAutosaveRef.current = true;
@@ -145,8 +163,18 @@ export function EvalModal({
 
   const saveDraftMutation = useMutation({
     mutationFn: async (payload: PMEvaluationDraftPayload) => {
-      if (!onSaveDraft) return;
-      await onSaveDraft(payload);
+      // Read the latest onSaveDraft via ref so we always invoke the
+      // current callback, regardless of parent re-render timing.
+      const fn = onSaveDraftRef.current;
+      if (!fn) return payload;
+      await fn(payload);
+      return payload;
+    },
+    onSuccess: (saved) => {
+      // Snapshot the just-saved payload so the autosave effect can
+      // bail when subsequent re-renders fire without the user having
+      // changed any field.
+      lastSavedSerializedRef.current = JSON.stringify(saved);
     },
   });
 
@@ -159,23 +187,43 @@ export function EvalModal({
 
   // Debounced autosave on field changes. Skipped for the read-only viewer,
   // the edit-mode submit-only flow, and the initial hydration pass.
+  //
+  // Critical: `onSaveDraft` is intentionally NOT in the dep array — it's
+  // read via `onSaveDraftRef.current` below. A bare `onSaveDraft` dep
+  // would feedback-loop because every mutation invalidates queries →
+  // parent refetches → parent re-renders → new onSaveDraft callback ref →
+  // effect re-fires → another autosave → another mutation → loop.
+  //
+  // Belt-and-suspenders: the `lastSavedSerializedRef` baseline check
+  // means even if the effect fires post-save (e.g. due to other state
+  // bumps), we don't trigger another save when the payload hasn't
+  // actually changed since the last successful one.
   useEffect(() => {
-    if (readOnly || !onSaveDraft || isLoadingReview || fetchError) return;
+    if (readOnly || !onSaveDraftRef.current || isLoadingReview || fetchError) return;
     if (skipNextAutosaveRef.current) {
       skipNextAutosaveRef.current = false;
+      // Seed the baseline so a save-on-fresh-mount with no edits is a no-op.
+      lastSavedSerializedRef.current = JSON.stringify(buildDraftPayload());
       return;
     }
-    debouncedAutosave(buildDraftPayload());
-    // We intentionally exclude buildDraftPayload from deps — it's a fresh
-    // closure each render but only the latest field values matter, and
-    // `debouncedAutosave`'s identity is stable.
+    const currentPayload = buildDraftPayload();
+    const currentSerialized = JSON.stringify(currentPayload);
+    if (currentSerialized === lastSavedSerializedRef.current) {
+      // Field values match the last-saved snapshot — nothing to do.
+      return;
+    }
+    debouncedAutosave(currentPayload);
+    // We intentionally exclude buildDraftPayload + onSaveDraft from deps —
+    // the latter is read via ref to avoid the feedback loop described
+    // above; the former is a fresh closure each render but only the
+    // latest field values matter and `debouncedAutosave`'s identity is
+    // stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     comments,
     performanceGroup,
     impactStatement,
     readOnly,
-    onSaveDraft,
     isLoadingReview,
     fetchError,
     debouncedAutosave,

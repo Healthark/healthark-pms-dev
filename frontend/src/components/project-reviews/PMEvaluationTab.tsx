@@ -5,14 +5,12 @@
  * table/card view with a Type column and filter.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   UserCircle, Briefcase, ClipboardList, Pencil,
   LayoutGrid, Table2, Search, CheckCircle2, Clock,
 } from "lucide-react";
 import {
-  projectReviewService,
-  type PMPendingReviewCard,
   type PMEvaluationPayload,
   type PMEvaluationDraftPayload,
   type ProjectReviewResponse,
@@ -20,6 +18,17 @@ import {
   type SecondaryEvalDraftPayload,
   type RoleExpectation,
 } from "../../services/project-review.service";
+import {
+  usePMQueue,
+  useSecondaryQueue,
+  useRoleExpectations,
+  useSubmitPMEvaluation,
+  useSavePMDraft,
+  useUpdateReview,
+  useSubmitSecondaryEval,
+  useSaveSecondaryDraft,
+  useUpdateSecondaryEval,
+} from "../../queries/projectReviews";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -169,10 +178,27 @@ export function PMEvaluationTab() {
   const activeCycle = settings?.active_cycle_name ?? null;
   const toast = useToast();
 
-  const [pmCards, setPmCards] = useState<PMPendingReviewCard[]>([]);
-  const [secReviews, setSecReviews] = useState<ProjectReviewResponse[]>([]);
-  const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // ['project-reviews', 'pm-queue' | 'secondary-queue' | 'role-expectations']
+  // — shared TanStack caches across PMEvaluationTab + ProjectReviews page.
+  const { data: pmCards = [], isLoading: pmLoading } = usePMQueue();
+  const { data: secReviews = [], isLoading: secLoading } = useSecondaryQueue();
+  const { data: expectations = [], isLoading: expLoading } = useRoleExpectations();
+  const isLoading = pmLoading || secLoading || expLoading;
+
+  // Mutation hooks — each invalidates ['project-reviews'] ± dashboard
+  const submitPMMutation = useSubmitPMEvaluation();
+  const savePMDraftMutation = useSavePMDraft();
+  const updateReviewMutation = useUpdateReview();
+  const submitSecMutation = useSubmitSecondaryEval();
+  const saveSecDraftMutation = useSaveSecondaryDraft();
+  const updateSecMutation = useUpdateSecondaryEval();
+  const isSaving =
+    submitPMMutation.isPending ||
+    updateReviewMutation.isPending ||
+    submitSecMutation.isPending ||
+    updateSecMutation.isPending;
+  const isDraftSaving =
+    savePMDraftMutation.isPending || saveSecDraftMutation.isPending;
 
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,25 +219,7 @@ export function PMEvaluationTab() {
   // Modal state
   const [evalTarget, setEvalTarget] = useState<UnifiedEvalRow | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [modalError, setModalError] = useState("");
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [queueData, secData, expData] = await Promise.all([
-        projectReviewService.getPMQueue(),
-        projectReviewService.getSecondaryQueue().catch(() => []),
-        projectReviewService.getRoleExpectations(),
-      ]);
-      setPmCards(queueData);
-      setSecReviews(secData);
-      setExpectations(expData);
-    } catch { /* stays empty */ } finally { setIsLoading(false); }
-  }, []);
-
-  useEffect(() => { void loadData(); }, [loadData]);
 
   // Build unified rows
   const unifiedRows: UnifiedEvalRow[] = [];
@@ -318,65 +326,73 @@ export function PMEvaluationTab() {
 
   const handlePMSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
-    setIsSaving(true); setModalError("");
+    setModalError("");
     try {
       if (isEditMode && evalTarget.review_id != null) {
-        await projectReviewService.updateReview(evalTarget.review_id, payload);
+        await updateReviewMutation.mutateAsync({
+          reviewId: evalTarget.review_id,
+          payload,
+        });
         closeModal();
         toast.success("Evaluation updated.");
       } else {
-        await projectReviewService.submitPMEvaluation(evalTarget.project_id, evalTarget.user_id!, payload);
-        setPmCards((prev) => prev.map((c) =>
-          c.project_id === evalTarget.project_id && c.user_id === evalTarget.user_id ? { ...c, review_status: "reviewed" } : c
-        ));
+        await submitPMMutation.mutateAsync({
+          projectId: evalTarget.project_id,
+          userId: evalTarget.user_id!,
+          payload,
+        });
         closeModal();
         toast.success("Evaluation submitted.");
       }
-    } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsSaving(false); }
+    } catch (err: unknown) {
+      setModalError(getErrorMessage(err));
+    }
   };
 
   const handleSecSubmit = async (reviewId: number, payload: SecondaryEvalPayload) => {
-    setIsSaving(true); setModalError("");
+    setModalError("");
     try {
       if (evalTarget?.review_status === "submitted") {
-        await projectReviewService.updateSecondaryEval(reviewId, payload);
+        await updateSecMutation.mutateAsync({ reviewId, payload });
       } else {
-        await projectReviewService.submitSecondaryEval(reviewId, payload);
+        await submitSecMutation.mutateAsync({ reviewId, payload });
       }
-      await loadData();
       closeModal();
       toast.success("Impact statement saved.");
-    } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsSaving(false); }
+    } catch (err: unknown) {
+      setModalError(getErrorMessage(err));
+    }
   };
 
   const handlePMSaveDraft = async (payload: PMEvaluationDraftPayload) => {
     if (!evalTarget) return;
-    setIsDraftSaving(true); setModalError("");
+    setModalError("");
     try {
-      await projectReviewService.savePMDraft(
-        evalTarget.project_id,
-        evalTarget.user_id!,
+      await savePMDraftMutation.mutateAsync({
+        projectId: evalTarget.project_id,
+        userId: evalTarget.user_id!,
         payload,
-      );
-      // Refresh the queue so the card picks up the newly-created review_id.
-      // Without this, the next time the PM opens the modal the draft fields
-      // wouldn't preload (preload condition keys off review_id) AND the row
-      // button stays "Evaluate" instead of flipping to "Continue Evaluation".
-      await loadData();
+      });
+      // Invalidation refreshes the queue so the card picks up the
+      // newly-created review_id; the modal can then preload draft fields
+      // on next open AND the row button flips to "Continue Evaluation".
       toast.success("Draft saved.");
-    } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsDraftSaving(false); }
+    } catch (err: unknown) {
+      setModalError(getErrorMessage(err));
+    }
   };
 
   const handleSecSaveDraft = async (
     reviewId: number,
     payload: SecondaryEvalDraftPayload,
   ) => {
-    setIsDraftSaving(true); setModalError("");
+    setModalError("");
     try {
-      await projectReviewService.saveSecondaryDraft(reviewId, payload);
-      await loadData();
+      await saveSecDraftMutation.mutateAsync({ reviewId, payload });
       toast.success("Draft saved.");
-    } catch (err: unknown) { setModalError(getErrorMessage(err)); } finally { setIsDraftSaving(false); }
+    } catch (err: unknown) {
+      setModalError(getErrorMessage(err));
+    }
   };
 
   const viewBtnCls = (mode: ViewMode) =>
