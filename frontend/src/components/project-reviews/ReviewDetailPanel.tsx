@@ -1,10 +1,12 @@
 import { Clock, Loader2, Star, User, UserCircle, X } from "lucide-react";
 import type {
   MyProjectCard,
+  ProjectReviewResponse,
   RoleExpectation,
 } from "../../services/project-review.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { useReviewDetails } from "../../hooks/useReviewDetails";
+import { useProjectReviewDetail } from "../../queries/projectReviews";
+import { getErrorMessage } from "../../utils/errors";
 import { CompetencyBlock } from "./CompetencyBlock";
 import { ImpactBlock } from "./ImpactBlock";
 
@@ -30,9 +32,15 @@ export function ReviewDetailPanel({
   const projectRatingsVisible = settings?.project_ratings_visible ?? false;
 
   const isPending = card.review_status !== "reviewed";
-  const { details, isFetching, error } = useReviewDetails(
-    isPending ? null : card.review_id,
-  );
+  // ['project-reviews', 'detail', reviewId] — shared TanStack cache.
+  // Replaces the prior useReviewDetails reducer hook; same loading
+  // lifecycle, just exposed via the standard useQuery state shape.
+  const {
+    data: details = null,
+    isPending: isFetching,
+    error: queryError,
+  } = useProjectReviewDetail(isPending ? null : card.review_id);
+  const error = queryError ? getErrorMessage(queryError) : "";
 
   const roleExp = expectations.find(
     (e) =>
@@ -98,7 +106,7 @@ function renderBody({
   isPending: boolean;
   isFetching: boolean;
   error: string;
-  details: ReturnType<typeof useReviewDetails>["details"];
+  details: ProjectReviewResponse | null;
   roleExp: RoleExpectation | undefined;
   projectRatingsVisible: boolean;
 }) {

@@ -9,17 +9,18 @@
  * showing review status and performance score.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   BarChart2, Briefcase, CheckCircle2, Clock,
   AlertCircle, ChevronDown, Users, User,
 } from "lucide-react";
 import {
-  projectReviewService,
-  type AdminProjectSummary,
   type AdminMemberReviewRow,
+  type AdminProjectSummary,
 } from "../../services/project-review.service";
+import { useManagementView } from "../../queries/projectReviews";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { getErrorMessage } from "../../utils/errors";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -281,9 +282,6 @@ export function ManagementTab() {
 
   const [selectedCycle, setSelectedCycle] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [data, setData] = useState<AdminProjectSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
 
   // Initialise cycle from settings once available
   useEffect(() => {
@@ -292,22 +290,17 @@ export function ManagementTab() {
     }
   }, [settings?.active_cycle_name, selectedCycle]);
 
-  const loadData = useCallback(async (cycle: string) => {
-    if (!cycle) return;
-    setIsLoading(true);
-    setError("");
-    try {
-      setData(await projectReviewService.getManagementView(cycle));
-    } catch {
-      setError("Failed to load management data. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedCycle) void loadData(selectedCycle);
-  }, [selectedCycle, loadData]);
+  // ['project-reviews', 'management', <cycle>] — shared TanStack cache.
+  // Returns empty array while selectedCycle is "" so the initial render
+  // before settings load is harmless.
+  const {
+    data = [],
+    isLoading,
+    error: queryError,
+  } = useManagementView(selectedCycle || undefined);
+  const error = queryError
+    ? `Failed to load management data. Please try again. (${getErrorMessage(queryError)})`
+    : "";
 
   // ── Summary stats (computed) ──
   const totalProjects = data.length;

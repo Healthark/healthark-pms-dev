@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Briefcase,
   CheckCircle2,
@@ -20,6 +20,15 @@ import {
   type SecondaryEvalPayload,
   type SecondaryEvalDraftPayload,
 } from "../../services/project-review.service";
+import {
+  useRoleExpectations,
+  useSubmitPMEvaluation,
+  useSavePMDraft,
+  useUpdateReview,
+  useSubmitSecondaryEval,
+  useSaveSecondaryDraft,
+  useUpdateSecondaryEval,
+} from "../../queries/projectReviews";
 import type { MenteeProjectAssignment } from "../../services/mentee.service";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
@@ -272,25 +281,34 @@ export function MenteeProjectsTab({
   const [cycleFilter, setCycleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
-  const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
+
+  // ['project-reviews', 'role-expectations'] — shared TanStack cache
+  // (15-min staleTime). Dedupes with PMEvaluationTab + ProjectReviews
+  // page when the mentor navigates between surfaces.
+  const { data: expectations = [] } = useRoleExpectations();
+
+  // Mutation hooks — invalidate ['project-reviews'] ± dashboard. The
+  // onReload() callback from the parent (MenteeDetail) is still called
+  // so the mentee-detail aggregate refreshes too.
+  const submitPMMutation = useSubmitPMEvaluation();
+  const savePMDraftMutation = useSavePMDraft();
+  const updateReviewMutation = useUpdateReview();
+  const submitSecMutation = useSubmitSecondaryEval();
+  const saveSecDraftMutation = useSaveSecondaryDraft();
+  const updateSecMutation = useUpdateSecondaryEval();
+  const isSaving =
+    submitPMMutation.isPending ||
+    updateReviewMutation.isPending ||
+    submitSecMutation.isPending ||
+    updateSecMutation.isPending;
+  const isDraftSaving =
+    savePMDraftMutation.isPending || saveSecDraftMutation.isPending;
 
   // Modal state
   const [evalTarget, setEvalTarget] = useState<MenteeEvalRow | null>(null);
   const [evalMode, setEvalMode] = useState<"create" | "edit" | "view">("create");
   const [impactTarget, setImpactTarget] = useState<MenteeEvalRow | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [modalError, setModalError] = useState("");
-
-  // Role expectations only matter when the mentor will actually evaluate.
-  // Fetching is cheap and cached at the service layer — same call the
-  // Project Reviews page makes.
-  useEffect(() => {
-    projectReviewService
-      .getRoleExpectations()
-      .then(setExpectations)
-      .catch(() => setExpectations([]));
-  }, []);
 
   // Build row list from assignments. Backend now emits one assignment row
   // per (project, cycle), so we map 1:1.
@@ -410,45 +428,42 @@ export function MenteeProjectsTab({
 
   const handlePMSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
-    setIsSaving(true);
     setModalError("");
     try {
       const isEdit = evalMode === "edit" && evalTarget.review_id != null;
       if (isEdit) {
-        await projectReviewService.updateReview(evalTarget.review_id!, payload);
-      } else {
-        await projectReviewService.submitPMEvaluation(
-          evalTarget.project_id,
-          menteeUserId,
+        await updateReviewMutation.mutateAsync({
+          reviewId: evalTarget.review_id!,
           payload,
-        );
+        });
+      } else {
+        await submitPMMutation.mutateAsync({
+          projectId: evalTarget.project_id,
+          userId: menteeUserId,
+          payload,
+        });
       }
       onReload();
       closeEval();
       toast.success(isEdit ? "Evaluation updated." : "Evaluation submitted.");
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handlePMSaveDraft = async (payload: PMEvaluationDraftPayload) => {
     if (!evalTarget) return;
-    setIsDraftSaving(true);
     setModalError("");
     try {
-      await projectReviewService.savePMDraft(
-        evalTarget.project_id,
-        menteeUserId,
+      await savePMDraftMutation.mutateAsync({
+        projectId: evalTarget.project_id,
+        userId: menteeUserId,
         payload,
-      );
+      });
       onReload();
       toast.success("Draft saved.");
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsDraftSaving(false);
     }
   };
 
@@ -456,16 +471,13 @@ export function MenteeProjectsTab({
     reviewId: number,
     payload: SecondaryEvalDraftPayload,
   ) => {
-    setIsDraftSaving(true);
     setModalError("");
     try {
-      await projectReviewService.saveSecondaryDraft(reviewId, payload);
+      await saveSecDraftMutation.mutateAsync({ reviewId, payload });
       onReload();
       toast.success("Draft saved.");
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsDraftSaving(false);
     }
   };
 
@@ -474,7 +486,6 @@ export function MenteeProjectsTab({
     payload: SecondaryEvalPayload,
   ) => {
     if (!impactTarget) return;
-    setIsSaving(true);
     setModalError("");
     try {
       // If the mentor already wrote an impact here, PUT — otherwise POST.
@@ -482,17 +493,15 @@ export function MenteeProjectsTab({
         (ev) => ev.evaluator_id === currentUserId,
       );
       if (mine) {
-        await projectReviewService.updateSecondaryEval(reviewId, payload);
+        await updateSecMutation.mutateAsync({ reviewId, payload });
       } else {
-        await projectReviewService.submitSecondaryEval(reviewId, payload);
+        await submitSecMutation.mutateAsync({ reviewId, payload });
       }
       onReload();
       closeImpact();
       toast.success(mine ? "Impact statement updated." : "Impact statement submitted.");
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 
