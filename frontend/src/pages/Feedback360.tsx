@@ -15,14 +15,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2, Search, UserCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import {
-  menteeService,
-  type MenteeSummary,
-} from "../services/mentee.service";
-import {
-  feedback360Service,
-  type FeedbackPeer,
-} from "../services/feedback360.service";
+import { type MenteeSummary } from "../services/mentee.service";
+import { type FeedbackPeer } from "../services/feedback360.service";
+import { useMenteeSummaries } from "../queries/mentees";
+import { useFeedbackPeers } from "../queries/feedback360";
 import { getErrorMessage } from "../utils/errors";
 import { PeerList } from "../components/feedback360/PeerList";
 import { AggregateView } from "../components/feedback360/AggregateView";
@@ -110,31 +106,23 @@ export function Feedback360() {
 // ── Mentee tab ──────────────────────────────────────────────────────
 
 function MenteeFeedbackTab() {
-  const [mentees, setMentees] = useState<MenteeSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  // Shared cache with MyMentees / MenteeDetail — dedupes the
+  // /mentees/summary request when the user comes here after viewing
+  // their mentees list (D4 migration).
+  const {
+    data: mentees = [],
+    isPending,
+    error: queryError,
+  } = useMenteeSummaries();
+  const isLoading = isPending;
+  const error = queryError ? getErrorMessage(queryError) : "";
   const [selected, setSelected] = useState<MenteeSummary | null>(null);
 
+  // Auto-select the first mentee once the list arrives — preserves the
+  // pre-migration UX where the picker landed on someone.
   useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    menteeService
-      .getSummaries()
-      .then((rows) => {
-        if (cancelled) return;
-        setMentees(rows);
-        if (rows.length > 0) setSelected(rows[0]);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!selected && mentees.length > 0) setSelected(mentees[0]);
+  }, [mentees, selected]);
 
   if (isLoading) {
     return (
@@ -198,29 +186,16 @@ function MenteeFeedbackTab() {
 // ── Org tab (Management only) ───────────────────────────────────────
 
 function OrgFeedbackTab() {
-  const [peers, setPeers] = useState<FeedbackPeer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  // Shared cache with the Give Feedback tab's PeerList — flipping
+  // between tabs is a cache hit.
+  const {
+    data: peers = [],
+    isPending,
+    error: queryError,
+  } = useFeedbackPeers();
+  const isLoading = isPending;
+  const error = queryError ? getErrorMessage(queryError) : "";
   const [selected, setSelected] = useState<FeedbackPeer | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    feedback360Service
-      .getPeers()
-      .then((rows) => {
-        if (!cancelled) setPeers(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (isLoading) {
     return (

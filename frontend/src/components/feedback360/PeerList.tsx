@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
@@ -10,10 +10,8 @@ import {
   UserCircle,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  feedback360Service,
-  type FeedbackPeer,
-} from "../../services/feedback360.service";
+import { type FeedbackPeer } from "../../services/feedback360.service";
+import { useFeedbackPeers } from "../../queries/feedback360";
 import { getErrorMessage } from "../../utils/errors";
 
 /**
@@ -30,33 +28,17 @@ const ESTIMATED_ROW_PX = 76; // ~card height + vertical padding
 const OVERSCAN = 6;
 
 export function PeerList() {
-  const [peers, setPeers] = useState<FeedbackPeer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    data: peers = [],
+    isPending,
+    error: queryError,
+  } = useFeedbackPeers();
+  const isLoading = isPending;
+  const error = queryError ? getErrorMessage(queryError) : "";
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "worked" | "not_worked">(
     "worked",
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError("");
-    feedback360Service
-      .getPeers()
-      .then((rows) => {
-        if (!cancelled) setPeers(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

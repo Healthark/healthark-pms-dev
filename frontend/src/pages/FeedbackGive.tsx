@@ -24,11 +24,14 @@ import {
   UserCircle,
 } from "lucide-react";
 import {
-  feedback360Service,
-  type FeedbackMyReview,
   type FeedbackQuestion,
   type FeedbackRatings,
 } from "../services/feedback360.service";
+import {
+  useFeedbackMyReview,
+  useFeedbackQuestions,
+  useSubmitFeedback,
+} from "../queries/feedback360";
 import { getErrorMessage } from "../utils/errors";
 import { useToast } from "../hooks/useToast";
 import { RatingTrack } from "../components/feedback360/RatingTrack";
@@ -37,50 +40,41 @@ import { Gridlines } from "../components/feedback360/Gridlines";
 export function FeedbackGive() {
   const { id } = useParams<{ id: string }>();
   const targetUserId = Number(id);
+  const isValidId = Number.isFinite(targetUserId);
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
-  const [my, setMy] = useState<FeedbackMyReview | null>(null);
-  const [ratings, setRatings] = useState<FeedbackRatings>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  // Two parallel queries — TanStack runs them concurrently. The
+  // questions registry is shared (15-min staleTime) so multiple
+  // FeedbackGive visits in one session hit the cache.
+  const questionsQuery = useFeedbackQuestions();
+  const myReviewQuery = useFeedbackMyReview(isValidId ? targetUserId : null);
+  const submitFeedbackMutation = useSubmitFeedback();
 
-  // Initial load — questions + my-review run in parallel.
-  useEffect(() => {
-    if (!Number.isFinite(targetUserId)) {
-      setLoadError("Invalid user.");
-      setIsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setIsLoading(true);
-    setLoadError("");
-    Promise.all([
-      feedback360Service.getQuestions(),
-      feedback360Service.getMyReview(targetUserId),
-    ])
-      .then(([qs, mine]) => {
-        if (cancelled) return;
-        setQuestions(qs);
-        setMy(mine);
-        // Pre-fill ratings when in read-only mode.
-        if (mine.ratings) setRatings(mine.ratings);
-      })
-      .catch((err) => {
-        if (!cancelled) setLoadError(getErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [targetUserId]);
+  const questions = questionsQuery.data ?? [];
+  const my = myReviewQuery.data ?? null;
+  const isLoading =
+    isValidId && (questionsQuery.isPending || myReviewQuery.isPending);
+  const loadError = !isValidId
+    ? "Invalid user."
+    : questionsQuery.error
+      ? getErrorMessage(questionsQuery.error)
+      : myReviewQuery.error
+        ? getErrorMessage(myReviewQuery.error)
+        : "";
 
   const isReadOnly = my?.ratings != null;
+  const [ratings, setRatings] = useState<FeedbackRatings>({});
+  const [submitError, setSubmitError] = useState("");
+  const isSubmitting = submitFeedbackMutation.isPending;
+
+  // Pre-fill ratings when the read-only payload arrives. Effect over a
+  // ref-style setter so re-renders during refetch don't clobber edits
+  // mid-session — but here read-only is a terminal state (can't go
+  // back to draft) so a simple effect is fine.
+  useEffect(() => {
+    if (my?.ratings) setRatings(my.ratings);
+  }, [my?.ratings]);
 
   const grouped = useMemo(() => {
     const out: { bucket: string; questions: FeedbackQuestion[] }[] = [];
@@ -111,17 +105,18 @@ export function FeedbackGive() {
 
   const handleSubmit = async () => {
     setSubmitError("");
-    setIsSubmitting(true);
     try {
-      await feedback360Service.submitReview({
+      await submitFeedbackMutation.mutateAsync({
         target_user_id: targetUserId,
         ratings,
       });
       toast.success("Feedback submitted.");
+      // Broadcast invalidation in the mutation hook flips the peer's
+      // has_submitted flag and refreshes the target's aggregate before
+      // we navigate.
       navigate("/feedback");
     } catch (err) {
       setSubmitError(getErrorMessage(err));
-      setIsSubmitting(false);
     }
   };
 
