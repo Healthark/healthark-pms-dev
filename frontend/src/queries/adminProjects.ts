@@ -33,11 +33,47 @@ export function useAdminProjects() {
   });
 }
 
+// Shared snapshot/rollback shape for the three project lifecycle
+// mutations below — each cancels in-flight refetches, snapshots the
+// cached list, mutates the row in place (or drops it for delete), and
+// rolls back to the snapshot if the server rejects.
+type ProjectsContext = { previous: ProjectResponse[] | undefined };
+
+function snapshotAdminProjects(
+  qc: ReturnType<typeof useQueryClient>,
+): Promise<ProjectsContext> {
+  return qc
+    .cancelQueries({ queryKey: adminProjectsQueryKey })
+    .then(() => ({
+      previous: qc.getQueryData<ProjectResponse[]>(adminProjectsQueryKey),
+    }));
+}
+
+function rollbackAdminProjects(
+  qc: ReturnType<typeof useQueryClient>,
+  context: ProjectsContext | undefined,
+): void {
+  if (context?.previous !== undefined) {
+    qc.setQueryData(adminProjectsQueryKey, context.previous);
+  }
+}
+
 export function useDeleteProject() {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<void, Error, number, ProjectsContext>({
     mutationFn: (projectId: number) => projectService.deleteProject(projectId),
-    onSuccess: () => {
+    // Optimistic: row vanishes from the table on click. The soft-delete
+    // is server-authoritative; if it fails (e.g. project has active
+    // reviews) the rollback restores the row.
+    onMutate: async (projectId) => {
+      const context = await snapshotAdminProjects(qc);
+      qc.setQueryData<ProjectResponse[]>(adminProjectsQueryKey, (old) =>
+        old?.filter((p) => p.id !== projectId),
+      );
+      return context;
+    },
+    onError: (_err, _vars, context) => rollbackAdminProjects(qc, context),
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: adminProjectsQueryKey });
     },
   });
@@ -45,9 +81,20 @@ export function useDeleteProject() {
 
 export function useMarkProjectComplete() {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<unknown, Error, number, ProjectsContext>({
     mutationFn: (projectId: number) => projectService.markComplete(projectId),
-    onSuccess: () => {
+    // Optimistic: status pill flips to "completed" instantly. Important
+    // for the Active filter — the row leaves the visible set without
+    // waiting for the refetch.
+    onMutate: async (projectId) => {
+      const context = await snapshotAdminProjects(qc);
+      qc.setQueryData<ProjectResponse[]>(adminProjectsQueryKey, (old) =>
+        old?.map((p) => (p.id === projectId ? { ...p, status: "completed" } : p)),
+      );
+      return context;
+    },
+    onError: (_err, _vars, context) => rollbackAdminProjects(qc, context),
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: adminProjectsQueryKey });
     },
   });
@@ -55,9 +102,18 @@ export function useMarkProjectComplete() {
 
 export function useReopenProject() {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<unknown, Error, number, ProjectsContext>({
     mutationFn: (projectId: number) => projectService.reopen(projectId),
-    onSuccess: () => {
+    // Optimistic: status pill flips to "active" instantly.
+    onMutate: async (projectId) => {
+      const context = await snapshotAdminProjects(qc);
+      qc.setQueryData<ProjectResponse[]>(adminProjectsQueryKey, (old) =>
+        old?.map((p) => (p.id === projectId ? { ...p, status: "active" } : p)),
+      );
+      return context;
+    },
+    onError: (_err, _vars, context) => rollbackAdminProjects(qc, context),
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: adminProjectsQueryKey });
     },
   });

@@ -189,9 +189,48 @@ export function useUpdateCriterion() {
       criterionId: number;
       payload: CriterionUpdatePayload;
     }): Promise<Criterion> => goalService.updateCriterion(criterionId, payload),
-    onSuccess: () => {
-      // Criterion checkbox toggles change progress_percent on the parent
-      // goal AND the completion_percent on the dashboard summary.
+    // Optimistic update — checkbox toggles are the highest-frequency
+    // mutation in the app, and waiting ~150-300 ms for the refetch
+    // before the box visibly flips is the most visible source of lag.
+    onMutate: async ({ criterionId, payload }) => {
+      // Cancel any in-flight refetches so they don't clobber the
+      // optimistic value when they settle.
+      await qc.cancelQueries({ queryKey: ["goals", "mine"] });
+      const snapshot = qc.getQueriesData<Goal[]>({
+        queryKey: ["goals", "mine"],
+      });
+      qc.setQueriesData<Goal[]>(
+        { queryKey: ["goals", "mine"] },
+        (old) => {
+          if (!old) return old;
+          return old.map((goal) => {
+            const idx = goal.criteria.findIndex((c) => c.id === criterionId);
+            if (idx === -1) return goal;
+            const nextCriteria = goal.criteria.slice();
+            nextCriteria[idx] = { ...nextCriteria[idx], ...payload };
+            // Recompute progress_percent so the bar reflects the toggle
+            // before the server's authoritative value arrives.
+            const total = nextCriteria.length;
+            const completed = nextCriteria.filter((c) => c.is_completed).length;
+            const progress_percent =
+              total === 0 ? 0 : Math.round((completed / total) * 100);
+            return { ...goal, criteria: nextCriteria, progress_percent };
+          });
+        },
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, context) => {
+      // Restore every cache entry we touched.
+      if (context?.snapshot) {
+        for (const [key, data] of context.snapshot) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: () => {
+      // Server is the source of truth for progress_percent + dashboard
+      // counters; reconcile after the round-trip.
       invalidateGoalsAndDashboard(qc);
     },
   });
@@ -207,14 +246,83 @@ export function useUpdateApproval() {
       goalId: number;
       payload: GoalApprovalPayload;
     }) => goalService.updateApproval(goalId, payload),
-    onSuccess: () => invalidateGoalsAndDashboard(qc),
+    // Optimistic: flip the row's approval_status (and feedback for
+    // request-changes) before the refetch lands. Without this the
+    // "Approve" / "Request Changes" buttons feel ~250 ms laggy.
+    onMutate: async ({ goalId, payload }) => {
+      await qc.cancelQueries({ queryKey: ["goals", "team"] });
+      const snapshot = qc.getQueriesData<TeamGoal[]>({
+        queryKey: ["goals", "team"],
+      });
+      qc.setQueriesData<TeamGoal[]>(
+        { queryKey: ["goals", "team"] },
+        (old) => {
+          if (!old) return old;
+          return old.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  approval_status: payload.approval_status,
+                  manager_feedback:
+                    payload.feedback !== undefined
+                      ? payload.feedback
+                      : g.manager_feedback,
+                }
+              : g,
+          );
+        },
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) {
+        for (const [key, data] of context.snapshot) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: () => invalidateGoalsAndDashboard(qc),
   });
 }
 
 export function useBulkApprove() {
   const qc = useQueryClient();
-  return useMutation<BulkApproveResult, Error, number[]>({
+  return useMutation<
+    BulkApproveResult,
+    Error,
+    number[],
+    { snapshot: Array<[readonly unknown[], TeamGoal[] | undefined]> }
+  >({
     mutationFn: (goalIds: number[]) => goalService.bulkApprove(goalIds),
-    onSuccess: () => invalidateGoalsAndDashboard(qc),
+    // Optimistic: flip every selected goal to "approved" so the modal's
+    // pending count and the underlying table both reflect the change
+    // before the refetch settles. If the server rejects any of them
+    // (failures[]), the onSettled refetch reconciles the row's true
+    // state and the consumer surfaces the failure list via a snackbar.
+    onMutate: async (goalIds) => {
+      await qc.cancelQueries({ queryKey: ["goals", "team"] });
+      const snapshot = qc.getQueriesData<TeamGoal[]>({
+        queryKey: ["goals", "team"],
+      });
+      const idSet = new Set(goalIds);
+      qc.setQueriesData<TeamGoal[]>(
+        { queryKey: ["goals", "team"] },
+        (old) => {
+          if (!old) return old;
+          return old.map((g) =>
+            idSet.has(g.id) ? { ...g, approval_status: "approved" } : g,
+          );
+        },
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) {
+        for (const [key, data] of context.snapshot) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: () => invalidateGoalsAndDashboard(qc),
   });
 }

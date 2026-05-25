@@ -166,6 +166,30 @@ export function useSetManagementRating() {
       reviewId: number;
       payload: ManagementRatingPayload;
     }) => annualReviewService.setManagementRating(reviewId, payload),
-    onSuccess: () => invalidateAnnualReviewsAndDashboard(qc),
+    // Optimistic: the management rating modal closes after the click,
+    // and without this the calibration grid cell flickers between the
+    // old value and the new one for ~150-300 ms while the refetch
+    // resolves. Update the cell immediately, reconcile on settle.
+    onMutate: async ({ reviewId, payload }) => {
+      await qc.cancelQueries({ queryKey: calibrationGridQueryKey });
+      const previous = qc.getQueryData<CalibrationRow[]>(calibrationGridQueryKey);
+      qc.setQueryData<CalibrationRow[]>(calibrationGridQueryKey, (old) =>
+        old?.map((row) =>
+          row.review_id === reviewId
+            ? {
+                ...row,
+                management_performance_rating: payload.management_performance_rating,
+              }
+            : row,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        qc.setQueryData(calibrationGridQueryKey, context.previous);
+      }
+    },
+    onSettled: () => invalidateAnnualReviewsAndDashboard(qc),
   });
 }
