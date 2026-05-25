@@ -11,7 +11,7 @@
 
 import { useState, useCallback } from "react";
 import { Lock, Eye, EyeOff } from "lucide-react";
-import { profileService } from "../../services/profile.service";
+import { useChangePassword } from "../../queries/profile";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
@@ -89,12 +89,13 @@ export function PasswordChangeCard() {
   const { refreshSession } = useAuth();
   const toast = useToast();
   const snackbar = useSnackbar();
+  const changePasswordMutation = useChangePassword();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [isSaving, setIsSaving] = useState(false);
+  const isSaving = changePasswordMutation.isPending;
 
   // ── Client-Side Validation ──────────────────────────────────────
   const mismatch =
@@ -107,10 +108,8 @@ export function PasswordChangeCard() {
     !isSaving;
 
   const handleSubmit = useCallback(async () => {
-    setIsSaving(true);
-
     try {
-      await profileService.changePassword({
+      await changePasswordMutation.mutateAsync({
         current_password: currentPassword,
         new_password: newPassword,
       });
@@ -121,14 +120,21 @@ export function PasswordChangeCard() {
       toast.success("Password updated.");
 
       // Refresh session so must_change_password flips to false immediately,
-      // lifting the /change-password gate for admin-reset users.
+      // lifting the /change-password gate for admin-reset users. This is
+      // the auth/session cache (not TanStack-managed), so the mutation
+      // hook can't trigger it — we do it here.
       void refreshSession();
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
-  }, [currentPassword, newPassword, refreshSession, toast, snackbar]);
+  }, [
+    changePasswordMutation,
+    currentPassword,
+    newPassword,
+    refreshSession,
+    toast,
+    snackbar,
+  ]);
 
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">

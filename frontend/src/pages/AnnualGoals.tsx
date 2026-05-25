@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, Fragment } from "react";
 import {
   Plus, Target, Lock, Search,
   LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen,
@@ -37,10 +37,8 @@ import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { formatFyYearSpan, extractFyToken } from "../utils/fy";
-import {
-  profileService,
-  type UserRoleExpectation,
-} from "../services/profile.service";
+import { type UserRoleExpectation } from "../services/profile.service";
+import { useMyExpectations } from "../queries/profile";
 import { isPostApproved } from "../utils/goalStatus";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
 import { exportService } from "../services/export.service";
@@ -208,22 +206,12 @@ export function AnnualGoals() {
   const isSelfReviewDraftSaving = saveSelfReviewDraftMutation.isPending;
 
   // Role expectations for the My Goals tab — collapsed by default.
-  const [roleExpectation, setRoleExpectation] = useState<UserRoleExpectation | null>(null);
+  // Failure is non-fatal: the hook returns `undefined`/`null` data on
+  // error and the section just won't render. 15-min staleTime in the
+  // query module means revisiting this tab in the same session is a
+  // cache hit.
+  const { data: roleExpectation = null } = useMyExpectations();
   const [roleExpectationsOpen, setRoleExpectationsOpen] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    profileService
-      .getMyExpectations()
-      .then((exp) => {
-        if (!cancelled) setRoleExpectation(exp);
-      })
-      .catch(() => {
-        // Non-fatal — section just won't render.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Modal helpers
   const openAdd = () => {
