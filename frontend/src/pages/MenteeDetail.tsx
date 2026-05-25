@@ -17,12 +17,15 @@ import {
   type MenteeDetail as MenteeDetailData,
 } from "../services/mentee.service";
 import {
-  annualReviewService,
   type AnnualReview,
   type MenteeAnnualReview,
   type MentorEvalPayload,
   type MentorEvalDraftPayload,
 } from "../services/annual-review.service";
+import {
+  useSubmitMentorEval,
+  useSaveMentorDraft,
+} from "../queries/annualReviews";
 import { MenteeGoalsTab } from "../components/mentees/MenteeGoalsTab";
 import { MenteeReviewTab } from "../components/mentees/MenteeReviewTab";
 import { MenteeProjectsTab } from "../components/mentees/MenteeProjectsTab";
@@ -131,8 +134,10 @@ export function MenteeDetail() {
   // form's auto-save-on-unmount only fires when this whole page
   // unmounts (route change), not on tab switches.
   const [evalFy, setEvalFy] = useState<string | null>(null);
-  const [evalSaving, setEvalSaving] = useState(false);
-  const [evalDraftSaving, setEvalDraftSaving] = useState(false);
+  const submitMentorEvalMutation = useSubmitMentorEval();
+  const saveMentorDraftMutation = useSaveMentorDraft();
+  const evalSaving = submitMentorEvalMutation.isPending;
+  const evalDraftSaving = saveMentorDraftMutation.isPending;
   const [evalError, setEvalError] = useState("");
   const confirm = useConfirm();
   const toast = useToast();
@@ -183,16 +188,13 @@ export function MenteeDetail() {
       confirmText: "Submit Evaluation",
     });
     if (!ok) return;
-    setEvalSaving(true);
     setEvalError("");
     try {
-      await annualReviewService.submitMentorEval(reviewId, payload);
+      await submitMentorEvalMutation.mutateAsync({ reviewId, payload });
       setEvalFy(null);
       reloadDetail();
     } catch (err) {
       setEvalError(getErrorMessage(err));
-    } finally {
-      setEvalSaving(false);
     }
   };
 
@@ -200,10 +202,9 @@ export function MenteeDetail() {
     reviewId: number,
     payload: MentorEvalDraftPayload,
   ) => {
-    setEvalDraftSaving(true);
     setEvalError("");
     try {
-      await annualReviewService.saveMentorDraft(reviewId, payload);
+      await saveMentorDraftMutation.mutateAsync({ reviewId, payload });
       reloadDetail();
       // Fires for both the explicit "Save Draft" click and the implicit
       // auto-save when this page unmounts (route change). The toast
@@ -212,8 +213,6 @@ export function MenteeDetail() {
       toast.success("Draft saved.");
     } catch (err) {
       setEvalError(getErrorMessage(err));
-    } finally {
-      setEvalDraftSaving(false);
     }
   };
 

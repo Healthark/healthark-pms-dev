@@ -12,11 +12,11 @@ import {
   Target,
 } from "lucide-react";
 import {
-  goalService,
   type TeamGoal,
   type ApprovalStatus,
   type SelfReviewCycleHalf,
 } from "../../services/goal.service";
+import { useUpdateApproval } from "../../queries/goals";
 import { getErrorMessage } from "../../utils/errors";
 import { formatFyYearSpan } from "../../utils/fy";
 import { isPostApproved } from "../../utils/goalStatus";
@@ -180,7 +180,8 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
 
-  const [isActing, setIsActing] = useState(false);
+  const updateApprovalMutation = useUpdateApproval();
+  const isActing = updateApprovalMutation.isPending;
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<SortState<MenteeGoalsSortKey> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
@@ -213,34 +214,31 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
       confirmText: "Approve",
     });
     if (!ok) return;
-    setIsActing(true);
     try {
-      await goalService.updateApproval(goal.id, { approval_status: "approved" });
+      await updateApprovalMutation.mutateAsync({
+        goalId: goal.id,
+        payload: { approval_status: "approved" },
+      });
       onReload();
       toast.success(`${goal.owner_name}'s goal approved.`);
     } catch (err) {
       snackbar.error(getErrorMessage(err));
-    } finally {
-      setIsActing(false);
     }
   };
 
   const handleSendFeedback = async (feedback: string) => {
     if (!feedbackTarget) return;
-    setIsActing(true);
     setModalError("");
     try {
-      await goalService.updateApproval(feedbackTarget.id, {
-        approval_status: "changes_requested",
-        feedback,
+      await updateApprovalMutation.mutateAsync({
+        goalId: feedbackTarget.id,
+        payload: { approval_status: "changes_requested", feedback },
       });
       setFeedbackTarget(null);
       onReload();
       toast.success("Feedback sent.");
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsActing(false);
     }
   };
 

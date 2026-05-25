@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import {
   Plus, Target, Lock, Search,
   LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen,
@@ -6,15 +6,21 @@ import {
   UserCircle,
 } from "lucide-react";
 import {
-  goalService,
   type Goal,
   type GoalCreatePayload,
   type GoalUpdatePayload,
   type GoalSelfReviewPayload,
   type SelfReviewCycleHalf,
-  type Criterion,
   type ApprovalStatus,
 } from "../services/goal.service";
+import {
+  useMyGoals,
+  useCreateGoal,
+  useUpdateGoal,
+  useSubmitGoal,
+  useSubmitSelfReview,
+  useSaveSelfReviewDraft,
+} from "../queries/goals";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useToast } from "../hooks/useToast";
@@ -100,12 +106,6 @@ const MY_GOALS_SORT_CONFIG: Record<
 // Helpers
 // ---------------------------------------------------------------------------
 
-function recomputeProgress(criteria: Criterion[]): number {
-  if (criteria.length === 0) return 0;
-  const completed = criteria.filter((c) => c.is_completed).length;
-  return Math.round((completed / criteria.length) * 100);
-}
-
 const ROLE_EXP_FIELDS: { expKey: keyof UserRoleExpectation; label: string }[] = [
   { expKey: "exp_firm_growth",       label: "Firm Growth" },
   { expKey: "exp_competency_skills", label: "Competency & Skills" },
@@ -186,20 +186,26 @@ export function AnnualGoals() {
   const [sort, setSort] = useState<SortState<MyGoalsSortKey> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
   // Self-review modal state
   const [selfReviewGoal, setSelfReviewGoal] = useState<Goal | null>(null);
   const [selfReviewCycle, setSelfReviewCycle] =
     useState<SelfReviewCycleHalf | null>(null);
-  const [isSelfReviewSaving, setIsSelfReviewSaving] = useState(false);
-  const [isSelfReviewDraftSaving, setIsSelfReviewDraftSaving] = useState(false);
   const [selfReviewError, setSelfReviewError] = useState("");
+
+  // Goals data + mutations (shared TanStack cache via ['goals'])
+  const { data: goals = [], isLoading } = useMyGoals("annual");
+  const createGoalMutation = useCreateGoal();
+  const updateGoalMutation = useUpdateGoal();
+  const submitGoalMutation = useSubmitGoal();
+  const submitSelfReviewMutation = useSubmitSelfReview();
+  const saveSelfReviewDraftMutation = useSaveSelfReviewDraft();
+  const isSaving = createGoalMutation.isPending || updateGoalMutation.isPending;
+  const isSelfReviewSaving = submitSelfReviewMutation.isPending;
+  const isSelfReviewDraftSaving = saveSelfReviewDraftMutation.isPending;
 
   // Role expectations for the My Goals tab — collapsed by default.
   const [roleExpectation, setRoleExpectation] = useState<UserRoleExpectation | null>(null);
@@ -219,21 +225,6 @@ export function AnnualGoals() {
     };
   }, []);
 
-  const loadGoals = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setGoals(await goalService.getMyGoals("annual"));
-    } catch {
-      /* stays empty */
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadGoals();
-  }, [loadGoals]);
-
   // Modal helpers
   const openAdd = () => {
     setEditingGoal(null);
@@ -251,34 +242,27 @@ export function AnnualGoals() {
     setModalError("");
   };
 
-  // Create or update
+  // Create or update — mutations invalidate ['goals'] + dashboard on success
   const handleSave = async (payload: GoalCreatePayload | GoalUpdatePayload) => {
-    setIsSaving(true);
     setModalError("");
     try {
       if (editingGoal) {
-        const updated = await goalService.updateGoal(
-          editingGoal.id,
-          payload as GoalUpdatePayload,
-        );
-        setGoals((prev) =>
-          prev.map((g) => (g.id === updated.id ? updated : g)),
-        );
+        await updateGoalMutation.mutateAsync({
+          goalId: editingGoal.id,
+          payload: payload as GoalUpdatePayload,
+        });
         closeModal();
         toast.success("Goal updated.");
       } else {
-        const created = await goalService.createGoal({
+        await createGoalMutation.mutateAsync({
           ...(payload as GoalCreatePayload),
           goal_type: "annual",
         });
-        setGoals((prev) => [created, ...prev]);
         closeModal();
         toast.success("Goal created.");
       }
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -292,8 +276,7 @@ export function AnnualGoals() {
     });
     if (!ok) return;
     try {
-      const updated = await goalService.submitGoal(goal.id);
-      setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+      await submitGoalMutation.mutateAsync(goal.id);
       toast.success("Goal submitted for review.");
     } catch (err) {
       snackbar.error(getErrorMessage(err));
@@ -323,23 +306,17 @@ export function AnnualGoals() {
       confirmText: "Submit Self-Review",
     });
     if (!ok) return;
-    setIsSelfReviewSaving(true);
     setSelfReviewError("");
     try {
-      const updated = await goalService.submitSelfReview(
-        selfReviewGoal.id,
+      await submitSelfReviewMutation.mutateAsync({
+        goalId: selfReviewGoal.id,
         cycleHalf,
         payload,
-      );
-      setGoals((prev) =>
-        prev.map((g) => (g.id === updated.id ? updated : g)),
-      );
+      });
       closeSelfReview();
       toast.success("Self-review submitted.");
     } catch (err) {
       setSelfReviewError(getErrorMessage(err));
-    } finally {
-      setIsSelfReviewSaving(false);
     }
   };
 
@@ -348,46 +325,23 @@ export function AnnualGoals() {
     payload: GoalSelfReviewPayload,
   ) => {
     if (!selfReviewGoal) return;
-    setIsSelfReviewDraftSaving(true);
     setSelfReviewError("");
     try {
-      const updated = await goalService.saveSelfReviewDraft(
-        selfReviewGoal.id,
+      await saveSelfReviewDraftMutation.mutateAsync({
+        goalId: selfReviewGoal.id,
         cycleHalf,
         payload,
-      );
-      setGoals((prev) =>
-        prev.map((g) => (g.id === updated.id ? updated : g)),
-      );
+      });
       // Keep the modal open so the mentee sees the "(Draft)" title and can
       // continue editing — toast confirms the save.
       toast.success("Draft saved.");
     } catch (err) {
       setSelfReviewError(getErrorMessage(err));
-    } finally {
-      setIsSelfReviewDraftSaving(false);
     }
   };
 
-  // Criterion toggle — client-side progress recompute for instant feedback
-  const handleCriterionUpdate = useCallback(
-    (goalId: number, updated: Criterion) => {
-      setGoals((prev) =>
-        prev.map((g) => {
-          if (g.id !== goalId) return g;
-          const newCriteria = g.criteria.map((c) =>
-            c.id === updated.id ? updated : c,
-          );
-          return {
-            ...g,
-            criteria: newCriteria,
-            progress_percent: recomputeProgress(newCriteria),
-          };
-        }),
-      );
-    },
-    [],
-  );
+  // Criterion toggles now flow through useUpdateCriterion in
+  // CriteriaChecklist; cache invalidation drives the UI refresh.
 
   const availableYears = Array.from(
     new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
@@ -625,7 +579,6 @@ export function AnnualGoals() {
                       onEdit={openEdit}
                       onSubmit={handleSubmit}
                       onSelfReview={(g, half) => openSelfReview(g, half)}
-                      onCriterionUpdate={handleCriterionUpdate}
                       editGateOpen={annualGoalsEditEnabled}
                     />
                   ))}
@@ -761,9 +714,7 @@ export function AnnualGoals() {
                                         criteria={goal.criteria}
                                         approvalStatus={goal.approval_status}
                                         progressPercent={goal.progress_percent}
-                                        onCriterionUpdate={(updated: Criterion) =>
-                                          handleCriterionUpdate(goal.id, updated)
-                                        }
+                                        interactive
                                       />
                                     )}
                                   </div>

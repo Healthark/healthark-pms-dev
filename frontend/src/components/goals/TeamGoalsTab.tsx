@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -14,12 +14,18 @@ import {
   MessageSquare,
 } from "lucide-react";
 import {
-  goalService,
   type TeamGoal,
   type ApprovalStatus,
   type SelfReviewCycleHalf,
   type GoalMentorReviewPayload,
 } from "../../services/goal.service";
+import {
+  useTeamGoals,
+  useUpdateApproval,
+  useBulkApprove,
+  useSaveMentorReviewDraft,
+  useSubmitMentorReview,
+} from "../../queries/goals";
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
@@ -206,9 +212,16 @@ export function TeamGoalsTab() {
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
 
-  const [goals, setGoals] = useState<TeamGoal[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isActing, setIsActing] = useState(false);
+  // ['goals', 'team', 'annual'] — shared TanStack cache + mutations
+  const { data: goals = [], isLoading } = useTeamGoals("annual");
+  const updateApprovalMutation = useUpdateApproval();
+  const bulkApproveMutation = useBulkApprove();
+  const saveMentorReviewDraftMutation = useSaveMentorReviewDraft();
+  const submitMentorReviewMutation = useSubmitMentorReview();
+  const isActing = updateApprovalMutation.isPending;
+  const bulkSaving = bulkApproveMutation.isPending;
+  const isSavingReview = submitMentorReviewMutation.isPending;
+  const isSavingReviewDraft = saveMentorReviewDraftMutation.isPending;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<SortState<TeamGoalsSortKey> | null>(null);
@@ -224,7 +237,6 @@ export function TeamGoalsTab() {
 
   // Bulk approve modal state
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
 
   // Mentor review modal state — opens for any post-approval half. The modal
@@ -232,8 +244,6 @@ export function TeamGoalsTab() {
   // for this (goal, half) already exists.
   const [reviewGoal, setReviewGoal] = useState<TeamGoal | null>(null);
   const [reviewCycle, setReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
-  const [isSavingReview, setIsSavingReview] = useState(false);
-  const [isSavingReviewDraft, setIsSavingReviewDraft] = useState(false);
   const [reviewError, setReviewError] = useState("");
 
   const openReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
@@ -252,22 +262,16 @@ export function TeamGoalsTab() {
     payload: GoalMentorReviewPayload,
   ) => {
     if (!reviewGoal) return;
-    setIsSavingReviewDraft(true);
     setReviewError("");
     try {
-      const updated = await goalService.saveMentorReviewDraft(
-        reviewGoal.id,
+      await saveMentorReviewDraftMutation.mutateAsync({
+        goalId: reviewGoal.id,
         cycleHalf,
         payload,
-      );
-      setGoals((prev) =>
-        prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
-      );
+      });
       toast.success("Draft saved.");
     } catch (err) {
       setReviewError(getErrorMessage(err));
-    } finally {
-      setIsSavingReviewDraft(false);
     }
   };
 
@@ -284,40 +288,18 @@ export function TeamGoalsTab() {
       confirmText: "Submit Mentor Review",
     });
     if (!ok) return;
-    setIsSavingReview(true);
     setReviewError("");
     try {
-      const updated = await goalService.submitMentorReview(
-        reviewGoal.id,
+      await submitMentorReviewMutation.mutateAsync({
+        goalId: reviewGoal.id,
         cycleHalf,
         payload,
-      );
-      setGoals((prev) =>
-        prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
-      );
+      });
       closeReview();
     } catch (err) {
       setReviewError(getErrorMessage(err));
-    } finally {
-      setIsSavingReview(false);
     }
   };
-
-  const loadGoals = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await goalService.getTeamGoals("annual");
-      setGoals(data);
-    } catch {
-      // Stays empty
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadGoals();
-  }, [loadGoals]);
 
   const handleApprove = async (goal: TeamGoal) => {
     const ok = await confirm({
@@ -327,40 +309,21 @@ export function TeamGoalsTab() {
       confirmText: "Approve",
     });
     if (!ok) return;
-    setIsActing(true);
     try {
-      const updated = await goalService.updateApproval(goal.id, {
-        approval_status: "approved",
+      await updateApprovalMutation.mutateAsync({
+        goalId: goal.id,
+        payload: { approval_status: "approved" },
       });
-      setGoals((prev) =>
-        prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
-      );
       toast.success(`${goal.owner_name}'s goal approved.`);
     } catch (err) {
       snackbar.error(getErrorMessage(err));
-    } finally {
-      setIsActing(false);
     }
   };
 
   const handleBulkApprove = async (goalIds: number[]) => {
-    setBulkSaving(true);
     setBulkError("");
     try {
-      const result = await goalService.bulkApprove(goalIds);
-      // Optimistically refresh the goal rows that were approved.
-      if (result.approved_ids.length > 0) {
-        const approvedSet = new Set(result.approved_ids);
-        setGoals((prev) =>
-          prev.map((g) =>
-            approvedSet.has(g.id)
-              ? { ...g, approval_status: "approved", manager_feedback: null }
-              : g,
-          ),
-        );
-      }
-      // Close on full success; surface partials inline so the mentor sees
-      // exactly which goals slipped state.
+      const result = await bulkApproveMutation.mutateAsync(goalIds);
       if (result.failures.length === 0) {
         toast.success(
           `Approved ${result.approved_ids.length} goal${
@@ -383,29 +346,21 @@ export function TeamGoalsTab() {
       }
     } catch (err) {
       setBulkError(getErrorMessage(err));
-    } finally {
-      setBulkSaving(false);
     }
   };
 
   const handleSendFeedback = async (feedback: string) => {
     if (!feedbackTarget) return;
-    setIsActing(true);
     setModalError("");
     try {
-      const updated = await goalService.updateApproval(feedbackTarget.id, {
-        approval_status: "changes_requested",
-        feedback,
+      await updateApprovalMutation.mutateAsync({
+        goalId: feedbackTarget.id,
+        payload: { approval_status: "changes_requested", feedback },
       });
-      setGoals((prev) =>
-        prev.map((g) => (g.id === updated.id ? { ...g, ...updated } : g)),
-      );
       setFeedbackTarget(null);
       toast.success("Feedback sent.");
     } catch (err) {
       setModalError(getErrorMessage(err));
-    } finally {
-      setIsActing(false);
     }
   };
 
