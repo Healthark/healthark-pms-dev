@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.core.config import settings
 from app.core.csrf import CSRFMiddleware
@@ -46,6 +47,12 @@ origins = _default_origins + _extra_origins
 # phase — the LAST add_middleware call is the outermost layer. CORS must be
 # outermost so browser preflight OPTIONS requests are answered before the
 # CSRF check runs (an OPTIONS without X-CSRF-Token would otherwise 403).
+# GZip is registered first so it's the innermost layer — it compresses the
+# response body on the way out, then CSRF and CORS append their headers
+# around the already-compressed payload. minimum_size=500 skips compression
+# for tiny responses where the overhead would dominate.
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 app.add_middleware(CSRFMiddleware)
 
 app.add_middleware(
