@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { MenteeCard } from "../components/mentees/MenteeCard";
 import {
@@ -10,10 +10,8 @@ import {
   type MenteeSortKey,
   type MenteeViewMode,
 } from "../components/mentees/MenteeToolbar";
-import {
-  menteeService,
-  type MenteeSummary,
-} from "../services/mentee.service";
+import { type MenteeSummary } from "../services/mentee.service";
+import { useMenteeSummaries } from "../queries/mentees";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 
 const MENTEE_TABLE_SORT_CONFIG: Record<
@@ -45,34 +43,17 @@ function CardSkeleton() {
 }
 
 export function MyMentees() {
-  const [mentees, setMentees] = useState<MenteeSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: mentees = [], isPending, error: queryError } = useMenteeSummaries();
+  const error = queryError
+    ? "Could not load mentees. Please try again."
+    : null;
+  const isLoading = isPending;
 
   const [search, setSearch] = useState("");
   const [onlyPending, setOnlyPending] = useState(false);
   const [sortKey, setSortKey] = useState<MenteeSortKey>("name");
   const [viewMode, setViewMode] = useState<MenteeViewMode>("grid");
   const [tableSort, setTableSort] = useState<SortState<MenteeTableSortKey> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    menteeService
-      .getSummaries()
-      .then((data) => {
-        if (!cancelled) setMentees(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Could not load mentees. Please try again.");
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const totalPendingActions = useMemo(
     () => mentees.reduce((sum, m) => sum + m.pending_actions_count, 0),

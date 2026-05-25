@@ -169,11 +169,9 @@ const SORT_CONFIG: Record<
 interface MenteeGoalsTabProps {
   readonly goals: TeamGoal[];
   readonly menteeName: string;
-  /** Called after an action (approve / request-changes) so the parent can re-fetch. */
-  readonly onReload: () => void;
 }
 
-export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabProps) {
+export function MenteeGoalsTab({ goals, menteeName }: MenteeGoalsTabProps) {
   const toast = useToast();
   const snackbar = useSnackbar();
   const confirm = useConfirm();
@@ -219,7 +217,8 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
         goalId: goal.id,
         payload: { approval_status: "approved" },
       });
-      onReload();
+      // Mutation onSuccess invalidates ['goals'] + ['mentees'] → parent
+      // MenteeDetail re-fetches automatically.
       toast.success(`${goal.owner_name}'s goal approved.`);
     } catch (err) {
       snackbar.error(getErrorMessage(err));
@@ -235,7 +234,6 @@ export function MenteeGoalsTab({ goals, menteeName, onReload }: MenteeGoalsTabPr
         payload: { approval_status: "changes_requested", feedback },
       });
       setFeedbackTarget(null);
-      onReload();
       toast.success("Feedback sent.");
     } catch (err) {
       setModalError(getErrorMessage(err));

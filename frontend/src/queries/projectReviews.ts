@@ -13,6 +13,7 @@ import {
   type SecondaryEvalResponse,
 } from "../services/project-review.service";
 import { dashboardSummaryQueryKey } from "./dashboard";
+import { invalidateMentees } from "./mentees";
 
 /**
  * Strict, shared query keys for the project-reviews domain.
@@ -114,6 +115,19 @@ function invalidateProjectReviewsAndDashboard(
 ): void {
   qc.invalidateQueries({ queryKey: projectReviewsQueryKey });
   qc.invalidateQueries({ queryKey: dashboardSummaryQueryKey });
+  // Mentor-side MenteeDetail.project_assignments[].review_detail is
+  // derived from the same review rows; keep it fresh.
+  invalidateMentees(qc);
+}
+
+/** Drafts don't bump dashboard counters but still surface on
+ *  MenteeProjectsTab (the saved draft text + flag rides on
+ *  review_detail inside MenteeDetail.project_assignments). */
+function invalidateProjectReviewDrafts(
+  qc: ReturnType<typeof useQueryClient>,
+): void {
+  qc.invalidateQueries({ queryKey: projectReviewsQueryKey });
+  invalidateMentees(qc);
 }
 
 export function useSubmitPMEvaluation() {
@@ -144,12 +158,7 @@ export function useSavePMDraft() {
       userId: number;
       payload: PMEvaluationDraftPayload;
     }) => projectReviewService.savePMDraft(projectId, userId, payload),
-    onSuccess: () => {
-      // Drafts don't affect dashboard counters; only refresh the
-      // project-reviews caches so the editing surface sees the saved
-      // state and the queue's "has_draft_content" flag updates.
-      qc.invalidateQueries({ queryKey: projectReviewsQueryKey });
-    },
+    onSuccess: () => invalidateProjectReviewDrafts(qc),
   });
 }
 
@@ -189,9 +198,7 @@ export function useSaveSecondaryDraft() {
   >({
     mutationFn: ({ reviewId, payload }) =>
       projectReviewService.saveSecondaryDraft(reviewId, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: projectReviewsQueryKey });
-    },
+    onSuccess: () => invalidateProjectReviewDrafts(qc),
   });
 }
 
