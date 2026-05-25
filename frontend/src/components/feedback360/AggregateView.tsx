@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
 import { AlertCircle, Loader2, Users } from "lucide-react";
 import {
-  feedback360Service,
-  type FeedbackAggregate,
   type FeedbackBucketAggregate,
   type FeedbackQuestionAggregate,
 } from "../../services/feedback360.service";
+import { useFeedbackAggregate } from "../../queries/feedback360";
 import { getErrorMessage } from "../../utils/errors";
 import { Gridlines } from "./Gridlines";
 
@@ -25,29 +23,13 @@ interface AggregateViewProps {
  * consistent regardless of which cohorts cleared the threshold.
  */
 export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
-  const [data, setData] = useState<FeedbackAggregate | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError("");
-    feedback360Service
-      .getAggregate(targetUserId)
-      .then((agg) => {
-        if (!cancelled) setData(agg);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [targetUserId]);
+  const {
+    data,
+    isPending,
+    error: queryError,
+  } = useFeedbackAggregate(targetUserId);
+  const isLoading = isPending;
+  const error = queryError ? getErrorMessage(queryError) : "";
 
   if (isLoading) {
     return (
