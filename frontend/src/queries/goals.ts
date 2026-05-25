@@ -32,6 +32,8 @@ export const myGoalsQueryKey = (goalType?: GoalType) =>
   ["goals", "mine", goalType ?? "all"] as const;
 export const teamGoalsQueryKey = (goalType?: GoalType) =>
   ["goals", "team", goalType ?? "all"] as const;
+export const goalDetailQueryKey = (goalId: number) =>
+  ["goals", "detail", goalId] as const;
 
 // ── Reads ─────────────────────────────────────────────────────────────
 
@@ -46,6 +48,24 @@ export function useTeamGoals(goalType?: GoalType) {
   return useQuery<TeamGoal[]>({
     queryKey: teamGoalsQueryKey(goalType),
     queryFn: () => goalService.getTeamGoals(goalType),
+  });
+}
+
+/**
+ * Single goal with the full self_reviews + mentor_reviews text bodies.
+ *
+ * The team-list response was slimmed to drop those text fields (payload
+ * reduction PR 18) — `GET /goals/team` now returns only `cycle_half` +
+ * `is_draft` per review row so the SelfReviewCycleMenu can render its
+ * status indicators. The mentor-review modal needs the actual text and
+ * calls this hook to fetch the full goal on open. Subsequent opens of
+ * the same goal are cache hits.
+ */
+export function useGoalDetail(goalId: number | null) {
+  return useQuery<Goal>({
+    queryKey: goalDetailQueryKey(goalId ?? -1),
+    queryFn: () => goalService.getGoal(goalId as number),
+    enabled: goalId !== null,
   });
 }
 

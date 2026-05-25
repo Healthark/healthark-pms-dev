@@ -142,6 +142,33 @@ class GoalMentorReviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GoalSelfReviewSlim(BaseModel):
+    """List-view subset of GoalSelfReviewResponse used by GET /goals/team.
+
+    Drops the heavy `self_overall_review` text body + identifiers that
+    the team-view table never reads. The SelfReviewCycleMenu only needs
+    `cycle_half` + `is_draft` to render Submitted / Draft / Missing
+    indicators. The full review text is fetched on demand via
+    GET /goals/{id} when the mentor opens the mentor-review modal.
+    """
+    cycle_half: SelfReviewCycleHalf
+    is_draft: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GoalMentorReviewSlim(BaseModel):
+    """List-view subset of GoalMentorReviewResponse used by GET /goals/team.
+
+    Drops the heavy `mentor_overall_review` text body. See
+    GoalSelfReviewSlim for the rationale.
+    """
+    cycle_half: SelfReviewCycleHalf
+    is_draft: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GoalSelfReviewSubmit(BaseModel):
     """
     Payload the goal owner submits when reflecting on an APPROVED goal
@@ -262,3 +289,19 @@ class TeamGoalResponse(GoalResponse):
     # can match the right RoleExpectation row without a second round-trip.
     owner_department_name: Optional[str] = None
     owner_designation_name: Optional[str] = None
+
+
+class TeamGoalListResponse(TeamGoalResponse):
+    """List-view response for GET /goals/team.
+
+    Overrides `self_reviews` and `mentor_reviews` to drop the heavy text
+    bodies — the team table only reads `cycle_half` + `is_draft` from
+    each item (for the SelfReviewCycleMenu's Submitted / Draft / Missing
+    indicators). The mentor-review modal fetches the full goal via
+    GET /goals/{id} when opened.
+
+    Wire saving on a typical mentor session with ~45 goals: ~6–8 kB
+    raw / ~2 kB gzipped on top of the gzip middleware enabled in PR 17.
+    """
+    self_reviews: list[GoalSelfReviewSlim] = []  # type: ignore[assignment]
+    mentor_reviews: list[GoalMentorReviewSlim] = []  # type: ignore[assignment]
