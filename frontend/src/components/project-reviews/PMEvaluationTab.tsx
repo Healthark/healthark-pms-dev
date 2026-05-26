@@ -5,7 +5,7 @@
  * table/card view with a Type column and filter.
  */
 
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import {
   UserCircle, Briefcase, ClipboardList, Pencil,
   LayoutGrid, Table2, Search, CheckCircle2, Clock,
@@ -35,8 +35,15 @@ import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
-import { EvalModal } from "./EvalModal";
-import { ImpactModal } from "./ImpactModal";
+// EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
+// modal in the app at ~475 LOC; ImpactModal is paired (same parents)
+// so we split them together. Each opens on row-click only.
+const EvalModal = lazy(() =>
+  import("./EvalModal").then((m) => ({ default: m.EvalModal })),
+);
+const ImpactModal = lazy(() =>
+  import("./ImpactModal").then((m) => ({ default: m.ImpactModal })),
+);
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -595,19 +602,24 @@ export function PMEvaluationTab() {
         </div>
       )}
 
-      {/* Modals */}
-      {evalTarget?.type === "primary" && (
-        <EvalModal card={evalTarget} expectation={getExpectation(evalTarget)} isEditMode={isEditMode}
-          onSubmit={handlePMSubmit}
-          onSaveDraft={isEditMode ? undefined : handlePMSaveDraft}
-          onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
-      )}
-      {evalTarget?.type === "secondary" && (
-        <ImpactModal row={evalTarget}
-          onSubmit={handleSecSubmit}
-          onSaveDraft={evalTarget.review_status === "submitted" ? undefined : handleSecSaveDraft}
-          onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
-      )}
+      {/* Modals — lazy chunks (F3). Each Suspense boundary scopes its
+          modal's loading state so they don't block each other. */}
+      <Suspense fallback={null}>
+        {evalTarget?.type === "primary" && (
+          <EvalModal card={evalTarget} expectation={getExpectation(evalTarget)} isEditMode={isEditMode}
+            onSubmit={handlePMSubmit}
+            onSaveDraft={isEditMode ? undefined : handlePMSaveDraft}
+            onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
+        )}
+      </Suspense>
+      <Suspense fallback={null}>
+        {evalTarget?.type === "secondary" && (
+          <ImpactModal row={evalTarget}
+            onSubmit={handleSecSubmit}
+            onSaveDraft={evalTarget.review_status === "submitted" ? undefined : handleSecSaveDraft}
+            onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
+        )}
+      </Suspense>
     </div>
   );
 }

@@ -11,6 +11,8 @@
  */
 
 import {
+  lazy,
+  Suspense,
   useState,
   useCallback,
   useImperativeHandle,
@@ -36,7 +38,14 @@ import { exportService } from "../../services/export.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { extractFyToken } from "../../utils/fy";
 import { ExportExcelButton } from "../exports/ExportExcelButton";
-import { ProjectModal } from "./ProjectModal";
+// ProjectModal lazy-loaded (F3) — it's a 718-LOC form with heavy
+// deps (UserCombobox, multiple queries) that only mounts when admin
+// clicks "Create" or the per-row pencil. Wrapping in React.lazy
+// splits it into its own chunk, shaving the AdminPanel initial
+// download for non-modal sessions. See docs/optimizations/20-lazy-modals.md.
+const ProjectModal = lazy(() =>
+  import("./ProjectModal").then((m) => ({ default: m.ProjectModal })),
+);
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -499,14 +508,16 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
         </div>
       )}
 
-      {showModal && (
-        <ProjectModal
-          projectId={editingProjectId}
-          users={users}
-          onClose={handleModalClose}
-          onSave={handleModalSave}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showModal && (
+          <ProjectModal
+            projectId={editingProjectId}
+            users={users}
+            onClose={handleModalClose}
+            onSave={handleModalSave}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

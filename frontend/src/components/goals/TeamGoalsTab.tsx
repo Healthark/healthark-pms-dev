@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from "react";
+import { lazy, Suspense, useState, useEffect, Fragment } from "react";
 import { createPortal } from "react-dom";
 import {
   Users,
@@ -35,7 +35,12 @@ import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
 import { GoalMentorReviewModal } from "./GoalMentorReviewModal";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
-import { BulkApproveModal } from "./BulkApproveModal";
+// BulkApproveModal lazy-loaded (F3) — toolbar action, fires ~2-4
+// times per FY per mentor. ~16 kB raw split out of the TeamGoalCard
+// chunk.
+const BulkApproveModal = lazy(() =>
+  import("./BulkApproveModal").then((m) => ({ default: m.BulkApproveModal })),
+);
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
@@ -779,18 +784,23 @@ export function TeamGoalsTab() {
         />
       )}
 
-      {/* Bulk approve modal */}
-      <BulkApproveModal
-        isOpen={bulkOpen}
-        goals={goals}
-        onClose={() => {
-          setBulkOpen(false);
-          setBulkError("");
-        }}
-        onSubmit={handleBulkApprove}
-        isSaving={bulkSaving}
-        error={bulkError}
-      />
+      {/* Bulk approve modal — lazy chunk (F3). Gated on bulkOpen so
+          the chunk only fetches on first open. */}
+      <Suspense fallback={null}>
+        {bulkOpen && (
+          <BulkApproveModal
+            isOpen={bulkOpen}
+            goals={goals}
+            onClose={() => {
+              setBulkOpen(false);
+              setBulkError("");
+            }}
+            onSubmit={handleBulkApprove}
+            isSaving={bulkSaving}
+            error={bulkError}
+          />
+        )}
+      </Suspense>
 
       {/* Mentor review modal — editable when no review yet for this half,
           read-only once the mentor's review has been submitted. */}
