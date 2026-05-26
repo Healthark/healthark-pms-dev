@@ -13,8 +13,6 @@ Pending-action counting (what drives the "Needs my attention" filter):
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
-from app.schemas.goal_schemas import TeamGoalResponse
-from app.schemas.annual_review_schemas import AnnualReviewResponse
 from app.schemas.project_review_schemas import ProjectReviewResponse
 
 
@@ -108,8 +106,14 @@ class MenteeSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class MenteeDetail(MenteeSummary):
-    """Expanded view for /my-mentees/:id — adds full nested lists."""
-    goals_list: List[TeamGoalResponse] = []
-    reviews_list: List[AnnualReviewResponse] = []
-    project_assignments: List[MenteeProjectAssignment] = []
+# NOTE: The `MenteeDetail` class previously extended `MenteeSummary`
+# with inline `goals_list`, `reviews_list`, and `project_assignments`
+# arrays. PR 19 (payload reduction) split those into dedicated
+# sub-resource endpoints:
+#     GET /mentees/{id}/goals
+#     GET /mentees/{id}/reviews
+#     GET /mentees/{id}/projects
+# `GET /mentees/{id}/detail` now returns the slim `MenteeSummary` shape
+# directly. The frontend keeps a `MenteeDetail` type alias pointing at
+# `MenteeSummary` to avoid breaking imports in third-party code; backend
+# consumers should use `MenteeSummary` going forward.

@@ -17,6 +17,7 @@ import {
   type SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import { useUpdateApproval } from "../../queries/goals";
+import { useMenteeGoals } from "../../queries/mentees";
 import { getErrorMessage } from "../../utils/errors";
 import { formatFyYearSpan } from "../../utils/fy";
 import { isPostApproved } from "../../utils/goalStatus";
@@ -167,11 +168,20 @@ const SORT_CONFIG: Record<
 // ---------------------------------------------------------------------------
 
 interface MenteeGoalsTabProps {
-  readonly goals: TeamGoal[];
+  readonly menteeId: number;
   readonly menteeName: string;
 }
 
-export function MenteeGoalsTab({ goals, menteeName }: MenteeGoalsTabProps) {
+export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
+  // Per-tab fetch (PR 19 split) — keys on ['mentees', id, 'goals'].
+  // Cross-domain invalidation from the goals/annual-reviews/
+  // project-reviews mutation broadcasts catches this via the
+  // top-level ['mentees'] prefix.
+  const {
+    data: goals = [],
+    isPending,
+    error: queryError,
+  } = useMenteeGoals(menteeId);
   const toast = useToast();
   const snackbar = useSnackbar();
   const confirm = useConfirm();
@@ -270,6 +280,22 @@ export function MenteeGoalsTab({ goals, menteeName }: MenteeGoalsTabProps) {
         ? "bg-brand/10 text-brand"
         : "text-text-muted hover:bg-surface-hover"
     }`;
+
+  if (isPending) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center text-sm text-text-muted">
+        Loading goals…
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        Could not load goals. Please try again.
+      </div>
+    );
+  }
 
   // Empty: no goals at all for this mentee
   if (goals.length === 0) {

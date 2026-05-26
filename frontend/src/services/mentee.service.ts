@@ -3,7 +3,14 @@
  *
  * Endpoints:
  *   GET /mentees/summary              → Cards for /my-mentees grid
- *   GET /mentees/{id}/detail          → Full payload for /my-mentees/:id
+ *   GET /mentees/{id}/detail          → Slim summary for /my-mentees/:id header
+ *   GET /mentees/{id}/goals           → Annual goals (PR 19 split)
+ *   GET /mentees/{id}/reviews         → Annual reviews (PR 19 split)
+ *   GET /mentees/{id}/projects        → Project assignments (PR 19 split)
+ *
+ * The `/{id}/detail` endpoint previously inlined goals/reviews/projects;
+ * PR 19 split those into the three dedicated endpoints above. The detail
+ * endpoint now returns only the identity + stats (MenteeSummary shape).
  *
  * Response types mirror backend/app/schemas/mentee_schemas.py exactly.
  */
@@ -79,11 +86,18 @@ export interface MenteeSummary {
   pending_actions_count: number;
 }
 
-export interface MenteeDetail extends MenteeSummary {
-  goals_list: TeamGoal[];
-  reviews_list: AnnualReview[];
-  project_assignments: MenteeProjectAssignment[];
-}
+/**
+ * Pre-PR-19 the detail endpoint inlined three arrays
+ * (goals_list, reviews_list, project_assignments). Those moved to
+ * dedicated sub-resource endpoints; the detail endpoint now returns the
+ * `MenteeSummary` shape directly.
+ *
+ * The type alias is kept so any external code still importing
+ * `MenteeDetail` continues to compile. New consumers should use
+ * `MenteeSummary` directly and pair it with the sub-resource hooks
+ * (`useMenteeGoals`, `useMenteeReviews`, `useMenteeProjects`).
+ */
+export type MenteeDetail = MenteeSummary;
 
 export const menteeService = {
   getSummaries: async (): Promise<MenteeSummary[]> => {
@@ -91,8 +105,40 @@ export const menteeService = {
     return res.data;
   },
 
-  getDetail: async (menteeId: number): Promise<MenteeDetail> => {
-    const res = await apiClient.get<MenteeDetail>(`/mentees/${menteeId}/detail`);
+  /** Slim mentee summary (identity + stats only) for the detail page
+   *  header. Pair with the sub-resource fetchers below for per-tab data. */
+  getDetail: async (menteeId: number): Promise<MenteeSummary> => {
+    const res = await apiClient.get<MenteeSummary>(
+      `/mentees/${menteeId}/detail`,
+    );
+    return res.data;
+  },
+
+  /** Annual goals for a mentee (mentor-visible states only). */
+  getMenteeGoals: async (menteeId: number): Promise<TeamGoal[]> => {
+    const res = await apiClient.get<TeamGoal[]>(
+      `/mentees/${menteeId}/goals`,
+    );
+    return res.data;
+  },
+
+  /** Every annual review for a mentee across all cycles, newest first. */
+  getMenteeReviews: async (menteeId: number): Promise<AnnualReview[]> => {
+    const res = await apiClient.get<AnnualReview[]>(
+      `/mentees/${menteeId}/reviews`,
+    );
+    return res.data;
+  },
+
+  /** Project assignments with inline review_detail for completed
+   *  evaluations. Drives the Projects tab + Annual Summary tab's
+   *  project section. */
+  getMenteeProjects: async (
+    menteeId: number,
+  ): Promise<MenteeProjectAssignment[]> => {
+    const res = await apiClient.get<MenteeProjectAssignment[]>(
+      `/mentees/${menteeId}/projects`,
+    );
     return res.data;
   },
 };
