@@ -33,12 +33,15 @@ interface NavItemData {
 
 // Single-tenant deployment — only Healthark is populated. Kept as a
 // lookup table so the existing org_id-driven plumbing continues to work.
-const ORG_ASSETS: Record<number, { logo: string; logoSmall: string; displayName: string; logoClass: string }> = {
+// `logoLight` is shown in light mode; `logoDark` is the dark-mode variant.
+const ORG_ASSETS: Record<number, { logoLight: string; logoDark: string; logoSmallLight: string; logoSmallDark: string; displayName: string; logoClass: string }> = {
   1: {
-    logo: "/healtharklogov2.png",
-    logoSmall: "/healtharklogo-small.png",
+    logoLight: "/healtharklogov2.png",
+    logoDark: "/healtharklogo.png",
+    logoSmallLight: "/healtharklogo-small.png",
+    logoSmallDark: "/healthark.png",
     displayName: "Healthark Insights",
-    logoClass: "h-7 w-auto object-contain shrink-0 max-w-[140px]",
+    logoClass: "max-w-[140px] max-h-10 w-auto h-auto object-contain shrink-0",
   },
 };
 
@@ -149,27 +152,35 @@ export function Sidebar() {
 
       {/* --- DYNAMIC LOGO RENDER HERE --- */}
       <div
-        className={`h-14 flex items-center border-b border-border transition-all duration-300 ${
-          isCollapsed ? "justify-center px-0" : "px-4"
+        className={`h-16 flex items-center border-b border-border transition-all duration-300 ${
+          isCollapsed ? "px-0 justify-center" : "pl-6 pr-3 justify-start"
         }`}
       >
         {isCollapsed ? (
-          <img
-            src={activeAssets.logoSmall}
-            alt={activeAssets.displayName}
-            className="h-8 w-8 object-contain shrink-0"
-          />
+          <>
+            <img
+              src={activeAssets.logoSmallLight}
+              alt={activeAssets.displayName}
+              className="h-12 w-12 object-contain shrink-0 block dark:hidden"
+            />
+            <img
+              src={activeAssets.logoSmallDark}
+              alt={activeAssets.displayName}
+              className="h-12 w-12 object-contain shrink-0 hidden dark:block"
+            />
+          </>
         ) : (
           <>
             <img
-              src={activeAssets.logo}
+              src={activeAssets.logoLight}
               alt={activeAssets.displayName}
-              className={activeAssets.logoClass} 
+              className={`${activeAssets.logoClass} block dark:hidden`}
             />
-            {/* Removed the org_id check so PMS shows for everyone */}
-            <span className="text-text-muted font-normal text-sm ml-2 shrink-0 whitespace-nowrap mt-4">
-              PMS
-            </span>
+            <img
+              src={activeAssets.logoDark}
+              alt={activeAssets.displayName}
+              className={`${activeAssets.logoClass} hidden dark:block`}
+            />
           </>
         )}
       </div>

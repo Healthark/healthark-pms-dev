@@ -145,15 +145,17 @@ export function Login() {
         {/* ── Login Card ── */}
         <div className="bg-surface py-8 px-4 shadow-xl sm:rounded-xl sm:px-10 border border-border transition-colors duration-1000 ease-in-out">
 
-          {/* Logo + PMS Tag */}
+          {/* Logo (light/dark variants) */}
           <div className="flex flex-col items-center justify-center mb-8 gap-3">
-            <span className="text-text-muted font-medium text-lg tracking-[0.15em] animate-[fadeIn_0.8s_ease-in-out]">
-              PMS
-            </span>
             <img
               src="/healtharklogov2.png"
               alt="Healthark Performance Management System"
-              className="h-14 w-auto object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out]"
+              className="h-40 w-auto object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] block dark:hidden"
+            />
+            <img
+              src="/healtharklogo.png"
+              alt="Healthark Performance Management System"
+              className="h-40 w-auto object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] hidden dark:block"
             />
             <style>{`
               @keyframes fadeIn {
