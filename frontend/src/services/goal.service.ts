@@ -218,6 +218,14 @@ export const goalService = {
     return res.data;
   },
 
+  /** Fetch a single goal with full self_reviews + mentor_reviews text.
+   *  Used by the mentor-review modal after the /goals/team list response
+   *  was slimmed to drop those text bodies (payload reduction PR 18). */
+  getGoal: async (goalId: number): Promise<Goal> => {
+    const res = await apiClient.get<Goal>(`/goals/${goalId}`);
+    return res.data;
+  },
+
   submitGoal: async (goalId: number): Promise<Goal> => {
     const res = await apiClient.patch<Goal>(`/goals/${goalId}/submit`, {});
     return res.data;

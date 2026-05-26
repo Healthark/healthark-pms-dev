@@ -20,19 +20,29 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Eye, FileText } from "lucide-react";
 import type { AnnualReview } from "../../services/annual-review.service";
+import { useMenteeReviews } from "../../queries/mentees";
 import { ReviewStatusBadge } from "../reviews/ReviewStatusBadge";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 
 interface MenteeReviewTabProps {
-  readonly reviews: AnnualReview[];
+  readonly menteeId: number;
   readonly menteeName: string;
 }
 
-export function MenteeReviewTab({ reviews, menteeName }: MenteeReviewTabProps) {
+export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) {
   const [, setSearchParams] = useSearchParams();
   const [viewing, setViewing] = useState<AnnualReview | null>(null);
+  // Per-tab fetch (PR 19 split). Shared cache with the page-level
+  // useMenteeReviews call in MenteeDetail.tsx that drives the eval
+  // drawer's FY map — so opening this tab after the page has loaded
+  // is a 0-request cache hit.
+  const {
+    data: reviews = [],
+    isPending,
+    error: queryError,
+  } = useMenteeReviews(menteeId);
 
   // Filter out drafts (mentee still working) — nothing for the mentor to
   // see. Sort newest-first by FY token (alpha-sort works because the bare
@@ -56,6 +66,22 @@ export function MenteeReviewTab({ reviews, menteeName }: MenteeReviewTabProps) {
       { replace: true },
     );
   };
+
+  if (isPending) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-text-muted">
+        Loading reviews…
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        Could not load reviews. Please try again.
+      </div>
+    );
+  }
 
   if (visible.length === 0) {
     const hasDraft = reviews.some((r) => r.status === "draft");

@@ -29,7 +29,7 @@ import {
   useSaveSecondaryDraft,
   useUpdateSecondaryEval,
 } from "../../queries/projectReviews";
-import type { MenteeProjectAssignment } from "../../services/mentee.service";
+import { useMenteeProjects } from "../../queries/mentees";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
@@ -258,17 +258,27 @@ function EvalCard({
 // ── Main tab ───────────────────────────────────────────────────────
 
 interface MenteeProjectsTabProps {
-  readonly assignments: MenteeProjectAssignment[];
+  readonly menteeId: number;
   readonly menteeName: string;
-  /** Needed for the create-path of EvalModal (submitPMEvaluation). */
+  /** Needed for the create-path of EvalModal (submitPMEvaluation). Same
+   *  value as `menteeId` today, but kept as a separate prop so the
+   *  create-path stays explicit if user_id and route id ever diverge. */
   readonly menteeUserId: number;
 }
 
 export function MenteeProjectsTab({
-  assignments,
+  menteeId,
   menteeName,
   menteeUserId,
 }: MenteeProjectsTabProps) {
+  // Per-tab fetch (PR 19 split) — ['mentees', id, 'projects'] key.
+  // Mutations from project-reviews (D3) invalidate ['project-reviews']
+  // AND ['mentees'] which catches this sub-key via prefix match.
+  const {
+    data: assignments = [],
+    isPending,
+    error: queryError,
+  } = useMenteeProjects(menteeId);
   const { user } = useAuth();
   const currentUserId = user?.user_id ?? null;
   const toast = useToast();
@@ -507,6 +517,22 @@ export function MenteeProjectsTab({
         ? "bg-brand/10 text-brand"
         : "text-text-muted hover:bg-surface-hover"
     }`;
+
+  if (isPending) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center text-sm text-text-muted bg-background/50">
+        Loading projects…
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        Could not load projects. Please try again.
+      </div>
+    );
+  }
 
   if (rows.length === 0) {
     return (

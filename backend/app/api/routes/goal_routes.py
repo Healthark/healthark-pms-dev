@@ -45,6 +45,7 @@ from app.schemas.goal_schemas import (
     GoalMentorReviewSubmit,
     GoalMentorReviewDraft,
     TeamGoalResponse,
+    TeamGoalListResponse,
 )
 from app.core.cycle_utils import (
     cycles_before,
@@ -284,7 +285,7 @@ def create_goal(
     return _get_goal_with_relations(db, new_goal.id, current_user.org_id)
 
 
-@router.get("/team", response_model=List[TeamGoalResponse])
+@router.get("/team", response_model=List[TeamGoalListResponse])
 def list_team_goals(
     db: DbSession,
     current_user: CurrentUser,

@@ -22,7 +22,7 @@ import {
   useSubmitMentorEval,
   useSaveMentorDraft,
 } from "../queries/annualReviews";
-import { useMenteeDetail } from "../queries/mentees";
+import { useMenteeDetail, useMenteeReviews } from "../queries/mentees";
 import { MenteeGoalsTab } from "../components/mentees/MenteeGoalsTab";
 import { MenteeReviewTab } from "../components/mentees/MenteeReviewTab";
 import { MenteeProjectsTab } from "../components/mentees/MenteeProjectsTab";
@@ -71,16 +71,23 @@ export function MenteeDetail() {
   const tabFromUrl = searchParams.get("tab");
   const activeTab: TabKey = isTabKey(tabFromUrl) ? tabFromUrl : "summary";
 
-  // Single source of truth for the mentee aggregate — the query is keyed
-  // on `["mentees", id, "detail"]` and invalidated by any goals /
-  // annual-reviews / project-reviews mutation broadcast (see the
-  // `invalidateMentees` helper in `queries/mentees.ts`). That replaces
-  // the old manual `reloadDetail()` callback chain.
+  // Page-level summary fetch — drives the identity card + pending-actions
+  // pill. Per PR 19 this is the slim shape (no inline goals/reviews/
+  // projects arrays); each tab fetches its own sub-resource. The query
+  // is keyed on `["mentees", id, "detail"]` and invalidated by any goals
+  // / annual-reviews / project-reviews mutation broadcast (see
+  // `invalidateMentees` in `queries/mentees.ts`).
   const {
     data: data = null,
     isPending,
     error: queryError,
   } = useMenteeDetail(isValidId ? menteeId : null);
+  // Reviews are also needed at the page level for the eval drawer's
+  // FY→review map. The Annual Summary tab + Reviews tab fetch the same
+  // hook independently; TanStack dedups so it's at most one request.
+  const { data: reviewsList = [] } = useMenteeReviews(
+    isValidId ? menteeId : null,
+  );
   const isLoading = isValidId && isPending;
   const error = !isValidId
     ? "Invalid mentee id."
@@ -117,13 +124,11 @@ export function MenteeDetail() {
 
   const reviewByCycle = useMemo(() => {
     const m = new Map<string, AnnualReview>();
-    if (data) {
-      for (const r of data.reviews_list) {
-        m.set(extractFyToken(r.cycle_name), r);
-      }
+    for (const r of reviewsList) {
+      m.set(extractFyToken(r.cycle_name), r);
     }
     return m;
-  }, [data]);
+  }, [reviewsList]);
 
   const evalReview = evalFy ? reviewByCycle.get(evalFy) ?? null : null;
   const enrichedReview: MenteeAnnualReview | null =
@@ -287,25 +292,25 @@ export function MenteeDetail() {
             <div className="p-5">
               {activeTab === "goals" && (
                 <MenteeGoalsTab
-                  goals={data.goals_list}
+                  menteeId={menteeId}
                   menteeName={data.full_name}
                 />
               )}
               {activeTab === "summary" && (
                 <MenteeAnnualSummaryTab
-                  mentee={data}
+                  menteeId={menteeId}
                   onOpenEval={openEval}
                 />
               )}
               {activeTab === "review" && (
                 <MenteeReviewTab
-                  reviews={data.reviews_list}
+                  menteeId={menteeId}
                   menteeName={data.full_name}
                 />
               )}
               {activeTab === "projects" && (
                 <MenteeProjectsTab
-                  assignments={data.project_assignments}
+                  menteeId={menteeId}
                   menteeName={data.full_name}
                   menteeUserId={data.user_id}
                 />

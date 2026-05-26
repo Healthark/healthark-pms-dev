@@ -27,6 +27,7 @@ import type {
   GoalMentorReviewPayload,
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
+import { useGoalDetail } from "../../queries/goals";
 import {
   projectReviewService,
   type RoleExpectation,
@@ -85,17 +86,27 @@ export function GoalMentorReviewModal({
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
 
+  // The /goals/team list response was slimmed (PR 18) to drop the heavy
+  // self_overall_review + mentor_overall_review text bodies. The modal
+  // fetches the full goal on open to populate the read-only self-review
+  // pane + pre-fill the mentor-review textarea when a draft already
+  // exists. `useGoalDetail` is gated on isOpen so the request only fires
+  // when the modal mounts, and the result is cached for subsequent opens.
+  const detailQuery = useGoalDetail(isOpen && goal ? goal.id : null);
+  const detail = detailQuery.data;
+  const isLoadingDetail = detailQuery.isPending && detailQuery.fetchStatus !== "idle";
+
   // Use the mentee's submitted self-review (drafts are owner-only).
   const selfReview =
-    goal && cycleHalf
-      ? goal.self_reviews.find(
+    detail && cycleHalf
+      ? detail.self_reviews.find(
           (sr) => sr.cycle_half === cycleHalf && !sr.is_draft,
         ) ?? null
       : null;
 
   const existingMentorReview =
-    goal && cycleHalf
-      ? goal.mentor_reviews.find((mr) => mr.cycle_half === cycleHalf) ?? null
+    detail && cycleHalf
+      ? detail.mentor_reviews.find((mr) => mr.cycle_half === cycleHalf) ?? null
       : null;
 
   // Mentor drafts stay editable; only a final non-draft row locks the modal.
@@ -108,12 +119,20 @@ export function GoalMentorReviewModal({
   const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
 
   // Re-seed the textarea whenever the modal opens on a different (goal, half).
+  // Gated on `detail` so the draft text fetched from /goals/{id} is available
+  // before we seed — otherwise we'd seed empty, then re-seed once detail
+  // arrived, which could clobber any text the mentor typed in that window.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !detail) return;
     setOverall(
       existingMentorReview ? existingMentorReview.mentor_overall_review : "",
     );
-  }, [isOpen, goal?.id, cycleHalf, existingMentorReview]);
+    // `existingMentorReview` is intentionally not in deps — it's derived from
+    // `detail` + `cycleHalf` which are both already tracked, and including
+    // it would re-fire the effect on every render that produces a fresh
+    // .find() result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, detail, goal?.id, cycleHalf]);
 
   // Fetch role-expectation rows once when the modal first opens. The org
   // typically only has 9 of these; cache once and filter client-side by
@@ -235,7 +254,12 @@ export function GoalMentorReviewModal({
               </span>
             </div>
             <div className="overflow-y-auto px-5 py-4">
-              {selfReview === null ? (
+              {isLoadingDetail ? (
+                <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-surface-muted px-4 py-6 text-sm text-text-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Loading review…
+                </div>
+              ) : selfReview === null ? (
                 <div className="rounded-lg border border-border bg-surface-muted px-4 py-6 text-center text-sm text-text-muted">
                   The mentee has not submitted their self-review for this half yet.
                 </div>
@@ -267,7 +291,7 @@ export function GoalMentorReviewModal({
                 </p>
               )}
 
-              {selfReview === null && !isReadOnly && (
+              {!isLoadingDetail && selfReview === null && !isReadOnly && (
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
                   You can only submit a mentor review once the mentee has
                   submitted their self-review.

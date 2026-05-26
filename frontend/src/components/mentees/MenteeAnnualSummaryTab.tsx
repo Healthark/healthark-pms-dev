@@ -29,7 +29,6 @@ import {
   type AnnualReview,
   type ReviewStatus,
 } from "../../services/annual-review.service";
-import type { MenteeDetail } from "../../services/mentee.service";
 import type {
   TeamGoal,
   GoalSelfReview,
@@ -37,6 +36,11 @@ import type {
   SelfReviewCycleHalf,
 } from "../../services/goal.service";
 import type { MenteeProjectAssignment } from "../../services/mentee.service";
+import {
+  useMenteeGoals,
+  useMenteeReviews,
+  useMenteeProjects,
+} from "../../queries/mentees";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
@@ -46,7 +50,7 @@ import {
 } from "../../utils/fy";
 
 interface MenteeAnnualSummaryTabProps {
-  readonly mentee: MenteeDetail;
+  readonly menteeId: number;
   /** Open the page-level eval drawer for the given FY token. Drawer
    *  state lives in MenteeDetail so tab switches don't unmount it. */
   readonly onOpenEval: (fy: string) => void;
@@ -423,9 +427,23 @@ function ProjectSummaryCard({
 // ── Main ────────────────────────────────────────────────────────────
 
 export function MenteeAnnualSummaryTab({
-  mentee,
+  menteeId,
   onOpenEval,
 }: MenteeAnnualSummaryTabProps) {
+  // Per-tab fetches (PR 19 split) — three parallel hooks. Each shares
+  // its cache key with the corresponding per-tab consumer
+  // (MenteeGoalsTab / MenteeReviewTab / MenteeProjectsTab), so flipping
+  // between the Summary tab and any of the dedicated tabs is a cache
+  // hit. The Summary tab needs all three sub-resources because it
+  // renders FY-filtered slices of each.
+  const goalsQuery = useMenteeGoals(menteeId);
+  const reviewsQuery = useMenteeReviews(menteeId);
+  const projectsQuery = useMenteeProjects(menteeId);
+  const goalsList: TeamGoal[] = goalsQuery.data ?? [];
+  const reviewsList: AnnualReview[] = reviewsQuery.data ?? [];
+  const projectAssignments: MenteeProjectAssignment[] =
+    projectsQuery.data ?? [];
+
   const { settings } = useSystemSettings();
   const activeFyToken = settings?.active_cycle_name
     ? extractFyToken(settings.active_cycle_name)
@@ -434,20 +452,20 @@ export function MenteeAnnualSummaryTab({
   // Map cycle_name → AnnualReview for fast lookup.
   const reviewByCycle = useMemo(() => {
     const m = new Map<string, AnnualReview>();
-    for (const r of mentee.reviews_list) {
+    for (const r of reviewsList) {
       m.set(extractFyToken(r.cycle_name), r);
     }
     return m;
-  }, [mentee.reviews_list]);
+  }, [reviewsList]);
 
   // FYs the picker exposes: every FY with a review row + the active FY (so
   // the mentor can land here even before the mentee files self-review).
   const availableFys = useMemo(() => {
     const s = new Set<string>();
     if (activeFyToken) s.add(activeFyToken);
-    for (const r of mentee.reviews_list) s.add(extractFyToken(r.cycle_name));
+    for (const r of reviewsList) s.add(extractFyToken(r.cycle_name));
     return Array.from(s).sort((a, b) => b.localeCompare(a));
-  }, [mentee.reviews_list, activeFyToken]);
+  }, [reviewsList, activeFyToken]);
 
   const [selectedFy, setSelectedFy] = useState(
     activeFyToken || availableFys[0] || "",
@@ -467,9 +485,9 @@ export function MenteeAnnualSummaryTab({
   const goalsInFy = useMemo(
     () =>
       selectedYear !== null
-        ? mentee.goals_list.filter((g) => g.fy_year === selectedYear)
+        ? goalsList.filter((g) => g.fy_year === selectedYear)
         : [],
-    [mentee.goals_list, selectedYear],
+    [goalsList, selectedYear],
   );
 
   // Group projects by half within the FY. `cycle` may be "H1 FY26-27",
@@ -482,7 +500,7 @@ export function MenteeAnnualSummaryTab({
       h2: MenteeProjectAssignment[];
       unknown: MenteeProjectAssignment[];
     } = { h1: [], h2: [], unknown: [] };
-    for (const p of mentee.project_assignments) {
+    for (const p of projectAssignments) {
       if (!p.cycle) continue;
       if (extractFyToken(p.cycle) !== selectedFy) continue;
       const upper = p.cycle.toUpperCase();
@@ -491,7 +509,7 @@ export function MenteeAnnualSummaryTab({
       else buckets.unknown.push(p);
     }
     return buckets;
-  }, [mentee.project_assignments, selectedFy]);
+  }, [projectAssignments, selectedFy]);
 
   const status = selectedReview?.status ?? null;
   const canFill = isActiveFy && status === "pending_mentor";
@@ -512,6 +530,22 @@ export function MenteeAnnualSummaryTab({
     if (status === "draft") return "Mentee is drafting their self-review";
     return null;
   })();
+
+  // Wait for all three sub-resources before deciding empty-vs-populated
+  // — `availableFys` is built from reviews + active settings, and goals
+  // / projects feed the FY-filtered sections below. Showing the "no
+  // cycles yet" placeholder before reviews settle would flash on every
+  // tab mount.
+  const isLoading =
+    goalsQuery.isPending || reviewsQuery.isPending || projectsQuery.isPending;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-text-muted">
+        Loading annual summary…
+      </div>
+    );
+  }
 
   if (availableFys.length === 0) {
     return (
