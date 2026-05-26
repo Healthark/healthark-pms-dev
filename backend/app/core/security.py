@@ -14,7 +14,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT Token Generation
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import jwt
+import jwt
 from app.core.config import settings
 
 ALGORITHM = "HS256"

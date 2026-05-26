@@ -1,6 +1,6 @@
 from typing import Annotated
 from fastapi import Cookie, Depends, Header, HTTPException, status
-from jose import jwt, JWTError
+import jwt
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -51,7 +51,7 @@ def get_current_user(
         if user_id is None:
             raise credentials_exception
 
-    except JWTError:
+    except jwt.InvalidTokenError:
         raise credentials_exception
 
     # 3. Look up the user in the database
