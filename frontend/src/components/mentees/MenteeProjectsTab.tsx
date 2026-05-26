@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import {
   Briefcase,
   CheckCircle2,
@@ -35,8 +35,18 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
-import { EvalModal, type EvalModalCard } from "../project-reviews/EvalModal";
-import { ImpactModal, type ImpactModalRow } from "../project-reviews/ImpactModal";
+// EvalModal + ImpactModal lazy-loaded (F3) — same chunks shared with
+// PMEvaluationTab. Splitting type-only imports out so the modal
+// modules don't get pulled into this parent's chunk at all (the
+// `import type` lines are erased at build time).
+import type { EvalModalCard } from "../project-reviews/EvalModal";
+import type { ImpactModalRow } from "../project-reviews/ImpactModal";
+const EvalModal = lazy(() =>
+  import("../project-reviews/EvalModal").then((m) => ({ default: m.EvalModal })),
+);
+const ImpactModal = lazy(() =>
+  import("../project-reviews/ImpactModal").then((m) => ({ default: m.ImpactModal })),
+);
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 
 // ── Local row shape ────────────────────────────────────────────────
@@ -766,36 +776,40 @@ export function MenteeProjectsTab({
         </div>
       )}
 
-      {/* Modals */}
-      {evalTarget && (
-        <EvalModal
-          card={toEvalCard(evalTarget)}
-          expectation={getExpectation(evalTarget)}
-          isEditMode={evalMode !== "create"}
-          readOnly={evalMode === "view"}
-          onSubmit={handlePMSubmit}
-          onSaveDraft={evalMode === "create" ? handlePMSaveDraft : undefined}
-          onClose={closeEval}
-          isSaving={isSaving}
-          isDraftSaving={isDraftSaving}
-          error={modalError}
-        />
-      )}
-      {impactTarget && impactModalRow && (
-        <ImpactModal
-          row={impactModalRow}
-          onSubmit={handleSecSubmit}
-          onSaveDraft={
-            impactModalRow.review_status === "submitted"
-              ? undefined
-              : handleSecSaveDraft
-          }
-          onClose={closeImpact}
-          isSaving={isSaving}
-          isDraftSaving={isDraftSaving}
-          error={modalError}
-        />
-      )}
+      {/* Modals — lazy chunks (F3). */}
+      <Suspense fallback={null}>
+        {evalTarget && (
+          <EvalModal
+            card={toEvalCard(evalTarget)}
+            expectation={getExpectation(evalTarget)}
+            isEditMode={evalMode !== "create"}
+            readOnly={evalMode === "view"}
+            onSubmit={handlePMSubmit}
+            onSaveDraft={evalMode === "create" ? handlePMSaveDraft : undefined}
+            onClose={closeEval}
+            isSaving={isSaving}
+            isDraftSaving={isDraftSaving}
+            error={modalError}
+          />
+        )}
+      </Suspense>
+      <Suspense fallback={null}>
+        {impactTarget && impactModalRow && (
+          <ImpactModal
+            row={impactModalRow}
+            onSubmit={handleSecSubmit}
+            onSaveDraft={
+              impactModalRow.review_status === "submitted"
+                ? undefined
+                : handleSecSaveDraft
+            }
+            onClose={closeImpact}
+            isSaving={isSaving}
+            isDraftSaving={isDraftSaving}
+            error={modalError}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

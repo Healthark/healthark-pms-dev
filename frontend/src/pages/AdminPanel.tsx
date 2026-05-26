@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
   UserPlus, Users, Settings, FolderOpen, Plus, Download,
 } from "lucide-react";
@@ -14,7 +14,12 @@ import { getErrorMessage } from "../utils/errors";
 import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/ProjectsTab";
-import { UserModal } from "../components/admin/UserModal";
+// UserModal lazy-loaded (F3) — admin-only form, opens on "Add User"
+// or per-row pencil click. Split into its own chunk so the AdminPanel
+// initial download skips it for non-modal sessions.
+const UserModal = lazy(() =>
+  import("../components/admin/UserModal").then((m) => ({ default: m.UserModal })),
+);
 import { ExportsTab } from "../components/admin/ExportsTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
@@ -260,17 +265,22 @@ export default function AdminPanel() {
         )}
       </div>
 
-      {/* Modals — rendered outside the card so they overlay the full page */}
-      <UserModal
-        isOpen={showUserModal}
-        onClose={closeUserModal}
-        onSave={handleSaveUser}
-        editingUser={editingUser}
-        departments={departments}
-        designations={designations}
-        isSaving={isSavingUser}
-        error={modalError}
-      />
+      {/* Modals — rendered outside the card so they overlay the full page.
+          Lazy-wrapped so the modal chunk only downloads on first open. */}
+      <Suspense fallback={null}>
+        {showUserModal && (
+          <UserModal
+            isOpen={showUserModal}
+            onClose={closeUserModal}
+            onSave={handleSaveUser}
+            editingUser={editingUser}
+            departments={departments}
+            designations={designations}
+            isSaving={isSavingUser}
+            error={modalError}
+          />
+        )}
+      </Suspense>
 
     </div>
   );

@@ -16,14 +16,20 @@
  *     mentor over to the Summary tab to actually fill it.
  */
 
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Eye, FileText } from "lucide-react";
 import type { AnnualReview } from "../../services/annual-review.service";
 import { useMenteeReviews } from "../../queries/mentees";
 import { ReviewStatusBadge } from "../reviews/ReviewStatusBadge";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
-import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
+// AnnualReviewDetailModal lazy-loaded (F3) — pure-display popup that
+// opens on per-row "View" click. ~8 kB split out of the MenteeDetail chunk.
+const AnnualReviewDetailModal = lazy(() =>
+  import("../reviews/AnnualReviewDetailModal").then((m) => ({
+    default: m.AnnualReviewDetailModal,
+  })),
+);
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 
 interface MenteeReviewTabProps {
@@ -190,14 +196,16 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
         </table>
       </div>
 
-      {viewing && (
-        <AnnualReviewDetailModal
-          review={viewing}
-          title={`${menteeName} · Annual Review`}
-          subtitle={`Year: ${formatFyLabel(viewing.cycle_name)}`}
-          onClose={() => setViewing(null)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {viewing && (
+          <AnnualReviewDetailModal
+            review={viewing}
+            title={`${menteeName} · Annual Review`}
+            subtitle={`Year: ${formatFyLabel(viewing.cycle_name)}`}
+            onClose={() => setViewing(null)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
