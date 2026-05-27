@@ -50,6 +50,12 @@ class UserResponse(BaseModel):
     department_id: Optional[int] = None
     designation_id: Optional[int] = None
     mentor_id: Optional[int] = None
+    # Resolved mentor display name. Populated by the paginated /admin/users
+    # route (via a self-join) so the table no longer resolves it client-side
+    # from the full user list — which broke once the list became paginated.
+    # The non-paginated /admin/users/all (pickers) leaves this None; pickers
+    # don't display it.
+    mentor_name: Optional[str] = None
     is_deleted: bool
     created_at: datetime
 

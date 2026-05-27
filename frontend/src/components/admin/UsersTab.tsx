@@ -1,22 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Pencil, UserX, UserCheck } from "lucide-react";
 import type {
   UserResponse,
+  UserQuery,
   DepartmentBrief,
   DesignationBrief,
 } from "../../services/admin.service";
 import { StatusBadge } from "./StatusBadge";
 import { SortableHeader } from "../SortableHeader";
-import {
-  compareValues,
-  type SortKind,
-  type SortState,
-} from "../../utils/sort";
+import { type SortState } from "../../utils/sort";
 import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { TablePagination } from "../common/TablePagination";
 import { exportService } from "../../services/export.service";
-import { useDeactivateUser, useReactivateUser, useUsers } from "../../queries/users";
+import {
+  useDeactivateUser,
+  useReactivateUser,
+  useUsersPage,
+} from "../../queries/users";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useDebounce } from "../../hooks/useDebounce";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { getErrorMessage } from "../../utils/errors";
@@ -54,22 +56,6 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "inactive", label: "Inactive" },
 ];
 
-const USERS_SORT_CONFIG: Record<
-  UsersSortKey,
-  { kind: SortKind; get: (u: UserResponse, all: readonly UserResponse[]) => unknown }
-> = {
-  full_name:        { kind: "alpha", get: (u) => u.full_name },
-  email:            { kind: "alpha", get: (u) => u.email },
-  mentor_name:      {
-    kind: "alpha",
-    get: (u, all) =>
-      u.mentor_id ? all.find((x) => x.id === u.mentor_id)?.full_name ?? null : null,
-  },
-  department_name:  { kind: "alpha", get: (u) => u.department?.name ?? null },
-  designation_name: { kind: "alpha", get: (u) => u.designation?.name ?? null },
-  status:           { kind: "alpha", get: (u) => (u.is_deleted ? "Inactive" : "Active") },
-};
-
 const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
@@ -90,7 +76,6 @@ export function UsersTab({
   onSearchChange,
   onEdit,
 }: UsersTabProps) {
-  const { data: users = [], isLoading } = useUsers();
   const deactivateMutation = useDeactivateUser();
   const reactivateMutation = useReactivateUser();
   const confirm = useConfirm();
@@ -102,9 +87,49 @@ export function UsersTab({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("all");
   const [designationFilter, setDesignationFilter] = useState<DesignationFilter>("all");
-  // Client-side pagination (frontend-only until the backend paginates).
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
+
+  // The search box is controlled by the parent (AdminPanel) via the
+  // `searchQuery` prop. Debounce it locally into `debouncedSearch` so the
+  // server query fires once after the user pauses, not per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  const [pushSearch] = useDebounce((value: string) => {
+    setDebouncedSearch(value);
+    setPage(1);
+  }, 300);
+  useEffect(() => {
+    pushSearch(searchQuery);
+  }, [searchQuery, pushSearch]);
+
+  // Reset to page 1 whenever a filter/sort/pageSize changes (page itself
+  // is not a dep, so Next/Prev don't bounce back to 1).
+  useEffect(() => {
+    setPage(1);
+  }, [roleFilter, statusFilter, departmentFilter, designationFilter, sort, pageSize]);
+
+  const query: UserQuery = {
+    page,
+    per_page: pageSize,
+    search: debouncedSearch || undefined,
+    role: roleFilter !== "all" ? roleFilter : undefined,
+    status: statusFilter,
+    department_id: departmentFilter !== "all" ? departmentFilter : undefined,
+    designation_id: designationFilter !== "all" ? designationFilter : undefined,
+    sort_by: sort?.key,
+    sort_dir: sort?.direction,
+  };
+
+  const { data, isLoading, isFetching } = useUsersPage(query);
+  const users = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  const hasActiveFilters =
+    !!debouncedSearch ||
+    roleFilter !== "all" ||
+    statusFilter !== "all" ||
+    departmentFilter !== "all" ||
+    designationFilter !== "all";
 
   const handleDeactivate = async (user: UserResponse) => {
     const ok = await confirm({
@@ -137,41 +162,6 @@ export function UsersTab({
       snackbar.error(getErrorMessage(err));
     }
   };
-
-  const visibleUsers = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const filtered = users.filter((u) => {
-      if (q) {
-        const matchesSearch =
-          u.full_name.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.employee_code.toLowerCase().includes(q);
-        if (!matchesSearch) return false;
-      }
-      if (roleFilter !== "all" && u.role !== roleFilter) return false;
-      if (statusFilter === "active" && u.is_deleted) return false;
-      if (statusFilter === "inactive" && !u.is_deleted) return false;
-      if (departmentFilter !== "all" && u.department?.id !== departmentFilter) return false;
-      if (designationFilter !== "all" && u.designation?.id !== designationFilter) return false;
-      return true;
-    });
-    if (!sort) return filtered;
-    const { kind, get } = USERS_SORT_CONFIG[sort.key];
-    return filtered.slice().sort((a, b) =>
-      compareValues(get(a, users), get(b, users), kind, sort.direction),
-    );
-  }, [users, searchQuery, roleFilter, statusFilter, departmentFilter, designationFilter, sort]);
-
-  // Snap back to the first page whenever the filtered set or page size
-  // changes, so the user never lands on a now-empty page.
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, roleFilter, statusFilter, departmentFilter, designationFilter, pageSize]);
-
-  const pagedUsers = useMemo(
-    () => visibleUsers.slice((page - 1) * pageSize, page * pageSize),
-    [visibleUsers, page, pageSize],
-  );
 
   return (
     <div>
@@ -270,7 +260,12 @@ export function UsersTab({
         // top:0 header). An `overflow-auto` wrapper with no padding/zoom is a
         // clean scroll context where the sticky <thead> pins reliably with no
         // gap or bleed-through. max-height keeps it generous but bounded.
-        <div className="max-h-[75vh] overflow-auto">
+        <div
+          className={`max-h-[75vh] overflow-auto transition-opacity ${
+            isFetching ? "opacity-60" : "opacity-100"
+          }`}
+          aria-busy={isFetching}
+        >
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               <tr className="bg-surface-muted text-left">
@@ -301,17 +296,19 @@ export function UsersTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visibleUsers.length === 0 ? (
+              {total === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
                     className="px-5 py-10 text-center text-text-muted"
                   >
-                    No users match your filters.
+                    {hasActiveFilters
+                      ? "No users match your filters."
+                      : "No users yet."}
                   </td>
                 </tr>
               ) : (
-                pagedUsers.map((user) => (
+                users.map((user) => (
                   <tr
                     key={user.id}
                     className={`transition-colors hover:bg-surface-muted ${user.is_deleted ? "opacity-60" : ""}`}
@@ -338,7 +335,7 @@ export function UsersTab({
                       {user.phone ?? "—"}
                     </td>
                     <td className="px-5 py-3.5 text-text-muted">
-                      {users.find((u) => u.id === user.mentor_id)?.full_name ?? "—"}
+                      {user.mentor_name ?? "—"}
                     </td>
                     <td className="px-5 py-3.5 text-text-muted">
                       {user.department?.name ?? "—"}
@@ -389,13 +386,16 @@ export function UsersTab({
         </div>
       )}
 
-      {!isLoading && visibleUsers.length > 0 && (
+      {!isLoading && total > 0 && (
         <TablePagination
           page={page}
           pageSize={pageSize}
-          totalItems={visibleUsers.length}
+          totalItems={total}
           onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
         />
       )}
     </div>
