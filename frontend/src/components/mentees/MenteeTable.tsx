@@ -29,7 +29,11 @@ function initialsFor(name: string): string {
 }
 
 export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
+  // Padding mirrors the other app tables: the first column gets px-5, the
+  // rest px-4. Row dividers use `divide-border/50` (set on <tbody> below) to
+  // match the lighter separators used across Team Review / Team Goals tables.
   const thCls = "px-4 py-2.5 text-left";
+  const firstThCls = "px-5 py-2.5 text-left";
   const plainThCls =
     "px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-text-muted";
 
@@ -38,7 +42,7 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
       <table className="w-full text-[13px]">
         <thead>
           <tr className="border-b border-border bg-surface-muted/80">
-            <th className={thCls}>
+            <th className={firstThCls}>
               <SortableHeader label="Mentee" columnKey="full_name" sort={sort} onSort={onSort} />
             </th>
             <th className={thCls}>
@@ -60,16 +64,16 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
             <th className={`${plainThCls} text-right`}>Actions</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/50">
           {mentees.map((m) => {
             const hasPending = m.pending_actions_count > 0;
             const initials = initialsFor(m.full_name);
             return (
               <tr
                 key={m.user_id}
-                className="border-b border-border last:border-b-0 hover:bg-surface-muted/60"
+                className="hover:bg-surface-muted/60 transition-colors"
               >
-                <td className="px-4 py-3">
+                <td className="px-5 py-3">
                   <div className="flex items-center gap-2.5">
                     <div
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white shrink-0"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Pencil, UserX, UserCheck } from "lucide-react";
 import type {
   UserResponse,
@@ -13,6 +13,7 @@ import {
   type SortState,
 } from "../../utils/sort";
 import { ExportExcelButton } from "../exports/ExportExcelButton";
+import { TablePagination } from "../common/TablePagination";
 import { exportService } from "../../services/export.service";
 import { useDeactivateUser, useReactivateUser, useUsers } from "../../queries/users";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -73,6 +74,14 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
+// Sticky header cells. Each <th> is pinned individually (the reliable
+// cross-browser pattern — sticky on <thead> is flaky in some engines) with a
+// fully OPAQUE background so rows scrolling underneath are completely hidden,
+// not blurred-but-visible. z-20 keeps it above tbody. The bottom border lives
+// on the cell so it travels with the pinned row (a <tr> border would scroll
+// away under border-separate).
+const HEADER_CELL_CLS =
+  "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
 
 export function UsersTab({
   departments,
@@ -93,6 +102,9 @@ export function UsersTab({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("all");
   const [designationFilter, setDesignationFilter] = useState<DesignationFilter>("all");
+  // Client-side pagination (frontend-only until the backend paginates).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const handleDeactivate = async (user: UserResponse) => {
     const ok = await confirm({
@@ -149,6 +161,17 @@ export function UsersTab({
       compareValues(get(a, users), get(b, users), kind, sort.direction),
     );
   }, [users, searchQuery, roleFilter, statusFilter, departmentFilter, designationFilter, sort]);
+
+  // Snap back to the first page whenever the filtered set or page size
+  // changes, so the user never lands on a now-empty page.
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, roleFilter, statusFilter, departmentFilter, designationFilter, pageSize]);
+
+  const pagedUsers = useMemo(
+    () => visibleUsers.slice((page - 1) * pageSize, page * pageSize),
+    [visibleUsers, page, pageSize],
+  );
 
   return (
     <div>
@@ -240,32 +263,39 @@ export function UsersTab({
           Loading users…
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        // The table gets its OWN scroll region. Page-level sticky can't be
+        // used here: the app shell's <main> sets `zoom: 0.9` and `p-6`, both
+        // of which break CSS `position: sticky` (zoom corrupts the sticky
+        // offset; a padded scroll container leaves rows visible above a
+        // top:0 header). An `overflow-auto` wrapper with no padding/zoom is a
+        // clean scroll context where the sticky <thead> pins reliably with no
+        // gap or bleed-through. max-height keeps it generous but bounded.
+        <div className="max-h-[75vh] overflow-auto">
+          <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
-              <tr className="border-b border-border bg-surface-muted text-left">
-                <th className="px-5 py-3">
+              <tr className="bg-surface-muted text-left">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Employee" columnKey="full_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Email" columnKey="email" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                <th className={`${HEADER_CELL_CLS} text-xs font-semibold uppercase tracking-wide text-text-muted`}>
                   Phone
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Mentor" columnKey="mentor_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Department" columnKey="department_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Designation" columnKey="designation_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Status" columnKey="status" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                <th className={`${HEADER_CELL_CLS} text-xs font-semibold uppercase tracking-wide text-text-muted`}>
                   Actions
                 </th>
               </tr>
@@ -281,7 +311,7 @@ export function UsersTab({
                   </td>
                 </tr>
               ) : (
-                visibleUsers.map((user) => (
+                pagedUsers.map((user) => (
                   <tr
                     key={user.id}
                     className={`transition-colors hover:bg-surface-muted ${user.is_deleted ? "opacity-60" : ""}`}
@@ -357,6 +387,16 @@ export function UsersTab({
             </tbody>
           </table>
         </div>
+      )}
+
+      {!isLoading && visibleUsers.length > 0 && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={visibleUsers.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </div>
   );

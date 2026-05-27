@@ -13,6 +13,7 @@
 import {
   lazy,
   Suspense,
+  useEffect,
   useState,
   useCallback,
   useImperativeHandle,
@@ -38,6 +39,7 @@ import { exportService } from "../../services/export.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { extractFyToken } from "../../utils/fy";
 import { ExportExcelButton } from "../exports/ExportExcelButton";
+import { TablePagination } from "../common/TablePagination";
 // ProjectModal lazy-loaded (F3) — it's a 718-LOC form with heavy
 // deps (UserCombobox, multiple queries) that only mounts when admin
 // clicks "Create" or the per-row pencil. Wrapping in React.lazy
@@ -95,6 +97,13 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
+// Sticky header cells. Each <th> is pinned individually (reliable across
+// engines; sticky on <thead> is flaky) with a fully OPAQUE background so rows
+// scrolling underneath are completely hidden. z-20 keeps it above tbody; the
+// bottom border lives on the cell so it travels with the pinned row under
+// border-separate. Mirrors UsersTab.
+const HEADER_CELL_CLS =
+  "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
 
 export interface ProjectsTabHandle {
   openCreate: () => void;
@@ -112,6 +121,9 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [pmFilter, setPmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // Client-side pagination (frontend-only until the backend paginates).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const toast = useToast();
   const snackbar = useSnackbar();
@@ -272,6 +284,17 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
       .sort((a, b) => compareValues(get(a), get(b), kind, sort.direction));
   }, [projects, searchQuery, yearFilter, pmFilter, statusFilter, sort]);
 
+  // Snap back to the first page whenever the filtered set or page size
+  // changes, so the user never lands on a now-empty page.
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, yearFilter, pmFilter, statusFilter, pageSize]);
+
+  const pagedProjects = useMemo(
+    () => visibleProjects.slice((page - 1) * pageSize, page * pageSize),
+    [visibleProjects, page, pageSize],
+  );
+
   return (
     <div>
       {/* Toolbar — search + filters */}
@@ -368,41 +391,48 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        // The table gets its OWN scroll region. Page-level sticky can't be
+        // used here: the app shell's <main> sets `zoom: 0.9` and `p-6`, both
+        // of which break CSS `position: sticky` (zoom corrupts the sticky
+        // offset; a padded scroll container leaves rows visible above a
+        // top:0 header). An `overflow-auto` wrapper with no padding/zoom pins
+        // the sticky <thead> reliably with no gap or bleed-through. Mirrors
+        // UsersTab.
+        <div className="max-h-[75vh] overflow-auto">
+          <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
-              <tr className="border-b border-border bg-surface-muted text-left">
-                <th className="px-5 py-3">
+              <tr className="bg-surface-muted text-left">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Project" columnKey="name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Code" columnKey="project_code" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Start Date" columnKey="start_date" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="End Date" columnKey="expected_end_date" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="PM" columnKey="pm_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="PM Reports To" columnKey="reports_to_name" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Members" columnKey="member_count" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3">
+                <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Status" columnKey="status" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                <th className={`${HEADER_CELL_CLS} text-xs font-semibold uppercase tracking-wide text-text-muted`}>
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visibleProjects.map((project) => (
+              {pagedProjects.map((project) => (
                 <tr
                   key={project.id}
                   className="transition-colors hover:bg-surface-muted"
@@ -506,6 +536,16 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {!isLoading && visibleProjects.length > 0 && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={visibleProjects.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
 
       <Suspense fallback={null}>

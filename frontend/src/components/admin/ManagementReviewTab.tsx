@@ -11,7 +11,7 @@
  * lets management set/override the management rating inline via a modal.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Eye,
   Loader2,
@@ -33,6 +33,13 @@ import { PerformanceRatingSelect } from "../reviews/PerformanceRatingSelect";
 import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
 import { getErrorMessage } from "../../utils/errors";
 import { useConfirm } from "../../hooks/useConfirm";
+import { TablePagination } from "../common/TablePagination";
+import { SortableHeader } from "../SortableHeader";
+import {
+  compareValues,
+  type SortKind,
+  type SortState,
+} from "../../utils/sort";
 
 type RatingValue = number | "";
 type StatusFilter = "all" | "pending" | "rated";
@@ -42,16 +49,27 @@ interface EditTarget {
   readonly draft: RatingValue;
 }
 
-const TABLE_HEADERS = [
-  "User",
-  "Email",
-  "Mentor",
-  "Department",
-  "Self Review",
-  "Mentor Review",
-  "Management Rating",
-  "Actions",
-];
+type MgmtReviewSortKey =
+  | "employee_name"
+  | "employee_email"
+  | "mentor_name"
+  | "department"
+  | "self_performance_rating"
+  | "mentor_performance_rating"
+  | "management_performance_rating";
+
+const MGMT_REVIEW_SORT_CONFIG: Record<
+  MgmtReviewSortKey,
+  { kind: SortKind; get: (r: CalibrationRow) => unknown }
+> = {
+  employee_name:                 { kind: "alpha",   get: (r) => r.employee_name },
+  employee_email:                { kind: "alpha",   get: (r) => r.employee_email },
+  mentor_name:                   { kind: "alpha",   get: (r) => r.mentor_name },
+  department:                    { kind: "alpha",   get: (r) => r.department },
+  self_performance_rating:       { kind: "numeric", get: (r) => r.self_performance_rating },
+  mentor_performance_rating:     { kind: "numeric", get: (r) => r.mentor_performance_rating },
+  management_performance_rating: { kind: "numeric", get: (r) => r.management_performance_rating },
+};
 
 export function ManagementReviewTab() {
   // ['annual-reviews', 'calibration'] — shared TanStack cache
@@ -64,6 +82,10 @@ export function ManagementReviewTab() {
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [mentorFilter, setMentorFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<SortState<MgmtReviewSortKey> | null>(null);
+  // Client-side pagination (frontend-only until the backend paginates).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [viewReviewId, setViewReviewId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
@@ -101,6 +123,20 @@ export function ManagementReviewTab() {
       (r.department ?? "").toLowerCase().includes(q)
     );
   });
+
+  const sorted = sort
+    ? filtered.slice().sort((a, b) => {
+        const { kind, get } = MGMT_REVIEW_SORT_CONFIG[sort.key];
+        return compareValues(get(a), get(b), kind, sort.direction);
+      })
+    : filtered;
+
+  // Snap back to page 1 whenever the filtered set or page size changes.
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, deptFilter, mentorFilter, statusFilter, pageSize]);
+
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   const handleSave = async () => {
     if (!editTarget) return;
@@ -256,18 +292,34 @@ export function ManagementReviewTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-muted text-left">
-                {TABLE_HEADERS.map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted"
-                  >
-                    {h}
-                  </th>
-                ))}
+                <th className="px-5 py-3">
+                  <SortableHeader label="User" columnKey="employee_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Email" columnKey="employee_email" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Mentor" columnKey="mentor_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Department" columnKey="department" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Self Review" columnKey="self_performance_rating" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Mentor Review" columnKey="mentor_performance_rating" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3">
+                  <SortableHeader label="Management Rating" columnKey="management_performance_rating" sort={sort} onSort={setSort} />
+                </th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((r) => (
+              {paged.map((r) => (
                 <tr
                   key={r.review_id}
                   className="transition-colors hover:bg-surface-muted"
@@ -334,6 +386,16 @@ export function ManagementReviewTab() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
 
       {viewReviewId != null && (

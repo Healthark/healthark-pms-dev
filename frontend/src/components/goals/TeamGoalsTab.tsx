@@ -42,6 +42,7 @@ const BulkApproveModal = lazy(() =>
   import("./BulkApproveModal").then((m) => ({ default: m.BulkApproveModal })),
 );
 import { SortableHeader } from "../SortableHeader";
+import { TablePagination } from "../common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
 import { halfDisplayLabel, isPostApproved } from "../../utils/goalStatus";
@@ -235,6 +236,9 @@ export function TeamGoalsTab() {
   const [yearFilter, setYearFilter] = useState("all");
   const [menteeFilter, setMenteeFilter] = useState("all");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
+  // Client-side pagination (frontend-only until the backend paginates).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // "Request Changes" modal state
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
@@ -403,9 +407,17 @@ export function TeamGoalsTab() {
       })
     : filtered;
 
+  // Page the sorted list. Applies to both card and table views.
+  const pagedGoals = sortedGoals.slice((page - 1) * pageSize, page * pageSize);
+
   useEffect(() => {
     setExpandedGoalId(null);
   }, [statusFilter, yearFilter, menteeFilter, searchQuery, viewMode]);
+
+  // Snap back to page 1 whenever the filtered set or page size changes.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, yearFilter, menteeFilter, searchQuery, pageSize]);
 
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
@@ -575,7 +587,7 @@ export function TeamGoalsTab() {
       ) : viewMode === "grid" ? (
         /* ── Card / Grid View ── */
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {sortedGoals.map((goal) => (
+          {pagedGoals.map((goal) => (
             <TeamGoalCard
               key={goal.id}
               goal={goal}
@@ -614,7 +626,7 @@ export function TeamGoalsTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {sortedGoals.map((goal) => {
+              {pagedGoals.map((goal) => {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "pending_approval";
                 const isApproved = isPostApproved(goal.approval_status);
@@ -771,6 +783,16 @@ export function TeamGoalsTab() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
 
       {/* "Request Changes" modal */}

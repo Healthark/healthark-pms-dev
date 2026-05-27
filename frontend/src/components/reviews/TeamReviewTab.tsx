@@ -13,7 +13,7 @@
  *   draft              → "Awaiting self-review" (mentee hasn't submitted)
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, Eye, LayoutGrid, Search,
@@ -28,6 +28,7 @@ import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
+import { TablePagination } from "../common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 
@@ -164,6 +165,9 @@ export function TeamReviewTab() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
   const [viewTarget, setViewTarget] = useState<MenteeAnnualReview | null>(null);
+  // Client-side pagination (frontend-only until the backend paginates).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const availableYears = Array.from(
     new Set(reviews.map((r) => extractFyToken(r.cycle_name))),
@@ -191,6 +195,14 @@ export function TeamReviewTab() {
         return compareValues(get(a), get(b), kind, sort.direction);
       })
     : filtered;
+
+  // Page the sorted list. Applies to both card and table views.
+  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+
+  // Snap back to page 1 whenever the filtered set or page size changes.
+  useEffect(() => {
+    setPage(1);
+  }, [yearFilter, employeeFilter, statusFilter, searchQuery, pageSize]);
 
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
@@ -314,7 +326,7 @@ export function TeamReviewTab() {
         <EmptyState hasFilter={true} />
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {sorted.map((r) => (
+          {paged.map((r) => (
             <TeamReviewCard
               key={r.id}
               review={r}
@@ -367,7 +379,7 @@ export function TeamReviewTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {sorted.map((r) => {
+              {paged.map((r) => {
                 const canEvaluate = r.status === "pending_mentor";
                 const canView =
                   r.status === "pending_management" ||
@@ -442,6 +454,16 @@ export function TeamReviewTab() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {reviews.length > 0 && filtered.length > 0 && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
 
       {viewTarget && (

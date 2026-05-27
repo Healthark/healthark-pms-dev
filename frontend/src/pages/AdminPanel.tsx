@@ -221,7 +221,10 @@ export default function AdminPanel() {
       </div>
 
       {/* Tab container */}
-      <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
+      {/* No `overflow-hidden` here: it would become the sticky table
+          header's scroll container and unstick it on page scroll. The card
+          relies on rounded children instead of clipping. */}
+      <div className="rounded-xl border border-border bg-surface shadow-sm">
         <div className="flex border-b border-border px-2">
           <button
             type="button"
