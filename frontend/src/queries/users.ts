@@ -1,22 +1,46 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   adminService,
   type UserCreatePayload,
+  type UserQuery,
   type UserResponse,
   type UserUpdatePayload,
 } from "../services/admin.service";
+import type { Page } from "../services/pagination";
 
 /**
- * Strict, shared query key for the org-wide user list. Every cache
- * read (UsersTab, UserCombobox, ProjectsTab) and every mutation
- * invalidation references this exact tuple.
+ * Shared key prefix for everything user-list. The non-paginated picker
+ * list (`useUsers`) is keyed exactly `["users"]`; the paginated table
+ * list (`useUsersPage`) is keyed `["users", "page", params]`. Both share
+ * the `["users"]` prefix, so a single mutation invalidation refreshes
+ * the pickers AND the table.
  */
 export const usersQueryKey = ["users"] as const;
+export const usersPageQueryKey = (params: UserQuery) =>
+  ["users", "page", params] as const;
 
+/** Full, non-paginated user list for client-side pickers (UserCombobox,
+ *  ProjectsTab PM/secondary picker). Hits /admin/users/all. */
 export function useUsers() {
   return useQuery<UserResponse[]>({
     queryKey: usersQueryKey,
     queryFn: () => adminService.getUsers(),
+  });
+}
+
+/** Paginated user list for the Admin Users table. Param-keyed so each
+ *  page/filter/sort view is its own cache entry; keepPreviousData avoids
+ *  blanking the table on page/filter changes. */
+export function useUsersPage(params: UserQuery) {
+  return useQuery<Page<UserResponse>>({
+    queryKey: usersPageQueryKey(params),
+    queryFn: () => adminService.getUsersPage(params),
+    placeholderData: keepPreviousData,
   });
 }
 

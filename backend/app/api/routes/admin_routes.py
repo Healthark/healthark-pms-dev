@@ -20,9 +20,10 @@ Security Layers Applied (ALL endpoints):
 
 import secrets
 import string
-from typing import List
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
-from sqlalchemy.orm import joinedload
+from typing import List, Optional
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_
+from sqlalchemy.orm import aliased, joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.core.cache import (
@@ -51,6 +52,7 @@ from app.schemas.admin_schemas import (
     AdminSettingsResponse,
     AdminSettingsUpdate,
 )
+from app.schemas.pagination import Page, PaginationParams
 
 
 _TEMP_PASSWORD_ALPHABET = string.ascii_letters + string.digits
@@ -79,31 +81,142 @@ def _require_admin(current_user: User) -> None:
 # USER MANAGEMENT
 # =====================================================================
 
-@router.get("/users", response_model=List[UserResponse])
+# Maps the FE `sort_by` value to a callable returning the SQL column to
+# sort on, given the aliased Mentor/Department/Designation joins. Anything
+# not in the map falls back to the default created_at order — a bad
+# sort_by never 500s.
+_USERS_SORT_COLUMNS = {
+    "full_name": lambda M, Dept, Desig: User.full_name,
+    "email": lambda M, Dept, Desig: User.email,
+    "mentor_name": lambda M, Dept, Desig: M.full_name,
+    "department_name": lambda M, Dept, Desig: Dept.name,
+    "designation_name": lambda M, Dept, Desig: Desig.name,
+    # is_deleted=False (active) sorts before True (inactive) on asc.
+    "status": lambda M, Dept, Desig: User.is_deleted,
+}
+
+
+@router.get("/users", response_model=Page[UserResponse])
 def list_users(
+    db: DbSession,
+    current_user: CurrentUser,
+    pg: PaginationParams = Depends(),
+    search: Optional[str] = Query(None, description="Matches name, email, or employee code"),
+    role: Optional[str] = Query(None, description="Admin | Staff"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="active | inactive | all"
+    ),
+    department_id: Optional[int] = Query(None),
+    designation_id: Optional[int] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+):
+    """
+    Paginated org user list for the Admin Users table.
+
+    Server-side search / role / status / department / designation filtering
+    + sort + offset pagination so the FE never holds the whole directory in
+    memory. Returns Page[UserResponse]; mentor_name is resolved via a
+    self-join. The non-paginated picker list lives at GET /admin/users/all.
+    """
+    _require_admin(current_user)
+
+    Mentor = aliased(User)
+    EmpDept = aliased(Department)
+    EmpDesig = aliased(Designation)
+
+    query = (
+        db.query(User, Mentor.full_name.label("mentor_name"))
+        .options(joinedload(User.department), joinedload(User.designation))
+        .outerjoin(Mentor, User.mentor_id == Mentor.id)
+        .outerjoin(EmpDept, User.department_id == EmpDept.id)
+        .outerjoin(EmpDesig, User.designation_id == EmpDesig.id)
+        .filter(User.org_id == current_user.org_id)
+    )
+
+    # ── Filters (SQL, before pagination) ─────────────────────────────
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                User.full_name.ilike(term),
+                User.email.ilike(term),
+                User.employee_code.ilike(term),
+            )
+        )
+    if role:
+        query = query.filter(User.role == role)
+    if status_filter == "active":
+        query = query.filter(User.is_deleted.is_(False))
+    elif status_filter == "inactive":
+        query = query.filter(User.is_deleted.is_(True))
+    if department_id is not None:
+        query = query.filter(User.department_id == department_id)
+    if designation_id is not None:
+        query = query.filter(User.designation_id == designation_id)
+
+    # Total across all pages (after filtering). Swap the SELECT list for a
+    # COUNT so the multi-entity select doesn't confuse the count.
+    total = query.with_entities(func.count(User.id)).order_by(None).scalar() or 0
+
+    # ── Sort (with stable id tiebreaker) ─────────────────────────────
+    col_fn = _USERS_SORT_COLUMNS.get(sort_by) if sort_by else None
+    if col_fn is not None:
+        sort_col = col_fn(Mentor, EmpDept, EmpDesig)
+        direction = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
+        query = query.order_by(direction, User.id.asc())
+    else:
+        query = query.order_by(User.created_at.desc(), User.id.asc())
+
+    rows = query.offset(pg.offset).limit(pg.limit).all()
+
+    items: list[UserResponse] = []
+    for user, mentor_name in rows:
+        # Inject the resolved mentor name so UserResponse.from_attributes
+        # reads it (the ORM User has no `mentor_name` attribute).
+        user.mentor_name = mentor_name
+        items.append(UserResponse.model_validate(user))
+
+    return Page[UserResponse](
+        items=items, total=total, page=pg.page, per_page=pg.per_page
+    )
+
+
+@router.get("/users/all", response_model=List[UserResponse])
+def list_all_users(
     db: DbSession,
     current_user: CurrentUser,
 ):
     """
-    Return every user in the organization (including deactivated ones).
+    Full, non-paginated org user list — for client-side pickers
+    (UserCombobox: PM / secondary-evaluator / mentor selection). These need
+    every user in memory to filter-as-you-type without a request per
+    keystroke. The Admin table uses the paginated GET /admin/users instead.
 
-    Uses joinedload to eagerly fetch department + designation in ONE query,
-    avoiding the N+1 problem when the table renders 50+ rows.
+    Resolves mentor_name via the same self-join the paginated route uses,
+    so both endpoints return an identical, fully-populated UserResponse
+    (no field-completeness drift between the two).
     """
     _require_admin(current_user)
 
-    users = (
-        db.query(User)
+    Mentor = aliased(User)
+    rows = (
+        db.query(User, Mentor.full_name.label("mentor_name"))
         .options(
             joinedload(User.department),
             joinedload(User.designation),
         )
+        .outerjoin(Mentor, User.mentor_id == Mentor.id)
         .filter(User.org_id == current_user.org_id)
         .order_by(User.created_at.desc())
         .all()
     )
 
-    return users
+    items: list[UserResponse] = []
+    for user, mentor_name in rows:
+        user.mentor_name = mentor_name
+        items.append(UserResponse.model_validate(user))
+    return items
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

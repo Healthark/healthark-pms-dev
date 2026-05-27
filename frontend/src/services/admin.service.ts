@@ -1,4 +1,5 @@
 import apiClient from "./api.client";
+import type { Page, PageQuery } from "./pagination";
 
 // ---------------------------------------------------------------------------
 // Response types — mirror backend admin_schemas.py exactly
@@ -26,10 +27,21 @@ export interface UserResponse {
   department_id: number | null;
   designation_id: number | null;
   mentor_id: number | null;
+  /** Resolved server-side by the paginated /admin/users route (self-join).
+   *  Null on the non-paginated /admin/users/all picker list. */
+  mentor_name: string | null;
   is_deleted: boolean;
   created_at: string;
   department: DepartmentBrief | null;
   designation: DesignationBrief | null;
+}
+
+/** Query params for the paginated Admin users table. */
+export interface UserQuery extends PageQuery {
+  role?: string;
+  status?: "all" | "active" | "inactive";
+  department_id?: number;
+  designation_id?: number;
 }
 
 export interface SystemSettings {
@@ -102,8 +114,31 @@ export interface UserUpdatePayload {
 
 export const adminService = {
   // Users
+  /** Full, non-paginated user list — for client-side pickers
+   *  (UserCombobox). Hits /admin/users/all. */
   getUsers: async (): Promise<UserResponse[]> => {
-    const res = await apiClient.get<UserResponse[]>("/admin/users");
+    const res = await apiClient.get<UserResponse[]>("/admin/users/all");
+    return res.data;
+  },
+
+  /** Paginated user list for the Admin Users table. Server applies
+   *  search / role / status / department / designation filtering + sort
+   *  + offset pagination. */
+  getUsersPage: async (params: UserQuery): Promise<Page<UserResponse>> => {
+    const res = await apiClient.get<Page<UserResponse>>("/admin/users", {
+      params: {
+        page: params.page,
+        per_page: params.per_page,
+        search: params.search || undefined,
+        role: params.role && params.role !== "all" ? params.role : undefined,
+        status:
+          params.status && params.status !== "all" ? params.status : undefined,
+        department_id: params.department_id ?? undefined,
+        designation_id: params.designation_id ?? undefined,
+        sort_by: params.sort_by || undefined,
+        sort_dir: params.sort_by ? params.sort_dir : undefined,
+      },
+    });
     return res.data;
   },
 
