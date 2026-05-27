@@ -193,20 +193,30 @@ def list_all_users(
     every user in memory to filter-as-you-type without a request per
     keystroke. The Admin table uses the paginated GET /admin/users instead.
 
-    mentor_name is left null here; pickers don't display it.
+    Resolves mentor_name via the same self-join the paginated route uses,
+    so both endpoints return an identical, fully-populated UserResponse
+    (no field-completeness drift between the two).
     """
     _require_admin(current_user)
 
-    return (
-        db.query(User)
+    Mentor = aliased(User)
+    rows = (
+        db.query(User, Mentor.full_name.label("mentor_name"))
         .options(
             joinedload(User.department),
             joinedload(User.designation),
         )
+        .outerjoin(Mentor, User.mentor_id == Mentor.id)
         .filter(User.org_id == current_user.org_id)
         .order_by(User.created_at.desc())
         .all()
     )
+
+    items: list[UserResponse] = []
+    for user, mentor_name in rows:
+        user.mentor_name = mentor_name
+        items.append(UserResponse.model_validate(user))
+    return items
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

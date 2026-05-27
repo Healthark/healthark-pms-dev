@@ -36,7 +36,7 @@ one shot — no mutation-side changes.
 
 - `UserResponse` gains **`mentor_name: Optional[str]`**. The table previously resolved the mentor's name client-side by `users.find(u => u.id === mentor_id)` over the full list — which breaks under pagination (the mentor often isn't on the current page). The paginated route now resolves it via a self-join and injects it onto each row.
 - `GET /admin/users` → `Page[UserResponse]`. Accepts `page`, `per_page`, `search`, `role`, `status` (active/inactive/all), `department_id`, `designation_id`, `sort_by`, `sort_dir`. Aliased joins (Mentor self-join, Department, Designation) power server-side filter/search/sort. `COUNT(*)` via `with_entities(func.count(User.id))` so the multi-entity select doesn't confuse the count. Stable `User.id` sort tiebreaker; unknown `sort_by` → default `created_at desc` (never 500s).
-- `GET /admin/users/all` → `List[UserResponse]` — the prior full-list behaviour, for pickers. `mentor_name` left null (pickers don't show it).
+- `GET /admin/users/all` → `List[UserResponse]` — the prior full-list behaviour, for pickers. Resolves `mentor_name` via the same self-join as the paginated route, so both endpoints return an identical, fully-populated `UserResponse` (no field-completeness drift).
 
 Department/designation **filter options need no new endpoint** — UsersTab already receives `departments` + `designations` as props (from AdminPanel's `useDepartments()` / `useDesignations()` reference-data queries). The filter dropdowns send `department_id` / `designation_id`, matched directly on `User.department_id` / `designation_id`.
 
@@ -99,7 +99,7 @@ Run as an Admin.
 
 - **Offset window shift** — same low-write caveat as PR 1; user create/deactivate is infrequent and doesn't reorder existing rows mid-paging. Non-issue here.
 - **Pickers still fetch all users** — intentional. UserCombobox needs the full set for client-side filtering. At extreme org sizes this could be revisited (server-search), but it's admin-only and not on the hot path.
-- **`mentor_name` only on the paginated route** — `/all` leaves it null. The only consumer that displays it is the table (paginated), so this is correct; pickers filter on full_name/email/role, not mentor_name.
+- **`mentor_name` resolved on both routes** — originally `/all` left it null (pickers don't display it), but that left the two endpoints returning the same schema with different completeness — a footgun for any future consumer. Both now resolve it via the self-join for an identical shape; the extra LEFT JOIN on `/all` is negligible.
 
 ## Next candidates (from the risk-assessment plan)
 
