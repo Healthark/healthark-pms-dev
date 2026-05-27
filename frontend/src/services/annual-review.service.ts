@@ -13,6 +13,7 @@
  */
 
 import apiClient from "./api.client";
+import type { Page, PageQuery } from "./pagination";
 
 // ── Enums ───────────────────────────────────────────────────────────
 
@@ -58,6 +59,21 @@ export interface MenteeAnnualReview extends AnnualReview {
   employee_email: string | null;
   department: string | null;
   designation: string | null;
+}
+
+/** Filter dropdown options for the calibration grid — distinct values
+ *  across the active cycle's calibration set, fetched once. */
+export interface CalibrationFilterOptions {
+  departments: string[];
+  mentors: string[];
+}
+
+/** Query params accepted by GET /annual-reviews/calibration. Extends the
+ *  shared PageQuery with the grid's domain-specific filters. */
+export interface CalibrationQuery extends PageQuery {
+  department?: string;
+  mentor?: string;
+  status?: "all" | "pending" | "rated";
 }
 
 export interface CalibrationRow {
@@ -178,9 +194,39 @@ export const annualReviewService = {
   },
 
   // ── Stage 3: Management ─────────────────────────────────────────
-  getCalibrationGrid: async (): Promise<CalibrationRow[]> => {
-    const res = await apiClient.get<CalibrationRow[]>(
+  /** Paginated calibration grid. Server applies search / department /
+   *  mentor / status filtering + sort + offset pagination; the response
+   *  is a Page<CalibrationRow> envelope. */
+  getCalibrationGrid: async (
+    params: CalibrationQuery,
+  ): Promise<Page<CalibrationRow>> => {
+    const res = await apiClient.get<Page<CalibrationRow>>(
       "/annual-reviews/calibration",
+      {
+        params: {
+          page: params.page,
+          per_page: params.per_page,
+          // Only send filters/sort when set so the URL stays clean and
+          // the backend treats absent params as "no filter".
+          search: params.search || undefined,
+          department: params.department || undefined,
+          mentor: params.mentor || undefined,
+          status:
+            params.status && params.status !== "all"
+              ? params.status
+              : undefined,
+          sort_by: params.sort_by || undefined,
+          sort_dir: params.sort_by ? params.sort_dir : undefined,
+        },
+      },
+    );
+    return res.data;
+  },
+
+  /** Distinct dept + mentor names for the grid's filter dropdowns. */
+  getCalibrationFilterOptions: async (): Promise<CalibrationFilterOptions> => {
+    const res = await apiClient.get<CalibrationFilterOptions>(
+      "/annual-reviews/calibration/filter-options",
     );
     return res.data;
   },

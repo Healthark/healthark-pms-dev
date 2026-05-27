@@ -31,12 +31,15 @@ Security Layers:
                                    are True.
 """
 
-from typing import List
-from fastapi import APIRouter, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
+from sqlalchemy.orm import aliased
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.core.cycle_utils import extract_fy_label
 from app.models.annual_review_models import AnnualReview, ReviewStatus
+from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.annual_review_schemas import (
@@ -47,8 +50,10 @@ from app.schemas.annual_review_schemas import (
     ManagementRatingUpdate,
     AnnualReviewResponse,
     CalibrationRow,
+    CalibrationFilterOptions,
     MenteeAnnualReview,
 )
+from app.schemas.pagination import Page, PaginationParams
 router = APIRouter()
 
 
@@ -435,63 +440,169 @@ def save_mentor_draft(
 # STAGE 3 — MANAGEMENT CALIBRATION & FINALIZATION
 # =====================================================================
 
-@router.get("/calibration", response_model=List[CalibrationRow])
-def get_calibration_grid(
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """
-    All reviews in pending_management + completed for the active cycle,
-    shaped into a simplified grid row. Management-only.
-    """
-    _require_management(current_user)
-    cycle_name = _get_active_cycle(db, current_user.org_id)
+# Maps the FE `sort_by` query value to a callable returning the SQL
+# column to sort on, given the (Employee, Mentor) aliases. `department`
+# is handled separately in the route because it sorts on the joined
+# Department alias. Anything not in this map (or `department`) falls back
+# to the default created_at order — so a bad sort_by never 500s.
+_CALIBRATION_SORT_COLUMNS = {
+    "employee_name": lambda E, M: E.full_name,
+    "employee_email": lambda E, M: E.email,
+    "mentor_name": lambda E, M: M.full_name,
+    "self_performance_rating": lambda E, M: AnnualReview.self_performance_rating,
+    "mentor_performance_rating": lambda E, M: AnnualReview.mentor_performance_rating,
+    "management_performance_rating": lambda E, M: AnnualReview.management_performance_rating,
+}
 
-    reviews = (
-        db.query(AnnualReview)
+
+def _calibration_base_query(db, org_id: int, cycle_name: str):
+    """Base calibration query joined to employee + mentor + employee's
+    department/designation via aliases, so we can filter/sort/search on
+    the resolved display names in SQL (not post-query in Python).
+
+    Returns (query, Employee, Mentor, EmpDept, EmpDesig) so callers can
+    reference the aliases for filtering and ordering.
+    """
+    Employee = aliased(User)
+    Mentor = aliased(User)
+    EmpDept = aliased(Department)
+    EmpDesig = aliased(Designation)
+
+    query = (
+        db.query(AnnualReview, Employee, Mentor, EmpDept, EmpDesig)
+        .join(Employee, AnnualReview.user_id == Employee.id)
+        .outerjoin(Mentor, AnnualReview.mentor_id == Mentor.id)
+        .outerjoin(EmpDept, Employee.department_id == EmpDept.id)
+        .outerjoin(EmpDesig, Employee.designation_id == EmpDesig.id)
         .filter(
-            AnnualReview.org_id == current_user.org_id,
+            AnnualReview.org_id == org_id,
             AnnualReview.cycle_name == cycle_name,
             AnnualReview.status.in_([
                 ReviewStatus.PENDING_MANAGEMENT.value,
                 ReviewStatus.COMPLETED.value,
             ]),
         )
-        .order_by(AnnualReview.created_at.asc())
-        .all()
+    )
+    return query, Employee, Mentor, EmpDept, EmpDesig
+
+
+@router.get("/calibration", response_model=Page[CalibrationRow])
+def get_calibration_grid(
+    db: DbSession,
+    current_user: CurrentUser,
+    pg: PaginationParams = Depends(),
+    search: Optional[str] = Query(None, description="Matches employee name/email, mentor, or department"),
+    department: Optional[str] = Query(None, description="Exact department name"),
+    mentor: Optional[str] = Query(None, description="Exact mentor name"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="all | pending | rated"
+    ),
+    sort_by: Optional[str] = Query(None, description="CalibrationRow field name"),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+):
+    """
+    Paginated calibration grid for the active cycle (pending_management +
+    completed reviews). Management-only.
+
+    Server-side search / department / mentor / status filtering + sort +
+    offset pagination so the FE never holds the full org review set in
+    memory. Filter-dropdown option lists come from
+    GET /calibration/filter-options (fetched once, cached).
+    """
+    _require_management(current_user)
+    cycle_name = _get_active_cycle(db, current_user.org_id)
+
+    query, Employee, Mentor, EmpDept, EmpDesig = _calibration_base_query(
+        db, current_user.org_id, cycle_name
     )
 
-    # Preload employees + mentors in a single round-trip. Mentors come from
-    # review.mentor_id (the one captured at self-review time) rather than
-    # user.mentor_id to keep the grid consistent with the review snapshot.
-    user_ids = {r.user_id for r in reviews}
-    mentor_ids = {r.mentor_id for r in reviews if r.mentor_id is not None}
-    all_ids = list(user_ids | mentor_ids)
-    users_by_id = {
-        u.id: u
-        for u in db.query(User).filter(User.id.in_(all_ids)).all()
-    } if all_ids else {}
+    # ── Filters (applied in SQL, BEFORE pagination) ──────────────────
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Employee.full_name.ilike(term),
+                Employee.email.ilike(term),
+                Mentor.full_name.ilike(term),
+                EmpDept.name.ilike(term),
+            )
+        )
+    if department:
+        query = query.filter(EmpDept.name == department)
+    if mentor:
+        query = query.filter(Mentor.full_name == mentor)
+    if status_filter == "pending":
+        query = query.filter(AnnualReview.management_performance_rating.is_(None))
+    elif status_filter == "rated":
+        query = query.filter(AnnualReview.management_performance_rating.isnot(None))
 
-    rows: list[CalibrationRow] = []
-    for r in reviews:
-        u = users_by_id.get(r.user_id)
-        m = users_by_id.get(r.mentor_id) if r.mentor_id else None
-        rows.append(CalibrationRow(
+    # Total across all pages (after filtering, before offset/limit).
+    total = query.order_by(None).count()
+
+    # ── Sort (with a stable `id` tiebreaker so offset paging is
+    # deterministic across requests) ─────────────────────────────────
+    sort_col = None
+    if sort_by == "department":
+        sort_col = EmpDept.name
+    elif sort_by in _CALIBRATION_SORT_COLUMNS:
+        sort_col = _CALIBRATION_SORT_COLUMNS[sort_by](Employee, Mentor)
+    if sort_col is not None:
+        direction = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
+        query = query.order_by(direction, AnnualReview.id.asc())
+    else:
+        # Default order mirrors the pre-pagination behaviour.
+        query = query.order_by(AnnualReview.created_at.asc(), AnnualReview.id.asc())
+
+    # ── Page slice ───────────────────────────────────────────────────
+    rows_raw = query.offset(pg.offset).limit(pg.limit).all()
+
+    items = [
+        CalibrationRow(
             review_id=r.id,
             user_id=r.user_id,
-            employee_name=u.full_name if u else "Unknown",
-            employee_email=u.email if u else None,
-            mentor_name=m.full_name if m else None,
-            department=u.department.name if u and u.department else None,
-            designation=u.designation.name if u and u.designation else None,
+            employee_name=emp.full_name if emp else "Unknown",
+            employee_email=emp.email if emp else None,
+            mentor_name=men.full_name if men else None,
+            department=dept.name if dept else None,
+            designation=desig.name if desig else None,
             self_performance_rating=r.self_performance_rating,
             mentor_performance_rating=r.mentor_performance_rating,
             management_performance_rating=r.management_performance_rating,
             final_performance_rating=r.final_performance_rating,
             status=r.status,
             final_rating_enabled=r.final_rating_enabled,
-        ))
-    return rows
+        )
+        for (r, emp, men, dept, desig) in rows_raw
+    ]
+
+    return Page[CalibrationRow](
+        items=items, total=total, page=pg.page, per_page=pg.per_page
+    )
+
+
+@router.get("/calibration/filter-options", response_model=CalibrationFilterOptions)
+def get_calibration_filter_options(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Distinct department + mentor names across the active cycle's
+    calibration set. Drives the grid's filter dropdowns. Management-only.
+
+    Computed from the unpaginated set so the dropdowns always show every
+    available value regardless of which page the user is on.
+    """
+    _require_management(current_user)
+    cycle_name = _get_active_cycle(db, current_user.org_id)
+
+    query, _Employee, Mentor, EmpDept, _EmpDesig = _calibration_base_query(
+        db, current_user.org_id, cycle_name
+    )
+    rows = query.with_entities(EmpDept.name, Mentor.full_name).all()
+
+    departments = sorted({d for (d, _m) in rows if d})
+    mentors = sorted({m for (_d, m) in rows if m})
+    return CalibrationFilterOptions(departments=departments, mentors=mentors)
 
 
 @router.patch("/{review_id}/management-rating", response_model=AnnualReviewResponse)

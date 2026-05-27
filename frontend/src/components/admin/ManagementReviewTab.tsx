@@ -11,7 +11,7 @@
  * lets management set/override the management rating inline via a modal.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Eye,
   Loader2,
@@ -22,9 +22,11 @@ import {
 } from "lucide-react";
 import {
   type CalibrationRow,
+  type CalibrationQuery,
 } from "../../services/annual-review.service";
 import {
   useCalibrationGrid,
+  useCalibrationFilterOptions,
   useSetManagementRating,
   useAnnualReviewDetail,
 } from "../../queries/annualReviews";
@@ -33,13 +35,10 @@ import { PerformanceRatingSelect } from "../reviews/PerformanceRatingSelect";
 import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
 import { getErrorMessage } from "../../utils/errors";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useDebounce } from "../../hooks/useDebounce";
 import { TablePagination } from "../common/TablePagination";
 import { SortableHeader } from "../SortableHeader";
-import {
-  compareValues,
-  type SortKind,
-  type SortState,
-} from "../../utils/sort";
+import { type SortState } from "../../utils/sort";
 
 type RatingValue = number | "";
 type StatusFilter = "all" | "pending" | "rated";
@@ -58,85 +57,66 @@ type MgmtReviewSortKey =
   | "mentor_performance_rating"
   | "management_performance_rating";
 
-const MGMT_REVIEW_SORT_CONFIG: Record<
-  MgmtReviewSortKey,
-  { kind: SortKind; get: (r: CalibrationRow) => unknown }
-> = {
-  employee_name:                 { kind: "alpha",   get: (r) => r.employee_name },
-  employee_email:                { kind: "alpha",   get: (r) => r.employee_email },
-  mentor_name:                   { kind: "alpha",   get: (r) => r.mentor_name },
-  department:                    { kind: "alpha",   get: (r) => r.department },
-  self_performance_rating:       { kind: "numeric", get: (r) => r.self_performance_rating },
-  mentor_performance_rating:     { kind: "numeric", get: (r) => r.mentor_performance_rating },
-  management_performance_rating: { kind: "numeric", get: (r) => r.management_performance_rating },
-};
-
 export function ManagementReviewTab() {
-  // ['annual-reviews', 'calibration'] — shared TanStack cache
-  const { data: rows = [], isLoading, error } = useCalibrationGrid();
   const setManagementRatingMutation = useSetManagementRating();
   const isSaving = setManagementRatingMutation.isPending;
-  const loadError = error ? getErrorMessage(error) : "";
 
-  const [searchQuery, setSearchQuery] = useState("");
+  // ── Filter / sort / paging state (drives the server query) ────────
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState(""); // debounced value sent to server
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [mentorFilter, setMentorFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<MgmtReviewSortKey> | null>(null);
-  // Client-side pagination (frontend-only until the backend paginates).
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Debounce the search box so we fire one request after the user pauses,
+  // not on every keystroke. Reset to page 1 on a new search term.
+  const [debounceSearch] = useDebounce((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, 300);
+
+  // Any filter/sort/pageSize change resets to page 1 (page itself is not a
+  // dep, so clicking Next/Prev doesn't bounce back to 1).
+  useEffect(() => {
+    setPage(1);
+  }, [deptFilter, mentorFilter, statusFilter, sort, pageSize]);
+
+  const query: CalibrationQuery = {
+    page,
+    per_page: pageSize,
+    search: search || undefined,
+    department: deptFilter !== "all" ? deptFilter : undefined,
+    mentor: mentorFilter !== "all" ? mentorFilter : undefined,
+    status: statusFilter,
+    sort_by: sort?.key,
+    sort_dir: sort?.direction,
+  };
+
+  // ['annual-reviews', 'calibration', query] — param-keyed page cache.
+  const { data, isLoading, isFetching, error } = useCalibrationGrid(query);
+  const rows = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const loadError = error ? getErrorMessage(error) : "";
+
+  // Filter dropdown options — fetched once, cached 5 min, independent of
+  // the current page so dropdowns always list every available value.
+  const { data: filterOptions } = useCalibrationFilterOptions();
+  const availableDepts = filterOptions?.departments ?? [];
+  const availableMentors = filterOptions?.mentors ?? [];
+
+  const hasActiveFilters =
+    !!search ||
+    deptFilter !== "all" ||
+    mentorFilter !== "all" ||
+    statusFilter !== "all";
 
   const [viewReviewId, setViewReviewId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [saveError, setSaveError] = useState("");
   const confirm = useConfirm();
-
-  const availableDepts = useMemo(
-    () =>
-      Array.from(
-        new Set(rows.map((r) => r.department).filter((d): d is string => !!d)),
-      ).sort((a, b) => a.localeCompare(b)),
-    [rows],
-  );
-
-  const availableMentors = useMemo(
-    () =>
-      Array.from(
-        new Set(rows.map((r) => r.mentor_name).filter((m): m is string => !!m)),
-      ).sort((a, b) => a.localeCompare(b)),
-    [rows],
-  );
-
-  const filtered = rows.filter((r) => {
-    if (deptFilter !== "all" && (r.department ?? "") !== deptFilter) return false;
-    if (mentorFilter !== "all" && (r.mentor_name ?? "") !== mentorFilter) return false;
-    if (statusFilter === "pending" && r.management_performance_rating != null) return false;
-    if (statusFilter === "rated" && r.management_performance_rating == null) return false;
-
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      r.employee_name.toLowerCase().includes(q) ||
-      (r.employee_email ?? "").toLowerCase().includes(q) ||
-      (r.mentor_name ?? "").toLowerCase().includes(q) ||
-      (r.department ?? "").toLowerCase().includes(q)
-    );
-  });
-
-  const sorted = sort
-    ? filtered.slice().sort((a, b) => {
-        const { kind, get } = MGMT_REVIEW_SORT_CONFIG[sort.key];
-        return compareValues(get(a), get(b), kind, sort.direction);
-      })
-    : filtered;
-
-  // Snap back to page 1 whenever the filtered set or page size changes.
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, deptFilter, mentorFilter, statusFilter, pageSize]);
-
-  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   const handleSave = async () => {
     if (!editTarget) return;
@@ -198,8 +178,11 @@ export function ManagementReviewTab() {
           <input
             type="search"
             placeholder="Search name, email, mentor…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              debounceSearch(e.target.value);
+            }}
             className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label="Search management reviews"
           />
@@ -270,25 +253,30 @@ export function ManagementReviewTab() {
       </div>
 
       {/* Table / Empty state */}
-      {filtered.length === 0 ? (
+      {total === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <ShieldCheck
             className="h-10 w-10 text-text-muted mb-3"
             aria-hidden="true"
           />
           <p className="font-display text-base font-medium text-text-main">
-            {rows.length === 0
-              ? "No reviews yet"
-              : "No reviews match your filters"}
+            {hasActiveFilters
+              ? "No reviews match your filters"
+              : "No reviews yet"}
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            {rows.length === 0
-              ? "Reviews appear here once they clear the mentor evaluation stage."
-              : "Try a different search term or adjust your filters."}
+            {hasActiveFilters
+              ? "Try a different search term or adjust your filters."
+              : "Reviews appear here once they clear the mentor evaluation stage."}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          className={`overflow-x-auto transition-opacity ${
+            isFetching ? "opacity-60" : "opacity-100"
+          }`}
+          aria-busy={isFetching}
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-muted text-left">
@@ -319,7 +307,7 @@ export function ManagementReviewTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paged.map((r) => (
+              {rows.map((r) => (
                 <tr
                   key={r.review_id}
                   className="transition-colors hover:bg-surface-muted"
@@ -388,13 +376,16 @@ export function ManagementReviewTab() {
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {total > 0 && (
         <TablePagination
           page={page}
           pageSize={pageSize}
-          totalItems={filtered.length}
+          totalItems={total}
           onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
         />
       )}
 
