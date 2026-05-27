@@ -15,12 +15,15 @@ import {
 } from "lucide-react";
 import {
   type TeamGoal,
+  type TeamGoalQuery,
   type ApprovalStatus,
   type SelfReviewCycleHalf,
   type GoalMentorReviewPayload,
 } from "../../services/goal.service";
 import {
   useTeamGoals,
+  useTeamGoalsFilterOptions,
+  usePendingTeamGoals,
   useUpdateApproval,
   useBulkApprove,
   useSaveMentorReviewDraft,
@@ -30,6 +33,7 @@ import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useDebounce } from "../../hooks/useDebounce";
 import { TeamGoalCard } from "./TeamGoalCard";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
@@ -43,7 +47,7 @@ const BulkApproveModal = lazy(() =>
 );
 import { SortableHeader } from "../SortableHeader";
 import { TablePagination } from "../common/TablePagination";
-import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
 import { halfDisplayLabel, isPostApproved } from "../../utils/goalStatus";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -173,17 +177,10 @@ function buildStatusFilters(
   ];
 }
 
+// Sort keys map 1:1 to the backend's _TEAM_GOALS_SORT_COLUMNS. Sorting is
+// now server-side (the page only holds one slice), so there's no
+// client-side compare config here anymore.
 type TeamGoalsSortKey = "title" | "owner_name" | "fy_year" | "approval_status";
-
-const TEAM_GOALS_SORT_CONFIG: Record<
-  TeamGoalsSortKey,
-  { kind: SortKind; get: (g: TeamGoal) => unknown }
-> = {
-  title:           { kind: "alpha",   get: (g) => g.title },
-  owner_name:      { kind: "alpha",   get: (g) => g.owner_name },
-  fy_year:         { kind: "numeric", get: (g) => g.fy_year },
-  approval_status: { kind: "alpha",   get: (g) => g.approval_status },
-};
 
 // ---------------------------------------------------------------------------
 // Skeleton
@@ -218,8 +215,6 @@ export function TeamGoalsTab() {
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
 
-  // ['goals', 'team', 'annual'] — shared TanStack cache + mutations
-  const { data: goals = [], isLoading } = useTeamGoals("annual");
   const updateApprovalMutation = useUpdateApproval();
   const bulkApproveMutation = useBulkApprove();
   const saveMentorReviewDraftMutation = useSaveMentorReviewDraft();
@@ -229,16 +224,71 @@ export function TeamGoalsTab() {
   const isSavingReview = submitMentorReviewMutation.isPending;
   const isSavingReviewDraft = saveMentorReviewDraftMutation.isPending;
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState(""); // debounced value → server
   const [sort, setSort] = useState<SortState<TeamGoalsSortKey> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [menteeFilter, setMenteeFilter] = useState("all");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
-  // Client-side pagination (frontend-only until the backend paginates).
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
+
+  const [debounceSearch] = useDebounce((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, 300);
+
+  // Reset to page 1 (and collapse any expanded row) whenever a filter,
+  // sort, or page size changes. `page` itself isn't a dep, so Next/Prev
+  // don't bounce back to 1.
+  useEffect(() => {
+    setPage(1);
+    setExpandedGoalId(null);
+  }, [statusFilter, yearFilter, menteeFilter, sort, pageSize]);
+
+  // Collapse expanded row on view-mode switch too.
+  useEffect(() => {
+    setExpandedGoalId(null);
+  }, [viewMode]);
+
+  const query: TeamGoalQuery = {
+    page,
+    per_page: pageSize,
+    goal_type: "annual",
+    search: search || undefined,
+    year: yearFilter !== "all" ? Number(yearFilter) : undefined,
+    mentee: menteeFilter !== "all" ? menteeFilter : undefined,
+    status: statusFilter,
+    sort_by: sort?.key,
+    sort_dir: sort?.direction,
+  };
+
+  // ['goals','team',query] — param-keyed page cache.
+  const { data, isLoading, isFetching } = useTeamGoals(query);
+  const goals = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  // Year + mentee dropdown options (server-distinct, cached).
+  const { data: filterOptions } = useTeamGoalsFilterOptions("annual");
+  const availableYears = filterOptions?.years ?? [];
+  const availableMentees = filterOptions?.mentees ?? [];
+
+  // All actionable goals (pending_approval + changes_requested), fetched
+  // independently so the Bulk Approve modal can act across every page and
+  // the toolbar badge shows the true pending count regardless of the
+  // current page/filter.
+  const { data: pendingGoals = [] } = usePendingTeamGoals("annual", true);
+  const pendingApprovalCount = pendingGoals.filter(
+    (g) => g.approval_status === "pending_approval",
+  ).length;
+
+  const hasActiveFilters =
+    !!search ||
+    statusFilter !== "all" ||
+    yearFilter !== "all" ||
+    menteeFilter !== "all";
 
   // "Request Changes" modal state
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
@@ -373,52 +423,6 @@ export function TeamGoalsTab() {
     }
   };
 
-  // Derived filter options
-  const availableYears = Array.from(
-    new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
-  ).sort((a, b) => b - a);
-
-  // Count goals currently awaiting approval — drives the toolbar badge.
-  const pendingApprovalCount = goals.filter(
-    (g) => g.approval_status === "pending_approval",
-  ).length;
-
-  const availableMentees = Array.from(
-    new Set(goals.map((g) => g.owner_name).filter((n): n is string => Boolean(n))),
-  ).sort((a, b) => a.localeCompare(b));
-
-  const filtered = goals
-    .filter((g) => statusFilter === "all" || g.approval_status === statusFilter)
-    .filter((g) => yearFilter === "all" || g.fy_year === Number(yearFilter))
-    .filter((g) => menteeFilter === "all" || g.owner_name === menteeFilter)
-    .filter((g) => {
-      const q = searchQuery.trim().toLowerCase();
-      if (q === "") return true;
-      return (
-        g.title.toLowerCase().includes(q) ||
-        g.owner_name.toLowerCase().includes(q)
-      );
-    });
-
-  const sortedGoals = sort
-    ? filtered.slice().sort((a, b) => {
-        const { kind, get } = TEAM_GOALS_SORT_CONFIG[sort.key];
-        return compareValues(get(a), get(b), kind, sort.direction);
-      })
-    : filtered;
-
-  // Page the sorted list. Applies to both card and table views.
-  const pagedGoals = sortedGoals.slice((page - 1) * pageSize, page * pageSize);
-
-  useEffect(() => {
-    setExpandedGoalId(null);
-  }, [statusFilter, yearFilter, menteeFilter, searchQuery, viewMode]);
-
-  // Snap back to page 1 whenever the filtered set or page size changes.
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, yearFilter, menteeFilter, searchQuery, pageSize]);
-
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
       viewMode === mode
@@ -428,7 +432,10 @@ export function TeamGoalsTab() {
 
   if (isLoading) return <TeamGoalsSkeleton />;
 
-  if (goals.length === 0) {
+  // Genuinely-empty state (no goals at all, no filters applied). When
+  // filters are active and the page is empty, the content section below
+  // renders the "no match" message instead.
+  if (total === 0 && !hasActiveFilters) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
         <Users className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
@@ -453,8 +460,11 @@ export function TeamGoalsTab() {
             <input
               type="text"
               placeholder="Search by goal or mentee..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                debounceSearch(e.target.value);
+              }}
               className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
             />
           </div>
@@ -542,7 +552,7 @@ export function TeamGoalsTab() {
               <option value="all">All Mentees</option>
               {availableMentees.map((name) => (
                 <option key={name} value={name}>
-                  {name} ({goals.filter((g) => g.owner_name === name).length})
+                  {name}
                 </option>
               ))}
             </select>
@@ -564,8 +574,6 @@ export function TeamGoalsTab() {
               {buildStatusFilters(cycleType).map((f) => (
                 <option key={f.value} value={f.value}>
                   {f.label}
-                  {f.value !== "all" &&
-                    ` (${goals.filter((g) => g.approval_status === f.value).length})`}
                 </option>
               ))}
             </select>
@@ -574,7 +582,7 @@ export function TeamGoalsTab() {
       </div>
 
       {/* Content */}
-      {filtered.length === 0 ? (
+      {total === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center bg-background/50">
           <Search className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
           <p className="font-display text-sm font-medium text-text-main">
@@ -586,8 +594,12 @@ export function TeamGoalsTab() {
         </div>
       ) : viewMode === "grid" ? (
         /* ── Card / Grid View ── */
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {pagedGoals.map((goal) => (
+        <div
+          className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 transition-opacity ${
+            isFetching ? "opacity-60" : "opacity-100"
+          }`}
+        >
+          {goals.map((goal) => (
             <TeamGoalCard
               key={goal.id}
               goal={goal}
@@ -604,7 +616,12 @@ export function TeamGoalsTab() {
         </div>
       ) : (
         /* ── Table View ── */
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div
+          className={`overflow-x-auto rounded-lg border border-border transition-opacity ${
+            isFetching ? "opacity-60" : "opacity-100"
+          }`}
+          aria-busy={isFetching}
+        >
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
@@ -626,7 +643,7 @@ export function TeamGoalsTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {pagedGoals.map((goal) => {
+              {goals.map((goal) => {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "pending_approval";
                 const isApproved = isPostApproved(goal.approval_status);
@@ -785,13 +802,16 @@ export function TeamGoalsTab() {
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {total > 0 && (
         <TablePagination
           page={page}
           pageSize={pageSize}
-          totalItems={filtered.length}
+          totalItems={total}
           onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
         />
       )}
 
@@ -812,7 +832,7 @@ export function TeamGoalsTab() {
         {bulkOpen && (
           <BulkApproveModal
             isOpen={bulkOpen}
-            goals={goals}
+            goals={pendingGoals}
             onClose={() => {
               setBulkOpen(false);
               setBulkError("");

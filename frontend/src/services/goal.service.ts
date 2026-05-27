@@ -9,6 +9,7 @@
  */
 
 import apiClient from "./api.client";
+import type { Page, PageQuery } from "./pagination";
 
 // ── Enums ───────────────────────────────────────────────────────────
 
@@ -152,6 +153,20 @@ export interface TeamGoal extends Goal {
    *  match the right RoleExpectation row without an extra fetch. */
   owner_department_name: string | null;
   owner_designation_name: string | null;
+}
+
+/** Query params for the paginated Team Goals table. */
+export interface TeamGoalQuery extends PageQuery {
+  goal_type?: GoalType;
+  year?: number;
+  mentee?: string;
+  status?: string;
+}
+
+/** Year + mentee dropdown options for the Team Goals tab. */
+export interface TeamGoalsFilterOptions {
+  years: number[];
+  mentees: string[];
 }
 
 export interface GoalCreatePayload {
@@ -303,8 +318,41 @@ export const goalService = {
   },
 
   // ── Manager ─────────────────────────────────────────────────────
-  getTeamGoals: async (goalType?: GoalType): Promise<TeamGoal[]> => {
-    const res = await apiClient.get<TeamGoal[]>("/goals/team", {
+  /** Paginated team goals for the Team Goals table. Server applies
+   *  search / year / mentee / status filtering + sort + pagination. */
+  getTeamGoals: async (params: TeamGoalQuery): Promise<Page<TeamGoal>> => {
+    const res = await apiClient.get<Page<TeamGoal>>("/goals/team", {
+      params: {
+        page: params.page,
+        per_page: params.per_page,
+        goal_type: params.goal_type || undefined,
+        search: params.search || undefined,
+        year: params.year ?? undefined,
+        mentee: params.mentee || undefined,
+        status: params.status && params.status !== "all" ? params.status : undefined,
+        sort_by: params.sort_by || undefined,
+        sort_dir: params.sort_by ? params.sort_dir : undefined,
+      },
+    });
+    return res.data;
+  },
+
+  /** Year + mentee dropdown options for the Team Goals tab filters. */
+  getTeamGoalsFilterOptions: async (
+    goalType?: GoalType,
+  ): Promise<TeamGoalsFilterOptions> => {
+    const res = await apiClient.get<TeamGoalsFilterOptions>(
+      "/goals/team/filter-options",
+      { params: goalType ? { goal_type: goalType } : undefined },
+    );
+    return res.data;
+  },
+
+  /** All team goals awaiting mentor action (pending_approval +
+   *  changes_requested), non-paginated — feeds the Bulk Approve modal so
+   *  it can act across every page. */
+  getPendingTeamGoals: async (goalType?: GoalType): Promise<TeamGoal[]> => {
+    const res = await apiClient.get<TeamGoal[]>("/goals/team/pending", {
       params: goalType ? { goal_type: goalType } : undefined,
     });
     return res.data;

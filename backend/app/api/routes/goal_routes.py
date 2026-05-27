@@ -22,8 +22,9 @@ Security Layers Applied:
 
 from datetime import date, datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, status
-from sqlalchemy.orm import joinedload
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_
+from sqlalchemy.orm import aliased, joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.goal_models import Goal, ApprovalStatus, GoalType, POST_APPROVAL_STATES
@@ -46,7 +47,9 @@ from app.schemas.goal_schemas import (
     GoalMentorReviewDraft,
     TeamGoalResponse,
     TeamGoalListResponse,
+    TeamGoalsFilterOptions,
 )
+from app.schemas.pagination import Page, PaginationParams
 from app.core.cycle_utils import (
     cycles_before,
     get_goal_cycle_name,
@@ -286,59 +289,48 @@ def create_goal(
     return _get_goal_with_relations(db, new_goal.id, current_user.org_id)
 
 
-@router.get("/team", response_model=List[TeamGoalListResponse])
-def list_team_goals(
-    db: DbSession,
-    current_user: CurrentUser,
-    goal_type: Optional[str] = None,
-):
-    """
-    Return annual goals for all of the current user's direct mentees.
-
-    This is the exclusive data source for the Team Goals tab.  Only the
-    assigned mentor sees a mentee's goals — there is no Admin bypass.
-    If an Admin is also someone's assigned mentor they see those goals;
-    otherwise they see nothing here (Admin role ≠ approval authority).
-    """
-    mentees = db.query(User).filter(
+def _mentee_ids_for(db: DbSession, current_user: User) -> list[int]:
+    """IDs of the current user's active direct mentees (same tenant).
+    Empty list when the caller mentors nobody."""
+    rows = db.query(User.id).filter(
         User.mentor_id == current_user.id,
         User.org_id == current_user.org_id,
         User.is_deleted == False,  # noqa: E712
     ).all()
+    return [r[0] for r in rows]
 
-    if not mentees:
-        return []
 
-    mentee_ids = [u.id for u in mentees]
+def _team_goals_base_query(db: DbSession, current_user: User, mentee_ids: list[int]):
+    """Base team-goals query joined to the owner (aliased) so we can
+    search / filter / sort on the owner's display name in SQL. Scoped to
+    the mentor's mentees + non-draft goals (drafts are owner-private).
 
+    Returns (query, Owner) so callers reference the alias for filtering
+    and ordering. Owner's department/designation are eager-loaded for the
+    owner_* injection that TeamGoalResponse.from_attributes reads.
+    """
+    Owner = aliased(User)
     query = (
         db.query(Goal)
         .options(
-            # eager-load the owner + their department/designation so we can
-            # inject those onto each row for the mentor-review modal to match
-            # the right RoleExpectation without a follow-up request.
             joinedload(Goal.owner).joinedload(User.department),
             joinedload(Goal.owner).joinedload(User.designation),
             joinedload(Goal.manager),
             joinedload(Goal.criteria),
         )
+        .join(Owner, Goal.user_id == Owner.id)
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
-            # A mentee's DRAFT is private work; it becomes visible to the
-            # mentor only after the mentee requests approval (SUBMITTED).
             Goal.approval_status != ApprovalStatus.DRAFT.value,
         )
     )
+    return query, Owner
 
-    if goal_type:
-        query = query.filter(Goal.goal_type == goal_type)
 
-    goals = query.order_by(Goal.created_at.desc()).all()
-
-    # Inject owner_name + owner_department_name + owner_designation_name onto
-    # each ORM object so TeamGoalResponse.from_attributes can read them as
-    # plain attributes (Pydantic from_attributes mode).
+def _inject_owner_fields(goals: list[Goal]) -> None:
+    """Stamp owner_name/department/designation onto each ORM goal so
+    TeamGoalResponse.from_attributes reads them as plain attributes."""
     for g in goals:
         g.owner_name = g.owner.full_name if g.owner else "Unknown"
         g.owner_department_name = (
@@ -348,7 +340,148 @@ def list_team_goals(
             g.owner.designation.name if g.owner and g.owner.designation else None
         )
 
-    return goals
+
+_TEAM_GOALS_SORT_COLUMNS = {
+    "title": lambda O: Goal.title,
+    "owner_name": lambda O: O.full_name,
+    # fy_year is derived from cycle_name ("H1 2026"); we sort on cycle_name
+    # which orders by year well enough for the picker (exact year sort would
+    # need a SQL substring extraction — not worth it for a rarely-used sort).
+    "fy_year": lambda O: Goal.cycle_name,
+    "approval_status": lambda O: Goal.approval_status,
+}
+
+
+@router.get("/team", response_model=Page[TeamGoalListResponse])
+def list_team_goals(
+    db: DbSession,
+    current_user: CurrentUser,
+    pg: PaginationParams = Depends(),
+    goal_type: Optional[str] = None,
+    search: Optional[str] = Query(None, description="Matches goal title or mentee name"),
+    year: Optional[int] = Query(None, description="Fiscal start year (from cycle_name)"),
+    mentee: Optional[str] = Query(None, description="Exact mentee (owner) full name"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Exact approval_status value"
+    ),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+):
+    """
+    Paginated annual goals for the current user's direct mentees — the
+    exclusive data source for the Team Goals tab table.
+
+    Server-side search / year / mentee / status filtering + sort + offset
+    pagination. Only the assigned mentor sees a mentee's goals (no Admin
+    bypass). Drafts are never shown (owner-private until submitted).
+    Filter-dropdown options come from GET /goals/team/filter-options; the
+    Bulk Approve modal pulls its full actionable set from
+    GET /goals/team/pending.
+    """
+    mentee_ids = _mentee_ids_for(db, current_user)
+    if not mentee_ids:
+        return Page[TeamGoalListResponse](
+            items=[], total=0, page=pg.page, per_page=pg.per_page
+        )
+
+    query, Owner = _team_goals_base_query(db, current_user, mentee_ids)
+
+    if goal_type:
+        query = query.filter(Goal.goal_type == goal_type)
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(Goal.title.ilike(term), Owner.full_name.ilike(term)))
+    if year is not None:
+        query = query.filter(Goal.cycle_name.ilike(f"%{year}%"))
+    if mentee:
+        query = query.filter(Owner.full_name == mentee)
+    if status_filter:
+        query = query.filter(Goal.approval_status == status_filter)
+
+    total = query.with_entities(func.count(Goal.id)).order_by(None).scalar() or 0
+
+    col_fn = _TEAM_GOALS_SORT_COLUMNS.get(sort_by) if sort_by else None
+    if col_fn is not None:
+        sort_col = col_fn(Owner)
+        direction = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
+        query = query.order_by(direction, Goal.id.asc())
+    else:
+        query = query.order_by(Goal.created_at.desc(), Goal.id.asc())
+
+    goals = query.offset(pg.offset).limit(pg.limit).all()
+    _inject_owner_fields(goals)
+
+    return Page[TeamGoalListResponse](
+        items=[TeamGoalListResponse.model_validate(g) for g in goals],
+        total=total,
+        page=pg.page,
+        per_page=pg.per_page,
+    )
+
+
+@router.get("/team/filter-options", response_model=TeamGoalsFilterOptions)
+def team_goals_filter_options(
+    db: DbSession,
+    current_user: CurrentUser,
+    goal_type: Optional[str] = None,
+):
+    """Distinct fiscal years + mentee names across the mentor's non-draft
+    team goals. Populates the Team Goals tab's Year + Mentee dropdowns."""
+    mentee_ids = _mentee_ids_for(db, current_user)
+    if not mentee_ids:
+        return TeamGoalsFilterOptions(years=[], mentees=[])
+
+    query, Owner = _team_goals_base_query(db, current_user, mentee_ids)
+    if goal_type:
+        query = query.filter(Goal.goal_type == goal_type)
+
+    rows = query.with_entities(Goal.cycle_name, Owner.full_name).all()
+
+    years: set[int] = set()
+    mentees: set[str] = set()
+    for cycle_name, owner_name in rows:
+        if owner_name:
+            mentees.add(owner_name)
+        if cycle_name:
+            for token in cycle_name.split():
+                if token.isdigit() and len(token) == 4:
+                    years.add(int(token))
+                    break
+
+    return TeamGoalsFilterOptions(
+        years=sorted(years, reverse=True),
+        mentees=sorted(mentees),
+    )
+
+
+@router.get("/team/pending", response_model=List[TeamGoalListResponse])
+def list_pending_team_goals(
+    db: DbSession,
+    current_user: CurrentUser,
+    goal_type: Optional[str] = None,
+):
+    """All team goals awaiting mentor action (pending_approval +
+    changes_requested), non-paginated. Feeds the Bulk Approve modal so a
+    mentor can approve across every page in one shot. The actionable set
+    is naturally small (most goals are already approved), so returning it
+    un-paginated is safe."""
+    mentee_ids = _mentee_ids_for(db, current_user)
+    if not mentee_ids:
+        return []
+
+    query, _Owner = _team_goals_base_query(db, current_user, mentee_ids)
+    if goal_type:
+        query = query.filter(Goal.goal_type == goal_type)
+    query = query.filter(
+        Goal.approval_status.in_([
+            ApprovalStatus.PENDING_APPROVAL.value,
+            ApprovalStatus.CHANGES_REQUESTED.value,
+        ])
+    )
+
+    goals = query.order_by(Goal.created_at.desc(), Goal.id.asc()).all()
+    _inject_owner_fields(goals)
+    return [TeamGoalListResponse.model_validate(g) for g in goals]
 
 
 @router.get("/{goal_id}", response_model=GoalResponse)

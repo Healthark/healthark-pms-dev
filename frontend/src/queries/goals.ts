@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   goalService,
   type Goal,
@@ -10,11 +15,14 @@ import {
   type GoalType,
   type SelfReviewCycleHalf,
   type TeamGoal,
+  type TeamGoalQuery,
+  type TeamGoalsFilterOptions,
   type Criterion,
   type CriterionCreatePayload,
   type CriterionUpdatePayload,
   type BulkApproveResult,
 } from "../services/goal.service";
+import type { Page } from "../services/pagination";
 import { dashboardSummaryQueryKey } from "./dashboard";
 import { invalidateMentees } from "./mentees";
 
@@ -30,8 +38,15 @@ import { invalidateMentees } from "./mentees";
 export const goalsQueryKey = ["goals"] as const;
 export const myGoalsQueryKey = (goalType?: GoalType) =>
   ["goals", "mine", goalType ?? "all"] as const;
-export const teamGoalsQueryKey = (goalType?: GoalType) =>
-  ["goals", "team", goalType ?? "all"] as const;
+// Paginated team-goals key includes the full query (page + filters +
+// sort). The top-level ['goals'] mutation broadcast prefix-matches every
+// variant, so approving a goal refetches the visible page automatically.
+export const teamGoalsQueryKey = (params: TeamGoalQuery) =>
+  ["goals", "team", params] as const;
+export const teamGoalsFilterOptionsQueryKey = (goalType?: GoalType) =>
+  ["goals", "team", "filter-options", goalType ?? "all"] as const;
+export const pendingTeamGoalsQueryKey = (goalType?: GoalType) =>
+  ["goals", "team", "pending", goalType ?? "all"] as const;
 export const goalDetailQueryKey = (goalId: number) =>
   ["goals", "detail", goalId] as const;
 
@@ -44,10 +59,34 @@ export function useMyGoals(goalType?: GoalType) {
   });
 }
 
-export function useTeamGoals(goalType?: GoalType) {
+export function useTeamGoals(params: TeamGoalQuery) {
+  return useQuery<Page<TeamGoal>>({
+    queryKey: teamGoalsQueryKey(params),
+    queryFn: () => goalService.getTeamGoals(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// Filter options + the bulk-approve pending set change only when goals
+// enter/leave the actionable states, so a short staleTime avoids
+// refetching them on every page/filter/sort interaction.
+const TEAM_GOALS_AUX_STALE_TIME = 60_000;
+
+export function useTeamGoalsFilterOptions(goalType?: GoalType) {
+  return useQuery<TeamGoalsFilterOptions>({
+    queryKey: teamGoalsFilterOptionsQueryKey(goalType),
+    queryFn: () => goalService.getTeamGoalsFilterOptions(goalType),
+    staleTime: TEAM_GOALS_AUX_STALE_TIME,
+  });
+}
+
+/** All team goals awaiting mentor action — for the Bulk Approve modal,
+ *  so it can act across every page. Enabled lazily by the modal. */
+export function usePendingTeamGoals(goalType: GoalType | undefined, enabled: boolean) {
   return useQuery<TeamGoal[]>({
-    queryKey: teamGoalsQueryKey(goalType),
-    queryFn: () => goalService.getTeamGoals(goalType),
+    queryKey: pendingTeamGoalsQueryKey(goalType),
+    queryFn: () => goalService.getPendingTeamGoals(goalType),
+    enabled,
   });
 }
 

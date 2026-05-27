@@ -305,3 +305,15 @@ class TeamGoalListResponse(TeamGoalResponse):
     """
     self_reviews: list[GoalSelfReviewSlim] = []  # type: ignore[assignment]
     mentor_reviews: list[GoalMentorReviewSlim] = []  # type: ignore[assignment]
+
+
+class TeamGoalsFilterOptions(BaseModel):
+    """Distinct fiscal years + mentee names across the mentor's
+    non-draft team goals. Drives the Team Goals tab's Year + Mentee
+    filter dropdowns once the list is paginated (the FE can no longer
+    derive them from the in-memory full set). Served from a dedicated
+    endpoint, cached with a long staleTime like the calibration grid's
+    filter-options.
+    """
+    years: list[int]
+    mentees: list[str]
