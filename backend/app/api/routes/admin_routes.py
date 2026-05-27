@@ -36,7 +36,7 @@ from app.core.security import get_password_hash
 from app.models.user_models import User
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings, CycleType
-from app.core.cycle_utils import get_current_cycle_info
+from app.core.cycle_utils import get_current_cycle_info, resolve_today
 from app.services.send_email import (
     is_smtp_configured,
     send_welcome_user_email,
@@ -401,10 +401,19 @@ def get_admin_settings(
                 detail="System settings have not been configured.",
             )
 
+        # Recompute on read against resolve_today(row) so the label always
+        # matches what the rest of the app will see — covers both real
+        # clock-roll-over since the last write and an active simulation.
+        fresh_cycle = get_current_cycle_info(
+            resolve_today(row),
+            CycleType(row.cycle_type),
+            row.fiscal_start_month,
+        )
+
         return AdminSettingsResponse(
             id=row.id,
             org_id=row.org_id,
-            active_cycle=row.active_cycle_name,
+            active_cycle=fresh_cycle,
             cycle_type=row.cycle_type,
             fiscal_start_month=row.fiscal_start_month,
             goals_edit_enabled=row.goals_edit_enabled,
@@ -412,6 +421,8 @@ def get_admin_settings(
             project_ratings_visible=row.project_ratings_visible,
             annual_reviews_enabled=row.annual_reviews_enabled,
             annual_review_final_rating_visible=row.annual_review_final_rating_visible,
+            simulated_today=row.simulated_today,
+            simulation_allowed=settings.ALLOW_DATE_SIMULATION,
             updated_at=row.updated_at,
         )
 
@@ -432,55 +443,93 @@ def update_admin_settings(
     """
     _require_admin(current_user)
 
-    settings = db.query(SystemSettings).filter(
+    settings_row = db.query(SystemSettings).filter(
         SystemSettings.org_id == current_user.org_id,
     ).first()
 
-    if not settings:
+    if not settings_row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="System settings have not been configured.",
         )
 
-    if settings_in.cycle_type is not None:
-        settings.cycle_type = settings_in.cycle_type
-    if settings_in.fiscal_start_month is not None:
-        settings.fiscal_start_month = settings_in.fiscal_start_month
-    if settings_in.goals_edit_enabled is not None:
-        settings.goals_edit_enabled = settings_in.goals_edit_enabled
-    if settings_in.annual_goals_edit_enabled is not None:
-        settings.annual_goals_edit_enabled = settings_in.annual_goals_edit_enabled
-    if settings_in.project_ratings_visible is not None:
-        settings.project_ratings_visible = settings_in.project_ratings_visible
-    if settings_in.annual_reviews_enabled is not None:
-        settings.annual_reviews_enabled = settings_in.annual_reviews_enabled
-    if settings_in.annual_review_final_rating_visible is not None:
-        settings.annual_review_final_rating_visible = settings_in.annual_review_final_rating_visible
-
-    # Recompute the cycle label from the (possibly updated) cadence + fiscal month
-    settings.active_cycle_name = get_current_cycle_info(
-        date.today(),
-        CycleType(settings.cycle_type),
-        settings.fiscal_start_month,
+    # ── Date-simulation gates (run BEFORE applying any writes) ──────
+    # 1. Env-flag gate. Any attempt to set/clear simulated_today on a
+    #    deployment with ALLOW_DATE_SIMULATION=false is rejected outright
+    #    — keeps production safe from accidental cycle-time shifts.
+    # 2. Authorization gate. Even on dev/staging, only Admin +
+    #    is_management can pin a simulated date. Other admins can save
+    #    everything else on this PATCH, but not the simulation fields.
+    wants_simulation_write = (
+        settings_in.simulated_today is not None
+        or bool(settings_in.clear_simulated_today)
     )
-    settings.updated_by_id = current_user.id
+    if wants_simulation_write:
+        if not settings.ALLOW_DATE_SIMULATION:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Date simulation is disabled for this deployment. "
+                    "Set ALLOW_DATE_SIMULATION=true on the backend to enable."
+                ),
+            )
+        if not (current_user.role == "Admin" and current_user.is_management):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Date simulation requires Admin + management.",
+            )
+
+    if settings_in.cycle_type is not None:
+        settings_row.cycle_type = settings_in.cycle_type
+    if settings_in.fiscal_start_month is not None:
+        settings_row.fiscal_start_month = settings_in.fiscal_start_month
+    if settings_in.goals_edit_enabled is not None:
+        settings_row.goals_edit_enabled = settings_in.goals_edit_enabled
+    if settings_in.annual_goals_edit_enabled is not None:
+        settings_row.annual_goals_edit_enabled = settings_in.annual_goals_edit_enabled
+    if settings_in.project_ratings_visible is not None:
+        settings_row.project_ratings_visible = settings_in.project_ratings_visible
+    if settings_in.annual_reviews_enabled is not None:
+        settings_row.annual_reviews_enabled = settings_in.annual_reviews_enabled
+    if settings_in.annual_review_final_rating_visible is not None:
+        settings_row.annual_review_final_rating_visible = settings_in.annual_review_final_rating_visible
+
+    # Apply simulated_today write. clear flag wins over set (defensive —
+    # both should never be sent together, but if they are, clear takes
+    # priority so the operator can recover from a stuck simulation).
+    if settings_in.clear_simulated_today:
+        settings_row.simulated_today = None
+    elif settings_in.simulated_today is not None:
+        settings_row.simulated_today = settings_in.simulated_today
+
+    # Recompute the cycle label from the (possibly updated) cadence +
+    # fiscal month, against resolve_today(settings_row) so a freshly-set
+    # simulated date also recomputes the label immediately.
+    settings_row.active_cycle_name = get_current_cycle_info(
+        resolve_today(settings_row),
+        CycleType(settings_row.cycle_type),
+        settings_row.fiscal_start_month,
+    )
+    settings_row.updated_by_id = current_user.id
 
     db.commit()
-    db.refresh(settings)
+    db.refresh(settings_row)
     invalidate_settings(current_user.org_id)
 
     return AdminSettingsResponse(
-        id=settings.id,
-        org_id=settings.org_id,
-        active_cycle=settings.active_cycle_name,
-        cycle_type=settings.cycle_type,
-        fiscal_start_month=settings.fiscal_start_month,
-        goals_edit_enabled=settings.goals_edit_enabled,
-        annual_goals_edit_enabled=settings.annual_goals_edit_enabled,
-        project_ratings_visible=settings.project_ratings_visible,
-        annual_reviews_enabled=settings.annual_reviews_enabled,
-        annual_review_final_rating_visible=settings.annual_review_final_rating_visible,
-        updated_at=settings.updated_at,
+        id=settings_row.id,
+        org_id=settings_row.org_id,
+        active_cycle=settings_row.active_cycle_name,
+        cycle_type=settings_row.cycle_type,
+        fiscal_start_month=settings_row.fiscal_start_month,
+        goals_edit_enabled=settings_row.goals_edit_enabled,
+        annual_goals_edit_enabled=settings_row.annual_goals_edit_enabled,
+        project_ratings_visible=settings_row.project_ratings_visible,
+        annual_reviews_enabled=settings_row.annual_reviews_enabled,
+        annual_review_final_rating_visible=settings_row.annual_review_final_rating_visible,
+        simulated_today=settings_row.simulated_today,
+        simulation_allowed=settings.ALLOW_DATE_SIMULATION,
+        updated_at=settings_row.updated_at,
     )
 
 

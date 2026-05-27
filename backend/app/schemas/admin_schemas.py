@@ -9,7 +9,7 @@ via a computed field so neither side needs to change.
 
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 
 
 # ── Reference Data (Dropdowns) ───────────────────────────────────────
@@ -103,6 +103,12 @@ class AdminSettingsResponse(BaseModel):
     project_ratings_visible: bool
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
+    # Dev / QA escape hatch. When set, the system treats this as "today"
+    # for every cycle-determination and review-window check.
+    simulated_today: Optional[date] = None
+    # Tells the UI whether the date-simulation field should be shown.
+    # Mirrors the backend's ALLOW_DATE_SIMULATION env flag.
+    simulation_allowed: bool = False
     updated_at: Optional[datetime] = None
 
 
@@ -115,3 +121,8 @@ class AdminSettingsUpdate(BaseModel):
     project_ratings_visible: Optional[bool] = None
     annual_reviews_enabled: Optional[bool] = None
     annual_review_final_rating_visible: Optional[bool] = None
+    # Optional[date] + clear flag: pass a real date to set, or pass
+    # `clear_simulated_today=true` to null the column. Omit both to leave
+    # unchanged (PATCH semantics — omission ≠ set-to-null).
+    simulated_today: Optional[date] = None
+    clear_simulated_today: Optional[bool] = None

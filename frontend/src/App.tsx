@@ -14,6 +14,7 @@ import { PageTitleProvider } from "./contexts/PageTitleProvider";
 import { SidebarProvider } from "./contexts/SidebarProvider";
 import { useSidebar } from "./hooks/useSidebar";
 import { useAuth } from "./hooks/useAuth";
+import { useSystemSettings } from "./hooks/useSystemSettings";
 
 const Login = lazy(() =>
   import("./pages/Login").then((m) => ({ default: m.Login })),
@@ -95,6 +96,26 @@ function MainContent() {
 }
 
 /**
+ * Renders an amber banner at the top of the authenticated shell whenever
+ * the org's SystemSettings has a `simulated_today` pinned. Lets every user
+ * see at a glance that the dates they're looking at are part of a dev/QA
+ * simulation rather than the real calendar.
+ */
+function SimulatedTodayBanner() {
+  const { settings } = useSystemSettings();
+  if (!settings?.simulated_today) return null;
+  return (
+    <output
+      className="block shrink-0 bg-amber-100 px-4 py-1.5 text-center text-xs font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+    >
+      Date simulation active — system is treating today as{" "}
+      <span className="tabular-nums">{settings.simulated_today}</span>.
+      Cycle labels, review windows, and goal gates use the simulated date.
+    </output>
+  );
+}
+
+/**
  * AppShell renders the persistent chrome (Sidebar + Topbar) around all
  * authenticated pages. <Outlet /> is where the matched child route renders.
  */
@@ -102,11 +123,14 @@ function AppShell() {
   return (
     <SidebarProvider>
       <PageTitleProvider>
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <Topbar />
-            <MainContent />
+        <div className="flex h-screen overflow-hidden flex-col">
+          <SimulatedTodayBanner />
+          <div className="flex flex-1 overflow-hidden">
+            <Sidebar />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <Topbar />
+              <MainContent />
+            </div>
           </div>
         </div>
       </PageTitleProvider>

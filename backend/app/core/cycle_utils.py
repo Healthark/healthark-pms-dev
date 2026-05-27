@@ -12,8 +12,31 @@ cycle code can recover the cadence without an extra arg — see
 `cycle_keys_for`.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from typing import TYPE_CHECKING, Optional
+
 from app.models.system_settings_models import CycleType
+
+if TYPE_CHECKING:
+    from app.models.system_settings_models import SystemSettings
+
+
+# ── "Today" resolver (demo / QA hook) ───────────────────────────────
+
+def resolve_today(settings: "Optional[SystemSettings]" = None) -> date:
+    """Return the date the cycle / review machinery should treat as today.
+
+    Priority:
+      1. ``settings.simulated_today`` (demo / QA override) wins outright.
+      2. Otherwise: ``datetime.now(timezone.utc).date()``.
+
+    Audit timestamps (created_at, project completion, export filenames)
+    intentionally bypass this helper — they must always reflect real
+    wall time / a deterministic UTC instant.
+    """
+    if settings is not None and getattr(settings, "simulated_today", None):
+        return settings.simulated_today
+    return datetime.now(timezone.utc).date()
 
 
 # ── Cadence helpers ─────────────────────────────────────────────────

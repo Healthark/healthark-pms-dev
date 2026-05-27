@@ -56,6 +56,14 @@ export default function AdminPanel() {
   const [annualGoalsEditEnabled, setAnnualGoalsEditEnabled] = useState(false);
   const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
   const [annualReviewFinalRatingVisible, setAnnualReviewFinalRatingVisible] = useState(false);
+  // Dev/QA date simulation. simulatedToday is an ISO date string (or empty
+  // when unset). simulationAllowed mirrors the backend's env flag so the
+  // field hides itself outside dev/staging.
+  const [simulatedToday, setSimulatedToday] = useState<string>("");
+  // Tracks whether the next save should send `clear_simulated_today` —
+  // set when the admin clicks Clear so the PATCH explicitly drops the
+  // stored value (PATCH semantics treat omission as "leave unchanged").
+  const [clearSimulatedTodayPending, setClearSimulatedTodayPending] = useState(false);
 
   const toast = useToast();
   const snackbar = useSnackbar();
@@ -86,6 +94,8 @@ export default function AdminPanel() {
     setAnnualGoalsEditEnabled(adminSettings.annual_goals_edit_enabled ?? false);
     setProjectRatingsVisible(adminSettings.project_ratings_visible ?? false);
     setAnnualReviewFinalRatingVisible(adminSettings.annual_review_final_rating_visible ?? false);
+    setSimulatedToday(adminSettings.simulated_today ?? "");
+    setClearSimulatedTodayPending(false);
   }, [adminSettings]);
 
   // ── User handlers ─────────────────────────────────────────────────────────
@@ -142,12 +152,29 @@ export default function AdminPanel() {
       project_ratings_visible: projectRatingsVisible,
       annual_review_final_rating_visible: annualReviewFinalRatingVisible,
     };
+    // Date simulation: clear wins, otherwise set if a value is present.
+    // Omitting both leaves the column untouched on the backend.
+    if (clearSimulatedTodayPending) {
+      payload.clear_simulated_today = true;
+    } else if (simulatedToday) {
+      payload.simulated_today = simulatedToday;
+    }
     try {
       await updateAdminSettingsMutation.mutateAsync(payload);
       toast.success("Configuration saved.");
     } catch (err) {
       snackbar.error(getErrorMessage(err));
     }
+  };
+
+  const handleClearSimulatedToday = () => {
+    setSimulatedToday("");
+    setClearSimulatedTodayPending(true);
+  };
+
+  const handleSimulatedTodayChange = (value: string) => {
+    setSimulatedToday(value);
+    setClearSimulatedTodayPending(false);
   };
 
   // ── Tab style helper ──────────────────────────────────────────────────────
@@ -259,6 +286,10 @@ export default function AdminPanel() {
             onProjectRatingsVisibleChange={setProjectRatingsVisible}
             annualReviewFinalRatingVisible={annualReviewFinalRatingVisible}
             onAnnualReviewFinalRatingVisibleChange={setAnnualReviewFinalRatingVisible}
+            simulatedToday={simulatedToday}
+            simulationAllowed={adminSettings?.simulation_allowed ?? false}
+            onSimulatedTodayChange={handleSimulatedTodayChange}
+            onClearSimulatedToday={handleClearSimulatedToday}
             onSave={handleSaveSettings}
             isSaving={isSavingSettings}
           />

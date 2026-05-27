@@ -24,7 +24,7 @@ from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.api.routes.project_review_routes import _build_review_response
-from app.core.cycle_utils import get_current_cycle_info
+from app.core.cycle_utils import get_current_cycle_info, resolve_today
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.goal_models import Goal, GoalType, ApprovalStatus, POST_APPROVAL_STATES
 from app.models.project_models import Project, ProjectAssignment
@@ -59,7 +59,7 @@ def _get_active_cycle(db: DbSession, org_id: int) -> str:
         CycleType(settings.cycle_type) if settings else CycleType.HALF_YEARLY
     )
     fiscal_start = settings.fiscal_start_month if settings else 4
-    return get_current_cycle_info(datetime.now(timezone.utc).date(), cycle_type, fiscal_start)
+    return get_current_cycle_info(resolve_today(settings), cycle_type, fiscal_start)
 
 
 def _list_mentees(db: DbSession, mentor: User) -> list[User]:

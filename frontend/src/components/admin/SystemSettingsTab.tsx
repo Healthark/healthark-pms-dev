@@ -1,4 +1,4 @@
-import { Save, Info } from "lucide-react";
+import { Save, Info, FlaskConical } from "lucide-react";
 import type { CycleType } from "../../services/system-settings.service";
 
 interface SystemSettingsTabProps {
@@ -15,6 +15,11 @@ interface SystemSettingsTabProps {
   readonly onAnnualGoalsEditEnabledChange: (val: boolean) => void;
   readonly projectRatingsVisible: boolean;
   readonly onProjectRatingsVisibleChange: (val: boolean) => void;
+  // Date simulation (dev/QA only)
+  readonly simulatedToday: string;
+  readonly simulationAllowed: boolean;
+  readonly onSimulatedTodayChange: (date: string) => void;
+  readonly onClearSimulatedToday: () => void;
   readonly onSave: () => void;
   readonly isSaving: boolean;
 }
@@ -79,6 +84,10 @@ export function SystemSettingsTab({
   onAnnualGoalsEditEnabledChange,
   projectRatingsVisible,
   onProjectRatingsVisibleChange,
+  simulatedToday,
+  simulationAllowed,
+  onSimulatedTodayChange,
+  onClearSimulatedToday,
   onSave,
   isSaving,
 }: SystemSettingsTabProps) {
@@ -233,6 +242,47 @@ export function SystemSettingsTab({
           </div>
         </div>
       </div>
+
+      {/* ── Date Simulation (dev/QA escape hatch) ───────────────────── */}
+      {simulationAllowed && (
+        <div>
+          <h3 className="font-display text-lg font-semibold text-text-main mb-4 flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-amber-600" aria-hidden="true" />
+            Developer · Date Simulation
+          </h3>
+          <div className="space-y-3 bg-surface p-5 rounded-xl border border-amber-200 dark:border-amber-500/40 shadow-sm">
+            <p className="text-xs text-text-muted">
+              Pin a fake &ldquo;today&rdquo; for cycle determination, review window
+              checks, and dashboards. The whole app shows an amber banner while
+              this is active so other users know. Audit timestamps and export
+              filenames keep using the real wall clock.
+            </p>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div>
+                <label htmlFor="simulated-today" className="block text-xs font-medium text-text-muted mb-1">
+                  Simulated Today
+                </label>
+                <input
+                  id="simulated-today"
+                  type="date"
+                  value={simulatedToday}
+                  onChange={(e) => onSimulatedTodayChange(e.target.value)}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-brand sm:w-52"
+                />
+              </div>
+              {simulatedToday && (
+                <button
+                  type="button"
+                  onClick={onClearSimulatedToday}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-hover"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

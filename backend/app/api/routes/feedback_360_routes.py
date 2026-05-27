@@ -21,8 +21,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import CurrentUser, DbSession
+from app.core.cycle_utils import resolve_today
 from app.feedback_360.questions import FEEDBACK_QUESTIONS, VALID_QUESTION_KEYS
 from app.models.feedback_360_models import Feedback360Answer, Feedback360Review
+from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.feedback_360_schemas import (
     FeedbackAggregateResponse,
@@ -50,6 +52,12 @@ router = APIRouter()
 MIN_REVIEWERS_PER_COHORT = 3
 
 
+def _resolved_active_fy(db: DbSession, org_id: int) -> int:
+    """Resolve current active FY honoring `simulated_today` if set."""
+    settings = db.query(SystemSettings).filter(SystemSettings.org_id == org_id).first()
+    return current_active_fy(resolve_today(settings))
+
+
 # ── Static registry ─────────────────────────────────────────────────
 
 
@@ -74,7 +82,7 @@ def list_peers(current_user: CurrentUser, db: DbSession):
     """List of org users the current user can submit reviews on. Each
     row carries `has_submitted` (already reviewed this FY?) and
     `worked_with` (system-inferred from project_assignments)."""
-    fy_year = current_active_fy()
+    fy_year = _resolved_active_fy(db, current_user.org_id)
 
     # Active org users excluding self.
     peers = (
@@ -188,7 +196,7 @@ def get_my_review(
             detail="That person isn't an active member of your organization.",
         )
 
-    fy_year = current_active_fy()
+    fy_year = _resolved_active_fy(db, current_user.org_id)
     rev_hash = reviewer_hash(current_user.id, target.id, fy_year)
     worked = did_work_together(
         db, current_user.id, target.id, current_user.org_id
@@ -284,7 +292,7 @@ def submit_review(
             )
 
     # 6. Compute the anonymous identifiers.
-    fy_year = current_active_fy()
+    fy_year = _resolved_active_fy(db, current_user.org_id)
     rev_hash = reviewer_hash(current_user.id, target.id, fy_year)
     worked_with = did_work_together(
         db, current_user.id, target.id, current_user.org_id
@@ -344,7 +352,7 @@ def get_aggregate(
             detail="You don't have permission to view this person's feedback.",
         )
 
-    fy_year = current_active_fy()
+    fy_year = _resolved_active_fy(db, current_user.org_id)
 
     # Total review count (across both cohorts, all questions).
     total_reviews = (

@@ -43,6 +43,12 @@ export interface SystemSettings {
   project_ratings_visible: boolean;
   annual_reviews_enabled: boolean;
   annual_review_final_rating_visible: boolean;
+  /** ISO date string set by Admin + management when previewing cycle
+   *  behavior at a different point in time. NULL when unset. */
+  simulated_today: string | null;
+  /** Mirrors the backend's ALLOW_DATE_SIMULATION env flag. UI hides the
+   *  Date Simulation control entirely when false. */
+  simulation_allowed: boolean;
   updated_at: string | null;
 }
 
@@ -54,6 +60,14 @@ export interface AdminSettingsUpdatePayload {
   project_ratings_visible?: boolean;
   annual_reviews_enabled?: boolean;
   annual_review_final_rating_visible?: boolean;
+  /** ISO date string to pin "today" to. Pair with omitting
+   *  clear_simulated_today. Rejected with 400 when ALLOW_DATE_SIMULATION
+   *  is false on the backend. */
+  simulated_today?: string;
+  /** Set true to explicitly null the simulated_today column. PATCH
+   *  treats omission as "leave unchanged", so this companion flag is
+   *  the only way to express a clear. */
+  clear_simulated_today?: boolean;
 }
 
 // ---------------------------------------------------------------------------

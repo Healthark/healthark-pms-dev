@@ -87,6 +87,18 @@ class SystemSettings(Base):
     # evaluating (that's required for the workflow).
     annual_review_final_rating_visible = Column(Boolean, default=False, nullable=False)
 
+    # ── Demo / QA Date Simulation ────────────────────────────────────
+    # When non-null, every cycle-determination and review-window check
+    # uses this date instead of today's real wall date — letting Admin
+    # management preview the morning of a cycle rollover or walk a
+    # stakeholder through "next quarter" without time-travelling.
+    # Audit timestamps (created_at, completion timestamps, export
+    # filenames) always use the real clock; this only shifts the
+    # cycle-calendar reference point. Gated by the
+    # ALLOW_DATE_SIMULATION env flag — production deployments leave
+    # that flag off and reject any non-null write to this column.
+    simulated_today = Column(Date, nullable=True)
+
     # ── Audit Trail ──────────────────────────────────────────────────
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

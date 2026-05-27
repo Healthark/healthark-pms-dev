@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.core.cache import invalidate_settings, system_settings_cache
+from app.core.config import settings as app_settings
 from app.models.system_settings_models import SystemSettings
 from app.schemas.system_settings_schemas import (
     SystemSettingsCreate,
@@ -55,7 +56,12 @@ def get_system_settings(
                 detail="System settings have not been configured for this organization."
             )
 
-        return SystemSettingsResponse.model_validate(row, from_attributes=True)
+        # simulation_allowed is not stored on the row — it's a per-deployment
+        # env flag. Splice it onto the response so the frontend can show/hide
+        # the Date Simulation control without a second round-trip.
+        payload = SystemSettingsResponse.model_validate(row, from_attributes=True)
+        payload.simulation_allowed = app_settings.ALLOW_DATE_SIMULATION
+        return payload
 
     return system_settings_cache.get_or_compute(current_user.org_id, _query)
 
@@ -165,4 +171,6 @@ def update_system_settings(
     db.refresh(settings)
     invalidate_settings(current_user.org_id)
 
-    return settings
+    payload = SystemSettingsResponse.model_validate(settings, from_attributes=True)
+    payload.simulation_allowed = app_settings.ALLOW_DATE_SIMULATION
+    return payload

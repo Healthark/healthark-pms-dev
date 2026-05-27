@@ -30,6 +30,7 @@ import {
   isHalfWindowOpen,
 } from "../../utils/goalStatus";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { useToday } from "../../hooks/useToday";
 
 interface SelfReviewCycleMenuProps {
   readonly goal: Goal;
@@ -60,6 +61,7 @@ export function SelfReviewCycleMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { settings } = useSystemSettings();
+  const today = useToday();
   const fiscalStartMonth = settings?.fiscal_start_month ?? 4;
   const cycleType = settings?.cycle_type ?? null;
   // For half-yearly orgs the menu shows 2 rows (H1/H2). For quarterly
@@ -183,6 +185,7 @@ export function SelfReviewCycleMenu({
             half,
             goal.fy_year,
             fiscalStartMonth,
+            today,
           );
           const isMenteeLocked = mode === "mentee" && !submitted && !windowOpen;
           const isMentorLocked = mode === "mentor" && !submitted;
