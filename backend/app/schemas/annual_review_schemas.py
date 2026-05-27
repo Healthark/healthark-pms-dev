@@ -123,6 +123,19 @@ class CalibrationRow(BaseModel):
     final_rating_enabled: bool = False
 
 
+class CalibrationFilterOptions(BaseModel):
+    """Distinct department + mentor names across the active cycle's
+    calibration set, used to populate the grid's filter dropdowns.
+
+    Served from a dedicated endpoint (not bundled into the paginated
+    page response) so the FE can fetch it once with a long staleTime —
+    the option set changes only when reviews enter/leave the calibration
+    stage, which is rare relative to page/filter/sort interactions.
+    """
+    departments: list[str]
+    mentors: list[str]
+
+
 class MenteeAnnualReview(AnnualReviewResponse):
     """
     A mentee's review enriched with employee display info. Used by the

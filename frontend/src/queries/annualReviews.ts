@@ -1,15 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   annualReviewService,
   type AnnualReview,
   type MenteeAnnualReview,
   type CalibrationRow,
+  type CalibrationQuery,
+  type CalibrationFilterOptions,
   type SelfReviewPayload,
   type SelfReviewDraftPayload,
   type MentorEvalPayload,
   type MentorEvalDraftPayload,
   type ManagementRatingPayload,
 } from "../services/annual-review.service";
+import type { Page } from "../services/pagination";
 import { dashboardSummaryQueryKey } from "./dashboard";
 import { invalidateMentees } from "./mentees";
 
@@ -32,9 +40,17 @@ export const menteeAnnualReviewsQueryKey = [
   "annual-reviews",
   "mentees",
 ] as const;
-export const calibrationGridQueryKey = [
+// Paginated calibration grid — the key includes the full query (page +
+// filters + sort) so each distinct view is its own cache entry. The
+// top-level ['annual-reviews'] mutation broadcast still prefix-matches
+// every variant, so setting a management rating refetches the visible
+// page automatically.
+export const calibrationGridQueryKey = (params: CalibrationQuery) =>
+  ["annual-reviews", "calibration", params] as const;
+export const calibrationFilterOptionsQueryKey = [
   "annual-reviews",
   "calibration",
+  "filter-options",
 ] as const;
 export const annualReviewDetailQueryKey = (reviewId: number) =>
   ["annual-reviews", "detail", reviewId] as const;
@@ -55,10 +71,26 @@ export function useMenteeAnnualReviews() {
   });
 }
 
-export function useCalibrationGrid() {
-  return useQuery<CalibrationRow[]>({
-    queryKey: calibrationGridQueryKey,
-    queryFn: () => annualReviewService.getCalibrationGrid(),
+export function useCalibrationGrid(params: CalibrationQuery) {
+  return useQuery<Page<CalibrationRow>>({
+    queryKey: calibrationGridQueryKey(params),
+    queryFn: () => annualReviewService.getCalibrationGrid(params),
+    // Keep the previous page's rows on screen while the next page loads,
+    // so paging / filtering doesn't blank the table.
+    placeholderData: keepPreviousData,
+  });
+}
+
+// Filter-dropdown options change rarely (only as reviews enter/leave the
+// calibration stage), so cache them for 5 min — separate from the page
+// data which refetches on every page/filter/sort change.
+const FILTER_OPTIONS_STALE_TIME = 5 * 60_000;
+
+export function useCalibrationFilterOptions() {
+  return useQuery<CalibrationFilterOptions>({
+    queryKey: calibrationFilterOptionsQueryKey,
+    queryFn: () => annualReviewService.getCalibrationFilterOptions(),
+    staleTime: FILTER_OPTIONS_STALE_TIME,
   });
 }
 
