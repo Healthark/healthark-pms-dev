@@ -1,0 +1,13 @@
+# Minimal lint config. Scoped to the test suite only — expanding to app/
+# is a post-MVP cleanup, not a CI prerequisite.
+line-length = 100
+target-version = "py311"
+
+include = ["tests/**/*.py"]
+
+[lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["F401"]
