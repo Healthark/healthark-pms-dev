@@ -82,6 +82,51 @@ export interface AdminSettingsUpdatePayload {
   clear_simulated_today?: boolean;
 }
 
+/** Per-fiscal-year access configuration types. The System Settings tab's
+ *  Year dropdown drives which FY's row is loaded; each FY has its own copy
+ *  of the four access toggles, so HR can keep past-year reviews editable
+ *  even after the system advances into the next fiscal year. */
+
+export interface YearOption {
+  fy_label: string;
+  is_current: boolean;
+  has_override: boolean;
+}
+
+export interface YearOptionsResponse {
+  years: YearOption[];
+}
+
+export interface YearSettingsResponse {
+  fy_label: string;
+  annual_reviews_enabled: boolean;
+  annual_review_final_rating_visible: boolean;
+  annual_goals_edit_enabled: boolean;
+  project_ratings_visible: boolean;
+  is_current: boolean;
+  updated_at: string | null;
+}
+
+export interface YearSettingsUpdatePayload {
+  annual_reviews_enabled: boolean;
+  annual_review_final_rating_visible: boolean;
+  annual_goals_edit_enabled: boolean;
+  project_ratings_visible: boolean;
+}
+
+export interface YearPreflightEntry {
+  in_flight_count: number;
+  warning: string | null;
+}
+
+export interface YearPreflightResponse {
+  fy_label: string;
+  annual_goals_edit_enabled: YearPreflightEntry;
+  annual_reviews_enabled: YearPreflightEntry;
+  project_ratings_visible: YearPreflightEntry;
+  annual_review_final_rating_visible: YearPreflightEntry;
+}
+
 // ---------------------------------------------------------------------------
 // Request payload types
 // ---------------------------------------------------------------------------
@@ -188,6 +233,45 @@ export const adminService = {
 
   updateSettings: async (payload: AdminSettingsUpdatePayload): Promise<SystemSettings> => {
     const res = await apiClient.patch<SystemSettings>("/admin/settings", payload);
+    return res.data;
+  },
+
+  // ── Per-FY access configuration ─────────────────────────────────
+  // The System Settings tab's Year dropdown loads via listSettingsYears();
+  // the four toggles below it bind to the row returned by getYearSettings.
+  // Save fires updateYearSettings (PATCH) with all four values for the
+  // selected FY. getYearPreflight powers the confirmation modal's
+  // in-flight impact warning.
+
+  listSettingsYears: async (): Promise<YearOptionsResponse> => {
+    const res = await apiClient.get<YearOptionsResponse>(
+      "/admin/settings/years",
+    );
+    return res.data;
+  },
+
+  getYearSettings: async (fyLabel: string): Promise<YearSettingsResponse> => {
+    const res = await apiClient.get<YearSettingsResponse>(
+      `/admin/settings/year/${encodeURIComponent(fyLabel)}`,
+    );
+    return res.data;
+  },
+
+  updateYearSettings: async (
+    fyLabel: string,
+    payload: YearSettingsUpdatePayload,
+  ): Promise<YearSettingsResponse> => {
+    const res = await apiClient.patch<YearSettingsResponse>(
+      `/admin/settings/year/${encodeURIComponent(fyLabel)}`,
+      payload,
+    );
+    return res.data;
+  },
+
+  getYearPreflight: async (fyLabel: string): Promise<YearPreflightResponse> => {
+    const res = await apiClient.get<YearPreflightResponse>(
+      `/admin/settings/year/${encodeURIComponent(fyLabel)}/preflight`,
+    );
     return res.data;
   },
 };
