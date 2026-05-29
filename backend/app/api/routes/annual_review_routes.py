@@ -32,28 +32,34 @@ Security Layers:
 """
 
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 
-from app.api.dependencies import DbSession, CurrentUser
-from app.core.cycle_utils import extract_fy_label
+from app.api.dependencies import CurrentUser, DbSession
+from app.core.cycle_utils import (
+    _fy_label_of_review,
+    extract_fy_label,
+    get_year_override,
+)
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.annual_review_schemas import (
+    AnnualReviewResponse,
+    CalibrationFilterOptions,
+    CalibrationRow,
+    ManagementRatingUpdate,
+    MenteeAnnualReview,
+    MentorEvalDraft,
+    MentorEvalUpdate,
     SelfAppraisalCreate,
     SelfAppraisalDraft,
-    MentorEvalUpdate,
-    MentorEvalDraft,
-    ManagementRatingUpdate,
-    AnnualReviewResponse,
-    CalibrationRow,
-    CalibrationFilterOptions,
-    MenteeAnnualReview,
 )
 from app.schemas.pagination import Page, PaginationParams
+
 router = APIRouter()
 
 
@@ -100,19 +106,73 @@ def _require_management(current_user: User) -> None:
         )
 
 
-def _strip_private_ratings(review: AnnualReview, final_visible: bool) -> None:
+def _require_reviews_open(db: DbSession, org_id: int, fy_label: Optional[str]) -> None:
+    """Raise 403 when annual-review writes are closed for `fy_label` (per-FY).
+
+    Net-new gate (decision #5): EVERY state-changing review endpoint —
+    self-review create / draft / submit, mentor evaluation submit / draft,
+    and the management rating publish — checks this for the review's own FY.
+      - No resolvable fy_label → 400.
+      - Missing override row OR annual_reviews_enabled False → 403
+        (default-deny: a year is closed until an Admin opens it).
+    """
+    if not fy_label:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot determine the fiscal year for this review.",
+        )
+    override = get_year_override(db, org_id, fy_label)
+    if override is None or not override.annual_reviews_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Annual review submissions for {fy_label} are currently closed. "
+                "Please wait for the Admin to open the review window."
+            ),
+        )
+
+
+def _final_rating_visible(
+    db: DbSession,
+    org_id: int,
+    review: AnnualReview,
+    active_fy_label: str,
+) -> bool:
+    """Per-FY visibility of an employee's final rating.
+
+    - Current FY (review's FY == the active FY): visible only when this
+      FY's `annual_review_final_rating_visible` toggle is True.
+    - Past (or any other) FY: always passes through — closing the current
+      year never retroactively hides a finalized prior year.
+
+    The per-row `final_rating_enabled` flag is enforced separately by the
+    caller, so this answers only the per-FY visibility question.
+    """
+    review_fy = _fy_label_of_review(review)
+    if review_fy == active_fy_label:
+        override = get_year_override(db, org_id, review_fy)
+        return bool(override and override.annual_review_final_rating_visible)
+    return True
+
+
+def _strip_private_ratings(
+    db: DbSession,
+    org_id: int,
+    review: AnnualReview,
+    active_fy_label: str,
+) -> None:
     """
     Mutates `review` in-place to hide ratings an employee shouldn't see yet.
 
     User-side display rule: final_performance_rating in the response is
     synthesized as management_performance_rating ?? mentor_performance_rating
     — the stored final_performance_rating column (HR's legacy override path)
-    is not surfaced. The fallback is still strictly gated by the per-row
-    final_rating_enabled AND the org-wide visibility flag so unfinalized
-    reviews never leak.
+    is not surfaced. The fallback is gated by the per-row
+    final_rating_enabled AND the per-FY visibility decision (see
+    `_final_rating_visible`) so unfinalized / closed-year reviews never leak.
 
-    Mentor draft text/rating are also stripped — the mentee should not
-    see in-progress mentor work.
+    Mentor draft text/rating are ALWAYS stripped — the mentee should not
+    see in-progress mentor work, regardless of FY.
     """
     mgmt = review.management_performance_rating
     mentor = review.mentor_performance_rating
@@ -120,6 +180,7 @@ def _strip_private_ratings(review: AnnualReview, final_visible: bool) -> None:
     review.management_performance_rating = None
     review.mentor_overall_review_draft = None
     review.mentor_performance_rating_draft = None
+    final_visible = _final_rating_visible(db, org_id, review, active_fy_label)
     if review.final_rating_enabled and final_visible:
         review.final_performance_rating = mgmt if mgmt is not None else mentor
     else:
@@ -144,6 +205,7 @@ def create_self_appraisal(
     cycle_name is stamped from SystemSettings — the employee cannot pick.
     """
     cycle_name = _get_active_cycle(db, current_user.org_id)
+    _require_reviews_open(db, current_user.org_id, cycle_name)
 
     existing = db.query(AnnualReview).filter(
         AnnualReview.org_id == current_user.org_id,
@@ -195,6 +257,7 @@ def create_self_appraisal_draft(
     endpoint to update an existing draft).
     """
     cycle_name = _get_active_cycle(db, current_user.org_id)
+    _require_reviews_open(db, current_user.org_id, cycle_name)
 
     existing = db.query(AnnualReview).filter(
         AnnualReview.org_id == current_user.org_id,
@@ -245,6 +308,7 @@ def save_draft(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only draft reviews can be edited.",
         )
+    _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
 
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(review, field, value)
@@ -276,7 +340,7 @@ def get_my_review(
             detail="No annual review found for the current cycle.",
         )
 
-    _strip_private_ratings(review, settings.annual_review_final_rating_visible)
+    _strip_private_ratings(db, current_user.org_id, review, cycle_name)
     return review
 
 
@@ -300,8 +364,9 @@ def get_my_review_history(
         .order_by(AnnualReview.created_at.desc())
         .all()
     )
+    active_fy = extract_fy_label(settings.active_cycle_name)
     for r in reviews:
-        _strip_private_ratings(r, settings.annual_review_final_rating_visible)
+        _strip_private_ratings(db, current_user.org_id, r, active_fy)
     return reviews
 
 
@@ -337,10 +402,11 @@ def get_mentee_reviews(
         for u in db.query(User).filter(User.id.in_(user_ids)).all()
     } if user_ids else {}
 
+    active_fy = extract_fy_label(settings.active_cycle_name)
     rows: list[MenteeAnnualReview] = []
     for r in reviews:
         base = AnnualReviewResponse.model_validate(r).model_dump()
-        if not settings.annual_review_final_rating_visible:
+        if not _final_rating_visible(db, current_user.org_id, r, active_fy):
             base["final_performance_rating"] = None
             base["management_performance_rating"] = None
         u = users.get(r.user_id)
@@ -379,6 +445,7 @@ def submit_mentor_evaluation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the assigned mentor for this review.",
         )
+    _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
 
     review.mentor_overall_review = payload.mentor_overall_review
     review.mentor_performance_rating = payload.mentor_performance_rating
@@ -422,6 +489,7 @@ def save_mentor_draft(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the assigned mentor for this review.",
         )
+    _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
 
     # Apply only fields the client included so partial saves don't wipe
     # work the mentor previously stored.
@@ -638,6 +706,7 @@ def set_management_rating(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Management rating can only be set after mentor evaluation is submitted.",
         )
+    _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
 
     review.management_performance_rating = payload.management_performance_rating
     review.final_rating_enabled = True
@@ -682,7 +751,8 @@ def get_review(
             detail="You do not have access to this review.",
         )
 
+    active_fy = extract_fy_label(settings.active_cycle_name)
     if is_owner and not is_admin:
-        _strip_private_ratings(review, settings.annual_review_final_rating_visible)
+        _strip_private_ratings(db, current_user.org_id, review, active_fy)
 
     return review
