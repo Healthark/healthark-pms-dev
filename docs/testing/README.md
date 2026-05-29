@@ -1,6 +1,43 @@
-# Testing — Foundation Only
+# Testing — Index
 
-This is the **placeholder pillar** for tests + CI. Intentionally minimal — just enough harness and a handful of pure-function tests so that adding more later is a matter of writing tests, not setting up tooling.
+This folder has **two layers**:
+
+1. **Foundation (existing)** — pytest + Vitest harness running in CI for pure-function coverage. Described below.
+2. **PMS Test Framework (new — files 00..06)** — the full manual + simulated test programme that complements the seven `docs/QA-Test-Cases-NN-*.md` checklists. Adds cross-module sync, multi-year cycle simulation, project-lifecycle coverage, and an edge-case + validation-gap register.
+
+---
+
+## The PMS Test Framework — sequential path
+
+Read these in order. The CSV is the master traceability log; the markdown files contain the actual test cases.
+
+| # | File | Purpose |
+|---|------|---------|
+| 00 | [00-framework-overview.md](00-framework-overview.md) | Framework choice (pytest + Playwright + Cycle-Sim Harness), tooling, coverage goals |
+| 01 | [01-traceability-matrix.csv](01-traceability-matrix.csv) | Master Excel/Sheets-importable inventory of all TCs across all modules |
+| 02 | [02-cross-module-sync-tests.md](02-cross-module-sync-tests.md) | TC-SYNC-001..020 — mentor↔mentee↔goal↔review↔360↔settings sync |
+| 03 | [03-cycle-simulation-playbook.md](03-cycle-simulation-playbook.md) | TC-CYCLE-001..022 — H1/H2/Q1..Q4/FY rollover via `simulated_today` |
+| 04 | [04-project-lifecycle-tests.md](04-project-lifecycle-tests.md) | TC-PROJLC-001..020 — project create → execute → complete → archive |
+| 05 | [05-edge-cases-and-validation-gaps.md](05-edge-cases-and-validation-gaps.md) | TC-GAP-001..040 — validation, security, concurrency, anonymity |
+| 06 | [06-execution-runbook.md](06-execution-runbook.md) | How to actually run a full test pass + defect filing template |
+
+Inputs feeding the framework (the existing manual QA checklists):
+
+- [QA-Test-Cases-01-Foundational.md](../QA-Test-Cases-01-Foundational.md) — TC-AUTH, TC-RBAC, TC-PROFILE, TC-NOTIF, TC-CHROME
+- [QA-Test-Cases-02-AnnualGoals.md](../QA-Test-Cases-02-AnnualGoals.md) — TC-GOAL, TC-SELFREV, TC-MENT-GOAL
+- [QA-Test-Cases-03-AnnualReviews.md](../QA-Test-Cases-03-AnnualReviews.md) — TC-AREV, TC-MREV, TC-MGMTREV
+- [QA-Test-Cases-04-ProjectReviews.md](../QA-Test-Cases-04-ProjectReviews.md) — TC-PR-MY, TC-PMR, TC-SEC, TC-ALLPR
+- [QA-Test-Cases-05-Feedback360.md](../QA-Test-Cases-05-Feedback360.md) — TC-FB360
+- [QA-Test-Cases-06-Mentoring.md](../QA-Test-Cases-06-Mentoring.md) — TC-MENT
+- [QA-Test-Cases-07-AdminAndCrossCutting.md](../QA-Test-Cases-07-AdminAndCrossCutting.md) — TC-DASH, TC-ADMIN-*, TC-EXP, TC-RESP, TC-A11Y...
+
+Total coverage: **~519 TCs** = 443 existing + 76 new (cross-module, cycle simulation, project lifecycle, edge cases).
+
+---
+
+## Foundation (pre-existing pytest + Vitest harness)
+
+This was the **placeholder pillar** for tests + CI. Intentionally minimal — just enough harness and a handful of pure-function tests so that adding more later is a matter of writing tests, not setting up tooling.
 
 Real test coverage (integration tests, E2E, coverage thresholds, gates that block merges) lands **after** the development + bug-fix phase is done. Until then this layer exists to:
 - Catch obvious regressions in the small set of pure helper functions covered.
