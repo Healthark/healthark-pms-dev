@@ -1,0 +1,83 @@
+name: CI
+
+# Foundation suite only — pure-function tests + lint + type-check on every
+# push and PR. Intentionally lightweight: this is the placeholder pillar.
+# Real coverage (integration tests, E2E, coverage gates) lands after the
+# development + bug-fix phase is done. See docs/testing/README.md.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save minutes — a fresh push
+# implicitly tells us the previous run's result no longer matters.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (pytest unit + ruff)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Dummy values for Settings(). The unit tests never connect to a DB
+      # or send email — these just have to satisfy the Pydantic loader.
+      SECRET_KEY: "ci-dummy-secret-do-not-use-anywhere-real"
+      DATABASE_URL: "postgresql://ci:ci@localhost/ci"
+      FEEDBACK_HASH_SECRET: "ci-dummy-feedback-hash-secret"
+      # Off in CI — integration tests would refuse to run anyway.
+      ALLOW_DATE_SIMULATION: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Run tests
+        # Pure-function tests. They import app.* modules which transitively
+        # trigger Settings() — the env vars above provide values Settings
+        # needs to instantiate without a real .env file.
+        run: pytest tests/ -v
+
+  frontend:
+    name: Frontend (vitest + eslint + tsc)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm run test:ci

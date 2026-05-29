@@ -1,0 +1,175 @@
+TC_ID,Module,Sub_Section,Title,Type,Priority,Source_Doc,Roles,Cycle_Dependent,Cross_Module,Pre_Conditions,Status
+TC-AUTH-001,1. Foundational,1.1 Auth,Login with valid credentials,MANUAL,P0,QA-01,Staff,No,No,Fresh incognito,Ready
+TC-AUTH-002,1. Foundational,1.1 Auth,Login fails with wrong password,MANUAL,P0,QA-01,Staff,No,No,Valid email exists,Ready
+TC-AUTH-003,1. Foundational,1.1 Auth,Login fails with non-existent email,MANUAL,P0,QA-01,Any,No,No,None,Ready
+TC-AUTH-004,1. Foundational,1.1 Auth,Login with empty fields,MANUAL,P1,QA-01,Any,No,No,None,Ready
+TC-AUTH-005,1. Foundational,1.1 Auth,Login as soft-deleted user,MANUAL,P0,QA-01,Any,No,No,Soft-deleted account,Ready
+TC-AUTH-006,1. Foundational,1.1 Auth,Forgot password link visible,MANUAL,P2,QA-01,Any,No,No,None,Ready
+TC-AUTH-007,1. Foundational,1.1 Auth,Request self-service reset email,MANUAL,P1,QA-01,Any,No,No,Valid email,Ready
+TC-AUTH-008,1. Foundational,1.1 Auth,Reset password via email link,MANUAL,P0,QA-01,Any,No,No,Token issued,Ready
+TC-AUTH-009,1. Foundational,1.1 Auth,Reset token expires after 15 min,MANUAL,P0,QA-01,Any,No,No,Stale token,Ready
+TC-AUTH-010,1. Foundational,1.1 Auth,Reset token cannot be reused,MANUAL,P0,QA-01,Any,No,No,Consumed token,Ready
+TC-AUTH-011,1. Foundational,1.1 Auth,Admin-triggered reset forces change,MANUAL,P0,QA-01,Staff,No,Yes (Admin>Users),must_change_password=true,Ready
+TC-AUTH-012,1. Foundational,1.1 Auth,Set new password on forced page,MANUAL,P0,QA-01,Staff,No,No,Forced state,Ready
+TC-AUTH-013,1. Foundational,1.1 Auth,Forced page cannot be bypassed by URL,MANUAL,P0,QA-01,Staff,No,No,Forced state,Ready
+TC-AUTH-014,1. Foundational,1.1 Auth,Logout from Topbar,MANUAL,P1,QA-01,Any,No,No,Logged in,Ready
+TC-AUTH-015,1. Foundational,1.1 Auth,Login rapid double-click resilience,MANUAL,P2,QA-01,Any,No,No,None,Ready
+TC-AUTH-016,1. Foundational,1.1 Auth,Login page responsive at 400px,MANUAL,P2,QA-01,Any,No,No,None,Ready
+TC-RBAC-001,1. Foundational,1.2 RBAC,Staff sees Staff-appropriate sidebar,MANUAL,P0,QA-01,Staff,No,Yes (Settings),Staff with mentor + project,Ready
+TC-RBAC-002,1. Foundational,1.2 RBAC,Staff with no mentees hides My Mentees,MANUAL,P1,QA-01,Staff,No,Yes (Mentoring),has_mentees=false,Ready
+TC-RBAC-003,1. Foundational,1.2 RBAC,Mentor sees My Mentees + Mentee Feedback,MANUAL,P0,QA-01,Mentor,No,Yes (Mentoring+360),has_mentees=true,Ready
+TC-RBAC-004,1. Foundational,1.2 RBAC,Admin Panel visibility,MANUAL,P0,QA-01,Admin/Staff,No,Yes (Admin),None,Ready
+TC-RBAC-005,1. Foundational,1.2 RBAC,Admin without is_management hides Mgmt Review,MANUAL,P0,QA-01,Admin,No,Yes (Admin+360),is_management=false,Ready
+TC-RBAC-006,1. Foundational,1.2 RBAC,Admin with is_management sees Mgmt Review + Org Feedback,MANUAL,P0,QA-01,Admin,No,Yes (Admin+360),is_management=true,Ready
+TC-RBAC-007,1. Foundational,1.2 RBAC,Direct URL access to forbidden pages,MANUAL,P0,QA-01,Staff,No,No,None,Ready
+TC-RBAC-008,1. Foundational,1.2 RBAC,Feature flag OFF hides sidebar item,MANUAL,P0,QA-01,Staff,No,Yes (Settings),annual_reviews_enabled=false,Ready
+TC-RBAC-009,1. Foundational,1.2 RBAC,Feature flag ON shows sidebar item,MANUAL,P0,QA-01,Staff,No,Yes (Settings),annual_reviews_enabled=true,Ready
+TC-RBAC-010,1. Foundational,1.2 RBAC,Unauthenticated to protected URL bounces to Login,MANUAL,P0,QA-01,Any,No,No,Logged out,Ready
+TC-PROFILE-001,1. Foundational,1.3 Profile,View own profile,MANUAL,P1,QA-01,Any,No,No,Logged in,Ready
+TC-PROFILE-002,1. Foundational,1.3 Profile,Profile shows assigned mentor,MANUAL,P1,QA-01,Staff,No,Yes (Mentoring),mentor_id set,Ready
+TC-PROFILE-003,1. Foundational,1.3 Profile,Profile shows No Mentor gracefully,MANUAL,P2,QA-01,Staff,No,No,mentor_id null,Ready
+TC-PROFILE-004,1. Foundational,1.3 Profile,Edit name and phone,MANUAL,P1,QA-01,Any,No,No,Logged in,Ready
+TC-PROFILE-005,1. Foundational,1.3 Profile,Cannot edit email/role/dept/designation/mentor,MANUAL,P0,QA-01,Staff,No,Yes (Admin),Non-admin,Ready
+TC-PROFILE-006,1. Foundational,1.3 Profile,Self-service change password,MANUAL,P0,QA-01,Any,No,No,Knows current pwd,Ready
+TC-PROFILE-007,1. Foundational,1.3 Profile,Profile reachable from Topbar avatar,MANUAL,P2,QA-01,Any,No,No,Logged in,Ready
+TC-NOTIF-001,1. Foundational,1.4 Notifications,Bell icon visible,MANUAL,P2,QA-01,Any,No,No,Logged in,Ready
+TC-NOTIF-002,1. Foundational,1.4 Notifications,Open notifications dropdown,MANUAL,P1,QA-01,Any,No,No,>=1 notification,Ready
+TC-NOTIF-003,1. Foundational,1.4 Notifications,Click notification navigates to source,MANUAL,P1,QA-01,Any,No,Yes (Goals/AR),Goal/review notif,Ready
+TC-NOTIF-004,1. Foundational,1.4 Notifications,Empty state friendly,MANUAL,P2,QA-01,Any,No,No,Zero notifs,Ready
+TC-NOTIF-005,1. Foundational,1.4 Notifications,Long list scrolls inside panel,MANUAL,P2,QA-01,Any,No,No,20+ notifs,Ready
+TC-NOTIF-006,1. Foundational,1.4 Notifications,Read state persists across sessions,MANUAL,P1,QA-01,Any,No,No,Read pre-existing,Ready
+TC-CHROME-001,1. Foundational,1.5 Chrome,Topbar shows active cycle,MANUAL,P1,QA-01,Any,Yes,Yes (Settings),Active cycle set,Ready
+TC-CHROME-002,1. Foundational,1.5 Chrome,Sidebar collapse/expand,MANUAL,P2,QA-01,Any,No,No,None,Ready
+TC-CHROME-003,1. Foundational,1.5 Chrome,Healthark logo + PMS label,MANUAL,P2,QA-01,Any,No,No,None,Ready
+TC-CHROME-004,1. Foundational,1.5 Chrome,Sidebar reflects feature toggles after re-login,MANUAL,P0,QA-01,Any,No,Yes (Settings),Admin toggled flag,Ready
+TC-GOAL-*,2. Annual Goals,2.1-2.5,See QA-02 for 75 goal TCs,MANUAL,P0-P2,QA-02,Staff/Mentor/Admin,Yes,Yes,Cycle active,Ready
+TC-MENT-GOAL-*,2. Annual Goals,2.4 Mentor Review,Mentor review of goal cycles,MANUAL,P0,QA-02,Mentor,Yes,Yes (Mentoring),Goal approved + cycle open,Ready
+TC-SELFREV-*,2. Annual Goals,2.3 Self-Review,Half/Qtr self-review on approved goals,MANUAL,P0,QA-02,Staff,Yes,No,is_review_window_open=true,Ready
+TC-AREV-*,3. Annual Reviews,3.1 My Review,Annual review draft/submit flow,MANUAL,P0,QA-03,Staff,Yes,Yes (Goals),Goals approved,Ready
+TC-MREV-*,3. Annual Reviews,3.2 Team Review,Mentor evaluates mentee annual review,MANUAL,P0,QA-03,Mentor,Yes,Yes (Mentoring),Mentee submitted,Ready
+TC-MGMTREV-*,3. Annual Reviews,3.3 Management Review,Management calibration of reviews,MANUAL,P0,QA-03,Admin+Mgmt,Yes,Yes (Admin),Mentor reviewed,Ready
+TC-PR-MY-*,4. Project Reviews,4.1 My Reviews,Staff views own project reviews,MANUAL,P1,QA-04,Staff,Yes,Yes (Projects),Assigned to project,Ready
+TC-PMR-*,4. Project Reviews,4.2 Evaluate Team,PM primary review of team,MANUAL,P0,QA-04,PM,Yes,Yes (Projects),reports_to_id set,Ready
+TC-SEC-*,4. Project Reviews,4.3 Secondary,Secondary evaluator flow,MANUAL,P0,QA-04,Secondary,Yes,Yes (Projects),secondary_evaluator_id set,Ready
+TC-ALLPR-*,4. Project Reviews,4.4 Admin Reviews,Admin sees all project reviews,MANUAL,P1,QA-04,Admin,Yes,Yes (Admin),None,Ready
+TC-PR-EDGE-*,4. Project Reviews,4.5 Edge cases,Project review boundary cases,MANUAL,P1,QA-04,Various,Yes,Yes,Various,Ready
+TC-FB360-*,5. 360 Feedback,5.1-5.7,360 feedback flows,MANUAL,P0-P1,QA-05,Any,Yes,Yes (Mentoring+Admin),FY active,Ready
+TC-MENT-*,6. Mentoring,6.1-6.7,Mentee list + detail tabs,MANUAL,P0-P1,QA-06,Mentor,No,Yes (Goals+AR+360),Has mentees,Ready
+TC-DASH-*,7. Admin & XC,7.1 Dashboard,Dashboard widgets,MANUAL,P1,QA-07,Any,Yes,Yes (Goals+AR+PR),Logged in,Ready
+TC-ADMIN-USR-*,7. Admin & XC,7.2 Users,Admin user CRUD,MANUAL,P0,QA-07,Admin,No,Yes (Auth),Admin role,Ready
+TC-ADMIN-PROJ-*,7. Admin & XC,7.3 Projects,Admin project CRUD,MANUAL,P0,QA-07,Admin,No,Yes (PR),Admin role,Ready
+TC-ADMIN-REV-*,7. Admin & XC,7.4 Reviews,Admin views all reviews,MANUAL,P1,QA-07,Admin,Yes,Yes (AR+PR),Admin role,Ready
+TC-ADMIN-MGT-*,7. Admin & XC,7.5 Mgmt Review,Management review tab,MANUAL,P0,QA-07,Admin+Mgmt,Yes,Yes (AR),is_management=true,Ready
+TC-ADMIN-SET-*,7. Admin & XC,7.6 Settings,System settings tab,MANUAL,P0,QA-07,Admin,Yes,Yes (ALL),Admin role,Ready
+TC-EXP-*,7. Admin & XC,7.7 Exports,Excel/CSV exports,MANUAL,P1,QA-07,Admin,Yes,Yes (ALL),Data populated,Ready
+TC-RESP-*,7. Admin & XC,7.8 Responsive,Responsive viewports,MANUAL,P2,QA-07,Any,No,No,None,Ready
+TC-STATE-*,7. Admin & XC,7.9 Loading states,Loading/skeleton states,MANUAL,P2,QA-07,Any,No,No,Slow network,Ready
+TC-FS-*,7. Admin & XC,7.10 Empty states,Empty states across app,MANUAL,P2,QA-07,Any,No,No,Empty data,Ready
+TC-TOAST-*,7. Admin & XC,7.11 Toasts,Toast notifications,MANUAL,P2,QA-07,Any,No,No,Trigger action,Ready
+TC-DATE-*,7. Admin & XC,7.12 Date handling,Date formats/locales,MANUAL,P1,QA-07,Any,Yes,No,None,Ready
+TC-403-*,7. Admin & XC,7.13 403/404,Error pages,MANUAL,P1,QA-07,Any,No,No,None,Ready
+TC-BROW-*,7. Admin & XC,7.14 Browser,Cross-browser smoke,MANUAL,P1,QA-07,Any,No,No,Chrome/FF/Safari,Ready
+TC-A11Y-*,7. Admin & XC,7.15 Accessibility,A11y baseline,MANUAL,P2,QA-07,Any,No,No,Screen reader,Ready
+TC-LOG-*,7. Admin & XC,7.16 Logging,Console + network log hygiene,MANUAL,P2,QA-07,Any,No,No,Browser devtools,Ready
+TC-SYNC-001,Cross-Module,Mentor reassign,Reassign mentor mid-cycle propagates to mentee sidebar + dashboard,SIM,P0,Testing-02,Mentor+Admin+Mentee,Yes,Yes (Mentoring+Goals+AR+Dash+360),Mentor has approved goals for mentee,New
+TC-SYNC-002,Cross-Module,Mentor reassign,Old mentor loses mentee from Team Goals view + Mentee Feedback,SIM,P0,Testing-02,Old mentor,Yes,Yes (Goals+360+Mentoring),Reassignment performed,New
+TC-SYNC-003,Cross-Module,Mentor reassign,New mentor inherits mentees pending self/mentor review state,SIM,P0,Testing-02,New mentor,Yes,Yes (Goals+AR),Mid-cycle reassign,New
+TC-SYNC-004,Cross-Module,Goal-Review link,Approved goals appear in mentees Annual Review goal-list automatically,API,P0,Testing-02,Staff+Mentor,Yes,Yes (Goals+AR),Goals approved this FY,New
+TC-SYNC-005,Cross-Module,Goal-Review link,Goal cycle_name matches Annual Review cycle_name suffix,API,P0,Testing-02,System,Yes,Yes (Goals+AR),Both records exist,New
+TC-SYNC-006,Cross-Module,Settings propagation,cycle_type swap re-stamps active_cycle_name and topbar updates within one refresh,SIM,P0,Testing-02,Admin+Staff,Yes,Yes (Settings+ALL),Admin permission,New
+TC-SYNC-007,Cross-Module,Settings propagation,annual_reviews_enabled=false hides sidebar AND blocks API,API+MANUAL,P0,Testing-02,Admin+Staff,No,Yes (Settings+AR),Flag toggled,New
+TC-SYNC-008,Cross-Module,Settings propagation,goals_submission_open=false blocks submit but allows draft save,API,P0,Testing-02,Staff,No,Yes (Settings+Goals),Goal in draft,New
+TC-SYNC-009,Cross-Module,Settings propagation,reviews_submission_open=false blocks Annual Review submit only,API,P0,Testing-02,Staff,No,Yes (Settings+AR),Review in draft,New
+TC-SYNC-010,Cross-Module,Project-Review,Adding user as project reports_to_id triggers their PM responsibility next cycle,SIM,P0,Testing-02,Admin+PM,Yes,Yes (Projects+PR),User has no projects,New
+TC-SYNC-011,Cross-Module,Project-Review,Removing reports_to_id closes pending Project Reviews for that PM,SIM,P0,Testing-02,Admin+PM,Yes,Yes (Projects+PR),PM has pending reviews,New
+TC-SYNC-012,Cross-Module,Project-Review,Adding secondary_evaluator_id creates Secondary review row for current cycle,API,P0,Testing-02,Admin+Secondary,Yes,Yes (Projects+PR),Cycle active,New
+TC-SYNC-013,Cross-Module,360-Mentoring,Mentor sees mentees 360 aggregate after >=3 reviewers submit,API+MANUAL,P0,Testing-02,Mentor,Yes,Yes (360+Mentoring),3+ reviewers,New
+TC-SYNC-014,Cross-Module,360-Mentoring,Reviewer hash unique per FY blocks re-submission,API,P0,Testing-02,Any,Yes,Yes (360),Already submitted FY,New
+TC-SYNC-015,Cross-Module,Dashboard sync,Dashboard widgets reflect Goals/AR/PR counts within 1 minute of change,API+MANUAL,P1,Testing-02,Staff+Mentor,Yes,Yes (Dash+ALL),Data exists,New
+TC-SYNC-016,Cross-Module,Notification routing,Goal submitted -> mentor receives notification; click navigates to that goal,API+MANUAL,P0,Testing-02,Staff+Mentor,No,Yes (Goals+Notif),Staff submits goal,New
+TC-SYNC-017,Cross-Module,Notification routing,Annual Review pending_management -> all is_management admins notified,API,P0,Testing-02,Mentor+Admin,Yes,Yes (AR+Notif),Mentor submits,New
+TC-SYNC-018,Cross-Module,Notification routing,360 submission -> NO notification to target (anonymity invariant),API,P0,Testing-02,Reviewer+Target,Yes,Yes (360+Notif),Reviewer submits,New
+TC-SYNC-019,Cross-Module,Soft-delete cascade,Soft-deleting user removes from Team Goals + Mentee list + Project Reviews + 360 reviewer pool,API,P0,Testing-02,Admin,Yes,Yes (ALL),Active user with data,New
+TC-SYNC-020,Cross-Module,Soft-delete cascade,Soft-deleted user historical reviews still visible to mentor/admin,API,P0,Testing-02,Mentor+Admin,Yes,Yes (Goals+AR+PR),Soft-deleted user had reviews,New
+TC-CYCLE-001,Cycle Simulation,Time-travel hook,simulated_today set/clear changes active_cycle correctly,SIM,P0,Testing-03,Admin+Mgmt,Yes,Yes (Settings),ALLOW_DATE_SIMULATION=true,New
+TC-CYCLE-002,Cycle Simulation,Time-travel hook,simulated_today cleared restores real UTC behaviour,SIM,P0,Testing-03,Admin+Mgmt,Yes,Yes (Settings),simulated_today set,New
+TC-CYCLE-003,Cycle Simulation,Time-travel hook,Non-management admin cannot set simulated_today,API,P0,Testing-03,Admin,No,No,is_management=false,New
+TC-CYCLE-004,Cycle Simulation,Time-travel hook,Production env (ALLOW_DATE_SIMULATION=false) rejects writes,API,P0,Testing-03,Admin+Mgmt,No,No,Env flag off,New
+TC-CYCLE-005,Cycle Simulation,Half->Half transition,H1 FY26 -> H2 FY26 transition: H1 reviews locked from edit,SIM,P0,Testing-03,Staff+Mentor,Yes,Yes (Goals+AR),H1 submissions exist,New
+TC-CYCLE-006,Cycle Simulation,Half->Half transition,H2 FY26 self-review window opens on Oct 1; H1 window stays closed,SIM,P0,Testing-03,Staff,Yes,Yes (Goals),Goals approved in H1,New
+TC-CYCLE-007,Cycle Simulation,Quarter cadence,Q1 -> Q2 -> Q3 -> Q4 transitions each open new self-review window,SIM,P0,Testing-03,Staff,Yes,Yes (Goals),cycle_type=quarterly,New
+TC-CYCLE-008,Cycle Simulation,Quarter cadence,Approved goal supports Q1 through Q4 review chain,SIM,P0,Testing-03,Staff+Mentor,Yes,Yes (Goals),cycle_type=quarterly,New
+TC-CYCLE-009,Cycle Simulation,FY rollover,FY26 -> FY27 rollover: H2 reviews from FY26 become read-only,SIM,P0,Testing-03,Staff+Mentor,Yes,Yes (Goals+AR),FY26 data populated,New
+TC-CYCLE-010,Cycle Simulation,FY rollover,FY26 -> FY27 rollover: new FY27 annual review row creates on first save,SIM,P0,Testing-03,Staff,Yes,Yes (AR),FY27 simulated_today,New
+TC-CYCLE-011,Cycle Simulation,FY rollover,FY26 -> FY27 rollover: dashboard widget switches to FY27 cycle,SIM,P0,Testing-03,Any,Yes,Yes (Dash+Settings),Rollover performed,New
+TC-CYCLE-012,Cycle Simulation,FY rollover,Pending mentor review at FY end can be submitted within grace period,SIM,P1,Testing-03,Mentor,Yes,Yes (Goals+AR),Pending review on Mar 31,New
+TC-CYCLE-013,Cycle Simulation,FY rollover,Backfilling H1 self-review after FY rollover returns 400,API,P0,Testing-03,Staff,Yes,No,is_review_window_open=false,New
+TC-CYCLE-014,Cycle Simulation,Cycle-type swap,annual -> half_yearly mid-FY: existing annual review preserved; new H1 self-review windows enabled,SIM,P0,Testing-03,Admin+Staff,Yes,Yes (Settings+ALL),Mid-FY,New
+TC-CYCLE-015,Cycle Simulation,Cycle-type swap,half_yearly -> quarterly mid-FY: orphaned H1 self-reviews still display read-only,SIM,P0,Testing-03,Staff+Mentor,Yes,Yes (Settings+Goals),H1 self-review exists,New
+TC-CYCLE-016,Cycle Simulation,Cycle-type swap,quarterly -> annual mid-FY: Q-self-reviews preserved; future Q reviews disabled,SIM,P1,Testing-03,Staff,Yes,Yes (Settings+Goals),Q1 review exists,New
+TC-CYCLE-017,Cycle Simulation,Multi-year,3-year simulation FY25/26/27: each FY has its own annual review row,SIM,P0,Testing-03,Staff,Yes,Yes (AR),Staff hired pre-FY25,New
+TC-CYCLE-018,Cycle Simulation,Multi-year,3-year simulation: goals from FY25 do not appear in FY27 Team Goals view,SIM,P0,Testing-03,Mentor,Yes,Yes (Goals),Multi-year data,New
+TC-CYCLE-019,Cycle Simulation,Multi-year,3-year simulation: 360 feedback respects fy_year per cycle uniquely,SIM,P0,Testing-03,Any,Yes,Yes (360),Multi-year 360 data,New
+TC-CYCLE-020,Cycle Simulation,Multi-year,Multi-year export filtered by FY returns only that FYs records,SIM,P0,Testing-03,Admin,Yes,Yes (Exports+ALL),Multi-year data,New
+TC-CYCLE-021,Cycle Simulation,Fiscal start swap,fiscal_start_month change (4 -> 1) recomputes active_cycle correctly,SIM,P1,Testing-03,Admin+Mgmt,Yes,Yes (Settings),Existing cycle data,New
+TC-CYCLE-022,Cycle Simulation,Fiscal start swap,Goal cycle_name from old fiscal_start unchanged retroactively,SIM,P1,Testing-03,System,Yes,No,Goals stamped pre-swap,New
+TC-PROJLC-001,Project Lifecycle,Create,New project auto-creates pending Project Reviews for assigned PM,API,P0,Testing-04,Admin+PM,Yes,Yes (Projects+PR),Cycle active,New
+TC-PROJLC-002,Project Lifecycle,Create,New project with secondary_evaluator creates Secondary review row,API,P0,Testing-04,Admin+Secondary,Yes,Yes (Projects+PR),Cycle active,New
+TC-PROJLC-003,Project Lifecycle,Create,Project assigned mid-cycle does not retroactively create past-cycle reviews,API,P0,Testing-04,Admin,Yes,Yes (Projects+PR),Existing FY,New
+TC-PROJLC-004,Project Lifecycle,Member add/remove,Add team_member -> appears in PM Evaluate Team list within current cycle,API,P0,Testing-04,Admin+PM,Yes,Yes (Projects+PR),Project exists,New
+TC-PROJLC-005,Project Lifecycle,Member add/remove,Remove team_member -> their pending Project Review for that project closes,SIM,P0,Testing-04,Admin+PM,Yes,Yes (Projects+PR),Member has pending review,New
+TC-PROJLC-006,Project Lifecycle,Member add/remove,Removed member historical reviews remain visible to PM + Admin,API,P0,Testing-04,PM+Admin,Yes,Yes (PR),Member had reviews,New
+TC-PROJLC-007,Project Lifecycle,PM change,Change primary reports_to_id mid-cycle: old PM loses access to draft new reviews,SIM,P0,Testing-04,Admin+Old PM,Yes,Yes (Projects+PR),PM had pending review,New
+TC-PROJLC-008,Project Lifecycle,PM change,Change primary reports_to_id: new PM inherits pending review draft (not submitted),SIM,P0,Testing-04,Admin+New PM,Yes,Yes (Projects+PR),Existing draft,New
+TC-PROJLC-009,Project Lifecycle,PM change,Change primary reports_to_id: submitted reviews stay attached to old PM as author,API,P0,Testing-04,Admin,Yes,Yes (PR),Old PM submitted reviews,New
+TC-PROJLC-010,Project Lifecycle,Secondary change,Adding/removing secondary mid-cycle handled like primary (draft vs submitted),SIM,P0,Testing-04,Admin,Yes,Yes (Projects+PR),Existing reviews,New
+TC-PROJLC-011,Project Lifecycle,Completion,Marking project completed mid-cycle stops new Project Review generation next cycle,SIM,P0,Testing-04,Admin,Yes,Yes (Projects+PR),Project active,New
+TC-PROJLC-012,Project Lifecycle,Completion,Completed project still shows historical reviews in My Reviews/Team Reviews,API,P0,Testing-04,Staff+PM,Yes,Yes (Projects+PR),Project completed mid-FY,New
+TC-PROJLC-013,Project Lifecycle,Completion,Pending project review on completed project: PM can still submit within current cycle,SIM,P0,Testing-04,PM,Yes,Yes (Projects+PR),Project completed Q3 with pending Q2 review,New
+TC-PROJLC-014,Project Lifecycle,Reactivation,Re-opening completed project resumes review generation from next cycle,SIM,P1,Testing-04,Admin,Yes,Yes (Projects+PR),Project was completed,New
+TC-PROJLC-015,Project Lifecycle,Archive,Hard archival (if supported) preserves historical reviews,API,P1,Testing-04,Admin,No,Yes (Projects+PR),Project archived,New
+TC-PROJLC-016,Project Lifecycle,Multi-project,Staff on 3 concurrent projects sees 3 PM review rows + 3 reviews to give if reviewers themselves,API,P0,Testing-04,Staff,Yes,Yes (Projects+PR),3 projects assigned,New
+TC-PROJLC-017,Project Lifecycle,Multi-project,Staff on 3 projects across 2 cycles: filter by project + cycle yields correct subset,API,P1,Testing-04,Staff,Yes,Yes (PR),Multi-cycle multi-project,New
+TC-PROJLC-018,Project Lifecycle,FY-rollover,Project active across FY boundary: previous-FY reviews locked; new-FY reviews start fresh,SIM,P0,Testing-04,All roles,Yes,Yes (Projects+PR+Settings),Project active FY26->FY27,New
+TC-PROJLC-019,Project Lifecycle,Settings,enabled_features.project_reviews=false hides all PR UI but preserves data,API+MANUAL,P0,Testing-04,Admin+Staff,No,Yes (Settings+PR),Flag toggled,New
+TC-PROJLC-020,Project Lifecycle,Notification,Project review submitted -> staff receives notification with deep-link,API,P1,Testing-04,Staff+PM,No,Yes (PR+Notif),PM submits review,New
+TC-GAP-001,Validation Gaps,Goal length,Goal description >5000 chars: client truncates vs server rejects,API,P0,Testing-05,Staff,No,No,None,New
+TC-GAP-002,Validation Gaps,Goal weight,Goal weight sum >100% across employees goals not enforced,API,P0,Testing-05,Staff,No,Yes (Goals),Multiple goals,New
+TC-GAP-003,Validation Gaps,Goal weight,Negative or zero goal weight accepted -> should reject,API,P0,Testing-05,Staff,No,No,None,New
+TC-GAP-004,Validation Gaps,Review rating,Annual review rating outside 1-5 range silently accepted,API,P0,Testing-05,Mentor,No,No,None,New
+TC-GAP-005,Validation Gaps,Review rating,Final rating mismatch warning vs hard error when mgmt overrides mentor by >2 points,API,P1,Testing-05,Admin+Mgmt,No,Yes (AR),Existing mentor rating,New
+TC-GAP-006,Validation Gaps,Review rating,Rating decimals (3.5 vs 3.50 vs 3.500) handled consistently,API,P1,Testing-05,Mentor,No,No,None,New
+TC-GAP-007,Validation Gaps,XSS,Goal title/description containing <script> tags rendered as text not executed,MANUAL,P0,Testing-05,Staff,No,No,Browser,New
+TC-GAP-008,Validation Gaps,XSS,Project name with HTML entities renders safely on dashboard widgets,MANUAL,P0,Testing-05,Admin,No,Yes (Dash+Projects),Project named with HTML,New
+TC-GAP-009,Validation Gaps,Unicode,Emoji + RTL Arabic + CJK in name/title fields stored and rendered correctly,MANUAL,P1,Testing-05,Any,No,No,None,New
+TC-GAP-010,Validation Gaps,Concurrency,Two mentor approvals on same goal racing: one wins; other gets 409,API,P0,Testing-05,2x Mentor session,No,Yes (Goals),Same goal target,New
+TC-GAP-011,Validation Gaps,Concurrency,Admin edits user while user edits own profile: last-write-wins vs reject,API,P1,Testing-05,Admin+Staff,No,Yes (Admin+Profile),Same user,New
+TC-GAP-012,Validation Gaps,Idempotency,POST /goals submit twice (network retry) creates 1 goal not 2,API,P0,Testing-05,Staff,No,No,None,New
+TC-GAP-013,Validation Gaps,Idempotency,POST /annual_reviews/submit twice idempotent,API,P0,Testing-05,Staff,No,No,Draft exists,New
+TC-GAP-014,Validation Gaps,Auth replay,JWT from old session valid until expiry vs revoked on logout,API,P0,Testing-05,Any,No,No,Logged out,New
+TC-GAP-015,Validation Gaps,Email,Reset email to non-existent address returns same generic message (timing-attack safe),API,P0,Testing-05,Any,No,Yes (Auth),Email not in db,New
+TC-GAP-016,Validation Gaps,Permission escalation,Staff POST /admin/settings returns 403 not 200,API,P0,Testing-05,Staff,No,No,Token captured,New
+TC-GAP-017,Validation Gaps,Permission escalation,Mentor reading another mentors mentees returns 403,API,P0,Testing-05,Mentor,No,Yes (Mentoring),Other mentor exists,New
+TC-GAP-018,Validation Gaps,Permission escalation,Staff GET /admin/users/<id> returns 403,API,P0,Testing-05,Staff,No,No,Other user,New
+TC-GAP-019,Validation Gaps,360 anonymity,Reviewer_hash brute-force resistance (HMAC secret strength),API,P0,Testing-05,System,Yes,Yes (360),Test secret,New
+TC-GAP-020,Validation Gaps,360 anonymity,Mentor cannot see individual reviewer identities in mentee 360 aggregate,API,P0,Testing-05,Mentor,Yes,Yes (360+Mentoring),3+ reviewers,New
+TC-GAP-021,Validation Gaps,360 min-reviewers,360 aggregate shows placeholder when reviewers <3 (anonymity threshold),API+MANUAL,P0,Testing-05,Any,Yes,Yes (360),<3 reviewers,New
+TC-GAP-022,Validation Gaps,Exports,Excel export with >10k rows streams without timeout,API,P1,Testing-05,Admin,No,Yes (Exports+ALL),Large dataset,New
+TC-GAP-023,Validation Gaps,Exports,Export filters honor cycle_name + FY + status combinations,API,P0,Testing-05,Admin,Yes,Yes (Exports+ALL),Multi-cycle data,New
+TC-GAP-024,Validation Gaps,Exports,Export filename contains FY + cycle_name + timestamp; no PII in filename,MANUAL,P1,Testing-05,Admin,No,No,None,New
+TC-GAP-025,Validation Gaps,Notifications,Notification dedup: same goal-approved fires once not N times on retries,API,P1,Testing-05,Staff,No,Yes (Goals+Notif),Mentor approves,New
+TC-GAP-026,Validation Gaps,Notifications,Notification retention: read >90 days old auto-purged or visible,API,P2,Testing-05,Any,No,No,Old notifs,New
+TC-GAP-027,Validation Gaps,Session,Session timeout silent vs warning before logout,MANUAL,P1,Testing-05,Any,No,No,Idle session,New
+TC-GAP-028,Validation Gaps,Session,Multi-tab session: logout in tab A logs out tab B on next API call,MANUAL,P1,Testing-05,Any,No,No,Two tabs,New
+TC-GAP-029,Validation Gaps,DB integrity,Orphan goal with deleted owner_id: API returns 404 not 500,API,P0,Testing-05,Any,No,No,Force orphan in db,New
+TC-GAP-030,Validation Gaps,DB integrity,Annual review for soft-deleted user: list excludes; direct GET returns 404,API,P1,Testing-05,Admin,No,Yes (AR),Soft-deleted user with review,New
+TC-GAP-031,Validation Gaps,Date display,Server in UTC + browser in IST: cycle dates display in IST consistently,MANUAL,P1,Testing-05,Any,Yes,No,Browser tz IST,New
+TC-GAP-032,Validation Gaps,Date display,Date picker default reflects active cycle window start; rejects dates outside cycle,MANUAL,P1,Testing-05,Any,Yes,Yes (Settings),Cycle bounds set,New
+TC-GAP-033,Validation Gaps,Pagination,Goals list pagination: filter+sort persist across pages,MANUAL,P1,Testing-05,Mentor,No,Yes (Goals),50+ goals,New
+TC-GAP-034,Validation Gaps,Pagination,Server-side pagination metadata correct (total/page/size) for /goals/team,API,P0,Testing-05,Mentor,No,Yes (Goals),50+ team goals,New
+TC-GAP-035,Validation Gaps,Search,Search by employee_code vs full name vs partial: ranking sensible,MANUAL,P2,Testing-05,Admin,No,Yes (Admin),Multi-user data,New
+TC-GAP-036,Validation Gaps,File upload,Profile avatar upload size limit + accepted mime types enforced,API+MANUAL,P1,Testing-05,Any,No,No,Try 10MB png,New
+TC-GAP-037,Validation Gaps,File upload,Project attachment if any: filename sanitization (no path traversal),API,P0,Testing-05,Admin,No,Yes (Projects),Try ../../etc/passwd,New
+TC-GAP-038,Validation Gaps,Browser back,Click goal -> detail -> back: returns to same filtered list + scroll position,MANUAL,P2,Testing-05,Any,No,Yes (Goals),Filtered list,New
+TC-GAP-039,Validation Gaps,Refresh,Refresh on draft Annual Review preserves unsaved input via autosave,MANUAL,P1,Testing-05,Staff,No,No,Draft open,New
+TC-GAP-040,Validation Gaps,Forms,Submit disabled until required fields valid; aria-invalid set on bad fields,MANUAL,P1,Testing-05,Any,No,No,Any form,New

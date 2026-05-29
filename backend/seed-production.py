@@ -47,6 +47,8 @@ from app.models.role_expectation_models import RoleExpectation
 from app.models.annual_review_models import AnnualReview
 from app.models.project_review_models import ProjectReview, ProjectReviewEvaluator
 from app.models.project_models import Project, ProjectAssignment
+from app.models.feedback_360_models import Feedback360Review, Feedback360Answer
+from app.models.export_audit_log_models import ExportAuditLog
 
 
 PASSWORD = "password123"
@@ -69,7 +71,13 @@ def _wipe_all(db):
     print("Wiping existing data...")
 
     # Tables that reference users/goals/projects/etc.
+    # Order: children before parents so FK constraints don't bite. Feedback360
+    # and ExportAuditLog were added after this script's original wipe list and
+    # both carry FKs into users — keep them at the top of the children block.
     wipe_order = [
+        Feedback360Answer,
+        Feedback360Review,
+        ExportAuditLog,
         PasswordResetToken,
         GoalNotification,
         GoalMentorReview,
