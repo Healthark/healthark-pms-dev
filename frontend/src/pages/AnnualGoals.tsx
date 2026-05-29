@@ -35,6 +35,7 @@ import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
+import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { formatFyYearSpan, extractFyToken } from "../utils/fy";
 import { type UserRoleExpectation } from "../services/profile.service";
@@ -331,6 +332,15 @@ export function AnnualGoals() {
   // Criterion toggles now flow through useUpdateCriterion in
   // CriteriaChecklist; cache invalidation drives the UI refresh.
 
+  const hasActiveFilters =
+    !!searchQuery || approvalFilter !== "all" || yearFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setApprovalFilter("all");
+    setYearFilter("all");
+  };
+
   const availableYears = Array.from(
     new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
   ).sort((a, b) => b - a);
@@ -540,6 +550,12 @@ export function AnnualGoals() {
                         ))}
                       </select>
                     </div>
+
+                    <ClearFiltersButton
+                      active={hasActiveFilters}
+                      onClear={clearFilters}
+                      className="ml-auto"
+                    />
                   </div>
                 </div>
               )}

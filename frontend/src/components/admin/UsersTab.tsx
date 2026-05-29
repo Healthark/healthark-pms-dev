@@ -11,6 +11,7 @@ import { SortableHeader } from "../SortableHeader";
 import { type SortState } from "../../utils/sort";
 import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { TablePagination } from "../common/TablePagination";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { exportService } from "../../services/export.service";
 import {
   useDeactivateUser,
@@ -131,6 +132,15 @@ export function UsersTab({
     departmentFilter !== "all" ||
     designationFilter !== "all";
 
+  const clearFilters = () => {
+    onSearchChange("");
+    setRoleFilter("all");
+    setStatusFilter("all");
+    setDepartmentFilter("all");
+    setDesignationFilter("all");
+    setPage(1);
+  };
+
   const handleDeactivate = async (user: UserResponse) => {
     const ok = await confirm({
       title: "Deactivate user?",
@@ -239,6 +249,7 @@ export function UsersTab({
             ))}
           </select>
         </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
         <div className="ml-auto">
           <ExportExcelButton
             label="Export Users"

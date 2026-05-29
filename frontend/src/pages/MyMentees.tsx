@@ -55,6 +55,13 @@ export function MyMentees() {
   const [viewMode, setViewMode] = useState<MenteeViewMode>("grid");
   const [tableSort, setTableSort] = useState<SortState<MenteeTableSortKey> | null>(null);
 
+  const hasActiveFilters = !!search || onlyPending;
+
+  const clearFilters = () => {
+    setSearch("");
+    setOnlyPending(false);
+  };
+
   const totalPendingActions = useMemo(
     () => mentees.reduce((sum, m) => sum + m.pending_actions_count, 0),
     [mentees],
@@ -138,6 +145,8 @@ export function MyMentees() {
               totalPendingActions={totalPendingActions}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={clearFilters}
             />
           )}
 

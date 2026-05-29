@@ -14,6 +14,7 @@ import {
   exportService,
   type EmployeeSlim,
 } from "../../services/export.service";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 const ALL_CYCLES = "__all__";
 
@@ -161,12 +162,24 @@ export function ExportsTab() {
 
   const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId) ?? null;
 
+  const hasActiveFilters =
+    fySelection !== (defaultFy ?? ALL_CYCLES) ||
+    !!employeeQuery ||
+    selectedEmployeeId !== null;
+
+  const clearFilters = () => {
+    setFySelection(defaultFy ?? ALL_CYCLES);
+    setEmployeeQuery("");
+    setSelectedEmployeeId(null);
+  };
+
   return (
     <div className="space-y-5 p-5">
       {/* Filters card */}
       <section className={CARD_CLS}>
         <div className={CARD_HEADER_CLS}>
           <h2 className={CARD_TITLE_CLS}>Filters</h2>
+          <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
         </div>
         <div className={CARD_BODY_CLS}>
           <div className="flex items-center gap-3 flex-wrap">

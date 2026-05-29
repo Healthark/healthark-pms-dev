@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import {
   type CalibrationRow,
   type CalibrationQuery,
@@ -112,6 +113,15 @@ export function ManagementReviewTab() {
     deptFilter !== "all" ||
     mentorFilter !== "all" ||
     statusFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setSearch("");
+    setDeptFilter("all");
+    setMentorFilter("all");
+    setStatusFilter("all");
+    setPage(1);
+  };
 
   const [viewReviewId, setViewReviewId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
@@ -250,6 +260,12 @@ export function ManagementReviewTab() {
             <option value="rated">Rated</option>
           </select>
         </div>
+
+        <ClearFiltersButton
+          className="ml-auto"
+          active={hasActiveFilters}
+          onClear={clearFilters}
+        />
       </div>
 
       {/* Table / Empty state */}

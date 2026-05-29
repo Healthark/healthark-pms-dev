@@ -21,6 +21,7 @@ import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -183,6 +184,15 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
       })
     : filtered;
 
+  const hasActiveFilters =
+    !!searchQuery || yearFilter !== "all" || statusFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setYearFilter("all");
+    setStatusFilter("all");
+  };
+
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
       viewMode === mode
@@ -251,6 +261,8 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
             ))}
           </select>
         </div>
+
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
 
         <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
           <button

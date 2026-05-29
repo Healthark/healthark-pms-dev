@@ -34,6 +34,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 // EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
 // modal in the app at ~475 LOC; ImpactModal is paired (same parents)
@@ -222,6 +223,27 @@ export function PMEvaluationTab() {
     if (cycleFilter === "" && activeCycle) setCycleFilter(activeCycle);
   }, [activeCycle, cycleFilter]);
   const [sort, setSort] = useState<SortState<EvalSortKey> | null>(null);
+
+  // The "cleared" cycle value is the active-cycle default the useEffect
+  // seeds (or "" before settings load) — NOT "all".
+  const cycleDefault = activeCycle ?? "";
+  const hasActiveFilters =
+    !!searchQuery ||
+    statusFilter !== "all" ||
+    typeFilter !== "all" ||
+    deptFilter !== "all" ||
+    projectFilter !== "all" ||
+    employeeFilter !== "all" ||
+    cycleFilter !== cycleDefault;
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setTypeFilter("all");
+    setDeptFilter("all");
+    setProjectFilter("all");
+    setEmployeeFilter("all");
+    setCycleFilter(cycleDefault);
+  };
 
   // Modal state
   const [evalTarget, setEvalTarget] = useState<UnifiedEvalRow | null>(null);
@@ -492,6 +514,7 @@ export function PMEvaluationTab() {
               {availableEmployees.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
+          <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
         </div>
       </div>
 
