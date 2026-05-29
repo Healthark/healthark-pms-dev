@@ -7,10 +7,10 @@ Key mapping note: The frontend uses `active_cycle` while the database stores
 via a computed field so neither side needs to change.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ── Reference Data (Dropdowns) ───────────────────────────────────────
 
@@ -132,3 +132,54 @@ class AdminSettingsUpdate(BaseModel):
     # unchanged (PATCH semantics — omission ≠ set-to-null).
     simulated_today: Optional[date] = None
     clear_simulated_today: Optional[bool] = None
+
+
+# ── Per-Fiscal-Year Override Schemas ─────────────────────────────────
+# The four access-control toggles now live on a separate per-FY table.
+# The Admin Panel's Year dropdown loads the row for the selected FY and
+# the four toggles drive these values.
+
+class YearOption(BaseModel):
+    """One entry in the Year dropdown."""
+    fy_label: str            # canonical bare-FY token (e.g. "FY26-27")
+    is_current: bool         # True for the system-computed active FY
+    has_override: bool       # False until an Admin has saved at least once
+
+
+class YearOptionsResponse(BaseModel):
+    """Payload of `GET /admin/settings/years`."""
+    years: list[YearOption]
+
+
+class YearSettingsResponse(BaseModel):
+    """Per-FY settings payload — what the Admin Panel binds toggles to."""
+    fy_label: str
+    annual_reviews_enabled: bool
+    annual_review_final_rating_visible: bool
+    annual_goals_edit_enabled: bool
+    project_ratings_visible: bool
+    is_current: bool
+    updated_at: Optional[datetime] = None
+
+
+class YearSettingsUpdate(BaseModel):
+    """PATCH payload — all four toggles required (Admin sees them together)."""
+    annual_reviews_enabled: bool
+    annual_review_final_rating_visible: bool
+    annual_goals_edit_enabled: bool
+    project_ratings_visible: bool
+
+
+class YearPreflightEntry(BaseModel):
+    in_flight_count: int
+    warning: Optional[str] = None
+
+
+class YearPreflightResponse(BaseModel):
+    """Per-FY in-flight counts. Same shape as the legacy preflight, with
+    counts scoped to the requested FY rather than the active one."""
+    fy_label: str
+    annual_goals_edit_enabled: YearPreflightEntry
+    annual_reviews_enabled: YearPreflightEntry
+    project_ratings_visible: YearPreflightEntry
+    annual_review_final_rating_visible: YearPreflightEntry
