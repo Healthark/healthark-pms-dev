@@ -10,15 +10,15 @@ DATABASE_URL. Requires interactive confirmation ("WIPE AND SEED") before
 proceeding. Pass --yes to skip the confirmation in deploy automation.
 
 Final state:
-  Organization:  Healthark (domain: healtharkinsights.com)
+  Organization:  Healthark (domain: healthark.ai)
   Departments:   Strategy, IDT, RWE, Marketing, HR
   Designations:  Consultant, Senior Consultant, Manager, Senior Manager,
                  Associate Director, Director,
                  HR Executive, Senior HR Executive, Head HR
   Users (all role=Admin, password=password123):
-    Amol Pandya      amol@healtharkinsights.com      Head HR              is_management=True   (no mentor)
-    Devanshi Shukla  devanshi@healtharkinsights.com  Senior HR Executive  mentor=Amol
-    Trapti Tiwari    trapti@healtharkinsights.com    HR Executive         mentor=Devanshi
+    Amol Pandya      amol@healthark.ai      Head HR              is_management=True   (no mentor)
+    Devanshi Shukla  devanshi@healthark.ai  Senior HR Executive  mentor=Amol
+    Trapti Tiwari    trapti@healthark.ai    HR Executive         mentor=Devanshi
 
 Run:
   cd backend && python seed-production.py
@@ -110,7 +110,7 @@ def _wipe_all(db):
 def _seed_org(db) -> Organization:
     org = Organization(
         name="Healthark",
-        domain="healtharkinsights.com",
+        domain="healthark.ai",
         enabled_features=[
             "dashboard", "goals", "project_reviews",
             "annual_reviews", "mentoring", "admin",
@@ -162,7 +162,7 @@ def _seed_users(db, org, depts, desigs):
         designation_id=desigs["Head HR"].id,
         employee_code="HRK-001",
         full_name="Amol Pandya",
-        email="amol@healtharkinsights.com",
+        email="amol@healthark.ai",
         role="Admin",
         is_management=True,
         password_hash=pw,
@@ -174,7 +174,7 @@ def _seed_users(db, org, depts, desigs):
         designation_id=desigs["Senior HR Executive"].id,
         employee_code="HRK-002",
         full_name="Devanshi Shukla",
-        email="devanshi@healtharkinsights.com",
+        email="devanshi@healthark.ai",
         role="Admin",
         is_management=False,
         password_hash=pw,
@@ -186,7 +186,7 @@ def _seed_users(db, org, depts, desigs):
         designation_id=desigs["HR Executive"].id,
         employee_code="HRK-003",
         full_name="Trapti Tiwari",
-        email="trapti@healtharkinsights.com",
+        email="trapti@healthark.ai",
         role="Admin",
         is_management=False,
         password_hash=pw,
@@ -417,7 +417,7 @@ def seed_expectations_only():
     db = SessionLocal()
     try:
         org = db.query(Organization).filter(
-            Organization.domain == "healtharkinsights.com"
+            Organization.domain == "healthark.ai"
         ).first()
         if not org:
             print("No Healthark organization found. Run the full seed first.")
