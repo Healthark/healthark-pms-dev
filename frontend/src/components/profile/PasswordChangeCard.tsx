@@ -10,14 +10,15 @@
  */
 
 import { useState, useCallback } from "react";
-import { Lock, Eye, EyeOff } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useChangePassword } from "../../queries/profile";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
+import { PasswordField } from "../common/PasswordField";
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand pr-10";
+  "w-full rounded-lg border border-border bg-surface py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 const LABEL_CLS = "block text-xs font-medium text-text-muted mb-1";
 
 /** Type-safe error extractor — never uses `as` casting. */
@@ -33,56 +34,6 @@ function getErrorMessage(err: unknown): string {
     if (response.data?.detail) return response.data.detail;
   }
   return "Something went wrong. Please try again.";
-}
-
-/** Toggle-able password input with eye icon. */
-function PasswordInput({
-  id,
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (val: string) => void;
-  readonly placeholder: string;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  return (
-    <div>
-      <label htmlFor={id} className={LABEL_CLS}>
-        {label}
-      </label>
-      <div className="relative">
-        <input
-          id={id}
-          type={visible ? "text" : "password"}
-          className={INPUT_CLS}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          autoComplete={
-            id === "current-password" ? "current-password" : "new-password"
-          }
-        />
-        <button
-          type="button"
-          onClick={() => setVisible((v) => !v)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main transition-colors"
-          aria-label={visible ? "Hide password" : "Show password"}
-        >
-          {visible ? (
-            <EyeOff className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Eye className="h-4 w-4" aria-hidden="true" />
-          )}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 export function PasswordChangeCard() {
@@ -154,20 +105,28 @@ export function PasswordChangeCard() {
       </div>
 
       <div className="max-w-sm space-y-4">
-        <PasswordInput
+        <PasswordField
           id="current-password"
           label="Current Password"
           value={currentPassword}
           onChange={setCurrentPassword}
           placeholder="Enter your current password"
+          autoComplete="current-password"
+          leadingIcon={Lock}
+          labelClassName={LABEL_CLS}
+          inputClassName={INPUT_CLS}
         />
 
-        <PasswordInput
+        <PasswordField
           id="new-password"
           label="New Password"
           value={newPassword}
           onChange={setNewPassword}
           placeholder="Min. 8 characters"
+          autoComplete="new-password"
+          leadingIcon={Lock}
+          labelClassName={LABEL_CLS}
+          inputClassName={INPUT_CLS}
         />
 
         {tooShort && (
@@ -176,12 +135,16 @@ export function PasswordChangeCard() {
           </p>
         )}
 
-        <PasswordInput
+        <PasswordField
           id="confirm-password"
           label="Confirm New Password"
           value={confirmPassword}
           onChange={setConfirmPassword}
           placeholder="Re-enter your new password"
+          autoComplete="new-password"
+          leadingIcon={Lock}
+          labelClassName={LABEL_CLS}
+          inputClassName={INPUT_CLS}
         />
 
         {mismatch && (

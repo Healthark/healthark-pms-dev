@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, Loader2, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { PasswordField } from "../components/common/PasswordField";
 
 const API_BASE =
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
@@ -118,23 +119,29 @@ export function ResetPassword() {
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <Field
+        <PasswordField
           id="new-password"
           label="New password"
-          type="password"
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
           minLength={MIN_PASSWORD_LENGTH}
+          required
+          leadingIcon={Lock}
+          labelClassName="block text-xs font-medium text-text-muted mb-1"
+          inputClassName="w-full rounded-lg border border-border bg-surface py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
         />
-        <Field
+        <PasswordField
           id="confirm-password"
           label="Confirm new password"
-          type="password"
           value={confirm}
           onChange={setConfirm}
           autoComplete="new-password"
           minLength={MIN_PASSWORD_LENGTH}
+          required
+          leadingIcon={Lock}
+          labelClassName="block text-xs font-medium text-text-muted mb-1"
+          inputClassName="w-full rounded-lg border border-border bg-surface py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
         />
 
         <p className="text-xs text-text-muted">
@@ -186,49 +193,3 @@ function Shell({ children }: { readonly children: React.ReactNode }) {
   );
 }
 
-interface FieldProps {
-  readonly id: string;
-  readonly label: string;
-  readonly type: "password" | "text";
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-  readonly autoComplete: string;
-  readonly minLength: number;
-}
-
-function Field({
-  id,
-  label,
-  type,
-  value,
-  onChange,
-  autoComplete,
-  minLength,
-}: FieldProps) {
-  return (
-    <div>
-      <label
-        htmlFor={id}
-        className="block text-xs font-medium text-text-muted mb-1"
-      >
-        {label}
-      </label>
-      <div className="relative">
-        <Lock
-          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
-          aria-hidden="true"
-        />
-        <input
-          id={id}
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete={autoComplete}
-          minLength={minLength}
-          required
-          className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-        />
-      </div>
-    </div>
-  );
-}
