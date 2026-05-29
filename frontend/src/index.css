@@ -58,6 +58,13 @@
 
   /* Light theme — default, also applied for the Healthark org branding. */
   :root, [data-theme="healthark"] {
+    /* Tells the browser which UA-styled controls (autofill, scrollbars,
+       date pickers, form controls) to render. Without this, Chrome's
+       autofill engine paints inputs with a light background regardless
+       of our CSS, which is the root cause of the "form goes white in
+       dark mode" bug. */
+    color-scheme: light;
+
     /* Brand */
     --brand: #315C84;
     --brand-light: #EBF1F6;
@@ -84,6 +91,10 @@
   /* Dark theme — opt-in via `<html class="dark">`. Brand colors shift
      slightly lighter so they stay legible on the dark surface. */
   .dark {
+    /* Pair with the variable swap so the browser renders autofill,
+       scrollbars, and form controls dark-first. */
+    color-scheme: dark;
+
     --brand: #5B8DB8;
     --brand-light: #1E3A5F;
     --accent: #38BDF8;
@@ -136,27 +147,106 @@
   }
 
   /* ── Chrome / Edge autofill override ─────────────────────────────
-     Browsers force a white/yellow background on auto-filled inputs
-     via the :-webkit-autofill pseudo-class, ignoring our `bg-surface`
-     class. Pin the background and text color to our theme variables
-     so the input stays consistent in both light and dark themes.
-     The 9999s transition delays the browser's own background fill
-     animation indefinitely so our box-shadow override actually
-     sticks. */
+     Browsers force a light-blue / yellow background on autofilled
+     inputs via the :-webkit-autofill pseudo-class, and the standard
+     :autofill in newer Chromium / Firefox. We pin the background and
+     text color so autofilled inputs match the surrounding form in both
+     light and dark themes.
+
+     Implementation notes:
+       - HARDCODED colors per theme rather than var(--background). Some
+         Chromium versions don't re-evaluate the inset box-shadow when
+         the CSS variable's computed value changes (e.g. after a theme
+         toggle), so autofilled inputs can get "stuck" at the wrong
+         color. Hardcoding sidesteps that bug entirely.
+       - `!important` is necessary: Chrome applies a UA stylesheet rule
+         with very high specificity to autofilled inputs that drops the
+         box-shadow back to its blue highlight unless we explicitly
+         beat it.
+       - `background-image: none` defeats the subtle blue→white gradient
+         Chrome paints over autofilled inputs in some recent versions.
+       - The 9999s transition delays the browser's background-fill
+         animation indefinitely so the box-shadow override sticks past
+         the autofill repaint. */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,
   input:-webkit-autofill:active,
+  input:autofill,
   textarea:-webkit-autofill,
   textarea:-webkit-autofill:hover,
   textarea:-webkit-autofill:focus,
+  textarea:autofill,
   select:-webkit-autofill,
   select:-webkit-autofill:hover,
-  select:-webkit-autofill:focus {
-    -webkit-text-fill-color: var(--text-main);
-    -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
-    caret-color: var(--text-main);
+  select:-webkit-autofill:focus,
+  select:autofill {
+    -webkit-text-fill-color: #0F172A !important;            /* light --text-main */
+    -webkit-box-shadow: 0 0 0 1000px #F8FAFC inset !important; /* light --background */
+            box-shadow: 0 0 0 1000px #F8FAFC inset !important;
+    background-color: #F8FAFC !important;
+    background-image: none !important;
+    caret-color: #0F172A !important;
     transition: background-color 9999s ease-in-out 0s,
                 color 9999s ease-in-out 0s;
+  }
+
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus,
+  .dark input:-webkit-autofill:active,
+  .dark input:autofill,
+  .dark textarea:-webkit-autofill,
+  .dark textarea:-webkit-autofill:hover,
+  .dark textarea:-webkit-autofill:focus,
+  .dark textarea:autofill,
+  .dark select:-webkit-autofill,
+  .dark select:-webkit-autofill:hover,
+  .dark select:-webkit-autofill:focus,
+  .dark select:autofill {
+    -webkit-text-fill-color: #F1F5F9 !important;            /* dark --text-main */
+    -webkit-box-shadow: 0 0 0 1000px #0F172A inset !important; /* dark --background */
+            box-shadow: 0 0 0 1000px #0F172A inset !important;
+    background-color: #0F172A !important;
+    background-image: none !important;
+    caret-color: #F1F5F9 !important;
+  }
+
+  /* ── Suppress browser-native password reveal buttons ─────────────
+     Edge / IE injects ::-ms-reveal and Chrome has a strong-password
+     suggestion button. They appear inconsistently (only during typing,
+     dark-mode invisible on some builds) and overlap our custom eye
+     toggle. Hide them so the custom PasswordField is the only reveal
+     control across Login / ResetPassword / PasswordChangeCard. */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear,
+  input[type="password"]::-webkit-credentials-auto-fill-button,
+  input[type="password"]::-webkit-strong-password-auto-fill-button,
+  input[type="password"]::-webkit-contacts-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ── Defensive: pin input bg + text in dark mode ─────────────────
+     Belt-and-suspenders for the user-typed (not autofilled) path. The
+     `bg-background text-text-main` utility classes on Login inputs
+     already resolve to the right values via CSS vars, but if any
+     other style (browser UA stylesheet, an extension, a stale rule)
+     wins the cascade, this catches the input by tag+type and forces
+     theme-correct colors. */
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark input[type="text"],
+  .dark input[type="search"],
+  .dark input[type="number"],
+  .dark input[type="tel"],
+  .dark input[type="url"],
+  .dark textarea {
+    color: #F1F5F9;
+    caret-color: #F1F5F9;
   }
 }

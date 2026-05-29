@@ -5,6 +5,40 @@
     <link rel="icon" type="image/svg+xml" href="/healtharklogo-small.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Healthark PMS</title>
+
+    <!--
+      Pre-React theme bootstrap — eliminates the flash of light mode on
+      first paint. The ThemeProvider's useEffect that adds the `dark`
+      class runs AFTER React's first paint, so dark-mode users would see
+      a single frame of light UI before the swap. Running this synchronous
+      script in <head> guarantees the `dark` class is on <html> before
+      any DOM paints. The logic mirrors ThemeProvider.readStoredTheme /
+      readSystemTheme exactly; keep them in sync if either changes.
+
+      Wrapped in IIFE + try/catch so a broken localStorage or older
+      browser without matchMedia can never block the rest of the page
+      from loading.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = null;
+          try {
+            var raw = localStorage.getItem("ui_theme");
+            if (raw === "light" || raw === "dark") stored = raw;
+          } catch (_) { /* localStorage blocked — fall through */ }
+
+          var theme = stored;
+          if (!theme && typeof window.matchMedia === "function") {
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark" : "light";
+          }
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (_) { /* never block rendering */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

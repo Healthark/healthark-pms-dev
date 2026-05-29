@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Loader2, Lock, Mail } from "lucide-react";
 import { authService } from "../services/auth.service";
 import { useAuth } from "../hooks/useAuth";
+import { PasswordField } from "../components/common/PasswordField";
 
 // ─── Types & Configuration ───────────────────────────────────────────────────
 
@@ -134,28 +135,28 @@ export function Login() {
 
   return (
     // Increased to duration-1000 for slow-motion theme shift
-    <div className="min-h-screen bg-background transition-colors duration-1000 ease-in-out flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      
+    <div className="min-h-screen bg-background transition-colors duration-1000 ease-in-out flex flex-col justify-center py-6 px-3 sm:py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+
       {/* Optional: Subtle dramatic background glow tied to the brand color */}
       <div className="absolute inset-0 bg-brand/5 transition-colors duration-1000 ease-in-out pointer-events-none" />
 
       {/* ── Container for Cards ── */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col gap-6 relative z-10">
+      <div className="w-full max-w-md mx-auto flex flex-col gap-6 relative z-10">
 
         {/* ── Login Card ── */}
-        <div className="bg-surface py-8 px-4 shadow-xl sm:rounded-xl sm:px-10 border border-border transition-colors duration-1000 ease-in-out">
+        <div className="bg-surface py-6 px-4 rounded-xl shadow-xl sm:py-8 sm:px-10 border border-border transition-colors duration-1000 ease-in-out">
 
           {/* Logo (light/dark variants) */}
-          <div className="flex flex-col items-center justify-center mb-8 gap-3">
+          <div className="flex flex-col items-center justify-center mb-6 sm:mb-8 gap-3">
             <img
               src="/healtharklogov2.png"
               alt="Healthark Performance Management System"
-              className="h-40 w-auto object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] block dark:hidden"
+              className="h-24 sm:h-40 w-auto max-w-full object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] block dark:hidden"
             />
             <img
               src="/healtharklogo.png"
               alt="Healthark Performance Management System"
-              className="h-40 w-auto object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] hidden dark:block"
+              className="h-24 sm:h-40 w-auto max-w-full object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] hidden dark:block"
             />
             <style>{`
               @keyframes fadeIn {
@@ -199,39 +200,22 @@ export function Login() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
+                    className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-colors duration-200 outline-none"
                     placeholder={EMAIL_PLACEHOLDER}
                   />
                 </div>
               </div>
 
               {/* Password Field */}
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-text-main mb-1 transition-colors duration-1000"
-                >
-                  Password
-                </label>
-                <div className="relative">
-                  <div
-                    className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                    aria-hidden="true"
-                  >
-                    <Lock className="h-5 w-5 text-text-muted transition-colors duration-1000" />
-                  </div>
-                  <input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand bg-background text-text-main sm:text-sm transition-all duration-1000 outline-none"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
+              <PasswordField
+                id="password"
+                label="Password"
+                value={password}
+                onChange={setPassword}
+                autoComplete="current-password"
+                required
+                leadingIcon={Lock}
+              />
 
               <div className="flex justify-end">
                 <button
@@ -247,7 +231,7 @@ export function Login() {
                 type="submit"
                 disabled={isLoading}
                 aria-busy={isLoading}
-                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-700 mt-4"
+                className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 mt-4"
               >
                 {isLoading ? (
                   <>
@@ -346,7 +330,7 @@ export function Login() {
                     type="submit"
                     disabled={isForgotLoading}
                     aria-busy={isForgotLoading}
-                    className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-300"
+                    className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200"
                   >
                     {isForgotLoading ? (
                       <>
