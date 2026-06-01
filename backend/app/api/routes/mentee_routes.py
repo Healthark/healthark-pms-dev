@@ -16,20 +16,19 @@ does not grant mentor authority. An Admin who is also an assigned mentor
 sees the relationship; otherwise they see an empty list here.
 """
 
-from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
-from app.api.dependencies import DbSession, CurrentUser
-from app.api.routes.project_review_routes import _build_review_response
+from app.api.dependencies import CurrentUser, DbSession
+from app.api.routes.project_review_routes import _build_review_response, _visible_performance_group
 from app.core.cycle_utils import get_current_cycle_info, resolve_today
 from app.models.annual_review_models import AnnualReview, ReviewStatus
-from app.models.goal_models import Goal, GoalType, ApprovalStatus, POST_APPROVAL_STATES
+from app.models.goal_models import POST_APPROVAL_STATES, ApprovalStatus, Goal, GoalType
 from app.models.project_models import Project, ProjectAssignment
 from app.models.project_review_models import ProjectReview, ProjectReviewStatus
-from app.models.system_settings_models import SystemSettings, CycleType
+from app.models.system_settings_models import CycleType, SystemSettings
 from app.models.user_models import User
 from app.schemas.annual_review_schemas import AnnualReviewResponse
 from app.schemas.goal_schemas import TeamGoalResponse
@@ -395,7 +394,14 @@ def _build_mentee_project_assignments(
                 MenteeProjectAssignment(
                     **common,
                     review_status=review.status,
-                    performance_group=review.performance_group,
+                    # Viewer is the subject's mentor (enforced by
+                    # _assert_mentee_access) → is_mentor=True: mentors always
+                    # see the rating (decision #6). Gate kept explicit so the
+                    # per-FY rule is documented at the read site.
+                    performance_group=_visible_performance_group(
+                        review, current_user, db, current_user.org_id,
+                        active_cycle, is_mentor=True,
+                    ),
                     cycle=review.cycle,
                     review_detail=review_detail,
                 )

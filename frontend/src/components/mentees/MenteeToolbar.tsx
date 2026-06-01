@@ -1,4 +1,5 @@
 import { Search, AlertTriangle, ArrowUpDown, LayoutGrid, Table2 } from "lucide-react";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 export type MenteeSortKey = "name" | "designation" | "pending";
 export type MenteeViewMode = "grid" | "table";
@@ -13,6 +14,8 @@ interface MenteeToolbarProps {
   readonly totalPendingActions: number;
   readonly viewMode: MenteeViewMode;
   readonly onViewModeChange: (value: MenteeViewMode) => void;
+  readonly hasActiveFilters: boolean;
+  readonly onClearFilters: () => void;
 }
 
 export function MenteeToolbar({
@@ -25,6 +28,8 @@ export function MenteeToolbar({
   totalPendingActions,
   viewMode,
   onViewModeChange,
+  hasActiveFilters,
+  onClearFilters,
 }: MenteeToolbarProps) {
   const viewBtnCls = (mode: MenteeViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
@@ -72,6 +77,8 @@ export function MenteeToolbar({
             </span>
           )}
         </button>
+
+        <ClearFiltersButton active={hasActiveFilters} onClear={onClearFilters} />
 
         {viewMode === "grid" && (
           <div className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs">

@@ -27,6 +27,10 @@ export const notificationService = {
     return res.data;
   },
 
+  markRead: async (id: number): Promise<void> => {
+    await apiClient.post(`/notifications/${id}/mark-read`, {});
+  },
+
   markAllRead: async (): Promise<void> => {
     await apiClient.post("/notifications/mark-all-read", {});
   },

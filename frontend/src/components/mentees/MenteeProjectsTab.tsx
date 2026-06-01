@@ -48,6 +48,7 @@ const ImpactModal = lazy(() =>
   import("../project-reviews/ImpactModal").then((m) => ({ default: m.ImpactModal })),
 );
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 // ── Local row shape ────────────────────────────────────────────────
 // Built from MenteeProjectAssignment. Carries the minimum the modals need
@@ -299,6 +300,15 @@ export function MenteeProjectsTab({
   const [cycleFilter, setCycleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+
+  const hasActiveFilters =
+    !!searchQuery || cycleFilter !== "all" || statusFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCycleFilter("all");
+    setStatusFilter("all");
+  };
 
   // ['project-reviews', 'role-expectations'] — shared TanStack cache
   // (15-min staleTime). Dedupes with PMEvaluationTab + ProjectReviews
@@ -643,6 +653,11 @@ export function MenteeProjectsTab({
               <option value="reviewed">Reviewed</option>
             </select>
           </div>
+          <ClearFiltersButton
+            active={hasActiveFilters}
+            onClear={clearFilters}
+            className="ml-auto"
+          />
         </div>
       </div>
 

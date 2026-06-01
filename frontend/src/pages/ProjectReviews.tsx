@@ -157,6 +157,23 @@ export function ProjectReviews() {
     });
   }, [filteredCards, sort]);
 
+  // The "cleared" cycle value is the active-cycle default the state is
+  // lazy-seeded with (or "" before settings load) — NOT "all".
+  const cycleDefault = settings?.active_cycle_name ?? "";
+  const hasActiveFilters =
+    !!searchQuery ||
+    pmFilter !== "all" ||
+    statusFilter !== "all" ||
+    projectFilter !== "all" ||
+    selectedCycle !== cycleDefault;
+  const clearFilters = () => {
+    setSearchQuery("");
+    setPmFilter("all");
+    setStatusFilter("all");
+    setProjectFilter("all");
+    setSelectedCycle(cycleDefault);
+  };
+
   // The selected card's validity is a function of the current filtered
   // set — derive instead of clearing via effect when filters change.
   const selectedCard =
@@ -242,6 +259,8 @@ export function ProjectReviews() {
                   availablePMs={availablePMs}
                   statusFilter={statusFilter}
                   onStatusFilterChange={setStatusFilter}
+                  hasActiveFilters={hasActiveFilters}
+                  onClearFilters={clearFilters}
                 />
               )}
 

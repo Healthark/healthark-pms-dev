@@ -178,7 +178,7 @@ def _get_cycle_type(db: Session, org_id: int) -> str:
 # ── Sheet: Users ────────────────────────────────────────────────────
 
 USERS_HEADERS = [
-    "ID", "Employee Code", "Full Name", "Email", "Phone",
+    "Sr No", "Employee Code", "Full Name", "Email", "Phone",
     "Role", "Is Management", "Is Deleted",
     "Department", "Designation", "Mentor",
     "Must Change Password", "Created At", "Updated At",
@@ -199,7 +199,9 @@ def build_users_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[str]
 
     row = 2
     for u in users:
-        ws.cell(row=row, column=1, value=u.id)
+        # Sr No: 1-indexed row counter (NOT the DB id) — opaque internal
+        # ids leak surface area we don't want in HR-facing exports.
+        ws.cell(row=row, column=1, value=row - 1)
         ws.cell(row=row, column=2, value=u.employee_code)
         ws.cell(row=row, column=3, value=u.full_name)
         ws.cell(row=row, column=4, value=u.email)
@@ -221,7 +223,7 @@ def build_users_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[str]
 # ── Sheet: Projects ─────────────────────────────────────────────────
 
 PROJECTS_HEADERS = [
-    "ID", "Project Code", "Name", "Description",
+    "Sr No", "Project Code", "Name", "Description",
     "Start Date", "Expected End Date",
     "Reports To", "Secondary Evaluator",
     "PM Name", "Member Count",
@@ -253,7 +255,9 @@ def build_projects_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[s
 
     row = 2
     for p in projects:
-        ws.cell(row=row, column=1, value=p.id)
+        # Sr No: 1-indexed row counter (NOT the DB id) — opaque internal
+        # ids leak surface area we don't want in HR-facing exports.
+        ws.cell(row=row, column=1, value=row - 1)
         ws.cell(row=row, column=2, value=p.project_code)
         ws.cell(row=row, column=3, value=p.name)
         ws.cell(row=row, column=4, value=p.description or "")
@@ -274,7 +278,7 @@ def build_projects_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[s
 # ── Sheet: Project Assignments (combined workbook only) ─────────────
 
 PROJECT_ASSIGNMENTS_HEADERS = [
-    "Assignment ID", "Project Code", "Project Name",
+    "Sr No", "Project Code", "Project Name",
     "Employee Code", "Employee Name",
     "Assignment Role", "Department", "Evaluator Type",
     "Assigned Date", "Created At",
@@ -295,7 +299,8 @@ def build_project_assignments_sheet(ws: Worksheet, db: Session, org_id: int) -> 
     r = 2
     for a in rows:
         proj = projects_by_id.get(a.project_id)
-        ws.cell(row=r, column=1, value=a.id)
+        # Sr No: 1-indexed row counter (NOT the DB id).
+        ws.cell(row=r, column=1, value=r - 1)
         ws.cell(row=r, column=2, value=proj.project_code if proj else "")
         ws.cell(row=r, column=3, value=proj.name if proj else "")
         ws.cell(row=r, column=4, value=_user_code(users_by_id, a.user_id))
@@ -313,7 +318,7 @@ def build_project_assignments_sheet(ws: Worksheet, db: Session, org_id: int) -> 
 # ── Sheet: Annual Goals ─────────────────────────────────────────────
 
 GOALS_HEADERS = [
-    "ID", "Employee Code", "Employee Name", "Manager",
+    "Sr No", "Employee Code", "Employee Name", "Manager",
     "Goal Type", "Cycle Name",
     "Title", "Description",
     "Approval Status", "Manager Feedback", "Progress Notes",
@@ -374,7 +379,8 @@ def build_goals_sheet(
     r = 2
     for g in goals:
         total, done, pct = _criteria_rollup(g.criteria)
-        ws.cell(row=r, column=1, value=g.id)
+        # Sr No: 1-indexed row counter (NOT the DB id).
+        ws.cell(row=r, column=1, value=r - 1)
         ws.cell(row=r, column=2, value=_user_code(users_by_id, g.user_id))
         ws.cell(row=r, column=3, value=_user_display(users_by_id, g.user_id))
         ws.cell(row=r, column=4, value=_user_display(users_by_id, g.manager_id))
@@ -414,7 +420,7 @@ def build_goals_sheet(
 # ── Sheet: Annual Reviews ───────────────────────────────────────────
 
 ANNUAL_REVIEWS_HEADERS = [
-    "ID", "Employee Code", "Employee Name", "Mentor",
+    "Sr No", "Employee Code", "Employee Name", "Mentor",
     "Cycle Name", "Status",
     "Self Overall Review", "Self Performance Rating",
     "Mentor Overall Review", "Mentor Performance Rating",
@@ -443,7 +449,8 @@ def build_annual_reviews_sheet(
 
     r = 2
     for rv in reviews:
-        ws.cell(row=r, column=1, value=rv.id)
+        # Sr No: 1-indexed row counter (NOT the DB id).
+        ws.cell(row=r, column=1, value=r - 1)
         ws.cell(row=r, column=2, value=_user_code(users_by_id, rv.user_id))
         ws.cell(row=r, column=3, value=_user_display(users_by_id, rv.user_id))
         ws.cell(row=r, column=4, value=_user_display(users_by_id, rv.mentor_id))
@@ -469,7 +476,7 @@ def build_annual_reviews_sheet(
 # ── Sheet: Project Reviews ──────────────────────────────────────────
 
 PROJECT_REVIEWS_HEADERS = [
-    "ID", "Project Code", "Project Name",
+    "Sr No", "Project Code", "Project Name",
     "Employee Code", "Employee Name", "Reviewer",
     "Cycle", "Status", "Performance Group", "Impact Statement",
     "Comment: Task Execution",
@@ -515,7 +522,8 @@ def build_project_reviews_sheet(
         sec_impacts = " | ".join(
             (s.impact_statement or "") for s in rv.secondary_evaluations
         )
-        ws.cell(row=r, column=1, value=rv.id)
+        # Sr No: 1-indexed row counter (NOT the DB id).
+        ws.cell(row=r, column=1, value=r - 1)
         ws.cell(row=r, column=2, value=proj.project_code if proj else "")
         ws.cell(row=r, column=3, value=proj.name if proj else "")
         ws.cell(row=r, column=4, value=_user_code(users_by_id, rv.user_id))
@@ -545,7 +553,7 @@ def build_project_reviews_sheet(
 # ── Sheet: Project Review Evaluators (combined workbook only) ───────
 
 PROJECT_REVIEW_EVALUATORS_HEADERS = [
-    "Evaluator Row ID", "Project Review ID",
+    "Sr No", "Project Review ID",
     "Project Code", "Project Name",
     "Reviewed Employee", "Evaluator Name", "Evaluator Type",
     "Status", "Impact Statement", "Created At",
@@ -570,7 +578,12 @@ def build_project_review_evaluators_sheet(ws: Worksheet, db: Session, org_id: in
     for ev in rows:
         review = reviews.get(ev.project_review_id)
         proj = projects_by_id.get(review.project_id) if review else None
-        ws.cell(row=r, column=1, value=ev.id)
+        # Sr No: 1-indexed row counter (NOT the DB id).
+        ws.cell(row=r, column=1, value=r - 1)
+        # Project Review ID kept as DB id — serves as a join key back to the
+        # Project Reviews sheet for cross-sheet correlation. (Note: that
+        # sheet now uses Sr No, so this FK is no longer a row pointer there;
+        # readers should match on Project Code + Reviewed Employee instead.)
         ws.cell(row=r, column=2, value=ev.project_review_id)
         ws.cell(row=r, column=3, value=proj.project_code if proj else "")
         ws.cell(row=r, column=4, value=proj.name if proj else "")

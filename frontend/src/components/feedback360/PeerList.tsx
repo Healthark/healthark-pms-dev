@@ -13,6 +13,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { type FeedbackPeer } from "../../services/feedback360.service";
 import { useFeedbackPeers } from "../../queries/feedback360";
 import { getErrorMessage } from "../../utils/errors";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 /**
  * Give Feedback tab — every active org user (excluding self), with a
@@ -39,6 +40,13 @@ export function PeerList() {
   const [filter, setFilter] = useState<"all" | "worked" | "not_worked">(
     "worked",
   );
+
+  const hasActiveFilters = !!search || filter !== "worked";
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilter("worked");
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -125,6 +133,7 @@ export function PeerList() {
           >
             Not worked with
           </FilterChip>
+          <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
         </div>
       </div>
 

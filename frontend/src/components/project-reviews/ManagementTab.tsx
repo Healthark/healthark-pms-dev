@@ -21,6 +21,7 @@ import {
 import { useManagementView } from "../../queries/projectReviews";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { getErrorMessage } from "../../utils/errors";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -312,6 +313,16 @@ export function ManagementTab() {
   const SELECT_CLS =
     "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer";
 
+  // The "cleared" cycle value is the active-cycle default the useEffect
+  // seeds (or "" before settings load) — NOT "all".
+  const cycleDefault = settings?.active_cycle_name ?? "";
+  const hasActiveFilters =
+    statusFilter !== "all" || selectedCycle !== cycleDefault;
+  const clearFilters = () => {
+    setStatusFilter("all");
+    setSelectedCycle(cycleDefault);
+  };
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
 
@@ -350,6 +361,8 @@ export function ManagementTab() {
               <option value="pending">Pending / Not Started</option>
             </select>
           </div>
+
+          <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
         </div>
 
         {/* Right-aligned summary chips — only when data is loaded. */}

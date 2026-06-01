@@ -14,12 +14,20 @@ Security Layers Applied:
 """
 
 from enum import Enum
+
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import DbSession, CurrentUser
+from app.api.dependencies import CurrentUser, DbSession
 from app.core.cache import invalidate_settings, system_settings_cache
 from app.core.config import settings as app_settings
-from app.models.system_settings_models import SystemSettings
+from app.core.cycle_utils import (
+    YEAR_OVERRIDE_FLAGS,
+    extract_fy_label,
+    get_current_cycle_info,
+    get_year_override,
+    resolve_today,
+)
+from app.models.system_settings_models import CycleType, SystemSettings
 from app.schemas.system_settings_schemas import (
     SystemSettingsCreate,
     SystemSettingsResponse,
@@ -61,6 +69,23 @@ def get_system_settings(
         # the Date Simulation control without a second round-trip.
         payload = SystemSettingsResponse.model_validate(row, from_attributes=True)
         payload.simulation_allowed = app_settings.ALLOW_DATE_SIMULATION
+
+        # Overlay the four per-FY access flags from the ACTIVE fiscal year's
+        # override row. The four toggles now live per-(org, fy); surfacing the
+        # active FY's values here keeps every app-wide `settings?.<flag>` read
+        # (feature pages, banners) consistent with the per-FY enforcement
+        # without touching each page. Falls back to the legacy columns already
+        # on `row` when no override row exists for the active FY yet.
+        # The year PATCH calls invalidate_settings() so this re-reads on save.
+        active_fy = extract_fy_label(
+            get_current_cycle_info(
+                resolve_today(row), CycleType(row.cycle_type), row.fiscal_start_month
+            )
+        )
+        override = get_year_override(db, current_user.org_id, active_fy)
+        if override is not None:
+            for flag in YEAR_OVERRIDE_FLAGS:
+                setattr(payload, flag, bool(getattr(override, flag)))
         return payload
 
     return system_settings_cache.get_or_compute(current_user.org_id, _query)

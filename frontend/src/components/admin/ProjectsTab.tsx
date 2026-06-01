@@ -26,6 +26,7 @@ import {
   CheckCircle2, RotateCcw,
 } from "lucide-react";
 import { type ProjectResponse } from "../../services/project.service";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { getErrorMessage } from "../../utils/errors";
 import { useUsers } from "../../queries/users";
 import {
@@ -295,6 +296,20 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     [visibleProjects, page, pageSize],
   );
 
+  const hasActiveFilters =
+    !!searchQuery ||
+    yearFilter !== "all" ||
+    pmFilter !== "all" ||
+    statusFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setYearFilter("all");
+    setPmFilter("all");
+    setStatusFilter("all");
+    setPage(1);
+  };
+
   return (
     <div>
       {/* Toolbar — search + filters */}
@@ -364,6 +379,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
             <option value="all">All</option>
           </select>
         </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
         <div className="ml-auto">
           <ExportExcelButton
             label="Export Projects"

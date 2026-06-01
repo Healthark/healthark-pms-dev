@@ -47,6 +47,7 @@ const BulkApproveModal = lazy(() =>
 );
 import { SortableHeader } from "../SortableHeader";
 import { TablePagination } from "../common/TablePagination";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
 import { halfDisplayLabel, isPostApproved } from "../../utils/goalStatus";
@@ -289,6 +290,15 @@ export function TeamGoalsTab() {
     statusFilter !== "all" ||
     yearFilter !== "all" ||
     menteeFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setSearch("");
+    setStatusFilter("all");
+    setYearFilter("all");
+    setMenteeFilter("all");
+    setPage(1);
+  };
 
   // "Request Changes" modal state
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
@@ -578,6 +588,12 @@ export function TeamGoalsTab() {
               ))}
             </select>
           </div>
+
+          <ClearFiltersButton
+            active={hasActiveFilters}
+            onClear={clearFilters}
+            className="ml-auto"
+          />
         </div>
       </div>
 

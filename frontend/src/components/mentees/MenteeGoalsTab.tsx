@@ -31,6 +31,7 @@ import { CriteriaChecklist } from "../goals/CriteriaChecklist";
 import { GoalSelfReviewModal } from "../goals/GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "../goals/SelfReviewCycleMenu";
 import { SortableHeader } from "../SortableHeader";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 
 // ---------------------------------------------------------------------------
@@ -255,6 +256,15 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
     setExpandedGoalId(null);
   }, [statusFilter, yearFilter, searchQuery, viewMode]);
 
+  const hasActiveFilters =
+    !!searchQuery || statusFilter !== "all" || yearFilter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setYearFilter("all");
+  };
+
   const availableYears = Array.from(
     new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
   ).sort((a, b) => b - a);
@@ -392,6 +402,12 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
               ))}
             </select>
           </div>
+
+          <ClearFiltersButton
+            active={hasActiveFilters}
+            onClear={clearFilters}
+            className="ml-auto"
+          />
         </div>
       </div>
 

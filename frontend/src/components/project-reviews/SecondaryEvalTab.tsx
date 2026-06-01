@@ -23,6 +23,7 @@ import {
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 type ViewMode = "grid" | "table";
 
@@ -213,6 +214,14 @@ export function SecondaryEvalTab() {
   const isSaving = submitMutation.isPending || updateMutation.isPending;
   const [modalError, setModalError] = useState("");
 
+  const hasActiveFilters =
+    !!searchQuery || statusFilter !== "all" || employeeFilter !== "all";
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setEmployeeFilter("all");
+  };
+
   const getMySubmission = (review: ProjectReviewResponse) =>
     review.secondary_evaluations?.find((ev) => ev.evaluator_id === currentUserId);
 
@@ -323,6 +332,8 @@ export function SecondaryEvalTab() {
               ))}
             </select>
           </div>
+
+          <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
         </div>
 
         <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">

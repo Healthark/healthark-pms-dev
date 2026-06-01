@@ -23,28 +23,43 @@ Endpoints:
 """
 
 from typing import List, Optional
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import joinedload
 
-from app.api.dependencies import DbSession, CurrentUser
+from app.api.dependencies import CurrentUser, DbSession
+from app.core.cycle_utils import (
+    _fy_label_of_project_review,
+    extract_fy_label,
+    get_year_override,
+)
 from app.models.project_models import (
-    Project, ProjectAssignment, PROJECT_STATUS_COMPLETED,
+    PROJECT_STATUS_COMPLETED,
+    Project,
+    ProjectAssignment,
 )
 from app.models.project_review_models import (
-    ProjectReview, ProjectReviewStatus,
-    ProjectReviewEvaluator, EvaluatorStatus,
+    EvaluatorStatus,
+    ProjectReview,
+    ProjectReviewEvaluator,
+    ProjectReviewStatus,
 )
-from app.models.system_settings_models import SystemSettings
-from app.models.user_models import User
 from app.models.reference_models import Department, Designation
 from app.models.role_expectation_models import RoleExpectation
+from app.models.system_settings_models import SystemSettings
+from app.models.user_models import User
 from app.schemas.project_review_schemas import (
-    PMEvaluationSubmit, PMEvaluationDraft,
-    SecondaryEvalSubmit, SecondaryEvalDraft,
-    ProjectReviewResponse, SecondaryEvalResponse,
-    MyProjectCard, PMPendingReviewCard,
+    AdminMemberReviewRow,
+    AdminProjectSummary,
+    MyProjectCard,
+    PMEvaluationDraft,
+    PMEvaluationSubmit,
+    PMPendingReviewCard,
+    ProjectReviewResponse,
     RoleExpectationResponse,
-    AdminMemberReviewRow, AdminProjectSummary,
+    SecondaryEvalDraft,
+    SecondaryEvalResponse,
+    SecondaryEvalSubmit,
 )
 
 router = APIRouter()
@@ -95,6 +110,41 @@ def _get_active_cycle(db: DbSession, org_id: int) -> str:
         )
 
     return settings.active_cycle_name
+
+
+def _visible_performance_group(
+    review: ProjectReview,
+    viewer: User,
+    db: DbSession,
+    org_id: int,
+    active_cycle_name: str,
+    *,
+    is_mentor: bool = False,
+) -> Optional[str]:
+    """Return `review.performance_group` if `viewer` may see it, else None.
+
+    Per-FY project-rating visibility (decision #6 — mentors always see):
+      - Past (or any non-active) FY → always pass through; closing the
+        current year never retroactively hides a finalized prior year.
+      - Admins, the rating's author (reviewer_id == viewer.id), and the
+        rated employee's mentor (is_mentor=True) → always see it.
+      - Otherwise (the rated employee viewing the current FY) → visible
+        only when this FY's `project_ratings_visible` toggle is True.
+
+    Authoring / PM contexts that need the raw group keep calling
+    `review.performance_group` directly (see `_build_review_response`).
+    """
+    group = review.performance_group
+    if not group:
+        return group
+    review_fy = _fy_label_of_project_review(review)
+    active_fy = extract_fy_label(active_cycle_name)
+    if review_fy != active_fy:
+        return group
+    if viewer.role == "Admin" or review.reviewer_id == viewer.id or is_mentor:
+        return group
+    override = get_year_override(db, org_id, review_fy)
+    return group if (override and override.project_ratings_visible) else None
 
 
 def _build_review_response(
@@ -226,7 +276,9 @@ def get_my_projects(
                 assignment_role=a.assignment_role,
                 department_name=dept.name if dept else None,
                 review_status=review.status,
-                performance_group=review.performance_group,
+                performance_group=_visible_performance_group(
+                    review, current_user, db, current_user.org_id, current_cycle
+                ),
                 pm_name=pm_user.full_name if pm_user else None,
                 cycle=review.cycle,
             ))

@@ -26,6 +26,7 @@ app = FastAPI(
 
 _default_origins = [
     "http://localhost",
+    "http://localhost:4173",
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:3000",

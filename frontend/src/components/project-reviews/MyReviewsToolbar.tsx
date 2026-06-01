@@ -1,4 +1,5 @@
 import { LayoutGrid, Search, Table2 } from "lucide-react";
+import { ClearFiltersButton } from "../common/ClearFiltersButton";
 
 type ViewMode = "grid" | "table";
 
@@ -26,6 +27,8 @@ export function MyReviewsToolbar({
   availablePMs,
   statusFilter,
   onStatusFilterChange,
+  hasActiveFilters,
+  onClearFilters,
 }: {
   readonly searchQuery: string;
   readonly onSearchChange: (v: string) => void;
@@ -42,6 +45,8 @@ export function MyReviewsToolbar({
   readonly availablePMs: readonly string[];
   readonly statusFilter: string;
   readonly onStatusFilterChange: (v: string) => void;
+  readonly hasActiveFilters: boolean;
+  readonly onClearFilters: () => void;
 }) {
   const viewBtnCls = (mode: ViewMode) =>
     `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
@@ -122,6 +127,11 @@ export function MyReviewsToolbar({
             <option value="pending">Pending</option>
           </select>
         </div>
+        <ClearFiltersButton
+          active={hasActiveFilters}
+          onClear={onClearFilters}
+          className="ml-auto"
+        />
       </div>
     </div>
   );

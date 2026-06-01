@@ -52,10 +52,6 @@ export default function AdminPanel() {
   // the ['admin-settings'] query whenever fresh data arrives.
   const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
   const [fiscalStartMonth, setFiscalStartMonth] = useState(4);
-  const [annualReviewsEnabled, setAnnualReviewsEnabled] = useState(false);
-  const [annualGoalsEditEnabled, setAnnualGoalsEditEnabled] = useState(false);
-  const [projectRatingsVisible, setProjectRatingsVisible] = useState(false);
-  const [annualReviewFinalRatingVisible, setAnnualReviewFinalRatingVisible] = useState(false);
   // Dev/QA date simulation. simulatedToday is an ISO date string (or empty
   // when unset). simulationAllowed mirrors the backend's env flag so the
   // field hides itself outside dev/staging.
@@ -90,10 +86,6 @@ export default function AdminPanel() {
     if (!adminSettings) return;
     setCycleType((adminSettings.cycle_type as CycleType) ?? "half_yearly");
     setFiscalStartMonth(adminSettings.fiscal_start_month ?? 4);
-    setAnnualReviewsEnabled(adminSettings.annual_reviews_enabled ?? false);
-    setAnnualGoalsEditEnabled(adminSettings.annual_goals_edit_enabled ?? false);
-    setProjectRatingsVisible(adminSettings.project_ratings_visible ?? false);
-    setAnnualReviewFinalRatingVisible(adminSettings.annual_review_final_rating_visible ?? false);
     setSimulatedToday(adminSettings.simulated_today ?? "");
     setClearSimulatedTodayPending(false);
   }, [adminSettings]);
@@ -147,10 +139,6 @@ export default function AdminPanel() {
     const payload: AdminSettingsUpdatePayload = {
       cycle_type: cycleType,
       fiscal_start_month: fiscalStartMonth,
-      annual_reviews_enabled: annualReviewsEnabled,
-      annual_goals_edit_enabled: annualGoalsEditEnabled,
-      project_ratings_visible: projectRatingsVisible,
-      annual_review_final_rating_visible: annualReviewFinalRatingVisible,
     };
     // Date simulation: clear wins, otherwise set if a value is present.
     // Omitting both leaves the column untouched on the backend.
@@ -281,14 +269,6 @@ export default function AdminPanel() {
             activeCycleName={adminSettings?.active_cycle ?? ""}
             cycleType={cycleType}
             fiscalStartMonth={fiscalStartMonth}
-            annualReviewsEnabled={annualReviewsEnabled}
-            onAnnualReviewsEnabledChange={setAnnualReviewsEnabled}
-            annualGoalsEditEnabled={annualGoalsEditEnabled}
-            onAnnualGoalsEditEnabledChange={setAnnualGoalsEditEnabled}
-            projectRatingsVisible={projectRatingsVisible}
-            onProjectRatingsVisibleChange={setProjectRatingsVisible}
-            annualReviewFinalRatingVisible={annualReviewFinalRatingVisible}
-            onAnnualReviewFinalRatingVisibleChange={setAnnualReviewFinalRatingVisible}
             simulatedToday={simulatedToday}
             simulationAllowed={adminSettings?.simulation_allowed ?? false}
             onSimulatedTodayChange={handleSimulatedTodayChange}
