@@ -1,19 +1,21 @@
 """
 Notification Schemas — The Topbar's API Contract.
 
-These schemas mirror the TypeScript interfaces in notification.service.ts exactly:
-    - NotificationItem  →  { type, message, count, severity }
-    - TopbarSummary     →  { active_cycle, notifications[] }
+These schemas mirror the TypeScript interfaces in notification.service.ts:
+    - NotificationItem       →  computed standing count (recomputed each load)
+    - StoredNotificationItem →  a persisted `notifications` row
+    - TopbarSummary          →  { active_cycle, notifications[], personal[], announcements[] }
 
-No database table backs these — they are computed on the fly from
-Goals, Users, and SystemSettings data. When a dedicated notifications
-table is built later (Epic 5), these schemas remain the response contract
-and the route simply switches from computing to reading.
+`NotificationItem` is still computed on the fly from Goals / Users /
+SystemSettings. `StoredNotificationItem` is backed by the generic
+`notifications` table (see app/models/notification_models.py) and is written
+by the notification service on module events / admin broadcasts.
 """
 
-from pydantic import BaseModel
-from typing import Optional, Literal
 from datetime import datetime
+from typing import Literal, Optional
+
+from pydantic import BaseModel
 
 
 class NotificationItem(BaseModel):
@@ -24,18 +26,27 @@ class NotificationItem(BaseModel):
     severity: Literal["info", "warning", "blocking"]
 
 
-class UserNotificationItem(BaseModel):
-    """A direct mentor-to-mentee notification created via the Notify button."""
+class StoredNotificationItem(BaseModel):
+    """A persisted notification row — either a personal event or an
+    org-wide announcement. Mirrors the generic Notification model and feeds
+    the two Topbar tabs (Notifications / Announcements)."""
     id: int
-    message: str
-    goal_id: int
+    category: str
+    type: str
+    title: str
+    body: str
+    link: Optional[str] = None
     created_at: datetime
     is_read: bool
 
 
 class TopbarSummary(BaseModel):
-    """Lightweight payload consumed by the Topbar on every page load."""
+    """Lightweight payload consumed by the Topbar on every page load.
+
+    `notifications` are computed standing counts (recomputed each load).
+    `personal` and `announcements` are persisted Notification rows split by
+    category — they back the two tabs of the bell dropdown."""
     active_cycle: Optional[str] = None
     notifications: list[NotificationItem] = []
-    # Direct user-to-user notifications (from mentor Notify button).
-    user_notifications: list[UserNotificationItem] = []
+    personal: list[StoredNotificationItem] = []
+    announcements: list[StoredNotificationItem] = []

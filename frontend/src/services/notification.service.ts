@@ -1,5 +1,6 @@
 import apiClient from "./api.client";
 
+/** A computed standing-count notification (recomputed each load, no read state). */
 export interface NotificationItem {
   type: string;
   message: string;
@@ -7,18 +8,29 @@ export interface NotificationItem {
   severity: "info" | "warning" | "blocking";
 }
 
-export interface UserNotificationItem {
+export type NotificationCategory = "personal" | "announcement";
+
+/** A persisted notification row — a personal event or an org-wide announcement. */
+export interface StoredNotificationItem {
   id: number;
-  message: string;
-  goal_id: number;
+  category: NotificationCategory;
+  type: string;
+  title: string;
+  body: string;
+  /** Relative in-app deep-link (e.g. "/annual-goals?tab=team"); null = no nav. */
+  link: string | null;
   created_at: string;
   is_read: boolean;
 }
 
 export interface TopbarSummary {
   active_cycle: string | null;
+  /** Computed standing counts (Notifications tab). */
   notifications: NotificationItem[];
-  user_notifications: UserNotificationItem[];
+  /** Persisted personal events (Notifications tab). */
+  personal: StoredNotificationItem[];
+  /** Persisted org-wide announcements (Announcements tab). */
+  announcements: StoredNotificationItem[];
 }
 
 export const notificationService = {
@@ -31,7 +43,12 @@ export const notificationService = {
     await apiClient.post(`/notifications/${id}/mark-read`, {});
   },
 
-  markAllRead: async (): Promise<void> => {
-    await apiClient.post("/notifications/mark-all-read", {});
+  /** Mark all read; pass a category to scope to one Topbar tab. */
+  markAllRead: async (category?: NotificationCategory): Promise<void> => {
+    await apiClient.post(
+      "/notifications/mark-all-read",
+      {},
+      category ? { params: { category } } : undefined,
+    );
   },
 };
