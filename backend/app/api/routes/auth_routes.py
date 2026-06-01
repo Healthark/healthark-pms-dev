@@ -19,6 +19,7 @@ from app.schemas.auth_schemas import (
     SessionResponse,
     TokenResponse,
     ResetPasswordRequest,
+    VerifyResetTokenRequest,
     ForgotPasswordRequest,
 )
 from app.schemas.user_schemas import UserProfile as UserProfileResponse
@@ -33,6 +34,51 @@ DbSession = Annotated[Session, Depends(get_db)]
 # verbatim, so divergence would surface as inconsistent UX.
 RESET_TOKEN_TTL_MINUTES = 15
 RESETS_PER_USER_PER_HOUR = 3
+
+# Single generic message for every "this token can't be used" case. Returned
+# identically for not-found / expired / used / deactivated so a probe can't
+# tell which condition failed (see _find_usable_reset_token).
+_INVALID_RESET_MESSAGE = (
+    "This reset link is invalid or has expired. "
+    "Ask your administrator to issue a new one."
+)
+
+
+def _find_usable_reset_token(
+    db: Session, token: str
+) -> tuple[PasswordResetToken, User] | None:
+    """Resolve a plaintext reset token to its (record, user) iff it is
+    currently usable — the hash exists, it has NOT been consumed, it has NOT
+    expired, and the target user is still active. Returns None on any failure.
+
+    Shared by /reset-password (which consumes the token) and
+    /reset-password/verify (the non-consuming on-load check) so the two can
+    never drift apart. Neither caller distinguishes the failure reason
+    externally — both map None to the single generic 400.
+    """
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    record = (
+        db.query(PasswordResetToken)
+        .filter(PasswordResetToken.token_hash == token_hash)
+        .first()
+    )
+    if record is None or record.used_at is not None:
+        return None
+
+    # `expires_at` is stored as timezone-aware UTC. Compare in the same zone.
+    now = datetime.now(timezone.utc)
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        # SQLite returns naive datetimes; treat as UTC.
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        return None
+
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if user is None or user.is_deleted:
+        return None
+
+    return record, user
 
 
 def _build_session(user: User, db: Session) -> dict:
@@ -191,39 +237,43 @@ def reset_password(payload: ResetPasswordRequest, db: DbSession):
     The CSRF middleware exempts this path because no auth/CSRF cookies
     exist at the time of call.
     """
-    token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
-    record = (
-        db.query(PasswordResetToken)
-        .filter(PasswordResetToken.token_hash == token_hash)
-        .first()
-    )
-
-    invalid = HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="This reset link is invalid or has expired. Ask your administrator to issue a new one.",
-    )
-
-    if record is None or record.used_at is not None:
-        raise invalid
-
-    # `expires_at` is stored as timezone-aware UTC. Compare in the same zone.
-    now = datetime.now(timezone.utc)
-    expires_at = record.expires_at
-    if expires_at.tzinfo is None:
-        # SQLite returns naive datetimes; treat as UTC.
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at <= now:
-        raise invalid
-
-    user = db.query(User).filter(User.id == record.user_id).first()
-    if user is None or user.is_deleted:
-        raise invalid
+    result = _find_usable_reset_token(db, payload.token)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_INVALID_RESET_MESSAGE,
+        )
+    record, user = result
 
     user.password_hash = get_password_hash(payload.new_password)
     user.must_change_password = False
-    record.used_at = now
+    record.used_at = datetime.now(timezone.utc)
     db.commit()
 
+    return None
+
+
+@router.post("/reset-password/verify", status_code=status.HTTP_204_NO_CONTENT)
+def verify_reset_token(payload: VerifyResetTokenRequest, db: DbSession):
+    """
+    Non-consuming validity check for a reset token.
+
+    The public `/reset-password` page calls this on load so an expired,
+    already-used, or otherwise invalid link is surfaced immediately — before
+    the user wastes effort entering a new password only to be rejected at
+    submit time. This endpoint NEVER marks the token used; only
+    /reset-password does that.
+
+    Returns 204 when the token is currently usable, or the same generic 400
+    as /reset-password otherwise (so probing can't distinguish why a token is
+    unusable). Unauthenticated + CSRF-exempt for the same reason as the
+    consume endpoint.
+    """
+    if _find_usable_reset_token(db, payload.token) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_INVALID_RESET_MESSAGE,
+        )
     return None
 
 
