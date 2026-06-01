@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, Loader2, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { PasswordField } from "../components/common/PasswordField";
@@ -7,24 +7,83 @@ const API_BASE =
   import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 const MIN_PASSWORD_LENGTH = 8;
 
+/** Token lifecycle for the on-load validity check. */
+type TokenStatus = "checking" | "valid" | "invalid";
+
 /**
  * Public reset-password page reached from the email link.
  *
- * Reads `?token=…` from the URL, lets the user pick a new password, then
- * POSTs to /auth/reset-password. Uses plain fetch (not apiClient) to avoid
- * the auth interceptor's 401 → forceLogout side-effect — the user is
- * unauthenticated by definition while sitting on this page.
+ * Reads `?token=…` from the URL and validates it up-front (POST
+ * /auth/reset-password/verify) so an expired / used / invalid link shows the
+ * warning on arrival, not after the user has filled in a new password. Only
+ * a valid token reveals the form; the final POST to /auth/reset-password is
+ * still the authority that consumes the token.
+ *
+ * Uses plain fetch (not apiClient) to avoid the auth interceptor's
+ * 401 → forceLogout side-effect — the user is unauthenticated by definition
+ * while sitting on this page.
  */
 export function ResetPassword() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const navigate = useNavigate();
 
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus>("checking");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // Validate the token the moment the page loads. A missing or rejected
+  // token short-circuits to the "invalid" screen before any form is shown.
+  // A network blip while verifying degrades gracefully to showing the form —
+  // the submit call re-validates server-side, so we never trap a legit user.
+  useEffect(() => {
+    if (!token) {
+      setError("This reset link is missing its token. Please open the link from your email.");
+      setTokenStatus("invalid");
+      return;
+    }
+
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/reset-password/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        if (ignore) return;
+
+        if (res.status === 204) {
+          setTokenStatus("valid");
+          return;
+        }
+
+        let detail: string | null = null;
+        try {
+          const body = await res.json();
+          if (typeof body?.detail === "string") detail = body.detail;
+        } catch {
+          /* no JSON body — fall back to the generic message below */
+        }
+        setError(
+          detail ??
+            "This reset link is invalid or has expired. Ask your administrator to issue a new one.",
+        );
+        setTokenStatus("invalid");
+      } catch {
+        // Couldn't reach the server to verify — don't block the user; let
+        // them try, and the submit endpoint will reject if it's truly bad.
+        if (!ignore) setTokenStatus("valid");
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, [token]);
 
   const validation = useMemo<string | null>(() => {
     if (!token) return "Reset token is missing from the URL.";
@@ -96,6 +155,42 @@ export function ResetPassword() {
             className="mt-5 inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
           >
             Go to sign in
+          </Link>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (tokenStatus === "checking") {
+    return (
+      <Shell>
+        <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-brand" aria-hidden="true" />
+          <p className="text-sm text-text-muted">Checking your reset link…</p>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (tokenStatus === "invalid") {
+    return (
+      <Shell>
+        <div className="flex flex-col items-center text-center">
+          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-3">
+            <AlertCircle className="h-7 w-7 text-red-600 dark:text-red-300" aria-hidden="true" />
+          </div>
+          <h1 className="mt-4 font-display text-xl font-semibold text-text-main">
+            Reset link expired or invalid
+          </h1>
+          <p className="mt-2 text-sm text-text-muted">
+            {error ??
+              "This reset link is invalid or has expired. Ask your administrator to issue a new one."}
+          </p>
+          <Link
+            to="/login"
+            className="mt-5 inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          >
+            Back to sign in
           </Link>
         </div>
       </Shell>

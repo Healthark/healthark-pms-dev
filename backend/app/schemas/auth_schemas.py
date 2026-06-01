@@ -16,6 +16,16 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class VerifyResetTokenRequest(BaseModel):
+    """Body for POST /auth/reset-password/verify — non-consuming token check.
+
+    Used by the public reset page on load so an expired / already-used /
+    invalid link is flagged BEFORE the user fills in a new password. Same
+    token constraints as ResetPasswordRequest, minus new_password (this
+    endpoint never sets a password and never marks the token used)."""
+    token: str = Field(..., min_length=20, max_length=128)
+
+
 class ForgotPasswordRequest(BaseModel):
     """Body for POST /auth/forgot-password — self-service reset request.
 
