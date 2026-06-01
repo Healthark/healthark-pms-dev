@@ -15,17 +15,20 @@ identical, so the frontend needs zero changes.
 Security Layers Applied:
     Layer 1 — Authentication:   CurrentUser dependency (JWT validation)
     Layer 2 — Tenant Isolation: All queries filter by current_user.org_id
-    Layer 3 — Role Awareness:   Admin sees all org goals; Mentors see mentee goals based on relationship
-    Layer 4 — Ownership:        Goal counts scoped to current_user.id
+    Layer 3 — Role Awareness:   The "team awaiting approval" count is scoped to
+                                the user's DIRECT mentees (mentor_id) regardless
+                                of role — there is no Admin org-wide bypass, so
+                                the count matches the Team Goals tab exactly.
+    Layer 4 — Ownership:        Personal goal counts scoped to current_user.id
 """
 
 from datetime import date
 from sqlalchemy import func
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.system_settings_models import SystemSettings
-from app.models.goal_models import Goal, ApprovalStatus
+from app.models.goal_models import Goal, ApprovalStatus, GoalType
 from app.models.user_models import User
 from app.models.goal_notification_models import GoalNotification
 from app.schemas.notification_schemas import NotificationItem, UserNotificationItem, TopbarSummary
@@ -59,12 +62,18 @@ def get_topbar_summary(
         active_cycle = None
 
     # ── Computed Notifications ───────────────────────────────────────
+    # Every goal notification below deep-links to the Annual Goals page, whose
+    # My Goals and Team Goals tabs are ANNUAL-only. So each count is scoped to
+    # goal_type == "annual" — otherwise a pending/draft *regular* goal would
+    # inflate the bell with a number the page can never surface (a false
+    # alarm). See GET /goals (My Goals) and GET /goals/team (Team Goals).
     notifications: list[NotificationItem] = []
 
     # 1. Goals sent back by manager with "Changes Requested"
     changes_count: int = db.query(func.count(Goal.id)).filter(
         Goal.org_id == current_user.org_id,
         Goal.user_id == current_user.id,
+        Goal.goal_type == GoalType.ANNUAL.value,
         Goal.approval_status == ApprovalStatus.CHANGES_REQUESTED.value,
     ).scalar() or 0
 
@@ -80,6 +89,7 @@ def get_topbar_summary(
     draft_count: int = db.query(func.count(Goal.id)).filter(
         Goal.org_id == current_user.org_id,
         Goal.user_id == current_user.id,
+        Goal.goal_type == GoalType.ANNUAL.value,
         Goal.approval_status == ApprovalStatus.DRAFT.value,
     ).scalar() or 0
 
@@ -91,29 +101,27 @@ def get_topbar_summary(
             severity="info",
         ))
 
-    # ── Manager-Only Notifications ───────────────────────────────────
-    # We dynamically check if the user has mentees, rather than checking a "Manager" string role
-    if current_user.role == "Admin":
-        mentee_ids = [
-            row[0] for row in db.query(User.id).filter(
-                User.org_id == current_user.org_id,
-                User.is_deleted == False,
-                User.id != current_user.id,
-            ).all()
-        ]
-    else:
-        mentee_ids = [
-            row[0] for row in db.query(User.id).filter(
-                User.mentor_id == current_user.id,
-                User.org_id == current_user.org_id,
-                User.is_deleted == False,
-            ).all()
-        ]
+    # ── Mentor Notifications ─────────────────────────────────────────
+    # Scoped to the user's DIRECT mentees (mentor_id), mirroring the Team
+    # Goals tab's data source (GET /goals/team → _mentee_ids_for). There is
+    # deliberately NO Admin org-wide bypass here: that tab has none, so an
+    # Admin who relied on it would see a count they could never clear. A user
+    # who mentors nobody gets an empty list — and no "team" notification — by
+    # design. Mentor/mentee behaviour is unchanged: this matches what the
+    # non-Admin branch already did.
+    mentee_ids = [
+        row[0] for row in db.query(User.id).filter(
+            User.mentor_id == current_user.id,
+            User.org_id == current_user.org_id,
+            User.is_deleted == False,  # noqa: E712
+        ).all()
+    ]
 
     if mentee_ids:
         awaiting_count: int = db.query(func.count(Goal.id)).filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
+            Goal.goal_type == GoalType.ANNUAL.value,
             Goal.approval_status == ApprovalStatus.PENDING_APPROVAL.value,
         ).scalar() or 0
 
@@ -153,6 +161,38 @@ def get_topbar_summary(
         notifications=notifications,
         user_notifications=user_notifications,
     )
+
+
+@router.post("/{notification_id}/mark-read", status_code=status.HTTP_204_NO_CONTENT)
+def mark_notification_read(
+    notification_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Mark a single direct notification as read.
+
+    Scoped to the current user (recipient) + tenant, so a user can only ever
+    flip their own notifications. A missing/foreign id returns 404 rather than
+    silently succeeding. Only the computed `user_notifications` (stored
+    GoalNotification rows) carry a read state — the system-computed
+    `notifications` clear themselves when the underlying goals are resolved.
+    """
+    notif = db.query(GoalNotification).filter(
+        GoalNotification.id == notification_id,
+        GoalNotification.recipient_id == current_user.id,
+        GoalNotification.org_id == current_user.org_id,
+    ).first()
+
+    if notif is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found.",
+        )
+
+    if not notif.is_read:
+        notif.is_read = True
+        db.commit()
+    return None
 
 
 @router.post("/mark-all-read", status_code=status.HTTP_204_NO_CONTENT)

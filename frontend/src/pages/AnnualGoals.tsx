@@ -1,4 +1,5 @@
 import { useState, Fragment } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus, Target, Lock, Search,
   LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen,
@@ -178,7 +179,26 @@ export function AnnualGoals() {
       settings.active_cycle_name
     : null;
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("my");
+  // The active tab lives in the URL (`?tab=my|team`) so the Topbar
+  // notification dropdown can deep-link straight to a tab — e.g. a "goals
+  // await your approval" notification opens Team Goals. Deriving the tab from
+  // the URL (instead of mirroring it into state) means a notification click
+  // switches tabs even when the user is already on this page. Team Goals is
+  // mentor-only, so `tab=team` falls back to My Goals for non-mentors.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: ActiveTab =
+    searchParams.get("tab") === "team" && isMentor ? "team" : "my";
+  const setActiveTab = (tab: ActiveTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");

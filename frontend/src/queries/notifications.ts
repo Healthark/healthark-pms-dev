@@ -26,6 +26,16 @@ export function useNotificationsSummary() {
   });
 }
 
+export function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => notificationService.markRead(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: notificationsSummaryQueryKey });
+    },
+  });
+}
+
 export function useMarkAllRead() {
   const qc = useQueryClient();
   return useMutation({

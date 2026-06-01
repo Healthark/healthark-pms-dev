@@ -1,13 +1,26 @@
 import { useState, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { Bell, CalendarDays } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import { useDismissedNotifications } from "../hooks/useDismissedNotifications";
 import { NotificationDropdown } from "../components/layout/NotificationDropdown";
 import { ThemeToggle } from "../components/layout/ThemeToggle";
+import type { NotificationItem } from "../services/notification.service";
 import {
   useMarkAllRead,
+  useMarkRead,
   useNotificationsSummary,
 } from "../queries/notifications";
+
+/**
+ * Stable per-instance key for a computed system notification. Embeds the
+ * count so a dismissed alert reappears once its magnitude changes — see
+ * useDismissedNotifications for the rationale.
+ */
+function systemKey(n: NotificationItem): string {
+  return `${n.type}:${n.count}`;
+}
 
 export function Topbar() {
   const { user } = useAuth();
@@ -21,9 +34,24 @@ export function Topbar() {
   // ── Notifications — shared TanStack cache via ['notifications', 'summary']
   const { data: summary } = useNotificationsSummary();
   const markAllReadMutation = useMarkAllRead();
+  const markReadMutation = useMarkRead();
+
+  // Client-side read state for the computed system notifications — they have
+  // no server-side `is_read`, so dismissals live in localStorage (per user).
+  const { isDismissed, dismiss } = useDismissedNotifications(user?.user_id ?? 0);
 
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
+
+  // System notifications the user hasn't dismissed yet — the single source
+  // for the dropdown list, the unread dot, and "mark all".
+  const visibleNotifications = (summary?.notifications ?? []).filter(
+    (n) => !isDismissed(systemKey(n)),
+  );
+  const unreadUserCount =
+    summary?.user_notifications.filter((n) => !n.is_read).length ?? 0;
+  const hasNotifications =
+    visibleNotifications.length > 0 || unreadUserCount > 0;
 
   const handleBellClick = useCallback(() => {
     if (anchorRect) {
@@ -37,17 +65,32 @@ export function Topbar() {
 
   const handleClose = useCallback(() => setAnchorRect(null), []);
 
-  // Invalidation-only — the badge clears after the server round-trip
-  // refreshes the summary cache. Matches the strict pattern established
-  // by the other Phase B/C mutations (no manual cache writes).
+  // "Mark all as read" — dismiss every visible system alert (client-side,
+  // localStorage) AND mark every stored user notification read (server-side,
+  // invalidation-only so the summary refetch clears the badge).
   const handleMarkAllRead = useCallback(async () => {
-    await markAllReadMutation.mutateAsync();
-  }, [markAllReadMutation]);
+    if (visibleNotifications.length > 0) {
+      dismiss(visibleNotifications.map(systemKey));
+    }
+    if (unreadUserCount > 0) {
+      await markAllReadMutation.mutateAsync();
+    }
+  }, [visibleNotifications, dismiss, unreadUserCount, markAllReadMutation]);
 
-  const unreadUserCount =
-    summary?.user_notifications.filter((n) => !n.is_read).length ?? 0;
-  const hasNotifications =
-    (summary?.notifications.length ?? 0) > 0 || unreadUserCount > 0;
+  // Per-notification read: stored user notifications hit the backend; computed
+  // system notifications are dismissed locally. The dropdown stays open and
+  // the row disappears (system) or greys out (user) on the next render.
+  const handleMarkRead = useCallback(
+    async (id: number) => {
+      await markReadMutation.mutateAsync(id);
+    },
+    [markReadMutation],
+  );
+
+  const handleMarkSystemRead = useCallback(
+    (n: NotificationItem) => dismiss(systemKey(n)),
+    [dismiss],
+  );
 
   const initials = user?.full_name
     ? user.full_name
@@ -85,7 +128,7 @@ export function Topbar() {
           className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-surface-muted"
           aria-label={
             hasNotifications
-              ? `Notifications (${summary?.notifications.length} new)`
+              ? `Notifications (${visibleNotifications.length} new)`
               : "Notifications"
           }
           aria-expanded={anchorRect !== null}
@@ -98,22 +141,24 @@ export function Topbar() {
           )}
         </button>
 
-        <div
-          className="h-8 w-8 rounded-full bg-brand text-white flex items-center justify-center font-semibold text-sm"
-          aria-label={user?.full_name ?? "User avatar"}
-          title={user?.full_name ?? ""}
+        <Link
+          to="/profile"
+          className="h-8 w-8 rounded-full bg-brand text-white flex items-center justify-center font-semibold text-sm cursor-default focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-surface"
+          aria-label={user?.full_name ? `${user.full_name} — view profile` : "View profile"}
         >
           {initials}
-        </div>
+        </Link>
       </div>
 
       {/* Notification dropdown — Portal so it escapes the header's layout */}
       {anchorRect && summary && (
         <NotificationDropdown
-          notifications={summary.notifications}
+          notifications={visibleNotifications}
           userNotifications={summary.user_notifications}
           anchorRect={anchorRect}
           onClose={handleClose}
+          onMarkRead={handleMarkRead}
+          onMarkSystemRead={handleMarkSystemRead}
           onMarkAllRead={handleMarkAllRead}
         />
       )}
