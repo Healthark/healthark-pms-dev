@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   notificationService,
+  type NotificationCategory,
   type TopbarSummary,
 } from "../services/notification.service";
 
@@ -39,7 +40,9 @@ export function useMarkRead() {
 export function useMarkAllRead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => notificationService.markAllRead(),
+    // Optional category scopes the bulk action to one Topbar tab.
+    mutationFn: (category?: NotificationCategory) =>
+      notificationService.markAllRead(category),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: notificationsSummaryQueryKey });
     },

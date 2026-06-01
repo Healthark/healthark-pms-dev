@@ -3,24 +3,13 @@ import { Link } from "react-router-dom";
 import { Bell, CalendarDays } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
-import { useDismissedNotifications } from "../hooks/useDismissedNotifications";
 import { NotificationDropdown } from "../components/layout/NotificationDropdown";
 import { ThemeToggle } from "../components/layout/ThemeToggle";
-import type { NotificationItem } from "../services/notification.service";
 import {
   useMarkAllRead,
   useMarkRead,
   useNotificationsSummary,
 } from "../queries/notifications";
-
-/**
- * Stable per-instance key for a computed system notification. Embeds the
- * count so a dismissed alert reappears once its magnitude changes — see
- * useDismissedNotifications for the rationale.
- */
-function systemKey(n: NotificationItem): string {
-  return `${n.type}:${n.count}`;
-}
 
 export function Topbar() {
   const { user } = useAuth();
@@ -36,22 +25,23 @@ export function Topbar() {
   const markAllReadMutation = useMarkAllRead();
   const markReadMutation = useMarkRead();
 
-  // Client-side read state for the computed system notifications — they have
-  // no server-side `is_read`, so dismissals live in localStorage (per user).
-  const { isDismissed, dismiss } = useDismissedNotifications(user?.user_id ?? 0);
-
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
 
-  // System notifications the user hasn't dismissed yet — the single source
-  // for the dropdown list, the unread dot, and "mark all".
-  const visibleNotifications = (summary?.notifications ?? []).filter(
-    (n) => !isDismissed(systemKey(n)),
-  );
-  const unreadUserCount =
-    summary?.user_notifications.filter((n) => !n.is_read).length ?? 0;
+  // Computed standing alerts (Notifications tab). These are NOT dismissable —
+  // they reflect live state and clear themselves when the underlying work is
+  // resolved (e.g. approving a pending goal drops the count to 0). Stored rows
+  // are split into personal (Notifications tab) + announcements (Announcements
+  // tab). The bell dot lights if any of the three has something.
+  const computedNotifications = summary?.notifications ?? [];
+  const personal = summary?.personal ?? [];
+  const announcements = summary?.announcements ?? [];
+  const personalUnread = personal.filter((n) => !n.is_read).length;
+  const announcementsUnread = announcements.filter((n) => !n.is_read).length;
   const hasNotifications =
-    visibleNotifications.length > 0 || unreadUserCount > 0;
+    computedNotifications.length > 0 ||
+    personalUnread > 0 ||
+    announcementsUnread > 0;
 
   const handleBellClick = useCallback(() => {
     if (anchorRect) {
@@ -65,31 +55,28 @@ export function Topbar() {
 
   const handleClose = useCallback(() => setAnchorRect(null), []);
 
-  // "Mark all as read" — dismiss every visible system alert (client-side,
-  // localStorage) AND mark every stored user notification read (server-side,
-  // invalidation-only so the summary refetch clears the badge).
-  const handleMarkAllRead = useCallback(async () => {
-    if (visibleNotifications.length > 0) {
-      dismiss(visibleNotifications.map(systemKey));
+  // Notifications tab "mark all": marks all stored personal rows read.
+  // Computed standing alerts are not dismissable — they clear when resolved.
+  const handleMarkAllPersonal = useCallback(async () => {
+    if (personalUnread > 0) {
+      await markAllReadMutation.mutateAsync("personal");
     }
-    if (unreadUserCount > 0) {
-      await markAllReadMutation.mutateAsync();
-    }
-  }, [visibleNotifications, dismiss, unreadUserCount, markAllReadMutation]);
+  }, [personalUnread, markAllReadMutation]);
 
-  // Per-notification read: stored user notifications hit the backend; computed
-  // system notifications are dismissed locally. The dropdown stays open and
-  // the row disappears (system) or greys out (user) on the next render.
+  // Announcements tab "mark all": mark all stored announcement rows read.
+  const handleMarkAllAnnouncements = useCallback(async () => {
+    if (announcementsUnread > 0) {
+      await markAllReadMutation.mutateAsync("announcement");
+    }
+  }, [announcementsUnread, markAllReadMutation]);
+
+  // Per-notification read: stored rows (personal + announcement) hit the
+  // backend by id. The dropdown stays open and the row updates on next render.
   const handleMarkRead = useCallback(
     async (id: number) => {
       await markReadMutation.mutateAsync(id);
     },
     [markReadMutation],
-  );
-
-  const handleMarkSystemRead = useCallback(
-    (n: NotificationItem) => dismiss(systemKey(n)),
-    [dismiss],
   );
 
   const initials = user?.full_name
@@ -128,7 +115,7 @@ export function Topbar() {
           className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-surface-muted"
           aria-label={
             hasNotifications
-              ? `Notifications (${visibleNotifications.length} new)`
+              ? `Notifications (${computedNotifications.length + personalUnread + announcementsUnread} new)`
               : "Notifications"
           }
           aria-expanded={anchorRect !== null}
@@ -153,13 +140,14 @@ export function Topbar() {
       {/* Notification dropdown — Portal so it escapes the header's layout */}
       {anchorRect && summary && (
         <NotificationDropdown
-          notifications={visibleNotifications}
-          userNotifications={summary.user_notifications}
+          notifications={computedNotifications}
+          personal={personal}
+          announcements={announcements}
           anchorRect={anchorRect}
           onClose={handleClose}
           onMarkRead={handleMarkRead}
-          onMarkSystemRead={handleMarkSystemRead}
-          onMarkAllRead={handleMarkAllRead}
+          onMarkAllPersonal={handleMarkAllPersonal}
+          onMarkAllAnnouncements={handleMarkAllAnnouncements}
         />
       )}
     </header>

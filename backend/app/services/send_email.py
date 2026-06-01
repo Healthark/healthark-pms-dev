@@ -589,3 +589,134 @@ def send_password_reset_email(
         ),
         from_name=sender_display_name,
     )
+
+
+# ── Generic notification / announcement template ─────────────────────
+
+
+def _notification_html(
+    title: str,
+    body: str,
+    cta_link: str | None,
+    cta_label: str | None,
+    theme: EmailTheme,
+) -> str:
+    """Inline-styled HTML for a generic notification / announcement email.
+
+    Same table-based layout + inline CSS contract as the reset/welcome
+    templates (broad client support). The CTA button renders only when
+    `cta_link` is provided. Every interpolation is escaped via `_esc()`;
+    `body` newlines become <br> so multi-line announcements read naturally."""
+    title_e = _esc(title)
+    body_e = _esc(body).replace("\n", "<br>")
+    brand_name_e = _esc(theme.brand_name)
+    brand_e = _esc(theme.brand)
+    brand_light_e = _esc(theme.brand_light)
+
+    cta_block = ""
+    if cta_link:
+        cta_link_e = _esc(cta_link)
+        cta_label_e = _esc(cta_label or "Open in the app")
+        cta_block = f"""
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px 0;">
+                <tr>
+                  <td align="center" style="background-color:{brand_e};border-radius:8px;">
+                    <a href="{cta_link_e}" target="_blank" rel="noopener" style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;">
+                      {cta_label_e}
+                    </a>
+                  </td>
+                </tr>
+              </table>"""
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{title_e}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#0F172A;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8FAFC;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background-color:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.06);">
+          <!-- Header band (brand) -->
+          <tr>
+            <td style="background-color:{brand_e};padding:24px 32px;">
+              <p style="margin:0;color:#FFFFFF;font-size:18px;font-weight:600;letter-spacing:0.2px;">
+                {brand_name_e}
+              </p>
+              <p style="margin:4px 0 0 0;color:{brand_light_e};font-size:13px;">
+                Notification
+              </p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 32px 8px 32px;">
+              <h1 style="margin:0 0 12px 0;font-size:20px;font-weight:600;color:#0F172A;">
+                {title_e}
+              </h1>
+              <p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#0F172A;">
+                {body_e}
+              </p>
+              {cta_block}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 32px 28px 32px;border-top:1px solid #E2E8F0;">
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#64748B;">
+                This is an automated message from {brand_name_e}.
+                Please do not reply to this email.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+
+def _notification_text(
+    title: str, body: str, cta_link: str | None, from_name: str
+) -> str:
+    """Plain-text fallback for the notification email."""
+    lines = [title, "", body, ""]
+    if cta_link:
+        lines.append(f"Open: {cta_link}")
+        lines.append("")
+    lines.append(f"— {from_name}")
+    return "\n".join(lines) + "\n"
+
+
+def send_notification_email(
+    to_email: str,
+    title: str,
+    body: str,
+    cta_link: str | None = None,
+    cta_label: str | None = None,
+    org_id: int | None = None,
+) -> bool:
+    """Email a generic notification / announcement.
+
+    Returns True if the message was handed to the SMTP server. Callers must
+    NOT depend on the return — the in-app notification row is the source of
+    truth; email is a best-effort secondary channel. Intended to be invoked
+    via FastAPI BackgroundTasks so the SMTP handshake doesn't block the
+    request thread. `org_id` selects the per-org theme."""
+    theme = _resolve_theme(org_id)
+    sender_display_name = _resolve_from_name(theme)
+    return _send(
+        to_email=to_email,
+        subject=title,
+        html_body=_notification_html(title, body, cta_link, cta_label, theme),
+        text_body=_notification_text(title, body, cta_link, sender_display_name),
+        from_name=sender_display_name,
+    )
