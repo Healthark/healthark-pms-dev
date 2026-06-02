@@ -3,7 +3,7 @@ AnnualReview Routes — The 3-Stage Appraisal Workflow.
 
 Endpoints:
     ── Stage 1: Employee ──
-    POST  /annual-reviews/self              → Create + submit self-appraisal
+    POST  /annual-reviews/self              → Create + submit self-review
     PATCH /annual-reviews/{id}/draft        → Save draft (partial, no status change)
     GET   /annual-reviews/mine              → Active-cycle review (404 if none)
     GET   /annual-reviews/mine/history      → All reviews owned by current user
@@ -33,7 +33,7 @@ Security Layers:
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 
@@ -44,9 +44,11 @@ from app.core.cycle_utils import (
     get_year_override,
 )
 from app.models.annual_review_models import AnnualReview, ReviewStatus
+from app.models.notification_models import NotificationCategory
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
+from app.services.notifications import create_notification
 from app.schemas.annual_review_schemas import (
     AnnualReviewResponse,
     CalibrationFilterOptions,
@@ -188,8 +190,33 @@ def _strip_private_ratings(
 
 
 # =====================================================================
-# STAGE 1 — EMPLOYEE SELF-APPRAISAL
+# STAGE 1 — EMPLOYEE SELF-REVIEW
 # =====================================================================
+
+def _notify_annual_self_submitted(
+    db: DbSession, employee: User, review: AnnualReview
+) -> None:
+    """In-app notice to the review's mentor that a self-review awaits their
+    evaluation. No-op when the review has no mentor on record."""
+    if review.mentor_id is None:
+        return
+    create_notification(
+        db,
+        org_id=review.org_id,
+        recipient_id=review.mentor_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="annual_self_submitted",
+        title="Annual self-review submitted",
+        body=(
+            f"{employee.full_name} submitted their {review.cycle_name} "
+            f"self-review — your evaluation is needed."
+        ),
+        link="/annual-reviews?tab=team",
+        entity_type="annual_review",
+        entity_id=review.id,
+        actor_id=employee.id,
+    )
+
 
 @router.post("/self", response_model=AnnualReviewResponse, status_code=status.HTTP_201_CREATED)
 def create_self_appraisal(
@@ -198,7 +225,7 @@ def create_self_appraisal(
     current_user: CurrentUser,
 ):
     """
-    Submit the employee's self-appraisal. If a draft row already exists for
+    Submit the employee's self-review. If a draft row already exists for
     the user/cycle, promote it to PENDING_MENTOR with the submitted payload.
     Otherwise create a new row directly in PENDING_MENTOR.
 
@@ -223,6 +250,7 @@ def create_self_appraisal(
         existing.self_overall_review = payload.self_overall_review
         existing.self_performance_rating = payload.self_performance_rating
         existing.status = ReviewStatus.PENDING_MENTOR.value
+        _notify_annual_self_submitted(db, current_user, existing)
         db.commit()
         db.refresh(existing)
         return existing
@@ -238,6 +266,8 @@ def create_self_appraisal(
         self_performance_rating=payload.self_performance_rating,
     )
     db.add(review)
+    db.flush()  # assign review.id before the notification references it
+    _notify_annual_self_submitted(db, current_user, review)
     db.commit()
     db.refresh(review)
     return review
@@ -250,7 +280,7 @@ def create_self_appraisal_draft(
     current_user: CurrentUser,
 ):
     """
-    Create a new annual self-appraisal in DRAFT state. The employee can
+    Create a new annual self-review in DRAFT state. The employee can
     revisit it via PATCH /draft and submit later via POST /self.
 
     409 if a row already exists for the user/cycle (use the PATCH /draft
@@ -426,6 +456,7 @@ def submit_mentor_evaluation(
     payload: MentorEvalUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """Mentor submits their evaluation. Status: PENDING_MENTOR → PENDING_MANAGEMENT.
     Any saved mentor draft is cleared; the submitted payload becomes final."""
@@ -454,6 +485,30 @@ def submit_mentor_evaluation(
     review.mentor_performance_rating_draft = None
 
     review.status = ReviewStatus.PENDING_MANAGEMENT.value
+
+    # Notify the employee their mentor evaluation is in (in-app + email).
+    # Generic body — the mentee must NOT see the rating/text yet.
+    employee = db.query(User).filter(User.id == review.user_id).first()
+    create_notification(
+        db,
+        org_id=review.org_id,
+        recipient_id=review.user_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="annual_mentor_eval_submitted",
+        title="Mentor evaluation submitted",
+        body=(
+            f"{current_user.full_name} completed your {review.cycle_name} "
+            f"mentor evaluation. It's now with management for calibration."
+        ),
+        link="/annual-reviews",
+        entity_type="annual_review",
+        entity_id=review.id,
+        actor_id=current_user.id,
+        email=True,
+        background_tasks=background_tasks,
+        recipient_email=employee.email if employee else None,
+        cta_label="View review",
+    )
 
     db.commit()
     db.refresh(review)
@@ -711,6 +766,25 @@ def set_management_rating(
     review.management_performance_rating = payload.management_performance_rating
     review.final_rating_enabled = True
     review.status = ReviewStatus.COMPLETED.value
+
+    # Notify the employee their review is finalized (in-app only). Fires on
+    # every publish — including a re-publish that adjusts the rating — so the
+    # employee always learns of a change. The body carries NO rating value;
+    # visibility of the number is governed by the per-FY
+    # annual_review_final_rating_visible gate.
+    create_notification(
+        db,
+        org_id=review.org_id,
+        recipient_id=review.user_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="annual_management_published",
+        title="Annual review finalized",
+        body=f"Your {review.cycle_name} performance review has been finalized.",
+        link="/annual-reviews",
+        entity_type="annual_review",
+        entity_id=review.id,
+        actor_id=current_user.id,
+    )
 
     db.commit()
     db.refresh(review)

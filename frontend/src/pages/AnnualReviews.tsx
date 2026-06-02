@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Lock } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
@@ -45,7 +46,23 @@ export function AnnualReviews() {
     ? extractFyToken(settings.active_cycle_name)
     : undefined;
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("my");
+  // Active tab lives in the URL (`?tab=my|team`) so a notification can deep-link
+  // straight to the Team tab (e.g. "X submitted their self-review"). Derived
+  // from the URL — works even when already on the page. Team is mentor-only, so
+  // `tab=team` falls back to My Review for non-mentors.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: ActiveTab =
+    searchParams.get("tab") === "team" && isMentor ? "team" : "my";
+  const setActiveTab = (tab: ActiveTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // ['annual-reviews', 'mine', 'history'] — shared TanStack cache
   const { data: reviews = [], isLoading } = useMyAnnualReviewHistory();
