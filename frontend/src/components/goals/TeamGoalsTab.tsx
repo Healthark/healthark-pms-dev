@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Link as LinkIcon,
   MessageSquare,
+  Send,
 } from "lucide-react";
 import {
   type TeamGoal,
@@ -28,6 +29,7 @@ import {
   useBulkApprove,
   useSaveMentorReviewDraft,
   useSubmitMentorReview,
+  useRemindSelfReview,
 } from "../../queries/goals";
 import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
@@ -220,6 +222,7 @@ export function TeamGoalsTab() {
   const bulkApproveMutation = useBulkApprove();
   const saveMentorReviewDraftMutation = useSaveMentorReviewDraft();
   const submitMentorReviewMutation = useSubmitMentorReview();
+  const remindMutation = useRemindSelfReview();
   const isActing = updateApprovalMutation.isPending;
   const bulkSaving = bulkApproveMutation.isPending;
   const isSavingReview = submitMentorReviewMutation.isPending;
@@ -367,6 +370,15 @@ export function TeamGoalsTab() {
       closeReview();
     } catch (err) {
       setReviewError(getErrorMessage(err));
+    }
+  };
+
+  const handleRemind = async (goal: TeamGoal) => {
+    try {
+      await remindMutation.mutateAsync(goal.id);
+      toast.success(`Self-review reminder sent to ${goal.owner_name}.`);
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
     }
   };
 
@@ -626,6 +638,8 @@ export function TeamGoalsTab() {
               }}
               onSelectHalf={openReview}
               isActing={isActing}
+              onRemind={handleRemind}
+              isReminding={remindMutation.isPending}
               statusViewerRole="mentor"
             />
           ))}
@@ -655,6 +669,9 @@ export function TeamGoalsTab() {
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Actions
+                </th>
+                <th className="text-center px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  Notify
                 </th>
               </tr>
             </thead>
@@ -762,12 +779,32 @@ export function TeamGoalsTab() {
                         </div>
                       </td>
 
+                      {/* Notify — send a self-review reminder (in-app + email).
+                          Separate column so it doesn't crowd the workflow
+                          actions; only meaningful once the goal is approved. */}
+                      <td
+                        className="px-2 py-3 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isApproved && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemind(goal)}
+                            disabled={remindMutation.isPending}
+                            aria-label={`Send ${goal.owner_name} a self-review reminder`}
+                            title={`Send ${goal.owner_name} a self-review reminder`}
+                            className="inline-flex items-center justify-center rounded-md p-1.5 text-text-muted hover:bg-brand/10 hover:text-brand disabled:opacity-50 transition-colors"
+                          >
+                            <Send className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
 
-                    {/* Expanded detail row — colSpan covers all 5 columns */}
+                    {/* Expanded detail row — colSpan covers all 6 columns */}
                     {isExpanded && (
                       <tr className="bg-brand/5">
-                        <td colSpan={5} className="px-10 py-4">
+                        <td colSpan={6} className="px-10 py-4">
                           <div className="space-y-3 max-w-2xl">
                             {goal.description && (
                               <p className="text-sm text-text-muted">

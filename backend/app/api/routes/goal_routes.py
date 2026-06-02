@@ -22,7 +22,7 @@ Security Layers Applied:
 
 from datetime import date, datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import aliased, joinedload, Session
 
@@ -31,8 +31,10 @@ from app.models.goal_models import Goal, ApprovalStatus, GoalType, POST_APPROVAL
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.goal_self_review_models import GoalSelfReview, SelfReviewCycleHalf
 from app.models.goal_mentor_review_models import GoalMentorReview
+from app.models.notification_models import NotificationCategory
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
+from app.services.notifications import create_notification
 from app.schemas.goal_schemas import (
     GoalCreate,
     GoalUpdate,
@@ -687,6 +689,7 @@ def approve_goal(
     approval_in: GoalApprovalUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
     Mentor/Admin approves or rejects a submitted goal.
@@ -732,8 +735,99 @@ def approve_goal(
     if approval_in.approval_status == ApprovalStatus.APPROVED:
         goal.approved_at = datetime.now(timezone.utc)
 
+    # Notify the goal owner of the mentor's decision. Added to the session
+    # here → committed atomically with the status change below.
+    if approval_in.approval_status == ApprovalStatus.APPROVED:
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=goal.user_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_approved",
+            title="Goal approved",
+            body=f'{current_user.full_name} approved your goal "{goal.title}".',
+            link="/annual-goals?tab=my",
+            entity_type="goal",
+            entity_id=goal.id,
+            actor_id=current_user.id,
+            email=True,
+            background_tasks=background_tasks,
+            recipient_email=goal_owner.email,
+            cta_label="View goal",
+        )
+    else:  # CHANGES_REQUESTED — in-app only.
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=goal.user_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_changes_requested",
+            title="Changes requested",
+            body=f'{current_user.full_name} requested changes on your goal "{goal.title}".',
+            link="/annual-goals?tab=my",
+            entity_type="goal",
+            entity_id=goal.id,
+            actor_id=current_user.id,
+        )
+
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
+
+
+@router.post("/{goal_id}/self-review-reminder", status_code=status.HTTP_204_NO_CONTENT)
+def remind_goal_self_review(
+    goal_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Mentor nudges a mentee to complete the self-review on an approved goal
+    (in-app + email). Manual action from the Team Goals tab.
+
+    Gates:
+        - Caller must be the goal owner's assigned mentor.
+        - Goal must be in a post-approval state — a self-review is only
+          relevant once the goal is approved.
+    """
+    goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
+    goal_owner = db.query(User).filter(User.id == goal.user_id).first()
+
+    if not goal_owner or goal_owner.mentor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the assigned mentor can send a self-review reminder.",
+        )
+
+    if goal.approval_status not in POST_APPROVAL_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Self-review reminders apply only to approved goals.",
+        )
+
+    create_notification(
+        db,
+        org_id=current_user.org_id,
+        recipient_id=goal.user_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="self_review_reminder",
+        title="Reminder: complete your self-review",
+        body=(
+            f'{current_user.full_name} is reminding you to complete your '
+            f'self-review for "{goal.title}". Open Annual Goals → My Goals '
+            f"to submit it."
+        ),
+        link="/annual-goals?tab=my",
+        entity_type="goal",
+        entity_id=goal.id,
+        actor_id=current_user.id,
+        email=True,
+        background_tasks=background_tasks,
+        recipient_email=goal_owner.email,
+        cta_label="Complete self-review",
+    )
+    db.commit()
+    return None
 
 
 @router.post("/bulk-approve", response_model=GoalBulkApproveResult)
@@ -741,6 +835,7 @@ def bulk_approve_goals(
     payload: GoalBulkApproveRequest,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
     Mentor-side bulk approval. Loads the requested goals (org-scoped),
@@ -800,6 +895,25 @@ def bulk_approve_goals(
         goal.manager_feedback = None
         goal.approved_at = now
         approved_ids.append(goal_id)
+
+        # Same owner notification as the single-goal /approve path.
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=goal.user_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_approved",
+            title="Goal approved",
+            body=f'{current_user.full_name} approved your goal "{goal.title}".',
+            link="/annual-goals?tab=my",
+            entity_type="goal",
+            entity_id=goal.id,
+            actor_id=current_user.id,
+            email=True,
+            background_tasks=background_tasks,
+            recipient_email=owner.email,
+            cta_label="View goal",
+        )
 
     db.commit()
     return GoalBulkApproveResult(approved_ids=approved_ids, failures=failures)
@@ -901,6 +1015,34 @@ def submit_goal_self_review(
         db.add(review)
     # Advance the goal's lifecycle state.
     goal.approval_status = _self_reviewed_state(half)
+
+    # Notify the owner's CURRENT mentor that a self-review is ready to review
+    # (in-app). Skip when there's no live mentor (unassigned / soft-deleted).
+    mentor = (
+        db.query(User)
+        .filter(User.id == current_user.mentor_id, User.is_deleted == False)  # noqa: E712
+        .first()
+        if current_user.mentor_id
+        else None
+    )
+    if mentor is not None:
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=mentor.id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_self_review_submitted",
+            title="Self-review submitted",
+            body=(
+                f'{current_user.full_name} submitted their {half} self-review '
+                f'on "{goal.title}".'
+            ),
+            link="/annual-goals?tab=team",
+            entity_type="goal",
+            entity_id=goal.id,
+            actor_id=current_user.id,
+        )
+
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
@@ -997,6 +1139,7 @@ def submit_goal_mentor_review(
     payload: GoalMentorReviewSubmit,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
     Mentor submits their review of a mentee's self-review for one half.
@@ -1089,6 +1232,29 @@ def submit_goal_mentor_review(
         db.add(mentor_review)
     # Advance the goal's lifecycle state.
     goal.approval_status = _mentor_reviewed_state(half)
+
+    # Notify the goal owner their mentor review is in (in-app + email).
+    create_notification(
+        db,
+        org_id=current_user.org_id,
+        recipient_id=goal.user_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="goal_mentor_review_submitted",
+        title="Mentor review submitted",
+        body=(
+            f'{current_user.full_name} completed the {half} mentor review on '
+            f'your goal "{goal.title}".'
+        ),
+        link="/annual-goals?tab=my",
+        entity_type="goal",
+        entity_id=goal.id,
+        actor_id=current_user.id,
+        email=True,
+        background_tasks=background_tasks,
+        recipient_email=goal_owner.email,
+        cta_label="View review",
+    )
+
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 

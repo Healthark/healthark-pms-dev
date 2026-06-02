@@ -1,4 +1,4 @@
-import { UserCircle, Check, RotateCcw, Link } from "lucide-react";
+import { UserCircle, Check, RotateCcw, Link, Send } from "lucide-react";
 import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
@@ -17,6 +17,10 @@ interface TeamGoalCardProps {
     cycleHalf: SelfReviewCycleHalf,
   ) => void;
   readonly isActing: boolean;
+  /** Optional — when provided, an approved goal shows a "Remind" button that
+   *  nudges the mentee to file their self-review. Omitted by read-only views. */
+  readonly onRemind?: (goal: TeamGoal) => void;
+  readonly isReminding?: boolean;
   /** Forwarded to the status badge so mentor-facing views can show
    *  "Mentor Review Pending" instead of "Self-Reviewed" for H1/H2. */
   readonly statusViewerRole?: "self" | "mentor";
@@ -28,6 +32,8 @@ export function TeamGoalCard({
   onRequestChanges,
   onSelectHalf,
   isActing,
+  onRemind,
+  isReminding,
   statusViewerRole,
 }: TeamGoalCardProps) {
   const isSubmitted = goal.approval_status === "pending_approval";
@@ -106,11 +112,25 @@ export function TeamGoalCard({
         )}
 
         {isApproved && (
-          <SelfReviewCycleMenu
-            goal={goal}
-            mode="mentor"
-            onSelect={(half) => onSelectHalf(goal, half)}
-          />
+          <>
+            {onRemind && (
+              <button
+                type="button"
+                onClick={() => onRemind(goal)}
+                disabled={isReminding}
+                aria-label={`Send ${goal.owner_name} a self-review reminder`}
+                title={`Send ${goal.owner_name} a self-review reminder`}
+                className="flex items-center justify-center rounded-md border border-border p-1.5 text-text-muted hover:bg-brand/10 hover:text-brand disabled:opacity-50 transition-colors"
+              >
+                <Send className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+            <SelfReviewCycleMenu
+              goal={goal}
+              mode="mentor"
+              onSelect={(half) => onSelectHalf(goal, half)}
+            />
+          </>
         )}
 
         {isChangesRequested && (
