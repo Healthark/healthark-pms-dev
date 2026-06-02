@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.notification_models import Notification
+from app.models.project_models import ProjectAssignment
 from app.models.user_models import User
 from app.services.send_email import is_smtp_configured, send_notification_email
 
@@ -199,6 +200,28 @@ def mentor_users(db: Session, org_id: int) -> list[User]:
             User.org_id == org_id,
             User.is_deleted == False,  # noqa: E712
             User.id.in_(mentor_ids),
+        )
+        .all()
+    )
+
+
+def project_team_users(db: Session, org_id: int, project_id: int) -> list[User]:
+    """Active users assigned to a project (distinct) — the audience for
+    project-level notices like 'project completed'."""
+    user_ids = (
+        db.query(ProjectAssignment.user_id)
+        .filter(
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.org_id == org_id,
+        )
+        .distinct()
+    )
+    return (
+        db.query(User)
+        .filter(
+            User.org_id == org_id,
+            User.is_deleted == False,  # noqa: E712
+            User.id.in_(user_ids),
         )
         .all()
     )
