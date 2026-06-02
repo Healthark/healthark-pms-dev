@@ -5,7 +5,7 @@ Replaces the 8 per-competency text columns on ``goal_self_reviews`` and
 
 The form UX is changing from "8 textareas, one per competency" to "one
 paragraph + a role-expectations reference panel for Firm Growth and
-Competency & Skills" — mirroring the Annual Review self-appraisal shape.
+Competency & Skills" — mirroring the Annual Review self-review shape.
 
 Data migration:
     For each existing row, populate ``self_overall_review`` /

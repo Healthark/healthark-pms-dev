@@ -11,7 +11,7 @@
 import { useState } from "react";
 import {
   Eye, LayoutGrid, Loader2, Lock, Search, Table2, UserCircle,
-  ClipboardCheck,
+  ClipboardCheck, Pencil,
 } from "lucide-react";
 import type {
   AnnualReview,
@@ -60,10 +60,15 @@ const SORT_CONFIG: Record<
 function SelfReviewCard({
   review,
   onView,
+  onEdit,
+  isEditable,
   finalRatingVisible,
 }: {
   readonly review: AnnualReview;
   readonly onView: (r: AnnualReview) => void;
+  readonly onEdit: (r: AnnualReview) => void;
+  /** True for the active cycle's draft — show Edit instead of View. */
+  readonly isEditable: boolean;
   readonly finalRatingVisible: boolean;
 }) {
   return (
@@ -102,14 +107,25 @@ function SelfReviewCard({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onView(review)}
-        className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
-      >
-        <Eye className="h-4 w-4" aria-hidden="true" />
-        View
-      </button>
+      {isEditable ? (
+        <button
+          type="button"
+          onClick={() => onEdit(review)}
+          className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
+        >
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+          Edit Draft
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onView(review)}
+          className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
+        >
+          <Eye className="h-4 w-4" aria-hidden="true" />
+          View
+        </button>
+      )}
     </div>
   );
 }
@@ -147,9 +163,23 @@ function LoadingState() {
 interface SelfReviewTabProps {
   readonly reviews: readonly AnnualReview[];
   readonly isLoading: boolean;
+  /** Active cycle label — the only review a draft can be edited for. */
+  readonly activeCycle: string;
+  /** Open the self-review form to edit the active-cycle draft. */
+  readonly onEditDraft: (review: AnnualReview) => void;
 }
 
-export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
+/** A row is editable (Edit, not View) when it's the active cycle's draft. */
+function isEditableDraft(r: AnnualReview, activeCycle: string): boolean {
+  return r.status === "draft" && r.cycle_name === activeCycle;
+}
+
+export function SelfReviewTab({
+  reviews,
+  isLoading,
+  activeCycle,
+  onEditDraft,
+}: SelfReviewTabProps) {
   const { settings } = useSystemSettings();
   const finalRatingVisible =
     settings?.annual_review_final_rating_visible ?? false;
@@ -303,6 +333,8 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
               key={r.id}
               review={r}
               onView={setViewTarget}
+              onEdit={onEditDraft}
+              isEditable={isEditableDraft(r, activeCycle)}
               finalRatingVisible={finalRatingVisible}
             />
           ))}
@@ -373,13 +405,23 @@ export function SelfReviewTab({ reviews, isLoading }: SelfReviewTabProps) {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setViewTarget(r)}
-                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
-                    >
-                      <Eye className="h-3 w-3" /> View
-                    </button>
+                    {isEditableDraft(r, activeCycle) ? (
+                      <button
+                        type="button"
+                        onClick={() => onEditDraft(r)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                      >
+                        <Pencil className="h-3 w-3" /> Edit
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setViewTarget(r)}
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                      >
+                        <Eye className="h-3 w-3" /> View
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -84,7 +84,7 @@ export interface GoalSelfReview {
   goal_id: number;
   cycle_half: SelfReviewCycleHalf;
   submitted_at: string;
-  /** Single freeform paragraph, mirrors the Annual Review self-appraisal shape. */
+  /** Single freeform paragraph, mirrors the Annual Review self-review shape. */
   self_overall_review: string;
   /** True while the row is a saved-but-not-submitted draft. Mentors only
    *  see rows where this is false (drafts are owner-only). */
