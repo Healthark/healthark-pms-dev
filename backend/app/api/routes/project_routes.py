@@ -16,10 +16,16 @@ Changes:
 
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import func
 
 from app.api.dependencies import DbSession, CurrentUser
+from app.models.notification_models import NotificationCategory
+from app.services.notifications import (
+    broadcast_notification,
+    create_notification,
+    project_team_users,
+)
 from app.models.project_models import (
     Project, ProjectAssignment,
     PROJECT_STATUS_ACTIVE, PROJECT_STATUS_COMPLETED,
@@ -185,6 +191,7 @@ def create_project(
     project_in: ProjectCreate,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """Create a project with optional initial team assignments."""
     _require_admin(current_user)
@@ -228,6 +235,29 @@ def create_project(
             evaluator_type=assignment_in.evaluator_type,
             assigned_date=assignment_in.assigned_date,
         ))
+
+    # Notify each initial team member they've been added (in-app + email).
+    member_ids = [a.user_id for a in project_in.assignments]
+    if member_ids:
+        members = db.query(User).filter(
+            User.org_id == current_user.org_id,
+            User.is_deleted == False,  # noqa: E712
+            User.id.in_(member_ids),
+        ).all()
+        broadcast_notification(
+            db,
+            org_id=current_user.org_id,
+            recipients=members,
+            category=NotificationCategory.PERSONAL.value,
+            type="project_assigned",
+            title="Added to a project",
+            body=f'You have been added to the project "{new_project.name}".',
+            link="/project-reviews",
+            actor_id=current_user.id,
+            send_email=True,
+            background_tasks=background_tasks,
+            cta_label="View project reviews",
+        )
 
     db.commit()
     db.refresh(new_project)
@@ -425,6 +455,7 @@ def add_assignment(
     assignment_in: AssignmentCreate,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """Add a team member to a project. Auto-fills role and department from user profile."""
     _require_admin(current_user)
@@ -508,6 +539,29 @@ def add_assignment(
         assigned_date=assignment_in.assigned_date,
     )
     db.add(new_assignment)
+
+    # Notify the newly-assigned member (in-app + email).
+    member = db.query(User).filter(
+        User.id == assignment_in.user_id, User.org_id == current_user.org_id
+    ).first()
+    create_notification(
+        db,
+        org_id=current_user.org_id,
+        recipient_id=assignment_in.user_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="project_assigned",
+        title="Added to a project",
+        body=f'You have been added to the project "{project.name}".',
+        link="/project-reviews",
+        entity_type="project",
+        entity_id=project.id,
+        actor_id=current_user.id,
+        email=True,
+        background_tasks=background_tasks,
+        recipient_email=member.email if member else None,
+        cta_label="View project reviews",
+    )
+
     db.commit()
     db.refresh(new_assignment)
 
@@ -635,6 +689,7 @@ def complete_project(
     project_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """Mark a project as completed (Admin-only).
 
@@ -666,6 +721,25 @@ def complete_project(
         project.status = PROJECT_STATUS_COMPLETED
         project.completed_at = datetime.now(timezone.utc)
         project.completed_by_id = current_user.id
+
+        # Notify the team the project is complete (in-app + email). Only on the
+        # active → completed transition (re-completing is a no-op above).
+        team = project_team_users(db, current_user.org_id, project.id)
+        broadcast_notification(
+            db,
+            org_id=current_user.org_id,
+            recipients=team,
+            category=NotificationCategory.PERSONAL.value,
+            type="project_completed",
+            title="Project completed",
+            body=f'The project "{project.name}" has been marked complete.',
+            link="/project-reviews",
+            actor_id=current_user.id,
+            send_email=True,
+            background_tasks=background_tasks,
+            cta_label="View project reviews",
+        )
+
         db.commit()
         db.refresh(project)
 
