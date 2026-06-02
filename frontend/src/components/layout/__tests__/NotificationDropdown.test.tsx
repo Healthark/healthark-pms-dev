@@ -99,6 +99,17 @@ describe("NotificationDropdown", () => {
     expect(props.onMarkRead).toHaveBeenCalledWith(11);
   });
 
+  it("hides the description until the notification is clicked", async () => {
+    const user = userEvent.setup();
+    renderDropdown();
+    // Collapsed: only the title is shown.
+    expect(screen.getByText("Goal approved")).toBeInTheDocument();
+    expect(screen.queryByText("Your goal was approved.")).not.toBeInTheDocument();
+    // Clicking the row reveals its description.
+    await user.click(screen.getByRole("button", { name: /Goal approved/ }));
+    expect(screen.getByText("Your goal was approved.")).toBeInTheDocument();
+  });
+
   it("'Mark all as read' clears the active tab", async () => {
     const user = userEvent.setup();
     const props = renderDropdown();

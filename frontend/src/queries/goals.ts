@@ -224,6 +224,12 @@ export function useSaveMentorReviewDraft() {
   });
 }
 
+export function useRemindSelfReview() {
+  return useMutation({
+    mutationFn: (goalId: number) => goalService.remindSelfReview(goalId),
+  });
+}
+
 export function useAddCriterion() {
   const qc = useQueryClient();
   return useMutation({

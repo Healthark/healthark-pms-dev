@@ -375,4 +375,10 @@ export const goalService = {
     });
     return res.data;
   },
+
+  // Mentor nudges a mentee to complete the self-review on an approved goal
+  // (in-app + email). Fire-and-forget — returns 204.
+  remindSelfReview: async (goalId: number): Promise<void> => {
+    await apiClient.post(`/goals/${goalId}/self-review-reminder`, {});
+  },
 };

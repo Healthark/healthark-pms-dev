@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Info, CheckCircle, BellDot, Check } from "lucide-react";
+import { AlertTriangle, Info, CheckCircle, BellDot, Check, ChevronDown } from "lucide-react";
 import type {
   NotificationItem,
   StoredNotificationItem,
@@ -88,6 +88,8 @@ export function NotificationDropdown({
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("notifications");
+  // Stored rows show title-only; clicking one reveals its description.
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   // Navigate to a row's target page, then dismiss the dropdown.
   const handleNavigate = (to: string) => {
@@ -134,41 +136,64 @@ export function NotificationDropdown({
       </span>
     ) : null;
 
-  // Shared renderer for a stored row (personal or announcement).
-  const renderStored = (item: StoredNotificationItem) => (
-    <li
-      key={item.id}
-      className={`flex items-stretch ${item.is_read ? "bg-surface" : "bg-blue-50 dark:bg-blue-950/40"}`}
-    >
-      <button
-        type="button"
-        onClick={() => item.link && handleNavigate(item.link)}
-        className={`flex flex-1 items-start gap-3 px-4 py-3 text-left transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
-          item.link ? "hover:opacity-80" : "cursor-default"
-        }`}
+  // Shared renderer for a stored row (personal or announcement). Collapsed it
+  // shows the title only; clicking the row reveals the description (and an
+  // "Open" link when the notification deep-links somewhere).
+  const renderStored = (item: StoredNotificationItem) => {
+    const isExpanded = expandedId === item.id;
+    return (
+      <li
+        key={item.id}
+        className={item.is_read ? "bg-surface" : "bg-blue-50 dark:bg-blue-950/40"}
       >
-        <BellDot
-          className={`h-4 w-4 mt-0.5 shrink-0 ${item.is_read ? "text-text-muted" : "text-blue-500 dark:text-blue-400 dark:text-blue-300"}`}
-          aria-hidden="true"
-        />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-text-main">{item.title}</p>
-          {item.body && <p className="mt-0.5 text-xs text-text-muted">{item.body}</p>}
+        <div className="flex items-stretch">
+          <button
+            type="button"
+            onClick={() => setExpandedId(isExpanded ? null : item.id)}
+            aria-expanded={isExpanded}
+            className="flex flex-1 items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+          >
+            <BellDot
+              className={`h-4 w-4 shrink-0 ${item.is_read ? "text-text-muted" : "text-blue-500 dark:text-blue-400 dark:text-blue-300"}`}
+              aria-hidden="true"
+            />
+            <p className="flex-1 text-sm font-medium text-text-main">{item.title}</p>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-text-muted transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </button>
+          {!item.is_read && (
+            <button
+              type="button"
+              onClick={() => onMarkRead(item.id)}
+              aria-label="Mark as read"
+              title="Mark as read"
+              className="flex shrink-0 items-center px-3 text-text-muted hover:text-brand transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+            >
+              <Check className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
         </div>
-      </button>
-      {!item.is_read && (
-        <button
-          type="button"
-          onClick={() => onMarkRead(item.id)}
-          aria-label="Mark as read"
-          title="Mark as read"
-          className="flex shrink-0 items-center px-3 text-text-muted hover:text-brand transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
-        >
-          <Check className="h-4 w-4" aria-hidden="true" />
-        </button>
-      )}
-    </li>
-  );
+        {isExpanded && (
+          <div className="pl-11 pr-4 pb-3 -mt-1">
+            {item.body && (
+              <p className="text-xs text-text-muted whitespace-pre-wrap">{item.body}</p>
+            )}
+            {item.link && (
+              <button
+                type="button"
+                onClick={() => item.link && handleNavigate(item.link)}
+                className="mt-1.5 text-[11px] font-medium text-brand hover:underline"
+              >
+                Open →
+              </button>
+            )}
+          </div>
+        )}
+      </li>
+    );
+  };
 
   const notificationsEmpty = notifications.length === 0 && personal.length === 0;
   // "Mark all as read" applies to whichever tab is active. Computed standing

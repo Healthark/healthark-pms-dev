@@ -43,8 +43,9 @@ Both bell tabs render empty until later PRs wire the per-module hooks.
   `personal` + `announcements`; `markAllRead(category?)` is category-aware.
 - **`NotificationDropdown` is now two-tabbed** — *Notifications* (computed
   standing alerts + stored personal events) and *Announcements* (stored
-  broadcasts). Stored rows render `title` + `body`, deep-link via their `link`
-  when present, and carry the per-row ✓ tick + a per-tab "Mark all as read".
+  broadcasts). Stored rows are **collapsed to the title**; clicking a row
+  reveals its `body` (and an "Open →" deep-link when `link` is set). They
+  carry the per-row ✓ tick + a per-tab "Mark all as read".
 - **Computed standing alerts are NOT dismissable** — they represent live work
   (e.g. "1 goal from your team awaits approval") and clear themselves when the
   underlying state resolves (approve the goal → the count drops to 0). So they
