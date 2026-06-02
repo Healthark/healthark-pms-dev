@@ -2,7 +2,7 @@
  * GoalSelfReviewModal.tsx — Owner's (or mentor-view) reflection form for
  * a single half (H1 / H2) of an approved annual goal.
  *
- * Form shape mirrors the Annual Review self-appraisal: one freeform
+ * Form shape mirrors the Annual Review self-review: one freeform
  * paragraph capturing the reflection. Above the textarea, two collapsible
  * panels surface the role expectations for **Firm Growth** and **Competency
  * & Skills** as a reference rubric — scoped to whichever role the *goal

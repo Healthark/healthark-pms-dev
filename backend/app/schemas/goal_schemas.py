@@ -178,7 +178,7 @@ class GoalSelfReviewSubmit(BaseModel):
     Each submission is one-shot — once persisted for a given
     (goal_id, cycle_half) it cannot be re-submitted.
 
-    Single freeform paragraph mirroring the Annual Review's self-appraisal
+    Single freeform paragraph mirroring the Annual Review's self-review
     shape; Firm Growth and Competency & Skills role expectations are surfaced
     on the form as reference panels.
     """

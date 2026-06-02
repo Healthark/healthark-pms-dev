@@ -32,7 +32,14 @@ export function AnnualReviews() {
   const confirm = useConfirm();
 
   const isMentor = user?.has_mentees ?? false;
-  const activeCycle = settings?.active_cycle_name ?? "";
+  // Annual reviews are tagged with the BARE fiscal-year label (e.g. "FY26-27"),
+  // NOT the full active cycle ("H1 FY26-27"). Extract the FY token so it matches
+  // review.cycle_name — otherwise currentReview never resolves, so the header
+  // button always shows "add", Save Draft tries to re-create (409), and the
+  // draft Edit gate never fires.
+  const activeCycle = settings?.active_cycle_name
+    ? extractFyToken(settings.active_cycle_name)
+    : "";
   // Admin-controlled gate for the Self-Review button. Mirrors the
   // annual_goals_edit_enabled pattern used on the Annual Goals page —
   // when off the button is replaced with a "submissions closed" indicator
@@ -81,13 +88,12 @@ export function AnnualReviews() {
   const currentReview =
     reviews.find((r) => r.cycle_name === activeCycle) ?? null;
   const isCurrentDraft = currentReview?.status === "draft";
-  // Can open the form when there's no row yet, OR when the existing row
-  // is still a draft. Past-draft statuses lock the modal closed.
+  // The header "Self-Review" button is ADD-ONLY: it appears only when there is
+  // no review row yet for the active cycle. Once a draft exists it's edited
+  // from the My Review table's Edit action (single-purpose button) and once
+  // submitted the row is locked.
   const canStart =
-    !!activeCycle &&
-    moduleEnabled &&
-    (!currentReview || isCurrentDraft) &&
-    !isLoading;
+    !!activeCycle && moduleEnabled && !currentReview && !isLoading;
 
   const handleSubmit = async (payload: SelfReviewPayload) => {
     const ok = await confirm({
@@ -170,7 +176,7 @@ export function AnnualReviews() {
                 className="shrink-0 flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                {isCurrentDraft ? "Continue Draft" : "Self-Review"}
+                Self-Review
               </button>
             ) : !moduleEnabled ? (
               <div className="shrink-0 flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
@@ -204,7 +210,15 @@ export function AnnualReviews() {
 
         <div className="p-5">
           {activeTab === "my" && (
-            <SelfReviewTab reviews={reviews} isLoading={isLoading} />
+            <SelfReviewTab
+              reviews={reviews}
+              isLoading={isLoading}
+              activeCycle={activeCycle}
+              onEditDraft={() => {
+                setFormError("");
+                setShowForm(true);
+              }}
+            />
           )}
           {activeTab === "team" && isMentor && <TeamReviewTab />}
         </div>
