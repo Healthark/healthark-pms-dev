@@ -92,7 +92,7 @@ describe("NotifyTab — recipient targeting", () => {
       mentors_only: false,
       department_ids: [],
       designation_ids: [],
-      send_email: true,
+      channel: "both",
     });
   });
 
@@ -138,25 +138,37 @@ describe("NotifyTab — recipient targeting", () => {
   });
 });
 
-describe("NotifyTab — message length guidance", () => {
-  it("shows a word counter when email is on (the default)", () => {
+describe("NotifyTab — channel + message length guidance", () => {
+  it("defaults to the Both channel with a character counter", () => {
     render(<NotifyTab />);
+    expect(screen.getByRole("radio", { name: "Both" })).toBeChecked();
+    expect(screen.getByText(/\/100 characters/)).toBeInTheDocument();
+  });
+
+  it("switches to a word counter when the Email channel is selected", async () => {
+    const user = userEvent.setup();
+    render(<NotifyTab />);
+    await user.click(screen.getByRole("radio", { name: "Email" }));
     expect(screen.getByText(/\/100 words/)).toBeInTheDocument();
   });
 
-  it("switches to a character counter when email is off", async () => {
+  it("dispatches the selected channel in the payload", async () => {
     const user = userEvent.setup();
     render(<NotifyTab />);
-    await user.click(screen.getByLabelText(/also send email/i)); // default true → off
-    expect(screen.getByText(/\/100 characters/)).toBeInTheDocument();
+    await fillMessage(user);
+    await user.click(screen.getByRole("radio", { name: "In-app" }));
+    await user.click(screen.getByRole("button", { name: /send announcement/i }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "in_app" }),
+    );
   });
 
   it("warns past the in-app limit but still allows sending (soft)", async () => {
     const user = userEvent.setup();
     render(<NotifyTab />);
-    await fillMessage(user); // preset body is well over 100 chars
-    await user.click(screen.getByLabelText(/also send email/i)); // → in-app, 100-char cap
-
+    await fillMessage(user); // preset body is well over 100 chars (in-app cap)
+    // Default channel "both" already writes in-app → 100-char cap applies.
     expect(screen.getByText(/over recommended length/i)).toBeInTheDocument();
 
     // Soft warning — Send is not disabled and still dispatches.

@@ -128,11 +128,14 @@ export function NotificationPanel({
         : "border-transparent text-text-muted hover:text-text-main"
     }`;
 
-  const countBadge = (n: number) =>
-    n > 0 ? (
-      <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-brand/10 px-1.5 text-[10px] font-bold text-brand">
-        {n}
-      </span>
+  // A small unread dot beside a tab label — mirrors the bell-icon dot rather
+  // than showing a number (the count now lives on the bell badge).
+  const unreadDot = (show: boolean) =>
+    show ? (
+      <span
+        className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle"
+        aria-hidden="true"
+      />
     ) : null;
 
   // Shared renderer for a stored row (personal or announcement). The whole row
@@ -225,10 +228,10 @@ export function NotificationPanel({
       {/* Tab bar — two equal, centered halves */}
       <div className="flex shrink-0 border-b border-border">
         <button type="button" className={tabCls("notifications")} onClick={() => setTab("notifications")}>
-          Notifications{countBadge(notificationsCount)}
+          Notifications{unreadDot(notificationsCount > 0)}
         </button>
         <button type="button" className={tabCls("announcements")} onClick={() => setTab("announcements")}>
-          Announcements{countBadge(announcementsUnread)}
+          Announcements{unreadDot(announcementsUnread > 0)}
         </button>
       </div>
 

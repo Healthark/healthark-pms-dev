@@ -38,10 +38,11 @@ export function Topbar() {
   const announcements = summary?.announcements ?? [];
   const personalUnread = personal.filter((n) => !n.is_read).length;
   const announcementsUnread = announcements.filter((n) => !n.is_read).length;
-  const hasNotifications =
-    computedNotifications.length > 0 ||
-    personalUnread > 0 ||
-    announcementsUnread > 0;
+  // Total unread across computed standing alerts + both stored tabs. Drives
+  // the numeric badge on the bell.
+  const unreadCount =
+    computedNotifications.length + personalUnread + announcementsUnread;
+  const hasNotifications = unreadCount > 0;
 
   const handleBellClick = useCallback(() => {
     if (anchorRect) {
@@ -115,16 +116,18 @@ export function Topbar() {
           className="relative p-2 text-text-muted hover:text-brand transition-colors rounded-full hover:bg-surface-muted"
           aria-label={
             hasNotifications
-              ? `Notifications (${computedNotifications.length + personalUnread + announcementsUnread} new)`
+              ? `Notifications (${unreadCount} new)`
               : "Notifications"
           }
           aria-expanded={anchorRect !== null}
           aria-haspopup="dialog"
         >
           <Bell className="w-5 h-5" />
-          {/* Red dot — only shown when there are real notifications */}
+          {/* Unread count badge — replaces the old single dot. */}
           {hasNotifications && (
-            <span className="absolute top-1.5 right-2 w-2 h-2 bg-accent rounded-full border-2 border-surface" aria-hidden="true" />
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white border-2 border-surface">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
           )}
         </button>
 

@@ -153,6 +153,9 @@ export interface UserUpdatePayload {
   mentor_id?: number | null;
 }
 
+/** Delivery channel for an Admin Notify broadcast. */
+export type NotifyChannel = "email" | "in_app" | "both";
+
 /** Body for the Admin "Notify" broadcast (POST /admin/notify).
  *  Recipients = active org users narrowed by the (AND-combined) filters;
  *  with no filter set, everyone is targeted. */
@@ -165,7 +168,8 @@ export interface AdminNotifyPayload {
   department_ids: number[];
   /** Restrict to these designations (any of); empty = no designation filter. */
   designation_ids: number[];
-  send_email: boolean;
+  /** "in_app" = bell only, "email" = email only, "both" = both. */
+  channel: NotifyChannel;
 }
 
 export interface AdminNotifyResult {

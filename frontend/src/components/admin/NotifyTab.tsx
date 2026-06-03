@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import { Megaphone, Send, Building2, Briefcase, Users2 } from "lucide-react";
 import { useSendNotify } from "../../queries/adminSettings";
+import type { NotifyChannel } from "../../services/admin.service";
 import { useDepartments, useDesignations } from "../../queries/adminReferenceData";
 import { useUsers } from "../../queries/users";
 import { useToast } from "../../hooks/useToast";
@@ -48,10 +49,16 @@ function toggleId(list: number[], id: number): number[] {
 }
 
 // Message length guidance (soft — the counter warns but never blocks sending).
-// In-app rows should stay glanceable; email has room for a fuller note, so the
-// cap relaxes when "Also send email" is on.
+// Anything that writes an in-app row (in_app / both) stays glanceable at ~100
+// characters; an email-only send has room for ~100 words.
 const IN_APP_CHAR_LIMIT = 100;
 const EMAIL_WORD_LIMIT = 100;
+
+const CHANNELS: { value: NotifyChannel; label: string }[] = [
+  { value: "in_app", label: "In-app" },
+  { value: "email", label: "Email" },
+  { value: "both", label: "Both" },
+];
 
 /** Word count (whitespace-delimited); 0 for blank/whitespace-only input. */
 function countWords(text: string): number {
@@ -74,7 +81,7 @@ export function NotifyTab() {
   const [mentorsOnly, setMentorsOnly] = useState(false);
   const [departmentIds, setDepartmentIds] = useState<number[]>([]);
   const [designationIds, setDesignationIds] = useState<number[]>([]);
-  const [sendEmail, setSendEmail] = useState(true);
+  const [channel, setChannel] = useState<NotifyChannel>("both");
 
   const applyPreset = (key: string) => {
     const preset = PRESETS.find((p) => p.key === key);
@@ -105,16 +112,17 @@ export function NotifyTab() {
   const hasContent = subject.trim().length > 0 && body.trim().length > 0;
   const canSend = hasContent && recipientCount > 0;
 
-  // Channel-dependent length guidance. With email on, the message can run to
-  // ~100 words; in-app-only keeps it to ~50 characters. Soft — `overLimit`
-  // only drives a red counter, it never disables Send.
+  // Channel-dependent length guidance. Email-only has room for ~100 words; any
+  // channel that writes an in-app row (in_app / both) keeps it to ~100
+  // characters. Soft — `overLimit` only drives a red counter, never disables Send.
+  const writesInApp = channel !== "email";
   const wordCount = countWords(body);
-  const overLimit = sendEmail
-    ? wordCount > EMAIL_WORD_LIMIT
-    : body.length > IN_APP_CHAR_LIMIT;
-  const counterText = sendEmail
-    ? `${wordCount}/${EMAIL_WORD_LIMIT} words`
-    : `${body.length}/${IN_APP_CHAR_LIMIT} characters`;
+  const overLimit = writesInApp
+    ? body.length > IN_APP_CHAR_LIMIT
+    : wordCount > EMAIL_WORD_LIMIT;
+  const counterText = writesInApp
+    ? `${body.length}/${IN_APP_CHAR_LIMIT} characters`
+    : `${wordCount}/${EMAIL_WORD_LIMIT} words`;
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
@@ -128,14 +136,19 @@ export function NotifyTab() {
     return parts.length > 0 ? parts.join(" · ") : "everyone";
   }, [mentorsOnly, departmentIds, designationIds]);
 
+  const channelPhrase: Record<NotifyChannel, string> = {
+    email: "email them",
+    in_app: "send an in-app notice",
+    both: "notify them in-app and by email",
+  };
+
   const handleSend = async () => {
     if (!canSend) return;
     const ok = await confirm({
       title: "Send announcement?",
       message:
-        `This will notify ${recipientCount} ` +
-        `${recipientCount === 1 ? "person" : "people"} (${filterSummary})` +
-        `${sendEmail ? " and send an email" : ""}.`,
+        `This will ${channelPhrase[channel]} for ${recipientCount} ` +
+        `${recipientCount === 1 ? "person" : "people"} (${filterSummary}).`,
       variant: "warning",
       confirmText: "Send",
     });
@@ -147,7 +160,7 @@ export function NotifyTab() {
         mentors_only: mentorsOnly,
         department_ids: departmentIds,
         designation_ids: designationIds,
-        send_email: sendEmail,
+        channel,
       });
       toast.success(
         `Announcement sent to ${result.recipients} ${
@@ -240,9 +253,9 @@ export function NotifyTab() {
             />
             <div className="mt-1 flex items-center justify-between text-[11px]">
               <span className="text-text-muted">
-                {sendEmail
-                  ? "Email is on — up to ~100 words."
-                  : "In-app only — keep it under ~50 characters."}
+                {writesInApp
+                  ? "In-app notice — keep it under ~100 characters."
+                  : "Email only — up to ~100 words."}
               </span>
               <span
                 id="notify-body-counter"
@@ -318,15 +331,31 @@ export function NotifyTab() {
             </div>
 
             <div className="border-t border-border pt-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-text-main">
-                <input
-                  type="checkbox"
-                  checked={sendEmail}
-                  onChange={(e) => setSendEmail(e.target.checked)}
-                  className="rounded border-border"
-                />
-                Also send email
-              </label>
+              <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-text-muted">
+                Channel
+              </div>
+              <div
+                role="radiogroup"
+                aria-label="Delivery channel"
+                className="flex overflow-hidden rounded-lg border border-border"
+              >
+                {CHANNELS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={channel === c.value}
+                    onClick={() => setChannel(c.value)}
+                    className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
+                      channel === c.value
+                        ? "bg-brand text-white"
+                        : "bg-surface text-text-main hover:bg-surface-muted"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Live recipient count */}

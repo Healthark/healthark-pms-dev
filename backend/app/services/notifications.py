@@ -118,6 +118,7 @@ def broadcast_notification(
     body: str,
     link: Optional[str] = None,
     actor_id: Optional[int] = None,
+    write_inapp: bool = True,
     send_email: bool = False,
     background_tasks: Optional[BackgroundTasks] = None,
     cta_label: Optional[str] = None,
@@ -128,29 +129,32 @@ def broadcast_notification(
 ) -> int:
     """Fan out one notification to many recipients (one row each).
 
-    Returns the recipient count. Rows are batch-added (not committed). When
-    ``send_email`` is set + SMTP configured + ``background_tasks`` present, a
-    single batched email task is enqueued so the SMTP connection is reused.
+    Returns the recipient count. When ``write_inapp`` is set (default) an in-app
+    row is batch-added per recipient (not committed). When ``send_email`` is set
+    + SMTP configured + ``background_tasks`` present, a single batched email task
+    is enqueued so the SMTP connection is reused. Setting ``write_inapp=False``
+    with ``send_email=True`` is an email-only broadcast (no in-app rows).
 
     ``email_subject``/``email_intro``/``email_details`` are shared by every
     recipient; the per-recipient greeting name is taken from each ``User`` so a
     fan-out email still addresses people by name.
     """
-    rows = [
-        Notification(
-            org_id=org_id,
-            recipient_id=u.id,
-            actor_id=actor_id,
-            category=category,
-            type=type,
-            title=title,
-            body=body,
-            link=link,
-        )
-        for u in recipients
-    ]
-    if rows:
-        db.add_all(rows)
+    if write_inapp:
+        rows = [
+            Notification(
+                org_id=org_id,
+                recipient_id=u.id,
+                actor_id=actor_id,
+                category=category,
+                type=type,
+                title=title,
+                body=body,
+                link=link,
+            )
+            for u in recipients
+        ]
+        if rows:
+            db.add_all(rows)
 
     if send_email and background_tasks is not None and is_smtp_configured():
         # (email, name) pairs so the batch worker can greet each recipient.
@@ -169,7 +173,7 @@ def broadcast_notification(
                 details=email_details,
                 snapshot_title=snapshot_title,
             )
-    return len(rows)
+    return len(recipients)
 
 
 def _send_batch_emails(
