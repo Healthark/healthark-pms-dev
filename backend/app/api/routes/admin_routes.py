@@ -72,7 +72,7 @@ from app.services.notifications import (
     active_org_users,
     broadcast_notification,
     create_notification,
-    mentor_users,
+    notify_audience,
 )
 from app.services.send_email import (
     is_smtp_configured,
@@ -969,19 +969,21 @@ def admin_notify(
     background_tasks: BackgroundTasks,
 ):
     """
-    Manual org-wide announcement from the Admin "Notify" tab.
+    Manual targeted announcement from the Admin "Notify" tab.
 
-    Fans out an in-app announcement (Announcements tab) to the chosen audience
-    and, when ``send_email`` is set, also emails them. This is the manual
-    channel for calendar-transition reminders ("the second half has started",
-    "the new financial year has begun") — there is no scheduler.
+    Fans out an in-app announcement (Announcements tab) to the recipients
+    resolved from the request's filters (mentors-only / departments /
+    designations, AND-combined; no filter → everyone) and, when ``send_email``
+    is set, also emails them.
     """
     _require_admin(current_user)
 
-    recipients = (
-        mentor_users(db, current_user.org_id)
-        if payload.audience == "mentors"
-        else active_org_users(db, current_user.org_id)
+    recipients = notify_audience(
+        db,
+        current_user.org_id,
+        mentors_only=payload.mentors_only,
+        department_ids=payload.department_ids,
+        designation_ids=payload.designation_ids,
     )
     count = broadcast_notification(
         db,

@@ -59,7 +59,16 @@ def db():
 _n = {"i": 0}
 
 
-def _user(db, org_id, *, role="Staff", mentor_id=None, is_deleted=False):
+def _user(
+    db,
+    org_id,
+    *,
+    role="Staff",
+    mentor_id=None,
+    is_deleted=False,
+    department_id=None,
+    designation_id=None,
+):
     _n["i"] += 1
     i = _n["i"]
     u = User(
@@ -71,6 +80,8 @@ def _user(db, org_id, *, role="Staff", mentor_id=None, is_deleted=False):
         password_hash="x",
         is_deleted=is_deleted,
         mentor_id=mentor_id,
+        department_id=department_id,
+        designation_id=designation_id,
     )
     db.add(u)
     db.flush()
@@ -269,7 +280,7 @@ def test_no_toggle_flip_emits_no_announcement(db):
 # ── Admin broadcast (admin_notify) ────────────────────────────────────
 
 
-def test_admin_notify_all_audience(db):
+def test_admin_notify_no_filter_targets_everyone(db):
     org = _org(db)
     admin = _user(db, org.id, role="Admin")
     _user(db, org.id, role="Staff")
@@ -278,9 +289,7 @@ def test_admin_notify_all_audience(db):
     active_count = db.query(User).filter(User.is_deleted == False).count()  # noqa: E712
 
     result = admin_notify(
-        AdminNotifyRequest(
-            subject="Heads up", body="Please read.", audience="all", send_email=False
-        ),
+        AdminNotifyRequest(subject="Heads up", body="Please read.", send_email=False),
         db,
         admin,
         BackgroundTasks(),
@@ -296,7 +305,7 @@ def test_admin_notify_all_audience(db):
     assert rows[0].actor_id == admin.id
 
 
-def test_admin_notify_mentors_audience(db):
+def test_admin_notify_mentors_only(db):
     org = _org(db)
     admin = _user(db, org.id, role="Admin")
     mentor = _user(db, org.id, role="Staff")
@@ -306,7 +315,7 @@ def test_admin_notify_mentors_audience(db):
 
     result = admin_notify(
         AdminNotifyRequest(
-            subject="For mentors", body="Review goals.", audience="mentors", send_email=False
+            subject="For mentors", body="Review goals.", mentors_only=True, send_email=False
         ),
         db,
         admin,
@@ -317,6 +326,75 @@ def test_admin_notify_mentors_audience(db):
     rows = db.query(Notification).filter(Notification.type == "admin_broadcast").all()
     assert len(rows) == 1
     assert rows[0].recipient_id == mentor.id
+
+
+def test_admin_notify_filters_by_department(db):
+    org = _org(db)
+    admin = _user(db, org.id, role="Admin", department_id=1)
+    a1 = _user(db, org.id, role="Staff", department_id=1)
+    _user(db, org.id, role="Staff", department_id=2)  # other dept — excluded
+    db.commit()
+
+    result = admin_notify(
+        AdminNotifyRequest(subject="Dept 1", body="b", department_ids=[1], send_email=False),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+    assert result.recipients == 2  # admin + a1, both in dept 1
+    recipients = {
+        r.recipient_id
+        for r in db.query(Notification).filter(Notification.type == "admin_broadcast")
+    }
+    assert recipients == {admin.id, a1.id}
+
+
+def test_admin_notify_filters_by_designation_across_departments(db):
+    org = _org(db)
+    admin = _user(db, org.id, role="Admin", department_id=1, designation_id=10)
+    c2 = _user(db, org.id, role="Staff", department_id=2, designation_id=10)  # same desig, other dept
+    _user(db, org.id, role="Staff", department_id=1, designation_id=11)  # other desig
+    db.commit()
+
+    result = admin_notify(
+        AdminNotifyRequest(subject="Consultants", body="b", designation_ids=[10], send_email=False),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+    assert result.recipients == 2  # designation 10 regardless of department
+    recipients = {
+        r.recipient_id
+        for r in db.query(Notification).filter(Notification.type == "admin_broadcast")
+    }
+    assert recipients == {admin.id, c2.id}
+
+
+def test_admin_notify_department_and_designation_are_anded(db):
+    org = _org(db)
+    admin = _user(db, org.id, role="Admin", department_id=1, designation_id=10)
+    _user(db, org.id, role="Staff", department_id=1, designation_id=11)  # right dept, wrong desig
+    _user(db, org.id, role="Staff", department_id=2, designation_id=10)  # wrong dept, right desig
+    db.commit()
+
+    result = admin_notify(
+        AdminNotifyRequest(
+            subject="Dept1 Consultants",
+            body="b",
+            department_ids=[1],
+            designation_ids=[10],
+            send_email=False,
+        ),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+    assert result.recipients == 1  # only the user in dept 1 AND designation 10
+    rows = db.query(Notification).filter(Notification.type == "admin_broadcast").all()
+    assert rows[0].recipient_id == admin.id
 
 
 def test_admin_notify_email_gated_by_smtp_config(db):
@@ -330,9 +408,7 @@ def test_admin_notify_email_gated_by_smtp_config(db):
     # configured — the email dispatch is the only thing gated. The in-app
     # rows always land regardless of SMTP state (env-independent invariant).
     result = admin_notify(
-        AdminNotifyRequest(
-            subject="Emailed?", body="Body.", audience="all", send_email=True
-        ),
+        AdminNotifyRequest(subject="Emailed?", body="Body.", send_email=True),
         db,
         admin,
         BackgroundTasks(),
@@ -353,7 +429,7 @@ def test_admin_notify_requires_admin(db):
 
     with pytest.raises(HTTPException) as exc:
         admin_notify(
-            AdminNotifyRequest(subject="x", body="y", audience="all", send_email=False),
+            AdminNotifyRequest(subject="x", body="y", send_email=False),
             db,
             staff,
             BackgroundTasks(),

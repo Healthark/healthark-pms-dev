@@ -243,6 +243,47 @@ def mentor_users(db: Session, org_id: int) -> list[User]:
     )
 
 
+def notify_audience(
+    db: Session,
+    org_id: int,
+    *,
+    mentors_only: bool = False,
+    department_ids: Optional[Sequence[int]] = None,
+    designation_ids: Optional[Sequence[int]] = None,
+) -> list[User]:
+    """Active org users narrowed by the Admin Notify filters (AND-combined).
+
+    No filter set → every active user. Each filter further narrows the set:
+    ``mentors_only`` keeps only users who mentor someone; ``department_ids`` /
+    ``designation_ids`` keep only users in those departments / designations.
+    Empty lists are treated as "no filter on that dimension".
+    """
+    query = db.query(User).filter(
+        User.org_id == org_id,
+        User.is_deleted == False,  # noqa: E712
+    )
+
+    if mentors_only:
+        mentor_ids = (
+            db.query(User.mentor_id)
+            .filter(
+                User.org_id == org_id,
+                User.is_deleted == False,  # noqa: E712
+                User.mentor_id.isnot(None),
+            )
+            .distinct()
+        )
+        query = query.filter(User.id.in_(mentor_ids))
+
+    if department_ids:
+        query = query.filter(User.department_id.in_(department_ids))
+
+    if designation_ids:
+        query = query.filter(User.designation_id.in_(designation_ids))
+
+    return query.all()
+
+
 def project_team_users(db: Session, org_id: int, project_id: int) -> list[User]:
     """Active users assigned to a project (distinct) — the audience for
     project-level notices like 'project completed'."""
