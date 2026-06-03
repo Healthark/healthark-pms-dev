@@ -754,6 +754,18 @@ def approve_goal(
             background_tasks=background_tasks,
             recipient_email=goal_owner.email,
             cta_label="View goal",
+            email_subject=f"Goal Approved: {goal.title}",
+            recipient_name=goal_owner.full_name,
+            email_intro=(
+                f'{current_user.full_name} has approved your goal "{goal.title}".'
+            ),
+            email_details=[
+                ("Goal Name", goal.title),
+                ("Approved By", current_user.full_name),
+                ("Approved On", goal.approved_at.strftime("%b %d, %Y")),
+                ("Status", "Approved"),
+            ],
+            snapshot_title="Goal Snapshot",
         )
     else:  # CHANGES_REQUESTED — in-app only.
         create_notification(
@@ -825,6 +837,19 @@ def remind_goal_self_review(
         background_tasks=background_tasks,
         recipient_email=goal_owner.email,
         cta_label="Complete self-review",
+        email_subject=f"Reminder: Complete your self-review for {goal.title}",
+        recipient_name=goal_owner.full_name,
+        email_intro=(
+            f'{current_user.full_name} is reminding you to complete your '
+            f'self-review for "{goal.title}". To submit it, open Annual Goals '
+            f"→ My Goals in your dashboard, or use the button below."
+        ),
+        email_details=[
+            ("Review Name", goal.title),
+            ("Reminded By", current_user.full_name),
+            ("Status", "Pending Action"),
+        ],
+        snapshot_title="Review Snapshot",
     )
     db.commit()
     return None

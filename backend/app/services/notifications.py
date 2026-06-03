@@ -53,6 +53,10 @@ def create_notification(
     recipient_email: Optional[str] = None,
     recipient_name: Optional[str] = None,
     cta_label: Optional[str] = None,
+    email_subject: Optional[str] = None,
+    email_intro: Optional[str] = None,
+    email_details: Optional[list[tuple[str, str]]] = None,
+    snapshot_title: str = "Snapshot",
 ) -> Notification:
     """Create one in-app notification row and optionally enqueue an email.
 
@@ -60,6 +64,11 @@ def create_notification(
     flushes it. Email (if requested) fires post-response via ``background_tasks``
     and is silently skipped when SMTP is unconfigured or no recipient email is
     known.
+
+    The in-app row always stays a clean ``title`` + short ``body``. The
+    ``email_*`` fields only enrich the email into the formal, snapshot style
+    (subject override, greeting via ``recipient_name``, lead paragraph, and a
+    labelled details table) — omit them and the email keeps the generic look.
     """
     notif = Notification(
         org_id=org_id,
@@ -89,6 +98,11 @@ def create_notification(
             cta_link=_abs_link(link),
             cta_label=cta_label,
             org_id=org_id,
+            subject=email_subject,
+            recipient_name=recipient_name,
+            intro=email_intro,
+            details=email_details,
+            snapshot_title=snapshot_title,
         )
     return notif
 
@@ -107,12 +121,20 @@ def broadcast_notification(
     send_email: bool = False,
     background_tasks: Optional[BackgroundTasks] = None,
     cta_label: Optional[str] = None,
+    email_subject: Optional[str] = None,
+    email_intro: Optional[str] = None,
+    email_details: Optional[list[tuple[str, str]]] = None,
+    snapshot_title: str = "Snapshot",
 ) -> int:
     """Fan out one notification to many recipients (one row each).
 
     Returns the recipient count. Rows are batch-added (not committed). When
     ``send_email`` is set + SMTP configured + ``background_tasks`` present, a
     single batched email task is enqueued so the SMTP connection is reused.
+
+    ``email_subject``/``email_intro``/``email_details`` are shared by every
+    recipient; the per-recipient greeting name is taken from each ``User`` so a
+    fan-out email still addresses people by name.
     """
     rows = [
         Notification(
@@ -131,35 +153,46 @@ def broadcast_notification(
         db.add_all(rows)
 
     if send_email and background_tasks is not None and is_smtp_configured():
-        targets = [u.email for u in recipients if u.email]
+        # (email, name) pairs so the batch worker can greet each recipient.
+        targets = [(u.email, u.full_name) for u in recipients if u.email]
         if targets:
             background_tasks.add_task(
                 _send_batch_emails,
-                to_emails=targets,
+                targets=targets,
                 title=title,
                 body=body,
                 cta_link=_abs_link(link),
                 cta_label=cta_label,
                 org_id=org_id,
+                subject=email_subject,
+                intro=email_intro,
+                details=email_details,
+                snapshot_title=snapshot_title,
             )
     return len(rows)
 
 
 def _send_batch_emails(
     *,
-    to_emails: Sequence[str],
+    targets: Sequence[tuple[str, Optional[str]]],
     title: str,
     body: str,
     cta_link: Optional[str],
     cta_label: Optional[str],
     org_id: int,
+    subject: Optional[str] = None,
+    intro: Optional[str] = None,
+    details: Optional[list[tuple[str, str]]] = None,
+    snapshot_title: str = "Snapshot",
 ) -> None:
     """Background worker: send the same notification email to many recipients.
 
-    Best-effort per recipient — a single failure is logged inside ``_send`` and
-    does not abort the rest of the batch.
+    ``targets`` is a sequence of ``(email, recipient_name)`` pairs so each
+    message can greet its recipient by name while sharing one subject / intro /
+    details block. Best-effort per recipient — a single failure is logged inside
+    ``_send`` and does not abort the rest of the batch.
     """
-    for to_email in to_emails:
+    for to_email, recipient_name in targets:
         send_notification_email(
             to_email=to_email,
             title=title,
@@ -167,6 +200,11 @@ def _send_batch_emails(
             cta_link=cta_link,
             cta_label=cta_label,
             org_id=org_id,
+            subject=subject,
+            recipient_name=recipient_name,
+            intro=intro,
+            details=details,
+            snapshot_title=snapshot_title,
         )
 
 

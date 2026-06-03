@@ -31,6 +31,7 @@ Security Layers:
                                    are True.
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -508,6 +509,22 @@ def submit_mentor_evaluation(
         background_tasks=background_tasks,
         recipient_email=employee.email if employee else None,
         cta_label="View review",
+        email_subject=(
+            f"Mentor Evaluation Submitted: {current_user.full_name} "
+            f"({review.cycle_name})"
+        ),
+        recipient_name=employee.full_name if employee else None,
+        email_intro=(
+            f"{current_user.full_name} has completed your {review.cycle_name} "
+            f"mentor evaluation. It is now with management for calibration."
+        ),
+        email_details=[
+            ("Submitted By", current_user.full_name),
+            ("Review Cycle", review.cycle_name),
+            ("Submitted On", datetime.now(timezone.utc).strftime("%b %d, %Y")),
+            ("Status", "Pending Management Calibration"),
+        ],
+        snapshot_title="Evaluation Snapshot",
     )
 
     db.commit()
