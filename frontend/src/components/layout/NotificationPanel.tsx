@@ -151,7 +151,7 @@ export function NotificationPanel({
             type="button"
             onClick={() => hasLink && item.link && handleNavigate(item.link)}
             disabled={!hasLink}
-            className="flex flex-1 items-start gap-3 px-4 py-3 text-left transition-opacity hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+            className="flex flex-1 items-start gap-3 px-4 pt-3 text-left transition-opacity hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
           >
             <BellDot
               className={`mt-0.5 h-4 w-4 shrink-0 ${item.is_read ? "text-text-muted" : "text-blue-500 dark:text-blue-400 dark:text-blue-300"}`}
@@ -166,11 +166,6 @@ export function NotificationPanel({
                   {timeAgo(item.created_at)}
                 </span>
               </div>
-              {item.body && (
-                <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">
-                  {item.body}
-                </p>
-              )}
             </div>
           </button>
           {!item.is_read && (
@@ -179,12 +174,21 @@ export function NotificationPanel({
               onClick={() => onMarkRead(item.id)}
               aria-label="Mark as read"
               title="Mark as read"
-              className="flex shrink-0 items-center px-3 text-text-muted hover:text-brand transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+              className="flex shrink-0 items-start px-3 pt-3 text-text-muted hover:text-brand transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
             >
               <Check className="h-4 w-4" aria-hidden="true" />
             </button>
           )}
         </div>
+        {/* Body sits outside the (possibly disabled) nav button so a long
+            announcement can scroll on its own. The scrollbar is hidden; the
+            box caps height and scrolls to hold ~100 words without inflating
+            the row. */}
+        {item.body && (
+          <div className="scrollbar-hide max-h-24 overflow-y-auto whitespace-pre-wrap px-4 pb-3 pl-11 text-xs text-text-muted">
+            {item.body}
+          </div>
+        )}
       </li>
     );
   };
@@ -212,7 +216,8 @@ export function NotificationPanel({
         position: "fixed",
         top: anchorRect.bottom + 8,
         right: window.innerWidth - anchorRect.right,
-        height: "50svh",
+        // Slightly taller than half-height so one more row/line is visible.
+        height: "calc(50svh + 3rem)",
         maxHeight,
         zIndex: 50,
       }}

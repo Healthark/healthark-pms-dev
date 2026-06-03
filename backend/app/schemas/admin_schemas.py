@@ -8,7 +8,7 @@ via a computed field so neither side needs to change.
 """
 
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -188,13 +188,19 @@ class YearPreflightResponse(BaseModel):
 # ── Admin Broadcast (Notify tab) ─────────────────────────────────────
 
 class AdminNotifyRequest(BaseModel):
-    """Body for POST /admin/notify — a manual org-wide announcement.
+    """Body for POST /admin/notify — a manual targeted announcement.
 
-    `preset` is a frontend convenience only (it pre-fills subject/body in the
-    UI); the backend treats `subject`/`body` as authoritative."""
+    Recipients are active org users narrowed by the (optional, AND-combined)
+    filters below. With no filter set, every active user is targeted:
+        * `mentors_only`     → restrict to users who mentor someone.
+        * `department_ids`   → restrict to these departments (any of).
+        * `designation_ids`  → restrict to these designations/job titles (any of).
+    `subject`/`body` are backend-authoritative (the UI presets only pre-fill)."""
     subject: str = Field(..., min_length=1, max_length=200)
     body: str = Field(..., min_length=1, max_length=4000)
-    audience: Literal["all", "mentors"] = "all"
+    mentors_only: bool = False
+    department_ids: list[int] = Field(default_factory=list)
+    designation_ids: list[int] = Field(default_factory=list)
     send_email: bool = False
 
 

@@ -153,11 +153,18 @@ export interface UserUpdatePayload {
   mentor_id?: number | null;
 }
 
-/** Body for the Admin "Notify" broadcast (POST /admin/notify). */
+/** Body for the Admin "Notify" broadcast (POST /admin/notify).
+ *  Recipients = active org users narrowed by the (AND-combined) filters;
+ *  with no filter set, everyone is targeted. */
 export interface AdminNotifyPayload {
   subject: string;
   body: string;
-  audience: "all" | "mentors";
+  /** Restrict to users who mentor someone. */
+  mentors_only: boolean;
+  /** Restrict to these departments (any of); empty = no department filter. */
+  department_ids: number[];
+  /** Restrict to these designations (any of); empty = no designation filter. */
+  designation_ids: number[];
   send_email: boolean;
 }
 
