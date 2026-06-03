@@ -146,6 +146,17 @@
     background: transparent;
   }
 
+  /* Opt-in: keep an element scrollable but hide its scrollbar entirely.
+     Used by compact scroll areas (e.g. a long announcement body in the
+     notification panel) where a visible bar would clutter the row. */
+  .scrollbar-hide {
+    scrollbar-width: none;            /* Firefox */
+    -ms-overflow-style: none;          /* IE / old Edge */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;                     /* WebKit / Chromium / Safari */
+  }
+
   /* ── Chrome / Edge autofill override ─────────────────────────────
      Browsers force a light-blue / yellow background on autofilled
      inputs via the :-webkit-autofill pseudo-class, and the standard

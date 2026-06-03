@@ -141,4 +141,15 @@ describe("NotificationPanel", () => {
     expect(screen.getByText(/all caught up/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Mark all as read" })).not.toBeInTheDocument();
   });
+
+  it("renders a long body in a scroll area with the scrollbar hidden", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(screen.getByRole("button", { name: /Announcements/ }));
+    const bodyEl = screen.getByText("Review mentee goals.");
+    // The body is a self-contained, scrollbar-hidden scroll area so a ~100-word
+    // announcement scrolls instead of inflating the row.
+    expect(bodyEl).toHaveClass("overflow-y-auto");
+    expect(bodyEl).toHaveClass("scrollbar-hide");
+  });
 });
