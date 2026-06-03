@@ -238,7 +238,7 @@ export default function AdminPanel() {
             onClick={() => setActiveTab("notify")}
           >
             <Megaphone className="h-4 w-4" aria-hidden="true" />
-            Notify
+            Announcement
           </button>
           {canSeeExport && (
             <button
