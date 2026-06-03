@@ -34,6 +34,12 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 
+# How long a stored notification lives before it's eligible for automatic
+# removal. Enforced two ways (no scheduler exists): a lazy purge on the
+# Topbar-summary read path, and a reusable CLI (app.scripts.purge_notifications)
+# that can be wired to cron. Both import this single source of truth.
+NOTIFICATION_RETENTION_DAYS = 100
+
 
 class NotificationCategory(str, enum.Enum):
     """Which Topbar tab a notification belongs to."""

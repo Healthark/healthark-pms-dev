@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Info, CheckCircle, BellDot, Check, ChevronDown } from "lucide-react";
+import { AlertTriangle, Info, CheckCircle, BellDot, Check } from "lucide-react";
 import type {
   NotificationItem,
   StoredNotificationItem,
 } from "../../services/notification.service";
+import { timeAgo } from "../../utils/timeAgo";
 
-interface NotificationDropdownProps {
+interface NotificationPanelProps {
   /** Computed standing counts — Notifications tab. */
   readonly notifications: NotificationItem[];
   /** Persisted personal events — Notifications tab. */
   readonly personal: StoredNotificationItem[];
   /** Persisted org-wide announcements — Announcements tab. */
   readonly announcements: StoredNotificationItem[];
-  /** DOMRect of the bell button — used to position the dropdown below it. */
+  /** DOMRect of the bell button — used to position the panel below it. */
   readonly anchorRect: DOMRect;
   readonly onClose: () => void;
   /** Mark a single stored row (personal or announcement) read, by id. */
@@ -67,7 +68,7 @@ type Tab = "notifications" | "announcements";
 
 function EmptyState({ label }: { readonly label: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-8 px-4 text-center">
+    <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
       <CheckCircle className="h-8 w-8 text-green-400" aria-hidden="true" />
       <p className="text-sm font-medium text-text-main">You're all caught up!</p>
       <p className="text-xs text-text-muted">{label}</p>
@@ -75,7 +76,7 @@ function EmptyState({ label }: { readonly label: string }) {
   );
 }
 
-export function NotificationDropdown({
+export function NotificationPanel({
   notifications,
   personal,
   announcements,
@@ -84,14 +85,12 @@ export function NotificationDropdown({
   onMarkRead,
   onMarkAllPersonal,
   onMarkAllAnnouncements,
-}: NotificationDropdownProps) {
+}: NotificationPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("notifications");
-  // Stored rows show title-only; clicking one reveals its description.
-  const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  // Navigate to a row's target page, then dismiss the dropdown.
+  // Navigate to a row's target page, then dismiss the panel.
   const handleNavigate = (to: string) => {
     onClose();
     navigate(to);
@@ -136,11 +135,12 @@ export function NotificationDropdown({
       </span>
     ) : null;
 
-  // Shared renderer for a stored row (personal or announcement). Collapsed it
-  // shows the title only; clicking the row reveals the description (and an
-  // "Open" link when the notification deep-links somewhere).
+  // Shared renderer for a stored row (personal or announcement). The whole row
+  // is a single button: it shows heading + short description + a relative
+  // timestamp, and navigates to the row's deep-link on click (when one is set).
+  // The ✓ affordance (unread rows only) marks read without navigating.
   const renderStored = (item: StoredNotificationItem) => {
-    const isExpanded = expandedId === item.id;
+    const hasLink = Boolean(item.link);
     return (
       <li
         key={item.id}
@@ -149,19 +149,29 @@ export function NotificationDropdown({
         <div className="flex items-stretch">
           <button
             type="button"
-            onClick={() => setExpandedId(isExpanded ? null : item.id)}
-            aria-expanded={isExpanded}
-            className="flex flex-1 items-center gap-3 px-4 py-3 text-left transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+            onClick={() => hasLink && item.link && handleNavigate(item.link)}
+            disabled={!hasLink}
+            className="flex flex-1 items-start gap-3 px-4 py-3 text-left transition-opacity hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
           >
             <BellDot
-              className={`h-4 w-4 shrink-0 ${item.is_read ? "text-text-muted" : "text-blue-500 dark:text-blue-400 dark:text-blue-300"}`}
+              className={`mt-0.5 h-4 w-4 shrink-0 ${item.is_read ? "text-text-muted" : "text-blue-500 dark:text-blue-400 dark:text-blue-300"}`}
               aria-hidden="true"
             />
-            <p className="flex-1 text-sm font-medium text-text-main">{item.title}</p>
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 text-text-muted transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
-              aria-hidden="true"
-            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="truncate text-sm font-medium text-text-main">
+                  {item.title}
+                </p>
+                <span className="shrink-0 text-[11px] text-text-muted">
+                  {timeAgo(item.created_at)}
+                </span>
+              </div>
+              {item.body && (
+                <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">
+                  {item.body}
+                </p>
+              )}
+            </div>
           </button>
           {!item.is_read && (
             <button
@@ -175,22 +185,6 @@ export function NotificationDropdown({
             </button>
           )}
         </div>
-        {isExpanded && (
-          <div className="pl-11 pr-4 pb-3 -mt-1">
-            {item.body && (
-              <p className="text-xs text-text-muted whitespace-pre-wrap">{item.body}</p>
-            )}
-            {item.link && (
-              <button
-                type="button"
-                onClick={() => item.link && handleNavigate(item.link)}
-                className="mt-1.5 text-[11px] font-medium text-brand hover:underline"
-              >
-                Open →
-              </button>
-            )}
-          </div>
-        )}
       </li>
     );
   };
@@ -204,21 +198,27 @@ export function NotificationDropdown({
   const activeMarkAll =
     tab === "notifications" ? onMarkAllPersonal : onMarkAllAnnouncements;
 
+  // Half-height vertical drawer anchored under the bell, scrollable. Capped so
+  // it never spills past the viewport bottom on short screens.
+  const maxHeight = Math.max(240, window.innerHeight - anchorRect.bottom - 16);
+
   return createPortal(
     <div
       ref={ref}
       role="dialog"
       aria-label="Notifications"
-      className="w-80 rounded-xl border border-border bg-surface shadow-lg overflow-hidden"
+      className="flex w-96 flex-col rounded-xl border border-border bg-surface shadow-lg overflow-hidden"
       style={{
         position: "fixed",
         top: anchorRect.bottom + 8,
         right: window.innerWidth - anchorRect.right,
+        height: "50svh",
+        maxHeight,
         zIndex: 50,
       }}
     >
       {/* Tab bar — two equal, centered halves */}
-      <div className="flex border-b border-border">
+      <div className="flex shrink-0 border-b border-border">
         <button type="button" className={tabCls("notifications")} onClick={() => setTab("notifications")}>
           Notifications{countBadge(notificationsCount)}
         </button>
@@ -229,7 +229,7 @@ export function NotificationDropdown({
 
       {/* "Mark all as read" — its own thin row so the tabs stay equal halves */}
       {activeClearable && (
-        <div className="flex justify-end border-b border-border px-3 py-1.5">
+        <div className="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
           <button
             type="button"
             onClick={activeMarkAll}
@@ -245,10 +245,11 @@ export function NotificationDropdown({
         (notificationsEmpty ? (
           <EmptyState label="No pending actions right now." />
         ) : (
-          <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+          <ul className="flex-1 divide-y divide-border overflow-y-auto">
             {/* Computed standing alerts — live to-dos, not dismissable. They
                 clear themselves when the underlying work is resolved, so there
-                is no ✓ tick; the whole row just deep-links to the action. */}
+                is no ✓ tick and no timestamp; the whole row deep-links to the
+                action. */}
             {notifications.map((n) => {
               const { icon: Icon, iconClass, bgClass } = SEVERITY_STYLES[n.severity];
               return (
@@ -274,7 +275,7 @@ export function NotificationDropdown({
         (announcements.length === 0 ? (
           <EmptyState label="No announcements right now." />
         ) : (
-          <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+          <ul className="flex-1 divide-y divide-border overflow-y-auto">
             {announcements.map(renderStored)}
           </ul>
         ))}
