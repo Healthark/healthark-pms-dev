@@ -31,17 +31,19 @@ removing the Primary, on each individual API call). Now:
   (native HTML5 drag-and-drop). Ordering is a within-session arrangement (the
   backend has no assignment order field).
 
-## Users & Projects tables — no internal scroll
-The Users and Projects tables were capped at `max-h-[75vh] overflow-auto` with a
-`sticky top-0` header, so 25 rows scrolled *inside* the table. Removed the
-internal scroll so the table grows to its content and the app shell's `<main>`
-(`overflow-y-auto`) scrolls instead — the page height adjusts to the record
-count. The header is now **non-sticky**: page-level sticky is unreliable under
-`<main>`'s `zoom: 0.9` (the very reason the table previously needed its own
-scroll context), so a non-sticky header is the correct trade for losing the
-internal scrollbox. Changed in `UsersTab.tsx` and `ProjectsTab.tsx`
-(`HEADER_CELL_CLS` drops `sticky top-0 z-20`; the wrapper drops
-`max-h-[75vh] overflow-auto`).
+## Users & Projects tables — no internal scroll, page-level sticky header
+The Users and Projects tables were capped at `max-h-[75vh] overflow-auto`, so 25
+rows scrolled *inside* the table. Removed the internal scroll so the table grows
+to its content and the app shell's `<main>` (`overflow-y-auto`) scrolls instead
+— the page height adjusts to the record count. The column header is **kept
+sticky** (`sticky top-0 z-20` per `<th>`, opaque bg) but now pins to `<main>`
+(the page scroll container) instead of an internal box, so the column names stay
+visible while reading down a long table. `<main>`'s `zoom: 0.9` doesn't affect a
+`top: 0` inset (0 scaled is 0), and its top padding scrolls away so the header
+pins flush at the scrollport top. Works because the tab card has no
+`overflow`/`transform` that would otherwise capture the sticky context. Changed
+in `UsersTab.tsx` and `ProjectsTab.tsx` (wrapper drops `max-h-[75vh]
+overflow-auto`; `HEADER_CELL_CLS` keeps `sticky top-0 z-20`).
 
 ## Tests
 - **`frontend/src/components/admin/__tests__/ProjectModal.test.tsx`** (2): a newly

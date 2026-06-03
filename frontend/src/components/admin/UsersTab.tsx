@@ -61,13 +61,17 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
-// Header cells. The table no longer scrolls internally — it grows to fit the
-// page (25 rows) and the app shell's <main> scrolls — so the header is NOT
-// sticky (page-level sticky is unreliable under <main>'s `zoom: 0.9`). Opaque
-// background + a per-cell bottom border (a <tr> border would not show under
-// border-separate).
+// Header cells, pinned to the page. The table has no internal scroll: it grows
+// to fit its rows and the app shell's <main> (overflow-y-auto) is the scroll
+// container, so `sticky top-0` pins each <th> to the top of <main> as the page
+// scrolls — the column names stay visible while reading down a long table.
+// Each <th> is pinned individually (sticky on <thead> is flaky cross-engine)
+// with a fully OPAQUE background + z-20 so rows scroll completely behind it,
+// and the bottom border lives on the cell so it travels with the pinned row
+// under border-separate. (Works because the tab card has no overflow/transform
+// that would otherwise capture the sticky context.)
 const HEADER_CELL_CLS =
-  "px-5 py-3 border-b border-border bg-surface-muted";
+  "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
 
 export function UsersTab({
   departments,
