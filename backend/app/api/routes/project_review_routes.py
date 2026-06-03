@@ -235,6 +235,7 @@ def get_my_projects(
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
             Project.is_deleted == False,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
         )
@@ -252,6 +253,7 @@ def get_my_projects(
         pm_assignment = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == a.project_id,
             ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         ).first()
         pm_user = db.query(User).filter(User.id == pm_assignment.user_id).first() if pm_assignment else None
 
@@ -331,6 +333,7 @@ def get_pm_evaluation_queue(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
             ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
     )
@@ -356,6 +359,7 @@ def get_pm_evaluation_queue(
                 ProjectAssignment.project_id == pm_a.project_id,
                 ProjectAssignment.org_id == current_user.org_id,
                 ProjectAssignment.user_id != current_user.id,
+                ProjectAssignment.is_deleted == False,  # noqa: E712
             )
             .all()
         )
@@ -482,6 +486,7 @@ def submit_pm_evaluation(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.user_id == current_user.id,
         ProjectAssignment.evaluator_type == "Primary",
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first()
 
     if not pm_assignment:
@@ -508,6 +513,7 @@ def submit_pm_evaluation(
         ProjectAssignment.org_id == current_user.org_id,
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.user_id == user_id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first()
 
     if not target_assignment:
@@ -603,6 +609,7 @@ def save_pm_evaluation_draft(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.user_id == current_user.id,
         ProjectAssignment.evaluator_type == "Primary",
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first()
     if not pm_assignment:
         raise HTTPException(
@@ -627,6 +634,7 @@ def save_pm_evaluation_draft(
         ProjectAssignment.org_id == current_user.org_id,
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.user_id == user_id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first()
     if not target_assignment:
         raise HTTPException(
@@ -1163,11 +1171,12 @@ def get_review(
     is_owner = review.user_id == current_user.id
     is_reviewer = review.reviewer_id == current_user.id
 
-    # Check if caller is assigned to same project
+    # Check if caller is assigned to same project (active membership)
     is_on_project = db.query(ProjectAssignment).filter(
         ProjectAssignment.project_id == review.project_id,
         ProjectAssignment.user_id == current_user.id,
         ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first() is not None
 
     if not (is_owner or is_reviewer or is_on_project or is_admin):

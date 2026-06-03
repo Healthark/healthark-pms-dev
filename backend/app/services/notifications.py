@@ -296,6 +296,7 @@ def project_team_users(db: Session, org_id: int, project_id: int) -> list[User]:
         .filter(
             ProjectAssignment.project_id == project_id,
             ProjectAssignment.org_id == org_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .distinct()
     )

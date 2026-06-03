@@ -60,6 +60,12 @@ class AssignmentResponse(BaseModel):
     evaluator_type: Optional[str] = None
     assigned_date: Optional[date] = None
     created_at: datetime
+    # Soft-delete audit. is_deleted=True members render greyed at the bottom of
+    # the team list; removed_by_name/removed_at power the "… was removed by …
+    # on …" line. Active members have is_deleted=False and null removal fields.
+    is_deleted: bool = False
+    removed_at: Optional[datetime] = None
+    removed_by_name: Optional[str] = None
 
 
 # ── Project Schemas ──────────────────────────────────────────────────

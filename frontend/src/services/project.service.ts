@@ -27,6 +27,12 @@ export interface AssignmentResponse {
   evaluator_type: string | null; // "Primary" | "Secondary" | null
   assigned_date: string | null;
   created_at: string;
+  /** Soft-delete audit. is_deleted members render greyed at the bottom of the
+   *  team list; removed_by_name/removed_at power the "… was removed by … on …"
+   *  line. Active members have is_deleted=false and null removal fields. */
+  is_deleted: boolean;
+  removed_at: string | null;
+  removed_by_name: string | null;
 }
 
 export interface AssignmentCreatePayload {
@@ -135,6 +141,14 @@ export const projectService = {
 
   removeAssignment: async (assignmentId: number): Promise<void> => {
     await apiClient.delete(`/projects/assignments/${assignmentId}`);
+  },
+
+  /** Re-add a soft-removed member (clears the removal marker). */
+  restoreAssignment: async (assignmentId: number): Promise<AssignmentResponse> => {
+    const res = await apiClient.post<AssignmentResponse>(
+      `/projects/assignments/${assignmentId}/restore`,
+    );
+    return res.data;
   },
 
   /** Admin-only. Marks the project completed. Idempotent — re-completing

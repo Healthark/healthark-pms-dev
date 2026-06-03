@@ -101,11 +101,20 @@ class ProjectAssignment(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Soft delete. Removing a member keeps the row (preserving the team-membership
+    # record across review cycles) and stamps who removed them and when. Restored
+    # by clearing these. The unique (org, project, user) index means there's at
+    # most one row per member per project, so re-adding restores this row.
+    is_deleted = Column(Boolean, nullable=False, default=False, server_default="false")
+    removed_at = Column(DateTime(timezone=True), nullable=True)
+    removed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     __table_args__ = (
         Index("ix_project_assignments_org_proj_user", "org_id", "project_id", "user_id", unique=True),
     )
 
     # Relationships
     project = relationship("Project", back_populates="assignments")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    removed_by = relationship("User", foreign_keys=[removed_by_id])
     department = relationship("Department")

@@ -8,7 +8,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { UserResponse } from "../../../services/admin.service";
 
@@ -17,7 +17,12 @@ vi.mock("../../../queries/adminReferenceData", () => ({
   useDesignations: () => ({ data: [{ id: 10, name: "Consultant", level: 1 }] }),
 }));
 vi.mock("../../../services/project.service", () => ({
-  projectService: { createProject: vi.fn(), getProjectDetail: vi.fn() },
+  projectService: {
+    createProject: vi.fn(),
+    getProjectDetail: vi.fn(),
+    removeAssignment: vi.fn(),
+    restoreAssignment: vi.fn(),
+  },
 }));
 vi.mock("../../../hooks/useToast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("../../../hooks/useSnackbar", () => ({ useSnackbar: () => ({ error: vi.fn() }) }));
@@ -26,8 +31,11 @@ vi.mock("../../common/UserCombobox", () => ({
 }));
 
 import { ProjectModal } from "../ProjectModal";
+import { projectService } from "../../../services/project.service";
 
 void React;
+
+const mockProjectService = vi.mocked(projectService);
 
 const users = [
   { id: 1, full_name: "User A", department_id: 1, designation: { id: 10, name: "Consultant", level: 1 }, is_deleted: false },
@@ -83,5 +91,98 @@ describe("ProjectModal — team members", () => {
     // Clear one PM → the inline error goes away.
     await user.click(screen.getAllByLabelText(/is PM/i)[0]);
     expect(screen.queryByText(/more than 1 PM/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ProjectModal — removed members (edit flow)", () => {
+  const assignment = (over: Record<string, unknown>) => ({
+    id: 0,
+    project_id: 5,
+    user_id: 0,
+    user_name: "",
+    assignment_role: null,
+    department_id: null,
+    department_name: null,
+    evaluator_type: null,
+    assigned_date: null,
+    created_at: "2026-01-01T00:00:00Z",
+    is_deleted: false,
+    removed_at: null,
+    removed_by_name: null,
+    ...over,
+  });
+
+  const detail = {
+    id: 5,
+    org_id: 1,
+    project_code: "P-1",
+    name: "Proj",
+    description: "",
+    start_date: null,
+    expected_end_date: null,
+    reports_to_id: null,
+    reports_to_name: null,
+    secondary_evaluator_id: null,
+    secondary_evaluator_name: null,
+    status: "active",
+    completed_at: null,
+    completed_by_id: null,
+    completed_by_name: null,
+    pm_id: null,
+    pm_name: null,
+    member_count: 1,
+    is_deleted: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: null,
+    assignments: [
+      assignment({ id: 11, user_id: 1, user_name: "User A" }),
+      assignment({
+        id: 12,
+        user_id: 2,
+        user_name: "User B",
+        is_deleted: true,
+        removed_at: "2026-03-12T00:00:00Z",
+        removed_by_name: "Amol",
+      }),
+    ],
+  };
+
+  function renderEdit() {
+    render(
+      <ProjectModal projectId={5} users={users} onClose={vi.fn()} onSave={vi.fn()} />,
+    );
+  }
+
+  it("renders removed members greyed at the bottom with audit + Re-add", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockProjectService.getProjectDetail.mockResolvedValue(detail as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockProjectService.restoreAssignment.mockResolvedValue({} as any);
+    const user = userEvent.setup();
+    renderEdit();
+
+    expect(await screen.findByText("Removed members")).toBeInTheDocument();
+    expect(screen.getByText("User B")).toBeInTheDocument();
+    expect(screen.getByText(/Removed by Amol on/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /re-add/i }));
+    expect(mockProjectService.restoreAssignment).toHaveBeenCalledWith(12);
+    // Re-add refetches the detail (initial load + after restore).
+    await waitFor(() => expect(mockProjectService.getProjectDetail).toHaveBeenCalledTimes(2));
+  });
+
+  it("makes a removed member selectable again in a new card", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockProjectService.getProjectDetail.mockResolvedValue(detail as any);
+    const user = userEvent.setup();
+    renderEdit();
+    await screen.findByText("Removed members");
+
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+    const select = screen.getByLabelText("Employee") as HTMLSelectElement;
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    // User B (removed) is re-addable; User A (active) is not offered.
+    expect(optionValues).toContain("2");
+    expect(optionValues).not.toContain("1");
   });
 });

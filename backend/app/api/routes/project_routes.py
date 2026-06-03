@@ -64,6 +64,9 @@ def _build_assignment_response(assignment: ProjectAssignment, db: DbSession) -> 
         evaluator_type=assignment.evaluator_type,
         assigned_date=assignment.assigned_date,
         created_at=assignment.created_at,
+        is_deleted=bool(assignment.is_deleted),
+        removed_at=assignment.removed_at,
+        removed_by_name=_resolve_user_name(db, assignment.removed_by_id),
     )
 
 
@@ -100,6 +103,7 @@ def _resolve_project_pm(db: DbSession, project_id: int, org_id: int) -> tuple[in
             ProjectAssignment.project_id == project_id,
             ProjectAssignment.org_id == org_id,
             ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .first()
     )
@@ -175,7 +179,10 @@ def list_projects(
 
     count_map = dict(
         db.query(ProjectAssignment.project_id, func.count(ProjectAssignment.id))
-        .filter(ProjectAssignment.org_id == current_user.org_id)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
         .group_by(ProjectAssignment.project_id)
         .all()
     )
@@ -186,6 +193,7 @@ def list_projects(
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
     )
@@ -326,7 +334,14 @@ def get_project_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
     assignment_responses = [_build_assignment_response(a, db) for a in project.assignments]
-    pm_assignment = next((a for a in assignment_responses if a.evaluator_type == "Primary"), None)
+    # Active members first, removed (soft-deleted) members last — the modal
+    # renders the removed group greyed at the bottom. Stable sort preserves the
+    # existing order within each group.
+    assignment_responses.sort(key=lambda a: a.is_deleted)
+    pm_assignment = next(
+        (a for a in assignment_responses if a.evaluator_type == "Primary" and not a.is_deleted),
+        None,
+    )
 
     return ProjectDetail(
         id=project.id,
@@ -399,6 +414,7 @@ def update_project(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.org_id == current_user.org_id,
         ProjectAssignment.evaluator_type == "Primary",
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first()
     pm_user_id = pm_assignment.user_id if pm_assignment else None
 
@@ -432,7 +448,8 @@ def update_project(
     db.refresh(project)
 
     count = db.query(func.count(ProjectAssignment.id)).filter(
-        ProjectAssignment.project_id == project.id
+        ProjectAssignment.project_id == project.id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).scalar() or 0
 
     pm_id, pm_name = _resolve_project_pm(db, project.id, current_user.org_id)
@@ -492,13 +509,15 @@ def add_assignment(
             detail="Cannot assign members to a completed project. Re-open it first.",
         )
 
+    # One row per (project, user) — unique index. A soft-deleted row is
+    # RESTORED below (re-add) rather than inserted again; an active row 409s.
     existing = db.query(ProjectAssignment).filter(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.user_id == assignment_in.user_id,
         ProjectAssignment.org_id == current_user.org_id,
     ).first()
 
-    if existing:
+    if existing and not existing.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This user is already assigned to this project.",
@@ -521,6 +540,7 @@ def add_assignment(
             ProjectAssignment.project_id == project_id,
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         ).first()
         if existing_primary:
             raise HTTPException(
@@ -546,16 +566,28 @@ def add_assignment(
     # Auto-fill role and department from user profile
     assignment_in = _auto_fill_assignment(assignment_in, db)
 
-    new_assignment = ProjectAssignment(
-        org_id=current_user.org_id,
-        project_id=project_id,
-        user_id=assignment_in.user_id,
-        assignment_role=assignment_in.assignment_role,
-        department_id=assignment_in.department_id,
-        evaluator_type=assignment_in.evaluator_type,
-        assigned_date=assignment_in.assigned_date,
-    )
-    db.add(new_assignment)
+    if existing:
+        # Re-add: restore the soft-deleted row in place (preserves history,
+        # honours the unique (project, user) index) with the new field values.
+        existing.assignment_role = assignment_in.assignment_role
+        existing.department_id = assignment_in.department_id
+        existing.evaluator_type = assignment_in.evaluator_type
+        existing.assigned_date = assignment_in.assigned_date
+        existing.is_deleted = False
+        existing.removed_at = None
+        existing.removed_by_id = None
+        new_assignment = existing
+    else:
+        new_assignment = ProjectAssignment(
+            org_id=current_user.org_id,
+            project_id=project_id,
+            user_id=assignment_in.user_id,
+            assignment_role=assignment_in.assignment_role,
+            department_id=assignment_in.department_id,
+            evaluator_type=assignment_in.evaluator_type,
+            assigned_date=assignment_in.assigned_date,
+        )
+        db.add(new_assignment)
 
     # Notify the newly-assigned member (in-app + email). The email is the
     # formal, snapshot-style template; the in-app row stays a short line.
@@ -641,6 +673,7 @@ def update_assignment(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.evaluator_type == "Primary",
             ProjectAssignment.id != assignment_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         ).first()
         if existing_primary:
             raise HTTPException(
@@ -684,7 +717,13 @@ def remove_assignment(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Remove a member from a project."""
+    """Soft-remove a member from a project.
+
+    The row is kept (preserving the team-membership record across review
+    cycles) and stamped with who removed them and when. The member then renders
+    greyed at the bottom of the team list and can be re-added. Project-review
+    rows are unaffected — they key on (user, project, cycle), not the row.
+    """
     _require_admin(current_user)
 
     assignment = db.query(ProjectAssignment).filter(
@@ -694,6 +733,12 @@ def remove_assignment(
 
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
+
+    if assignment.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This member has already been removed.",
+        )
 
     # A project must always have a PM — refuse to drop the Primary
     # assignment. To swap PMs the admin must first promote another member
@@ -705,9 +750,42 @@ def remove_assignment(
             detail="PM cannot be removed.",
         )
 
-    db.delete(assignment)
+    assignment.is_deleted = True
+    assignment.removed_at = datetime.now(timezone.utc)
+    assignment.removed_by_id = current_user.id
     db.commit()
     return None
+
+
+@router.post("/assignments/{assignment_id}/restore", response_model=AssignmentResponse)
+def restore_assignment(
+    assignment_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Re-add a previously removed member by clearing the soft-delete marker.
+
+    A removed row is never the Primary (PM can't be removed), so restoring it
+    never reintroduces a second PM.
+    """
+    _require_admin(current_user)
+
+    assignment = db.query(ProjectAssignment).filter(
+        ProjectAssignment.id == assignment_id,
+        ProjectAssignment.org_id == current_user.org_id,
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
+
+    if assignment.is_deleted:
+        assignment.is_deleted = False
+        assignment.removed_at = None
+        assignment.removed_by_id = None
+        db.commit()
+        db.refresh(assignment)
+
+    return _build_assignment_response(assignment, db)
 
 
 # =====================================================================
@@ -745,6 +823,7 @@ def complete_project(
     count = db.query(func.count(ProjectAssignment.id)).filter(
         ProjectAssignment.project_id == project.id,
         ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).scalar() or 0
 
     if project.status != PROJECT_STATUS_COMPLETED:
@@ -817,6 +896,7 @@ def reopen_project(
     count = db.query(func.count(ProjectAssignment.id)).filter(
         ProjectAssignment.project_id == project.id,
         ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
     ).scalar() or 0
 
     if project.status == PROJECT_STATUS_COMPLETED:

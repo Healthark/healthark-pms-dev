@@ -91,6 +91,8 @@ def did_work_together(
                 SubA.project_id == SubB.project_id,
                 SubA.org_id == org_id,
                 SubB.org_id == org_id,
+                SubA.is_deleted == False,  # noqa: E712
+                SubB.is_deleted == False,  # noqa: E712
             )
         )
     ).scalar() or False
@@ -114,6 +116,8 @@ def shared_project_targets(
             SubA.org_id == org_id,
             SubB.org_id == org_id,
             SubB.user_id != reviewer_id,
+            SubA.is_deleted == False,  # noqa: E712
+            SubB.is_deleted == False,  # noqa: E712
         )
         .distinct()
         .all()
