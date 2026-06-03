@@ -8,7 +8,7 @@ via a computed field so neither side needs to change.
 """
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -183,3 +183,22 @@ class YearPreflightResponse(BaseModel):
     annual_reviews_enabled: YearPreflightEntry
     project_ratings_visible: YearPreflightEntry
     annual_review_final_rating_visible: YearPreflightEntry
+
+
+# ── Admin Broadcast (Notify tab) ─────────────────────────────────────
+
+class AdminNotifyRequest(BaseModel):
+    """Body for POST /admin/notify — a manual org-wide announcement.
+
+    `preset` is a frontend convenience only (it pre-fills subject/body in the
+    UI); the backend treats `subject`/`body` as authoritative."""
+    subject: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=4000)
+    audience: Literal["all", "mentors"] = "all"
+    send_email: bool = False
+
+
+class AdminNotifyResult(BaseModel):
+    """Outcome of a broadcast: recipient count + whether email was dispatched."""
+    recipients: int
+    emailed: bool

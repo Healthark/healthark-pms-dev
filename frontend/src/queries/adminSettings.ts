@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminService,
+  type AdminNotifyPayload,
   type AdminSettingsUpdatePayload,
   type SystemSettings,
   type YearOptionsResponse,
@@ -9,6 +10,7 @@ import {
   type YearPreflightResponse,
 } from "../services/admin.service";
 import { systemSettingsQueryKey } from "./systemSettings";
+import { notificationsSummaryQueryKey } from "./notifications";
 
 /**
  * Strict, shared query key for the admin-side settings view
@@ -38,6 +40,18 @@ export function useUpdateAdminSettings() {
       // /settings/ payload on its next render.
       qc.invalidateQueries({ queryKey: adminSettingsQueryKey });
       qc.invalidateQueries({ queryKey: systemSettingsQueryKey });
+    },
+  });
+}
+
+// Admin "Notify" broadcast. Invalidate the Topbar summary so the admin (if in
+// the audience) sees the announcement in their own bell after sending.
+export function useSendNotify() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: AdminNotifyPayload) => adminService.sendNotify(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: notificationsSummaryQueryKey });
     },
   });
 }

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
-  UserPlus, Users, Settings, FolderOpen, Plus, Download,
+  UserPlus, Users, Settings, FolderOpen, Plus, Download, Megaphone,
 } from "lucide-react";
 
 import {
@@ -21,6 +21,7 @@ const UserModal = lazy(() =>
   import("../components/admin/UserModal").then((m) => ({ default: m.UserModal })),
 );
 import { ExportsTab } from "../components/admin/ExportsTab";
+import { NotifyTab } from "../components/admin/NotifyTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
@@ -33,6 +34,7 @@ import { useDepartments, useDesignations } from "../queries/adminReferenceData";
 type ActiveTab =
   | "users"
   | "projects"
+  | "notify"
   | "export"
   | "settings";
 
@@ -230,6 +232,14 @@ export default function AdminPanel() {
             <FolderOpen className="h-4 w-4" aria-hidden="true" />
             Projects
           </button>
+          <button
+            type="button"
+            className={tabCls("notify")}
+            onClick={() => setActiveTab("notify")}
+          >
+            <Megaphone className="h-4 w-4" aria-hidden="true" />
+            Notify
+          </button>
           {canSeeExport && (
             <button
               type="button"
@@ -261,6 +271,8 @@ export default function AdminPanel() {
         )}
 
         {activeTab === "projects" && <ProjectsTab ref={projectsTabRef} />}
+
+        {activeTab === "notify" && <NotifyTab />}
 
         {activeTab === "export" && canSeeExport && <ExportsTab />}
 

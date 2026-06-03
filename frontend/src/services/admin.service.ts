@@ -153,6 +153,19 @@ export interface UserUpdatePayload {
   mentor_id?: number | null;
 }
 
+/** Body for the Admin "Notify" broadcast (POST /admin/notify). */
+export interface AdminNotifyPayload {
+  subject: string;
+  body: string;
+  audience: "all" | "mentors";
+  send_email: boolean;
+}
+
+export interface AdminNotifyResult {
+  recipients: number;
+  emailed: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -272,6 +285,12 @@ export const adminService = {
     const res = await apiClient.get<YearPreflightResponse>(
       `/admin/settings/year/${encodeURIComponent(fyLabel)}/preflight`,
     );
+    return res.data;
+  },
+
+  // Admin "Notify" tab — fan out an org-wide announcement (in-app + optional email).
+  sendNotify: async (payload: AdminNotifyPayload): Promise<AdminNotifyResult> => {
+    const res = await apiClient.post<AdminNotifyResult>("/admin/notify", payload);
     return res.data;
   },
 };
