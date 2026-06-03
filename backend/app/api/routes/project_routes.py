@@ -108,6 +108,23 @@ def _resolve_project_pm(db: DbSession, project_id: int, org_id: int) -> tuple[in
     return row[0], row[1]
 
 
+def _format_date(value) -> str:
+    """Human date for emails (e.g. 'Mar 05, 2026'); em-dash when unset."""
+    return value.strftime("%b %d, %Y") if value else "—"
+
+
+def _format_timeline(start, end) -> str:
+    """'start – end' for the project-snapshot Timeline row."""
+    return f"{_format_date(start)} – {_format_date(end)}"
+
+
+def _format_team(names: list[str], limit: int = 4) -> str:
+    """First `limit` member names, then '+N others' for the rest."""
+    if len(names) <= limit:
+        return ", ".join(names)
+    return ", ".join(names[:limit]) + f" + {len(names) - limit} others"
+
+
 def _auto_fill_assignment(assignment_in: AssignmentCreate, db: DbSession) -> AssignmentCreate:
     """
     Auto-fill assignment_role from designation and department_id from user
@@ -540,10 +557,12 @@ def add_assignment(
     )
     db.add(new_assignment)
 
-    # Notify the newly-assigned member (in-app + email).
+    # Notify the newly-assigned member (in-app + email). The email is the
+    # formal, snapshot-style template; the in-app row stays a short line.
     member = db.query(User).filter(
         User.id == assignment_in.user_id, User.org_id == current_user.org_id
     ).first()
+    _, pm_name = _resolve_project_pm(db, project.id, current_user.org_id)
     create_notification(
         db,
         org_id=current_user.org_id,
@@ -559,7 +578,18 @@ def add_assignment(
         email=True,
         background_tasks=background_tasks,
         recipient_email=member.email if member else None,
-        cta_label="View project reviews",
+        cta_label="View project",
+        email_subject=f"You have been added to: {project.name}",
+        recipient_name=member.full_name if member else None,
+        email_intro=(
+            f'You have been added to the project "{project.name}" in '
+            f"Healthark PMS."
+        ),
+        email_details=[
+            ("Project Manager", pm_name or "—"),
+            ("Timeline", _format_timeline(project.start_date, project.expected_end_date)),
+        ],
+        snapshot_title="Project Snapshot",
     )
 
     db.commit()
@@ -725,6 +755,7 @@ def complete_project(
         # Notify the team the project is complete (in-app + email). Only on the
         # active → completed transition (re-completing is a no-op above).
         team = project_team_users(db, current_user.org_id, project.id)
+        _, pm_name = _resolve_project_pm(db, project.id, current_user.org_id)
         broadcast_notification(
             db,
             org_id=current_user.org_id,
@@ -737,7 +768,17 @@ def complete_project(
             actor_id=current_user.id,
             send_email=True,
             background_tasks=background_tasks,
-            cta_label="View project reviews",
+            cta_label="View project",
+            email_subject=f"Project Completed: {project.name}",
+            email_intro=(
+                f'The project "{project.name}" has been marked complete.'
+            ),
+            email_details=[
+                ("Project Manager", pm_name or "—"),
+                ("Completed On", _format_date(project.completed_at)),
+                ("Team Members", _format_team([u.full_name for u in team])),
+            ],
+            snapshot_title="Project Snapshot",
         )
 
         db.commit()

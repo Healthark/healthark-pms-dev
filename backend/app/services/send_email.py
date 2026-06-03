@@ -600,18 +600,55 @@ def _notification_html(
     cta_link: str | None,
     cta_label: str | None,
     theme: EmailTheme,
+    *,
+    recipient_name: str | None = None,
+    intro: str | None = None,
+    details: list[tuple[str, str]] | None = None,
+    snapshot_title: str = "Snapshot",
 ) -> str:
-    """Inline-styled HTML for a generic notification / announcement email.
+    """Inline-styled HTML for a notification / announcement email.
 
     Same table-based layout + inline CSS contract as the reset/welcome
-    templates (broad client support). The CTA button renders only when
-    `cta_link` is provided. Every interpolation is escaped via `_esc()`;
-    `body` newlines become <br> so multi-line announcements read naturally."""
+    templates (broad client support). Every interpolation is escaped via
+    `_esc()`. The optional blocks make the formal, snapshot-style emails:
+        * `recipient_name` → a "Hi {name}," greeting line.
+        * `intro`          → the lead paragraph (falls back to `body`).
+        * `details`        → a labelled "{snapshot_title}" key-value table.
+    With none of them set it renders exactly like the original generic email
+    (H1 + body paragraph + optional CTA), so existing callers are unaffected."""
     title_e = _esc(title)
-    body_e = _esc(body).replace("\n", "<br>")
+    lead_e = _esc(intro if intro is not None else body).replace("\n", "<br>")
     brand_name_e = _esc(theme.brand_name)
     brand_e = _esc(theme.brand)
     brand_light_e = _esc(theme.brand_light)
+
+    greeting_block = ""
+    if recipient_name:
+        greeting_block = (
+            f'<p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#0F172A;">'
+            f"Hi {_esc(recipient_name)},</p>"
+        )
+
+    details_block = ""
+    if details:
+        rows = "".join(
+            f"""
+                  <tr>
+                    <td style="padding:6px 16px 6px 0;font-size:13px;color:#64748B;white-space:nowrap;vertical-align:top;">{_esc(label)}</td>
+                    <td style="padding:6px 0;font-size:13px;color:#0F172A;font-weight:500;">{_esc(value)}</td>
+                  </tr>"""
+            for label, value in details
+        )
+        details_block = f"""
+              <p style="margin:0 0 8px 0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#64748B;">
+                {_esc(snapshot_title)}
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px 0;background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;">
+                <tr><td style="padding:8px 16px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">{rows}
+                  </table>
+                </td></tr>
+              </table>"""
 
     cta_block = ""
     if cta_link:
@@ -659,9 +696,11 @@ def _notification_html(
               <h1 style="margin:0 0 12px 0;font-size:20px;font-weight:600;color:#0F172A;">
                 {title_e}
               </h1>
+              {greeting_block}
               <p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#0F172A;">
-                {body_e}
+                {lead_e}
               </p>
+              {details_block}
               {cta_block}
             </td>
           </tr>
@@ -685,10 +724,25 @@ def _notification_html(
 
 
 def _notification_text(
-    title: str, body: str, cta_link: str | None, from_name: str
+    title: str,
+    body: str,
+    cta_link: str | None,
+    from_name: str,
+    *,
+    recipient_name: str | None = None,
+    intro: str | None = None,
+    details: list[tuple[str, str]] | None = None,
+    snapshot_title: str = "Snapshot",
 ) -> str:
     """Plain-text fallback for the notification email."""
-    lines = [title, "", body, ""]
+    lines = [title, ""]
+    if recipient_name:
+        lines += [f"Hi {recipient_name},", ""]
+    lines += [intro if intro is not None else body, ""]
+    if details:
+        lines.append(f"{snapshot_title}:")
+        lines += [f"  {label}: {value}" for label, value in details]
+        lines.append("")
     if cta_link:
         lines.append(f"Open: {cta_link}")
         lines.append("")
@@ -703,20 +757,52 @@ def send_notification_email(
     cta_link: str | None = None,
     cta_label: str | None = None,
     org_id: int | None = None,
+    *,
+    subject: str | None = None,
+    recipient_name: str | None = None,
+    intro: str | None = None,
+    details: list[tuple[str, str]] | None = None,
+    snapshot_title: str = "Snapshot",
 ) -> bool:
-    """Email a generic notification / announcement.
+    """Email a notification / announcement.
 
     Returns True if the message was handed to the SMTP server. Callers must
     NOT depend on the return — the in-app notification row is the source of
     truth; email is a best-effort secondary channel. Intended to be invoked
     via FastAPI BackgroundTasks so the SMTP handshake doesn't block the
-    request thread. `org_id` selects the per-org theme."""
+    request thread. `org_id` selects the per-org theme.
+
+    The optional keyword fields produce the formal, snapshot-style emails:
+    `subject` overrides the Subject header + H1 (defaults to `title`),
+    `recipient_name` adds a greeting, `intro` is the lead paragraph (falls back
+    to `body`), and `details` renders a labelled "{snapshot_title}" table. Omit
+    them all for the original generic look."""
     theme = _resolve_theme(org_id)
     sender_display_name = _resolve_from_name(theme)
+    heading = subject or title
     return _send(
         to_email=to_email,
-        subject=title,
-        html_body=_notification_html(title, body, cta_link, cta_label, theme),
-        text_body=_notification_text(title, body, cta_link, sender_display_name),
+        subject=heading,
+        html_body=_notification_html(
+            heading,
+            body,
+            cta_link,
+            cta_label,
+            theme,
+            recipient_name=recipient_name,
+            intro=intro,
+            details=details,
+            snapshot_title=snapshot_title,
+        ),
+        text_body=_notification_text(
+            heading,
+            body,
+            cta_link,
+            sender_display_name,
+            recipient_name=recipient_name,
+            intro=intro,
+            details=details,
+            snapshot_title=snapshot_title,
+        ),
         from_name=sender_display_name,
     )
