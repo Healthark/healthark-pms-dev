@@ -15,9 +15,9 @@
  * Placement: src/components/admin/ProjectModal.tsx
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, Loader2, UserPlus, Trash2, Pencil } from "lucide-react";
+import { X, Loader2, UserPlus, Trash2, Pencil, GripVertical } from "lucide-react";
 import {
   projectService,
   type ProjectDetail,
@@ -125,9 +125,10 @@ export function ProjectModal({
   }, [isEditing, projectId]);
 
   // ── Draft Assignment Helpers ────────────────────────────────────
+  // New member cards are prepended so a fresh, empty card always appears at
+  // the TOP of the list — no scrolling to the bottom to fill it in.
   const addDraftAssignment = () => {
     setDraftAssignments((prev) => [
-      ...prev,
       {
         tempId: tempId(),
         user_id: "",
@@ -136,7 +137,26 @@ export function ProjectModal({
         is_pm: false,
         assigned_date: "",
       },
+      ...prev,
     ]);
+  };
+
+  // Drag-to-reorder for the draft cards. Native HTML5 DnD; the grip handle is
+  // the drag source and each card is a drop target.
+  const dragIndexRef = useRef<number | null>(null);
+  const handleDragStart = (index: number) => {
+    dragIndexRef.current = index;
+  };
+  const handleDropOn = (index: number) => {
+    const from = dragIndexRef.current;
+    dragIndexRef.current = null;
+    if (from === null || from === index) return;
+    setDraftAssignments((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(index, 0, moved);
+      return next;
+    });
   };
 
   const updateDraft = <K extends keyof DraftAssignment>(
@@ -149,17 +169,13 @@ export function ProjectModal({
     );
   };
 
-  /** Toggle PM flag on a draft. At most one draft can be PM at a time;
-   *  also blocked if an existing assignment is already PM. */
+  /** Toggle PM flag on a draft. Multiple drafts may be checked as PM in the
+   *  form — the "more than one PM" rule is enforced at submit time with an
+   *  inline error rather than blocked here, so the admin can mark a new PM and
+   *  then clear the old one (a swap) without being stuck. */
   const toggleDraftPm = (id: string) => {
     setDraftAssignments((prev) =>
-      prev.map((a) =>
-        a.tempId === id
-          ? { ...a, is_pm: !a.is_pm }
-          : a.is_pm
-            ? { ...a, is_pm: false }
-            : a,
-      ),
+      prev.map((a) => (a.tempId === id ? { ...a, is_pm: !a.is_pm } : a)),
     );
   };
 
@@ -180,22 +196,11 @@ export function ProjectModal({
     }
   };
 
+  // Drop a draft card. For an edit-in-place draft this just cancels the edit
+  // (the original read-only row reappears via the filter). A draft marked PM
+  // can be removed freely — the at-least-one / at-most-one PM rules are checked
+  // at submit time, not blocked here.
   const removeDraft = (id: string) => {
-    const target = draftAssignments.find((a) => a.tempId === id);
-    if (!target) return;
-    // For an edit-in-place draft, "X" means cancel the edit — drop the
-    // draft and the original read-only row reappears via the filter.
-    // No PM block here because the original PM is preserved untouched.
-    if (target.existingId !== undefined) {
-      setDraftAssignments((prev) => prev.filter((a) => a.tempId !== id));
-      return;
-    }
-    // A project must always have at least one PM. Block removing a new
-    // draft marked as PM.
-    if (target.is_pm) {
-      snackbar.error("PM cannot be removed.");
-      return;
-    }
     setDraftAssignments((prev) => prev.filter((a) => a.tempId !== id));
   };
 
@@ -258,6 +263,13 @@ export function ProjectModal({
   const draftPrimary = draftAssignments.find((a) => a.is_pm) ?? null;
   const hasPrimary = !!existingPrimary || !!draftPrimary;
 
+  // A project may have at most one PM. The form lets the admin tick more than
+  // one (so they can mark a new PM before clearing the old), but saving is
+  // blocked with an inline error until exactly one remains.
+  const pmCount =
+    (existingPrimary ? 1 : 0) + draftAssignments.filter((d) => d.is_pm).length;
+  const tooManyPms = pmCount > 1;
+
   // Validation requirements (for create + final save):
   //   - PM checked on exactly one member
   //   - reports_to_id set
@@ -299,6 +311,8 @@ export function ProjectModal({
           ? "End Date cannot be before Start Date."
           : draftJoinedBeforeStart
             ? "A member's Joined Date cannot be earlier than the project Start Date."
+            : tooManyPms
+            ? "A Project cannot have more than 1 PM."
             : !hasPrimary
             ? "Project must have at least one PM."
             : !isEditing && reportsToId === null
@@ -501,7 +515,9 @@ export function ProjectModal({
               </div>
 
               {/* ── Team Members ───────────────────────────────── */}
-              <div className="border-t border-border pt-5 space-y-3">
+              {/* flex-col + order-* so draft cards render ABOVE the existing
+                  read-only rows without moving them in the DOM. */}
+              <div className="border-t border-border pt-5 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
                     Team Members
@@ -512,12 +528,19 @@ export function ProjectModal({
                   </button>
                 </div>
 
-                {/* Existing Assignments — read-only rows. Clicking the
-                    pencil promotes the row into draftAssignments below
-                    (same UI as Add Member, prepopulated) so all fields can
-                    be edited. The original row is hidden via the
-                    visibleExistingAssignments filter while its draft is
-                    present. */}
+                {tooManyPms && (
+                  <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                    A Project cannot have more than 1 PM. Uncheck PM on the extra
+                    member before saving.
+                  </p>
+                )}
+
+                {/* Existing Assignments — read-only rows, rendered BELOW the
+                    draft cards (order-2) so a freshly added card sits on top.
+                    Clicking the pencil promotes the row into draftAssignments
+                    for in-place editing; the original row is hidden via the
+                    visibleExistingAssignments filter while its draft is present. */}
+                <div className="order-2 flex flex-col gap-3">
                 {visibleExistingAssignments.map((a) => (
                   <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2">
                     <div className="flex-1 min-w-0">
@@ -552,42 +575,59 @@ export function ProjectModal({
                     </button>
                   </div>
                 ))}
+                </div>
 
-                {/* Draft Assignments — also hosts edit-in-place rows
-                    (draft.existingId is set); for those the Employee
-                    select is locked because user_id is not editable on
-                    the AssignmentUpdate API. */}
-                {draftAssignments.map((draft) => {
+                {/* Draft Assignments — rendered ABOVE the existing rows
+                    (order-1) so the newest (prepended) card is on top. Also
+                    hosts edit-in-place rows (draft.existingId set); for those
+                    the Employee select is locked (user_id isn't editable on the
+                    AssignmentUpdate API). Cards are drag-reorderable. */}
+                <div className="order-1 flex flex-col gap-3">
+                {draftAssignments.map((draft, draftIndex) => {
                   const isEditDraft = draft.existingId !== undefined;
-                  const pmDisabled =
-                    !draft.is_pm && (!!existingPrimary || !draft.user_id);
-                  const pmDisabledReason = !draft.is_pm
-                    ? existingPrimary
-                      ? `PM already set: ${existingPrimary.user_name}. Remove that member first.`
-                      : !draft.user_id
-                        ? "Pick an employee first."
-                        : null
-                    : null;
+                  // Only gate on having picked an employee. Multiple members
+                  // may be ticked PM here; the "more than one PM" rule is an
+                  // inline submit-time error, not a per-checkbox block.
+                  const pmDisabled = !draft.is_pm && !draft.user_id;
+                  const pmDisabledReason =
+                    pmDisabled ? "Pick an employee first." : null;
                   const joinedBeforeStart =
                     !!startDate && !!draft.assigned_date && draft.assigned_date < startDate;
                   return (
                   <div
                     key={draft.tempId}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDropOn(draftIndex)}
                     className={`rounded-lg border p-3 space-y-2 ${
                       isEditDraft ? "border-brand bg-brand/5" : "border-border"
                     }`}
                   >
-                    {isEditDraft && (
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
-                        Editing team member
-                      </p>
-                    )}
+                    <div className="flex items-center justify-between">
+                      {/* Drag handle — reorders the team member cards. */}
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={() => handleDragStart(draftIndex)}
+                        onDragEnd={() => (dragIndexRef.current = null)}
+                        className="-ml-1 cursor-grab rounded p-1 text-text-muted hover:bg-surface-muted active:cursor-grabbing"
+                        aria-label="Drag to reorder"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      {isEditDraft && (
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
+                          Editing team member
+                        </p>
+                      )}
+                    </div>
                     <div className="grid grid-cols-12 gap-2 items-end">
                       {/* Employee — 4 cols (locked when editing an existing row) */}
                       <div className="col-span-4">
                         <label className={LABEL_CLS}>Employee</label>
                         <select
                           className={INPUT_CLS}
+                          aria-label="Employee"
                           value={draft.user_id}
                           disabled={isEditDraft}
                           onChange={(e) => handleUserSelect(draft.tempId, e.target.value)}
@@ -686,6 +726,7 @@ export function ProjectModal({
                   </div>
                   );
                 })}
+                </div>
 
                 {existingAssignments.length === 0 && draftAssignments.length === 0 && (
                   <p className="text-xs text-text-muted italic text-center py-3">

@@ -98,11 +98,12 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
-// Sticky header cells. Each <th> is pinned individually (reliable across
-// engines; sticky on <thead> is flaky) with a fully OPAQUE background so rows
-// scrolling underneath are completely hidden. z-20 keeps it above tbody; the
-// bottom border lives on the cell so it travels with the pinned row under
-// border-separate. Mirrors UsersTab.
+// Header cells, pinned to the page. The table has no internal scroll: it grows
+// to fit its rows and the app shell's <main> (overflow-y-auto) is the scroll
+// container, so `sticky top-0` pins each <th> to the top of <main> as the page
+// scrolls. Pinned per-cell (sticky on <thead> is flaky) with a fully OPAQUE
+// background + z-20 so rows scroll behind it; the bottom border lives on the
+// cell so it travels under border-separate. Mirrors UsersTab.
 const HEADER_CELL_CLS =
   "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
 
@@ -407,14 +408,10 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
           </p>
         </div>
       ) : (
-        // The table gets its OWN scroll region. Page-level sticky can't be
-        // used here: the app shell's <main> sets `zoom: 0.9` and `p-6`, both
-        // of which break CSS `position: sticky` (zoom corrupts the sticky
-        // offset; a padded scroll container leaves rows visible above a
-        // top:0 header). An `overflow-auto` wrapper with no padding/zoom pins
-        // the sticky <thead> reliably with no gap or bleed-through. Mirrors
-        // UsersTab.
-        <div className="max-h-[75vh] overflow-auto">
+        // No internal scroll: the table grows to fit all rows and the app
+        // shell's <main> handles scrolling, so the page height adjusts to the
+        // record count instead of trapping rows in a 75vh box. Mirrors UsersTab.
+        <div>
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               <tr className="bg-surface-muted text-left">
