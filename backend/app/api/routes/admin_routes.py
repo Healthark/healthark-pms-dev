@@ -45,11 +45,14 @@ from app.core.cycle_utils import (
 from app.core.security import get_password_hash
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.goal_models import Goal, GoalType
+from app.models.notification_models import NotificationCategory
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import CycleType, SystemSettings
 from app.models.system_settings_year_override_models import SystemSettingsYearOverride
 from app.models.user_models import User
 from app.schemas.admin_schemas import (
+    AdminNotifyRequest,
+    AdminNotifyResult,
     AdminSettingsResponse,
     AdminSettingsUpdate,
     DepartmentBrief,
@@ -65,6 +68,12 @@ from app.schemas.admin_schemas import (
     YearSettingsUpdate,
 )
 from app.schemas.pagination import Page, PaginationParams
+from app.services.notifications import (
+    active_org_users,
+    broadcast_notification,
+    create_notification,
+    mentor_users,
+)
 from app.services.send_email import (
     is_smtp_configured,
     send_welcome_user_email,
@@ -324,6 +333,7 @@ def update_user(
     user_in: UserUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
     Update a user's details (name, role, department, mentor, etc.).
@@ -344,6 +354,10 @@ def update_user(
             detail="User not found.",
         )
 
+    # Snapshot the mentor before applying the update so we can detect a
+    # reassignment and notify the mentee (in-app + email).
+    old_mentor_id = user.mentor_id
+
     # If employee_code is changing, check for duplicates
     update_data = user_in.model_dump(exclude_unset=True)
 
@@ -362,6 +376,32 @@ def update_user(
 
     for field, value in update_data.items():
         setattr(user, field, value)
+
+    # Mentor reassignment → a single in-app + email notice to the mentee.
+    # Only when the mentor actually changed to a (non-null) new mentor.
+    if (
+        "mentor_id" in update_data
+        and user.mentor_id is not None
+        and user.mentor_id != old_mentor_id
+    ):
+        new_mentor = db.query(User).filter(User.id == user.mentor_id).first()
+        mentor_name = new_mentor.full_name if new_mentor else "a new mentor"
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=user.id,
+            category=NotificationCategory.PERSONAL.value,
+            type="mentor_reassigned",
+            title="Your mentor has changed",
+            body=f"{mentor_name} is now your mentor.",
+            link="/profile",
+            entity_type="user",
+            entity_id=user.id,
+            actor_id=current_user.id,
+            email=True,
+            background_tasks=background_tasks,
+            recipient_email=user.email,
+        )
 
     db.commit()
 
@@ -826,6 +866,32 @@ def get_year_settings(
     return _build_year_settings_response(row, _current_fy_label(settings_row))
 
 
+# Announcement copy for each per-FY access toggle. Keyed by flag → link +
+# (title, body) per resulting state (True = enabled). `{fy}` is filled in.
+_TOGGLE_ANNOUNCEMENTS: dict[str, dict] = {
+    "annual_goals_edit_enabled": {
+        "link": "/annual-goals",
+        True: ("Goal submissions opened", "Annual goal submissions are now open for {fy}."),
+        False: ("Goal submissions closed", "Annual goal submissions are now closed for {fy}."),
+    },
+    "annual_reviews_enabled": {
+        "link": "/annual-reviews",
+        True: ("Annual reviews opened", "Annual reviews are now open for {fy}."),
+        False: ("Annual reviews closed", "Annual reviews are now closed for {fy}."),
+    },
+    "annual_review_final_rating_visible": {
+        "link": "/annual-reviews",
+        True: ("Final ratings visible", "Final annual-review ratings are now visible for {fy}."),
+        False: ("Final ratings hidden", "Final annual-review ratings are now hidden for {fy}."),
+    },
+    "project_ratings_visible": {
+        "link": "/project-reviews",
+        True: ("Project ratings visible", "Project ratings are now visible for {fy}."),
+        False: ("Project ratings hidden", "Project ratings are now hidden for {fy}."),
+    },
+}
+
+
 @router.patch("/settings/year/{fy_label}", response_model=YearSettingsResponse)
 def update_year_settings(
     fy_label: str,
@@ -859,9 +925,33 @@ def update_year_settings(
         seed_from_settings=settings_row,
         updated_by_id=current_user.id,
     )
+    # Snapshot before applying so we can announce only the toggles that flip.
+    old_flags = {flag: bool(getattr(row, flag)) for flag in YEAR_OVERRIDE_FLAGS}
     for flag in YEAR_OVERRIDE_FLAGS:
         setattr(row, flag, bool(getattr(payload, flag)))
     row.updated_by_id = current_user.id
+
+    # Announce each flipped toggle to all active org users (in-app only,
+    # Announcements tab). Added to this session → committed atomically below.
+    flipped = [f for f in YEAR_OVERRIDE_FLAGS if old_flags[f] != bool(getattr(row, f))]
+    if flipped:
+        recipients = active_org_users(db, current_user.org_id)
+        for flag in flipped:
+            enabled = bool(getattr(row, flag))
+            title, body_tmpl = _TOGGLE_ANNOUNCEMENTS[flag][enabled]
+            broadcast_notification(
+                db,
+                org_id=current_user.org_id,
+                recipients=recipients,
+                category=NotificationCategory.ANNOUNCEMENT.value,
+                type="settings_toggle",
+                title=title,
+                body=body_tmpl.format(fy=canonical),
+                link=_TOGGLE_ANNOUNCEMENTS[flag]["link"],
+                actor_id=current_user.id,
+                send_email=False,
+            )
+
     db.commit()
     db.refresh(row)
     # The public GET /settings/ banner reads the active-FY override; bust
@@ -869,6 +959,47 @@ def update_year_settings(
     invalidate_settings(current_user.org_id)
 
     return _build_year_settings_response(row, _current_fy_label(settings_row))
+
+
+@router.post("/notify", response_model=AdminNotifyResult)
+def admin_notify(
+    payload: AdminNotifyRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Manual org-wide announcement from the Admin "Notify" tab.
+
+    Fans out an in-app announcement (Announcements tab) to the chosen audience
+    and, when ``send_email`` is set, also emails them. This is the manual
+    channel for calendar-transition reminders ("the second half has started",
+    "the new financial year has begun") — there is no scheduler.
+    """
+    _require_admin(current_user)
+
+    recipients = (
+        mentor_users(db, current_user.org_id)
+        if payload.audience == "mentors"
+        else active_org_users(db, current_user.org_id)
+    )
+    count = broadcast_notification(
+        db,
+        org_id=current_user.org_id,
+        recipients=recipients,
+        category=NotificationCategory.ANNOUNCEMENT.value,
+        type="admin_broadcast",
+        title=payload.subject,
+        body=payload.body,
+        actor_id=current_user.id,
+        send_email=payload.send_email,
+        background_tasks=background_tasks,
+    )
+    db.commit()
+    return AdminNotifyResult(
+        recipients=count,
+        emailed=bool(payload.send_email and is_smtp_configured()),
+    )
 
 
 @router.get(
