@@ -39,7 +39,7 @@ were job-title designations, which already exist as reference data); keep
 ### Message length guidance (soft)
 The composer shows a **channel-dependent live counter** under the message: with
 "Also send email" on, the cap relaxes to **~100 words** (email has room); in-app
-only keeps it to **~50 characters** (rows stay glanceable). It's a **soft**
+only keeps it to **~100 characters** (rows stay glanceable). It's a **soft**
 warning — the counter turns red and reads "over recommended length" past the
 limit, but typing and sending are never blocked (no backend rejection). Applies
 to the Notify tab only. Constants `IN_APP_CHAR_LIMIT` / `EMAIL_WORD_LIMIT` live

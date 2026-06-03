@@ -148,14 +148,14 @@ describe("NotifyTab — message length guidance", () => {
     const user = userEvent.setup();
     render(<NotifyTab />);
     await user.click(screen.getByLabelText(/also send email/i)); // default true → off
-    expect(screen.getByText(/\/50 characters/)).toBeInTheDocument();
+    expect(screen.getByText(/\/100 characters/)).toBeInTheDocument();
   });
 
   it("warns past the in-app limit but still allows sending (soft)", async () => {
     const user = userEvent.setup();
     render(<NotifyTab />);
-    await fillMessage(user); // preset body is well over 50 chars
-    await user.click(screen.getByLabelText(/also send email/i)); // → in-app, 50-char cap
+    await fillMessage(user); // preset body is well over 100 chars
+    await user.click(screen.getByLabelText(/also send email/i)); // → in-app, 100-char cap
 
     expect(screen.getByText(/over recommended length/i)).toBeInTheDocument();
 
