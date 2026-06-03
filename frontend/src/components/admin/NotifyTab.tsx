@@ -200,10 +200,11 @@ export function NotifyTab() {
         </div>
       </div>
 
-      {/* Full-width two-column layout: message composer + recipients */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* ── Message composer (spans 2/3) ── */}
-        <div className="space-y-5 lg:col-span-2">
+      {/* Full-width two-column layout: message composer + recipients, split
+          evenly (50/50) at the center on large screens. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* ── Message composer (50%) ── */}
+        <div className="space-y-5">
           <div>
             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
               Quick presets
@@ -269,8 +270,8 @@ export function NotifyTab() {
           </div>
         </div>
 
-        {/* ── Recipients panel (1/3) ── */}
-        <div className="lg:col-span-1">
+        {/* ── Recipients panel (50%) ── */}
+        <div>
           <div className="space-y-4 rounded-xl border border-border bg-surface-muted/40 p-4">
             <div className="flex items-center gap-2">
               <Users2 className="h-4 w-4 text-brand" aria-hidden="true" />
