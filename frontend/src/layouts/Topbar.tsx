@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Bell, CalendarDays } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
-import { NotificationDropdown } from "../components/layout/NotificationDropdown";
+import { NotificationPanel } from "../components/layout/NotificationPanel";
 import { ThemeToggle } from "../components/layout/ThemeToggle";
 import {
   useMarkAllRead,
@@ -137,9 +137,9 @@ export function Topbar() {
         </Link>
       </div>
 
-      {/* Notification dropdown — Portal so it escapes the header's layout */}
+      {/* Notification panel — Portal so it escapes the header's layout */}
       {anchorRect && summary && (
-        <NotificationDropdown
+        <NotificationPanel
           notifications={computedNotifications}
           personal={personal}
           announcements={announcements}

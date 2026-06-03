@@ -22,13 +22,19 @@ Security Layers Applied:
     Layer 4 — Ownership:        Personal goal counts scoped to current_user.id
 """
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.core.cycle_utils import get_current_cycle_info, resolve_today
 from app.models.goal_models import ApprovalStatus, Goal, GoalType
-from app.models.notification_models import Notification, NotificationCategory
+from app.models.notification_models import (
+    NOTIFICATION_RETENTION_DAYS,
+    Notification,
+    NotificationCategory,
+)
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.notification_schemas import (
@@ -49,6 +55,18 @@ def get_topbar_summary(
     Return the active cycle name and a list of computed notifications
     for the currently authenticated user.
     """
+    # ── Retention: lazy purge (no scheduler exists) ──────────────────
+    # Drop this org's stored rows older than the retention window on the
+    # read path. One indexed bulk DELETE (ix_notifications_org covers the
+    # org filter) so the summary GET stays cheap; the CLI
+    # (app.scripts.purge_notifications) covers orgs that never load the app.
+    cutoff = datetime.now(timezone.utc) - timedelta(days=NOTIFICATION_RETENTION_DAYS)
+    db.query(Notification).filter(
+        Notification.org_id == current_user.org_id,
+        Notification.created_at < cutoff,
+    ).delete(synchronize_session=False)
+    db.commit()
+
     # ── Active Cycle ─────────────────────────────────────────────────
     settings = db.query(SystemSettings).filter(
         SystemSettings.org_id == current_user.org_id
