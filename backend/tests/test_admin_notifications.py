@@ -289,7 +289,7 @@ def test_admin_notify_no_filter_targets_everyone(db):
     active_count = db.query(User).filter(User.is_deleted == False).count()  # noqa: E712
 
     result = admin_notify(
-        AdminNotifyRequest(subject="Heads up", body="Please read.", send_email=False),
+        AdminNotifyRequest(subject="Heads up", body="Please read.", channel="in_app"),
         db,
         admin,
         BackgroundTasks(),
@@ -315,7 +315,7 @@ def test_admin_notify_mentors_only(db):
 
     result = admin_notify(
         AdminNotifyRequest(
-            subject="For mentors", body="Review goals.", mentors_only=True, send_email=False
+            subject="For mentors", body="Review goals.", mentors_only=True, channel="in_app"
         ),
         db,
         admin,
@@ -336,7 +336,7 @@ def test_admin_notify_filters_by_department(db):
     db.commit()
 
     result = admin_notify(
-        AdminNotifyRequest(subject="Dept 1", body="b", department_ids=[1], send_email=False),
+        AdminNotifyRequest(subject="Dept 1", body="b", department_ids=[1], channel="in_app"),
         db,
         admin,
         BackgroundTasks(),
@@ -358,7 +358,7 @@ def test_admin_notify_filters_by_designation_across_departments(db):
     db.commit()
 
     result = admin_notify(
-        AdminNotifyRequest(subject="Consultants", body="b", designation_ids=[10], send_email=False),
+        AdminNotifyRequest(subject="Consultants", body="b", designation_ids=[10], channel="in_app"),
         db,
         admin,
         BackgroundTasks(),
@@ -385,7 +385,7 @@ def test_admin_notify_department_and_designation_are_anded(db):
             body="b",
             department_ids=[1],
             designation_ids=[10],
-            send_email=False,
+            channel="in_app",
         ),
         db,
         admin,
@@ -404,11 +404,10 @@ def test_admin_notify_email_gated_by_smtp_config(db):
     db.commit()
     active_count = db.query(User).filter(User.is_deleted == False).count()  # noqa: E712
 
-    # When send_email is requested, `emailed` reflects whether SMTP is
-    # configured — the email dispatch is the only thing gated. The in-app
-    # rows always land regardless of SMTP state (env-independent invariant).
+    # channel="both": `emailed` reflects whether SMTP is configured (email is
+    # the only gated part); the in-app rows always land (env-independent).
     result = admin_notify(
-        AdminNotifyRequest(subject="Emailed?", body="Body.", send_email=True),
+        AdminNotifyRequest(subject="Emailed?", body="Body.", channel="both"),
         db,
         admin,
         BackgroundTasks(),
@@ -422,6 +421,50 @@ def test_admin_notify_email_gated_by_smtp_config(db):
     )
 
 
+def test_admin_notify_email_channel_writes_no_inapp_rows(db):
+    org = _org(db)
+    admin = _user(db, org.id, role="Admin")
+    _user(db, org.id, role="Staff")
+    db.commit()
+    active_count = db.query(User).filter(User.is_deleted == False).count()  # noqa: E712
+
+    # channel="email": recipients are counted and (SMTP permitting) emailed,
+    # but NO in-app Notification rows are written.
+    result = admin_notify(
+        AdminNotifyRequest(subject="Email only", body="Body.", channel="email"),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+    assert result.recipients == active_count
+    assert result.emailed is is_smtp_configured()
+    assert db.query(Notification).count() == 0
+
+
+def test_admin_notify_in_app_channel_never_emails(db):
+    org = _org(db)
+    admin = _user(db, org.id, role="Admin")
+    _user(db, org.id, role="Staff")
+    db.commit()
+    active_count = db.query(User).filter(User.is_deleted == False).count()  # noqa: E712
+
+    # channel="in_app": rows land, email is never dispatched regardless of SMTP.
+    result = admin_notify(
+        AdminNotifyRequest(subject="In-app only", body="Body.", channel="in_app"),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+    assert result.recipients == active_count
+    assert result.emailed is False
+    assert (
+        db.query(Notification).filter(Notification.type == "admin_broadcast").count()
+        == active_count
+    )
+
+
 def test_admin_notify_requires_admin(db):
     org = _org(db)
     staff = _user(db, org.id, role="Staff")
@@ -429,7 +472,7 @@ def test_admin_notify_requires_admin(db):
 
     with pytest.raises(HTTPException) as exc:
         admin_notify(
-            AdminNotifyRequest(subject="x", body="y", send_email=False),
+            AdminNotifyRequest(subject="x", body="y", channel="in_app"),
             db,
             staff,
             BackgroundTasks(),

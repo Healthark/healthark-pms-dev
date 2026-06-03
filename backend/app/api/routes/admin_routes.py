@@ -971,10 +971,10 @@ def admin_notify(
     """
     Manual targeted announcement from the Admin "Notify" tab.
 
-    Fans out an in-app announcement (Announcements tab) to the recipients
-    resolved from the request's filters (mentors-only / departments /
-    designations, AND-combined; no filter → everyone) and, when ``send_email``
-    is set, also emails them.
+    Resolves recipients from the request's filters (mentors-only / departments /
+    designations, AND-combined; no filter → everyone), then delivers per
+    ``channel``: "in_app" writes the Announcements-tab row only, "email" sends
+    the email only (no in-app row), "both" does both.
     """
     _require_admin(current_user)
 
@@ -985,6 +985,7 @@ def admin_notify(
         department_ids=payload.department_ids,
         designation_ids=payload.designation_ids,
     )
+    wants_email = payload.channel in ("email", "both")
     count = broadcast_notification(
         db,
         org_id=current_user.org_id,
@@ -994,13 +995,14 @@ def admin_notify(
         title=payload.subject,
         body=payload.body,
         actor_id=current_user.id,
-        send_email=payload.send_email,
+        write_inapp=payload.channel in ("in_app", "both"),
+        send_email=wants_email,
         background_tasks=background_tasks,
     )
     db.commit()
     return AdminNotifyResult(
         recipients=count,
-        emailed=bool(payload.send_email and is_smtp_configured()),
+        emailed=bool(wants_email and is_smtp_configured()),
     )
 
 

@@ -8,7 +8,7 @@ via a computed field so neither side needs to change.
 """
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -195,13 +195,18 @@ class AdminNotifyRequest(BaseModel):
         * `mentors_only`     → restrict to users who mentor someone.
         * `department_ids`   → restrict to these departments (any of).
         * `designation_ids`  → restrict to these designations/job titles (any of).
-    `subject`/`body` are backend-authoritative (the UI presets only pre-fill)."""
+    `subject`/`body` are backend-authoritative (the UI presets only pre-fill).
+
+    `channel` chooses the delivery mode:
+        * "in_app" → write the in-app announcement only.
+        * "email"  → send the email only (no in-app row).
+        * "both"   → in-app announcement + email."""
     subject: str = Field(..., min_length=1, max_length=200)
     body: str = Field(..., min_length=1, max_length=4000)
     mentors_only: bool = False
     department_ids: list[int] = Field(default_factory=list)
     designation_ids: list[int] = Field(default_factory=list)
-    send_email: bool = False
+    channel: Literal["email", "in_app", "both"] = "both"
 
 
 class AdminNotifyResult(BaseModel):
