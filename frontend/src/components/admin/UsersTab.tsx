@@ -61,14 +61,13 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
-// Sticky header cells. Each <th> is pinned individually (the reliable
-// cross-browser pattern — sticky on <thead> is flaky in some engines) with a
-// fully OPAQUE background so rows scrolling underneath are completely hidden,
-// not blurred-but-visible. z-20 keeps it above tbody. The bottom border lives
-// on the cell so it travels with the pinned row (a <tr> border would scroll
-// away under border-separate).
+// Header cells. The table no longer scrolls internally — it grows to fit the
+// page (25 rows) and the app shell's <main> scrolls — so the header is NOT
+// sticky (page-level sticky is unreliable under <main>'s `zoom: 0.9`). Opaque
+// background + a per-cell bottom border (a <tr> border would not show under
+// border-separate).
 const HEADER_CELL_CLS =
-  "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
+  "px-5 py-3 border-b border-border bg-surface-muted";
 
 export function UsersTab({
   departments,
@@ -264,15 +263,11 @@ export function UsersTab({
           Loading users…
         </div>
       ) : (
-        // The table gets its OWN scroll region. Page-level sticky can't be
-        // used here: the app shell's <main> sets `zoom: 0.9` and `p-6`, both
-        // of which break CSS `position: sticky` (zoom corrupts the sticky
-        // offset; a padded scroll container leaves rows visible above a
-        // top:0 header). An `overflow-auto` wrapper with no padding/zoom is a
-        // clean scroll context where the sticky <thead> pins reliably with no
-        // gap or bleed-through. max-height keeps it generous but bounded.
+        // No internal scroll: the table grows to fit all rows and the app
+        // shell's <main> handles scrolling, so the page height adjusts to the
+        // record count instead of trapping rows in a 75vh box.
         <div
-          className={`max-h-[75vh] overflow-auto transition-opacity ${
+          className={`transition-opacity ${
             isFetching ? "opacity-60" : "opacity-100"
           }`}
           aria-busy={isFetching}
