@@ -47,6 +47,18 @@ function toggleId(list: number[], id: number): number[] {
   return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 }
 
+// Message length guidance (soft — the counter warns but never blocks sending).
+// In-app rows should stay glanceable; email has room for a fuller note, so the
+// cap relaxes when "Also send email" is on.
+const IN_APP_CHAR_LIMIT = 50;
+const EMAIL_WORD_LIMIT = 100;
+
+/** Word count (whitespace-delimited); 0 for blank/whitespace-only input. */
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
 export function NotifyTab() {
   const toast = useToast();
   const snackbar = useSnackbar();
@@ -92,6 +104,17 @@ export function NotifyTab() {
 
   const hasContent = subject.trim().length > 0 && body.trim().length > 0;
   const canSend = hasContent && recipientCount > 0;
+
+  // Channel-dependent length guidance. With email on, the message can run to
+  // ~100 words; in-app-only keeps it to ~50 characters. Soft — `overLimit`
+  // only drives a red counter, it never disables Send.
+  const wordCount = countWords(body);
+  const overLimit = sendEmail
+    ? wordCount > EMAIL_WORD_LIMIT
+    : body.length > IN_APP_CHAR_LIMIT;
+  const counterText = sendEmail
+    ? `${wordCount}/${EMAIL_WORD_LIMIT} words`
+    : `${body.length}/${IN_APP_CHAR_LIMIT} characters`;
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
@@ -213,7 +236,23 @@ export function NotifyTab() {
               maxLength={4000}
               placeholder="What do you want to tell the team?"
               className={`${inputCls} resize-none`}
+              aria-describedby="notify-body-counter"
             />
+            <div className="mt-1 flex items-center justify-between text-[11px]">
+              <span className="text-text-muted">
+                {sendEmail
+                  ? "Email is on — up to ~100 words."
+                  : "In-app only — keep it under ~50 characters."}
+              </span>
+              <span
+                id="notify-body-counter"
+                aria-live="polite"
+                className={overLimit ? "font-semibold text-red-500" : "text-text-muted"}
+              >
+                {counterText}
+                {overLimit ? " — over recommended length" : ""}
+              </span>
+            </div>
           </div>
         </div>
 

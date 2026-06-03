@@ -36,14 +36,25 @@ were job-title designations, which already exist as reference data); keep
 - **`admin.service.ts`**: `AdminNotifyPayload` now carries `mentors_only` /
   `department_ids` / `designation_ids`.
 
+### Message length guidance (soft)
+The composer shows a **channel-dependent live counter** under the message: with
+"Also send email" on, the cap relaxes to **~100 words** (email has room); in-app
+only keeps it to **~50 characters** (rows stay glanceable). It's a **soft**
+warning — the counter turns red and reads "over recommended length" past the
+limit, but typing and sending are never blocked (no backend rejection). Applies
+to the Notify tab only. Constants `IN_APP_CHAR_LIMIT` / `EMAIL_WORD_LIMIT` live
+in `NotifyTab.tsx`.
+
 ## Tests
 - **`backend/tests/test_admin_notifications.py`**: notify tests updated to the
   new schema + added department filter, designation-across-departments,
   department-AND-designation, and mentors-only cases (14 in file).
-- **`frontend/.../NotifyTab.test.tsx`**: live count defaults to everyone;
-  dispatch with empty filters; department narrowing reflected in payload + count;
-  mentors-only toggle; cancelled confirm (6 cases).
+- **`frontend/.../NotifyTab.test.tsx`** (9 cases): live count defaults to
+  everyone; dispatch with empty filters; department narrowing reflected in
+  payload + count; mentors-only toggle; cancelled confirm; word counter when
+  email is on; character counter when email is off; over-limit warns but still
+  sends (soft).
 
 ## Verification
 - Backend `pytest -q` → 74 passed; ruff-clean.
-- Frontend `tsc` clean; eslint 0 problems; `vitest` NotifyTab 6 passed.
+- Frontend `tsc` clean; eslint 0 problems; `vitest` NotifyTab 9 passed.

@@ -137,3 +137,32 @@ describe("NotifyTab — recipient targeting", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 });
+
+describe("NotifyTab — message length guidance", () => {
+  it("shows a word counter when email is on (the default)", () => {
+    render(<NotifyTab />);
+    expect(screen.getByText(/\/100 words/)).toBeInTheDocument();
+  });
+
+  it("switches to a character counter when email is off", async () => {
+    const user = userEvent.setup();
+    render(<NotifyTab />);
+    await user.click(screen.getByLabelText(/also send email/i)); // default true → off
+    expect(screen.getByText(/\/50 characters/)).toBeInTheDocument();
+  });
+
+  it("warns past the in-app limit but still allows sending (soft)", async () => {
+    const user = userEvent.setup();
+    render(<NotifyTab />);
+    await fillMessage(user); // preset body is well over 50 chars
+    await user.click(screen.getByLabelText(/also send email/i)); // → in-app, 50-char cap
+
+    expect(screen.getByText(/over recommended length/i)).toBeInTheDocument();
+
+    // Soft warning — Send is not disabled and still dispatches.
+    const send = screen.getByRole("button", { name: /send announcement/i });
+    expect(send).toBeEnabled();
+    await user.click(send);
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+  });
+});
