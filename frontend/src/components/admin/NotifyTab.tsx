@@ -50,7 +50,7 @@ function toggleId(list: number[], id: number): number[] {
 // Message length guidance (soft — the counter warns but never blocks sending).
 // In-app rows should stay glanceable; email has room for a fuller note, so the
 // cap relaxes when "Also send email" is on.
-const IN_APP_CHAR_LIMIT = 50;
+const IN_APP_CHAR_LIMIT = 100;
 const EMAIL_WORD_LIMIT = 100;
 
 /** Word count (whitespace-delimited); 0 for blank/whitespace-only input. */
