@@ -40,6 +40,7 @@ import {
   useMarkProjectComplete,
   useReopenProject,
 } from "../../queries/adminProjects";
+import { coverageGapsQueryKey } from "../../queries/adminSettings";
 import { exportService } from "../../services/export.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { extractFyToken } from "../../utils/fy";
@@ -254,6 +255,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const handleModalSave = () => {
     handleModalClose();
     queryClient.invalidateQueries({ queryKey: adminProjectsQueryKey });
+    // A PM promotion/demotion inside the modal can open/close a coverage gap.
+    queryClient.invalidateQueries({ queryKey: coverageGapsQueryKey });
   };
 
   const hasActiveFilters =

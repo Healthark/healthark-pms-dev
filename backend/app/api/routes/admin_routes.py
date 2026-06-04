@@ -46,6 +46,11 @@ from app.core.security import get_password_hash
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.goal_models import Goal, GoalType
 from app.models.notification_models import NotificationCategory
+from app.models.project_models import (
+    PROJECT_STATUS_COMPLETED,
+    Project,
+    ProjectAssignment,
+)
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import CycleType, SystemSettings
 from app.models.system_settings_year_override_models import SystemSettingsYearOverride
@@ -55,6 +60,9 @@ from app.schemas.admin_schemas import (
     AdminNotifyResult,
     AdminSettingsResponse,
     AdminSettingsUpdate,
+    CoverageGaps,
+    CoverageGapProject,
+    CoverageGapUser,
     DepartmentBrief,
     DesignationBrief,
     UserCreate,
@@ -73,6 +81,7 @@ from app.services.notifications import (
     broadcast_notification,
     create_notification,
     notify_audience,
+    warn_admins_coverage_gap,
 )
 from app.services.send_email import (
     is_smtp_configured,
@@ -448,6 +457,95 @@ def reactivate_user(
     return _load_user_with_relations(db, user.id)
 
 
+# =====================================================================
+# COVERAGE GAPS (mentor / PM removal impact)
+# =====================================================================
+
+def _orphaned_mentees(db: DbSession, org_id: int) -> list[User]:
+    """Active users whose `mentor_id` points at a soft-deleted user — i.e.
+    their mentor was removed and the link now dangles. Reassign to clear."""
+    Mentor = aliased(User)
+    return (
+        db.query(User)
+        .join(Mentor, Mentor.id == User.mentor_id)
+        .filter(
+            User.org_id == org_id,
+            User.is_deleted == False,  # noqa: E712
+            Mentor.is_deleted == True,  # noqa: E712
+        )
+        .order_by(User.full_name)
+        .all()
+    )
+
+
+def _pm_less_projects(db: DbSession, org_id: int) -> list[Project]:
+    """Active, non-completed projects with no active Primary assignment whose
+    user is also active — covers a PM deactivated or demoted without a
+    replacement."""
+    covered_ids = [
+        pid
+        for (pid,) in db.query(ProjectAssignment.project_id)
+        .join(User, User.id == ProjectAssignment.user_id)
+        .filter(
+            ProjectAssignment.org_id == org_id,
+            ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+            User.is_deleted == False,  # noqa: E712
+        )
+        .distinct()
+        .all()
+    ]
+    return (
+        db.query(Project)
+        .filter(
+            Project.org_id == org_id,
+            Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
+            Project.id.notin_(covered_ids),
+        )
+        .order_by(Project.name)
+        .all()
+    )
+
+
+def _warn_if_coverage_gap(db: DbSession, org_id: int, actor_id: int) -> None:
+    """Recompute coverage and, if anything is uncovered, broadcast one in-app
+    warning to all admins. Called after a removal/edit that could drop
+    coverage; idempotent in effect (the banner reflects live state)."""
+    mentees = _orphaned_mentees(db, org_id)
+    projects = _pm_less_projects(db, org_id)
+    if not mentees and not projects:
+        return
+    parts: list[str] = []
+    if mentees:
+        parts.append(f"{len(mentees)} mentee(s) without a mentor")
+    if projects:
+        parts.append(f"{len(projects)} project(s) without a PM")
+    warn_admins_coverage_gap(
+        db,
+        org_id=org_id,
+        actor_id=actor_id,
+        title="Action required: coverage gap",
+        body=" · ".join(parts) + ". Reassign from the Admin Panel.",
+        link="/admin",
+    )
+
+
+@router.get("/coverage-gaps", response_model=CoverageGaps)
+def get_coverage_gaps(db: DbSession, current_user: CurrentUser):
+    """Live mentor/PM coverage gaps for the Admin-Panel warning banner.
+    Empty lists ⇒ no banner. Clears as soon as the admin reassigns."""
+    _require_admin(current_user)
+    mentees = _orphaned_mentees(db, current_user.org_id)
+    projects = _pm_less_projects(db, current_user.org_id)
+    return CoverageGaps(
+        orphaned_mentees=[CoverageGapUser(id=u.id, name=u.full_name) for u in mentees],
+        pm_less_projects=[
+            CoverageGapProject(id=p.id, name=p.name) for p in projects
+        ],
+    )
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_user(
     user_id: int,
@@ -461,6 +559,9 @@ def deactivate_user(
     historical review/goal data. The user's JWT will still work until
     it expires, but the CurrentUser dependency checks is_deleted on
     every request, so they are blocked immediately.
+
+    If the removed user was a mentor and/or a project PM, all admins get an
+    in-app coverage-gap warning so they can reassign promptly.
     """
     _require_admin(current_user)
 
@@ -483,6 +584,10 @@ def deactivate_user(
         )
 
     user.is_deleted = True
+    db.commit()
+
+    # Warn admins if this removal left mentees orphaned or a project PM-less.
+    _warn_if_coverage_gap(db, current_user.org_id, current_user.id)
     db.commit()
 
     return None  # 204 No Content — no body

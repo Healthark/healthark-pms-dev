@@ -14,6 +14,7 @@ import { getErrorMessage } from "../utils/errors";
 import { UsersTab } from "../components/admin/UsersTab";
 import { SystemSettingsTab } from "../components/admin/SystemSettingsTab";
 import { ProjectsTab, type ProjectsTabHandle } from "../components/admin/ProjectsTab";
+import { CoverageGapBanner } from "../components/admin/CoverageGapBanner";
 // UserModal lazy-loaded (F3) — admin-only form, opens on "Add User"
 // or per-row pencil click. Split into its own chunk so the AdminPanel
 // initial download skips it for non-modal sessions.
@@ -27,7 +28,11 @@ import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
 import { useAuth } from "../hooks/useAuth";
 import { useCreateUser, useUpdateUser } from "../queries/users";
-import { useAdminSettings, useUpdateAdminSettings } from "../queries/adminSettings";
+import {
+  useAdminSettings,
+  useUpdateAdminSettings,
+  useCoverageGaps,
+} from "../queries/adminSettings";
 import { useDepartments, useDesignations } from "../queries/adminReferenceData";
 
 
@@ -42,6 +47,11 @@ export default function AdminPanel() {
   // ── Reference data (shared cache via ['admin', 'departments|designations']) ─
   const { data: departments = [] } = useDepartments();
   const { data: designations = [] } = useDesignations();
+
+  // ── Coverage gaps (mentor/PM removal impact) — drives the warning banner ─
+  const { data: coverageGaps } = useCoverageGaps();
+  const orphanedMenteeCount = coverageGaps?.orphaned_mentees.length ?? 0;
+  const pmLessProjectCount = coverageGaps?.pm_less_projects.length ?? 0;
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>("users");
@@ -209,6 +219,17 @@ export default function AdminPanel() {
           </button>
         )}
       </div>
+
+      {/* Coverage-gap warning — persists while a removed/reassigned mentor or
+          PM has left mentees orphaned or a project without a PM. Clears once
+          the admin reassigns (the query is invalidated by user/project
+          mutations). */}
+      <CoverageGapBanner
+        menteeCount={orphanedMenteeCount}
+        projectCount={pmLessProjectCount}
+        onFixMentees={() => setActiveTab("users")}
+        onFixProjects={() => setActiveTab("projects")}
+      />
 
       {/* Tab container */}
       {/* No `overflow-hidden` here: it would become the sticky table

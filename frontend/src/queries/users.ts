@@ -12,6 +12,7 @@ import {
   type UserUpdatePayload,
 } from "../services/admin.service";
 import type { Page } from "../services/pagination";
+import { coverageGapsQueryKey } from "./adminSettings";
 
 /**
  * Shared key prefix for everything user-list. The non-paginated picker
@@ -66,6 +67,8 @@ export function useUpdateUser() {
     }) => adminService.updateUser(userId, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: usersQueryKey });
+      // A mentor change can resolve/alter a coverage gap.
+      qc.invalidateQueries({ queryKey: coverageGapsQueryKey });
     },
   });
 }
@@ -76,6 +79,8 @@ export function useDeactivateUser() {
     mutationFn: (userId: number) => adminService.deactivateUser(userId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: usersQueryKey });
+      // Removing a mentor/PM may open a coverage gap.
+      qc.invalidateQueries({ queryKey: coverageGapsQueryKey });
     },
   });
 }
@@ -86,6 +91,8 @@ export function useReactivateUser() {
     mutationFn: (userId: number) => adminService.reactivateUser(userId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: usersQueryKey });
+      // Reactivating the removed mentor/PM closes the gap.
+      qc.invalidateQueries({ queryKey: coverageGapsQueryKey });
     },
   });
 }

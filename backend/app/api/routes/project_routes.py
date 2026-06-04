@@ -25,6 +25,7 @@ from app.services.notifications import (
     broadcast_notification,
     create_notification,
     project_team_users,
+    warn_admins_coverage_gap,
 )
 from app.models.project_models import (
     Project, ProjectAssignment,
@@ -112,6 +113,36 @@ def _resolve_project_pm(db: DbSession, project_id: int, org_id: int) -> tuple[in
     if not row:
         return None, None
     return row[0], row[1]
+
+
+def _warn_if_project_pm_less(
+    db: DbSession, org_id: int, actor_id: int, project_id: int
+) -> None:
+    """If the project now has no active Primary (PM), broadcast an in-app
+    coverage-gap warning to all admins. Called after a PM demotion."""
+    remaining_primary = db.query(ProjectAssignment.id).filter(
+        ProjectAssignment.project_id == project_id,
+        ProjectAssignment.org_id == org_id,
+        ProjectAssignment.evaluator_type == "Primary",
+        ProjectAssignment.is_deleted == False,  # noqa: E712
+    ).first()
+    if remaining_primary is not None:
+        return
+    project = db.query(Project).filter(Project.id == project_id).first()
+    warn_admins_coverage_gap(
+        db,
+        org_id=org_id,
+        actor_id=actor_id,
+        title="Action required: project without a PM",
+        body=(
+            f'"{project.name}" has no Primary evaluator (PM). '
+            "Assign a new PM from the Admin Panel."
+            if project
+            else "A project has no PM. Reassign from the Admin Panel."
+        ),
+        link="/admin",
+    )
+    db.commit()
 
 
 def _format_date(value) -> str:
@@ -854,10 +885,24 @@ def update_assignment(
                 detail="The PM cannot be the same user as the Secondary Evaluator.",
             )
 
+    # Detect a PM demotion (Primary → non-Primary) so we can warn admins if it
+    # leaves the project without a PM.
+    was_primary = assignment.evaluator_type == "Primary"
+    becoming_non_primary = (
+        "evaluator_type" in update_data
+        and update_data["evaluator_type"] != "Primary"
+    )
+
     for field, value in update_data.items():
         setattr(assignment, field, value)
 
     db.commit()
+
+    if was_primary and becoming_non_primary:
+        _warn_if_project_pm_less(
+            db, current_user.org_id, current_user.id, assignment.project_id
+        )
+
     db.refresh(assignment)
 
     return _build_assignment_response(assignment, db)

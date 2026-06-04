@@ -213,3 +213,24 @@ class AdminNotifyResult(BaseModel):
     """Outcome of a broadcast: recipient count + whether email was dispatched."""
     recipients: int
     emailed: bool
+
+
+# ── Coverage gaps (mentor/PM removal impact) ─────────────────────────
+
+class CoverageGapUser(BaseModel):
+    """A mentee whose mentor link now dangles (mentor was removed)."""
+    id: int
+    name: str
+
+
+class CoverageGapProject(BaseModel):
+    """An active project with no active Primary (PM) assignment."""
+    id: int
+    name: str
+
+
+class CoverageGaps(BaseModel):
+    """Live coverage gaps the Admin Panel surfaces as a warning banner.
+    Empty lists ⇒ no banner. Drives GET /admin/coverage-gaps."""
+    orphaned_mentees: list[CoverageGapUser]
+    pm_less_projects: list[CoverageGapProject]

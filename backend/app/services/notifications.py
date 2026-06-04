@@ -20,7 +20,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.notification_models import Notification
+from app.models.notification_models import Notification, NotificationCategory
 from app.models.project_models import ProjectAssignment
 from app.models.user_models import User
 from app.services.send_email import is_smtp_configured, send_notification_email
@@ -222,6 +222,47 @@ def active_org_users(db: Session, org_id: int) -> list[User]:
         db.query(User)
         .filter(User.org_id == org_id, User.is_deleted == False)  # noqa: E712
         .all()
+    )
+
+
+def org_admins(db: Session, org_id: int) -> list[User]:
+    """Active admins of the org — the audience for 'action required' warnings."""
+    return (
+        db.query(User)
+        .filter(
+            User.org_id == org_id,
+            User.role == "Admin",
+            User.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+
+
+def warn_admins_coverage_gap(
+    db: Session,
+    *,
+    org_id: int,
+    actor_id: Optional[int],
+    title: str,
+    body: str,
+    link: str = "/admin",
+) -> int:
+    """In-app warning to every active admin that a removal/edit left mentees or
+    a project without coverage. In-app only (no email noise); the persistent
+    Admin-Panel banner (driven by GET /admin/coverage-gaps) is the durable
+    surface — this is the moment-of-action alert. Returns recipient count."""
+    return broadcast_notification(
+        db,
+        org_id=org_id,
+        recipients=org_admins(db, org_id),
+        category=NotificationCategory.ANNOUNCEMENT.value,
+        type="coverage_gap_warning",
+        title=title,
+        body=body,
+        link=link,
+        actor_id=actor_id,
+        write_inapp=True,
+        send_email=False,
     )
 
 

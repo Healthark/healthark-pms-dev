@@ -405,6 +405,18 @@ def get_my_review_history(
 # STAGE 2 — MENTOR EVALUATION
 # =====================================================================
 
+def _is_current_mentor(db: DbSession, review: AnnualReview, current_user: User) -> bool:
+    """True iff the caller is the mentee's CURRENT mentor (live relationship),
+    regardless of who was stamped on the review at submit time.
+
+    Access follows the live mentor link so a reassigned mentor immediately
+    inherits the mentee's in-flight AND historical reviews — exactly like a
+    regular mentor. `review.mentor_id` is kept only as attribution of who
+    actually evaluated, not as the access gate."""
+    mentee = db.query(User).filter(User.id == review.user_id).first()
+    return mentee is not None and mentee.mentor_id == current_user.id
+
+
 @router.get("/mentees", response_model=List[MenteeAnnualReview])
 def get_mentee_reviews(
     db: DbSession,
@@ -415,13 +427,18 @@ def get_mentee_reviews(
     Each row is enriched with employee_name / department / designation.
     Final ratings are nulled when the org-wide visibility flag is off so the
     Mentee Review tab can conditionally hide the Ratings column.
+
+    Listed by the mentee's LIVE `User.mentor_id` (not the frozen
+    `AnnualReview.mentor_id`), so a newly-assigned mentor sees their mentees'
+    full review history and a former mentor stops seeing ex-mentees.
     """
     settings = _get_settings(db, current_user.org_id)
     reviews = (
         db.query(AnnualReview)
+        .join(User, User.id == AnnualReview.user_id)
         .filter(
             AnnualReview.org_id == current_user.org_id,
-            AnnualReview.mentor_id == current_user.id,
+            User.mentor_id == current_user.id,
         )
         .order_by(AnnualReview.created_at.desc())
         .all()
@@ -472,15 +489,18 @@ def submit_mentor_evaluation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This review is not in the mentor evaluation stage.",
         )
-    if review.mentor_id != current_user.id:
+    if not _is_current_mentor(db, review, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the assigned mentor for this review.",
+            detail="You are not the current mentor for this employee.",
         )
     _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
 
     review.mentor_overall_review = payload.mentor_overall_review
     review.mentor_performance_rating = payload.mentor_performance_rating
+    # Stamp the actual evaluator (attribution) — may differ from the mentor
+    # stamped at self-submit time if the mentee was reassigned mid-cycle.
+    review.mentor_id = current_user.id
     # Clear any draft scratchpad — the final cols are now authoritative.
     review.mentor_overall_review_draft = None
     review.mentor_performance_rating_draft = None
@@ -556,12 +576,16 @@ def save_mentor_draft(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This review is not in the mentor evaluation stage.",
         )
-    if review.mentor_id != current_user.id:
+    if not _is_current_mentor(db, review, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the assigned mentor for this review.",
+            detail="You are not the current mentor for this employee.",
         )
     _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
+
+    # Stamp the current mentor as the working evaluator (attribution stays
+    # truthful after a mid-cycle reassignment).
+    review.mentor_id = current_user.id
 
     # Apply only fields the client included so partial saves don't wipe
     # work the mentor previously stored.
@@ -833,7 +857,7 @@ def get_review(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
 
     is_owner = review.user_id == current_user.id
-    is_mentor = review.mentor_id == current_user.id
+    is_mentor = _is_current_mentor(db, review, current_user)
     is_admin = current_user.role == "Admin"
 
     if not (is_owner or is_mentor or is_admin):
