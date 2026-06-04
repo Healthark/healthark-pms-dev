@@ -343,7 +343,7 @@ export function SystemSettingsTab({
   const yearLoading = yearSettingsQuery.isPending || !savedYear;
 
   return (
-    <div className="p-6 max-w-mx-auto space-y-6">
+    <div className="p-4 space-y-4 sm:p-6 sm:space-y-6">
       {/* ── Year-scoped configuration header ────────────────────────── */}
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm">
         <div className="flex-1 min-w-[240px]">
@@ -586,7 +586,7 @@ export function SystemSettingsTab({
                   type="date"
                   value={simulatedToday}
                   onChange={(e) => onSimulatedTodayChange(e.target.value)}
-                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-brand sm:w-52"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-brand sm:w-52"
                 />
               </div>
               {simulatedToday && (

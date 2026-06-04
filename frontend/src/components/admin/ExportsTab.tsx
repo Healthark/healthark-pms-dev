@@ -174,7 +174,7 @@ export function ExportsTab() {
   };
 
   return (
-    <div className="space-y-5 p-5">
+    <div className="space-y-4 p-4 sm:space-y-5 sm:p-5">
       {/* Filters card */}
       <section className={CARD_CLS}>
         <div className={CARD_HEADER_CLS}>
