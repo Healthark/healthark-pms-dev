@@ -18,6 +18,7 @@ import {
   useReactivateUser,
   useUsersPage,
 } from "../../queries/users";
+import { useCoverageGaps } from "../../queries/adminSettings";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useToast } from "../../hooks/useToast";
@@ -127,6 +128,13 @@ export function UsersTab({
   const { data, isLoading, isFetching } = useUsersPage(query);
   const users = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  // Orphaned mentees (mentor was deactivated) — highlight their rows amber so
+  // the admin can spot who needs a new mentor. Mirrors the coverage banner.
+  const { data: coverageGaps } = useCoverageGaps();
+  const orphanedMenteeIds = new Set(
+    (coverageGaps?.orphaned_mentees ?? []).map((m) => m.id),
+  );
 
   const hasActiveFilters =
     !!debouncedSearch ||
@@ -321,7 +329,16 @@ export function UsersTab({
                 users.map((user) => (
                   <tr
                     key={user.id}
-                    className={`transition-colors hover:bg-surface-muted ${user.is_deleted ? "opacity-60" : ""}`}
+                    title={
+                      orphanedMenteeIds.has(user.id)
+                        ? "This mentee's mentor was deactivated — assign a new mentor."
+                        : undefined
+                    }
+                    className={`transition-colors ${
+                      orphanedMenteeIds.has(user.id)
+                        ? "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+                        : "hover:bg-surface-muted"
+                    }${user.is_deleted ? " opacity-60" : ""}`}
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
