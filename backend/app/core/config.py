@@ -6,7 +6,13 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
+    # Idle session window. The JWT (and its cookie) live this long; while the
+    # user is active the frontend slides the window forward via
+    # POST /auth/refresh, so an active session never expires. After this many
+    # minutes with no activity the cookie's token expires and the next request
+    # 401s — that is the automatic-logout path. Keep this in sync with the
+    # frontend IDLE_LIMIT_MS in src/hooks/useIdleTimeout.ts.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Database
     DATABASE_URL: str
