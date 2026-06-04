@@ -166,11 +166,11 @@ describe("ProjectsTab — server-side pagination", () => {
     // The affected row carries the warning title + amber background.
     const flagged = screen.getByTitle(/no PM/i);
     expect(flagged).toHaveTextContent("Borealis");
-    expect(flagged.className).toMatch(/bg-amber/);
+    expect(flagged.className).toMatch(/bg-red/);
 
     // Apollo (id 1) is covered → no warning title on its row.
     const apolloRow = screen.getByText("Apollo").closest("tr");
     expect(apolloRow?.getAttribute("title")).toBeFalsy();
-    expect(apolloRow?.className).not.toMatch(/bg-amber/);
+    expect(apolloRow?.className).not.toMatch(/bg-red/);
   });
 });

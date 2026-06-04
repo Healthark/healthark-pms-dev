@@ -336,7 +336,7 @@ export function UsersTab({
                     }
                     className={`transition-colors ${
                       orphanedMenteeIds.has(user.id)
-                        ? "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+                        ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60"
                         : "hover:bg-surface-muted"
                     }${user.is_deleted ? " opacity-60" : ""}`}
                   >
