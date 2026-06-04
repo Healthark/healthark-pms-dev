@@ -25,13 +25,17 @@ import {
   Search, Pencil, Trash2, Users, FolderOpen,
   CheckCircle2, RotateCcw,
 } from "lucide-react";
-import { type ProjectResponse } from "../../services/project.service";
+import {
+  type ProjectResponse,
+  type ProjectQuery,
+} from "../../services/project.service";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { getErrorMessage } from "../../utils/errors";
 import { useUsers } from "../../queries/users";
 import {
   adminProjectsQueryKey,
   useAdminProjects,
+  useProjectsFilterOptions,
   useDeleteProject,
   useMarkProjectComplete,
   useReopenProject,
@@ -52,12 +56,9 @@ const ProjectModal = lazy(() =>
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useDebounce } from "../../hooks/useDebounce";
 import { SortableHeader } from "../SortableHeader";
-import {
-  compareValues,
-  type SortKind,
-  type SortState,
-} from "../../utils/sort";
+import { type SortState } from "../../utils/sort";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
@@ -78,19 +79,8 @@ type ProjectsSortKey =
   | "member_count"
   | "status";
 
-const PROJECTS_SORT_CONFIG: Record<
-  ProjectsSortKey,
-  { kind: SortKind; get: (p: ProjectResponse) => unknown }
-> = {
-  name:              { kind: "alpha",   get: (p) => p.name },
-  project_code:      { kind: "natural", get: (p) => p.project_code },
-  start_date:        { kind: "alpha",   get: (p) => p.start_date },
-  expected_end_date: { kind: "alpha",   get: (p) => p.expected_end_date },
-  pm_name:           { kind: "alpha",   get: (p) => p.pm_name },
-  reports_to_name:   { kind: "alpha",   get: (p) => p.reports_to_name },
-  member_count:      { kind: "numeric", get: (p) => p.member_count },
-  status:            { kind: "alpha",   get: (p) => p.status },
-};
+// Sort keys map 1:1 to the backend's sort_by values. Sorting is
+// server-side now, so there's no client-side compare config here.
 
 type StatusFilter = "active" | "completed" | "all";
 
@@ -116,16 +106,27 @@ interface ProjectsTabProps {
 }
 
 export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState(""); // debounced value → server
   const [showModal, setShowModal] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [sort, setSort] = useState<SortState<ProjectsSortKey> | null>(null);
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [pmFilter, setPmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  // Client-side pagination (frontend-only until the backend paginates).
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
+
+  const [debounceSearch] = useDebounce((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, 300);
+
+  // Reset to page 1 on any filter/sort/pageSize change (page itself isn't a
+  // dep, so Next/Prev don't bounce back to page 1).
+  useEffect(() => {
+    setPage(1);
+  }, [yearFilter, pmFilter, statusFilter, sort, pageSize]);
 
   const toast = useToast();
   const snackbar = useSnackbar();
@@ -144,11 +145,32 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     [allUsers],
   );
 
-  // ['admin', 'projects'] — shared TanStack cache. Always fetches with
-  // include_completed=true so the Active / Completed / All status filter
-  // is a pure client-side narrowing.
-  const { data: projects = [], isLoading: isProjectsLoading } = useAdminProjects();
+  const query: ProjectQuery = {
+    page,
+    per_page: pageSize,
+    search: search || undefined,
+    status: statusFilter,
+    year: yearFilter !== "all" ? Number(yearFilter) : undefined,
+    pm: pmFilter !== "all" ? pmFilter : undefined,
+    sort_by: sort?.key,
+    sort_dir: sort?.direction,
+  };
+
+  // ['admin','projects','page',query] — param-keyed page cache. Server
+  // applies search / status / year / PM filtering + sort + pagination.
+  const {
+    data,
+    isLoading: isProjectsLoading,
+    isFetching,
+  } = useAdminProjects(query);
+  const projects = data?.items ?? [];
+  const total = data?.total ?? 0;
   const isLoading = isProjectsLoading || isUsersLoading;
+
+  // Year + PM dropdown options (server-distinct, cached).
+  const { data: filterOptions } = useProjectsFilterOptions();
+  const availableYears = filterOptions?.years ?? [];
+  const availablePms = filterOptions?.pms ?? [];
 
   // Mutation hooks — each invalidates ['admin', 'projects'] on success,
   // which triggers a refetch and updates the table without manual
@@ -234,77 +256,15 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     queryClient.invalidateQueries({ queryKey: adminProjectsQueryKey });
   };
 
-  const availableYears = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          projects
-            .map((p) =>
-              p.start_date ? new Date(p.start_date).getFullYear() : null,
-            )
-            .filter((y): y is number => y !== null),
-        ),
-      ).sort((a, b) => b - a),
-    [projects],
-  );
-
-  const availablePms = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          projects
-            .map((p) => p.pm_name)
-            .filter((n): n is string => !!n),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [projects],
-  );
-
-  const visibleProjects = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    const filtered = projects.filter((p) => {
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
-      if (q) {
-        const matchesSearch =
-          p.name.toLowerCase().includes(q) ||
-          p.project_code.toLowerCase().includes(q);
-        if (!matchesSearch) return false;
-      }
-      if (yearFilter !== "all") {
-        const year = p.start_date
-          ? new Date(p.start_date).getFullYear().toString()
-          : null;
-        if (year !== yearFilter) return false;
-      }
-      if (pmFilter !== "all" && p.pm_name !== pmFilter) return false;
-      return true;
-    });
-    if (!sort) return filtered;
-    const { kind, get } = PROJECTS_SORT_CONFIG[sort.key];
-    return filtered
-      .slice()
-      .sort((a, b) => compareValues(get(a), get(b), kind, sort.direction));
-  }, [projects, searchQuery, yearFilter, pmFilter, statusFilter, sort]);
-
-  // Snap back to the first page whenever the filtered set or page size
-  // changes, so the user never lands on a now-empty page.
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, yearFilter, pmFilter, statusFilter, pageSize]);
-
-  const pagedProjects = useMemo(
-    () => visibleProjects.slice((page - 1) * pageSize, page * pageSize),
-    [visibleProjects, page, pageSize],
-  );
-
   const hasActiveFilters =
-    !!searchQuery ||
+    !!search ||
     yearFilter !== "all" ||
     pmFilter !== "all" ||
     statusFilter !== "all";
 
   const clearFilters = () => {
-    setSearchQuery("");
+    setSearchInput("");
+    setSearch("");
     setYearFilter("all");
     setPmFilter("all");
     setStatusFilter("all");
@@ -323,8 +283,11 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
           <input
             type="search"
             placeholder="Search by name or code…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              debounceSearch(e.target.value);
+            }}
             className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label="Search projects"
           />
@@ -393,25 +356,29 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
         <div className="flex items-center justify-center py-20 text-sm text-text-muted">
           Loading projects…
         </div>
-      ) : visibleProjects.length === 0 ? (
+      ) : total === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <FolderOpen className="h-10 w-10 text-text-muted mb-3" aria-hidden="true" />
           <p className="font-display text-base font-medium text-text-main">
-            {projects.length === 0
-              ? "No projects yet"
-              : "No projects match your filters"}
+            {hasActiveFilters
+              ? "No projects match your filters"
+              : "No projects yet"}
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            {projects.length === 0
-              ? "Create your first project to start assigning team members."
-              : "Try adjusting your search or filters."}
+            {hasActiveFilters
+              ? "Try adjusting your search or filters."
+              : "Create your first project to start assigning team members."}
           </p>
         </div>
       ) : (
         // No internal scroll: the table grows to fit all rows and the app
         // shell's <main> handles scrolling, so the page height adjusts to the
         // record count instead of trapping rows in a 75vh box. Mirrors UsersTab.
-        <div>
+        // Dim + aria-busy while a page/filter/sort request is in flight.
+        <div
+          className={`transition-opacity ${isFetching ? "opacity-60" : "opacity-100"}`}
+          aria-busy={isFetching}
+        >
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               <tr className="bg-surface-muted text-left">
@@ -445,7 +412,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {pagedProjects.map((project) => (
+              {projects.map((project) => (
                 <tr
                   key={project.id}
                   className="transition-colors hover:bg-surface-muted"
@@ -551,13 +518,16 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
         </div>
       )}
 
-      {!isLoading && visibleProjects.length > 0 && (
+      {!isLoading && total > 0 && (
         <TablePagination
           page={page}
           pageSize={pageSize}
-          totalItems={visibleProjects.length}
+          totalItems={total}
           onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
         />
       )}
 
