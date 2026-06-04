@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AuthContext, type AuthContextType } from "./AuthContext";
 import { authService, type AuthResponse } from "../services/auth.service";
 import { useSessionQuery } from "../queries/session";
+import { useIdleTimeout, SESSION_EXPIRED_KEY } from "../hooks/useIdleTimeout";
 
 // Maps outside the component and acts as source of truth.
 // Single-tenant deployment — only Healthark is populated. Kept as a
@@ -184,6 +185,20 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
 
   // Derived boolean — avoids null checks scattered across the codebase
   const isAuthenticated = useMemo(() => user !== null, [user]);
+
+  /**
+   * 30-minute idle timeout. While authenticated, `useIdleTimeout` slides the
+   * server-side session window on user activity (throttled POST /auth/refresh)
+   * and calls this handler once the idle limit is hit. We drop a marker that
+   * the Login page reads to show the "session expired" notice, then log out —
+   * clearing `user` makes ProtectedRoute redirect to /login (a soft
+   * react-router redirect, so the sessionStorage marker survives the hop).
+   */
+  const handleIdleExpire = useCallback((): void => {
+    sessionStorage.setItem(SESSION_EXPIRED_KEY, "idle");
+    logout();
+  }, [logout]);
+  useIdleTimeout(isAuthenticated, handleIdleExpire);
 
   /**
    * useMemo here is non-negotiable: without it, every render creates a new

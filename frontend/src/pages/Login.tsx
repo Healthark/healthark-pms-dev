@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Loader2, Lock, Mail } from "lucide-react";
 import { authService } from "../services/auth.service";
 import { useAuth } from "../hooks/useAuth";
+import { SESSION_EXPIRED_KEY } from "../hooks/useIdleTimeout";
 import { PasswordField } from "../components/common/PasswordField";
 
 // ─── Types & Configuration ───────────────────────────────────────────────────
@@ -54,6 +55,17 @@ export function Login() {
   const [forgotSent, setForgotSent] = useState(false);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState("");
+
+  // Surfaced once when the user was auto-logged-out for inactivity. The marker
+  // is set by AuthProvider's idle handler; we read-and-clear it on mount so it
+  // shows exactly once (not again on a later manual visit to /login).
+  const [idleExpired, setIdleExpired] = useState(false);
+  useEffect(() => {
+    if (sessionStorage.getItem(SESSION_EXPIRED_KEY) === "idle") {
+      setIdleExpired(true);
+      sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+    }
+  }, []);
 
   const switchToForgot = () => {
     setMode("forgot");
@@ -168,6 +180,15 @@ export function Login() {
 
           {mode === "login" && (
             <form className="space-y-6" onSubmit={handleLogin} noValidate>
+              {idleExpired && !error && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm p-3 rounded-lg text-center animate-[fadeIn_0.3s_ease-in-out]"
+                >
+                  Your session expired due to inactivity. Please sign in again.
+                </div>
+              )}
               {error && (
                 <div
                   role="alert"
