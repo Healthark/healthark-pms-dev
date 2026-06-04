@@ -1199,12 +1199,26 @@ def update_review(
 
     is_admin = current_user.role == "Admin"
     is_reviewer = review.reviewer_id == current_user.id
+    # A newly-assigned PM inherits edit rights on the project's reviews — the
+    # current active Primary, not just whoever first authored the row. This
+    # lets a reassigned PM continue/own in-flight evaluations like a regular PM.
+    is_current_pm = db.query(ProjectAssignment.id).filter(
+        ProjectAssignment.project_id == review.project_id,
+        ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.user_id == current_user.id,
+        ProjectAssignment.evaluator_type == "Primary",
+        ProjectAssignment.is_deleted == False,  # noqa: E712
+    ).first() is not None
 
-    if not (is_reviewer or is_admin):
+    if not (is_reviewer or is_current_pm or is_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the PM who submitted this review (or an Admin) may edit it.",
+            detail="Only the project's PM (or an Admin) may edit this review.",
         )
+
+    # Keep attribution truthful: the acting PM becomes the recorded reviewer.
+    if not is_admin:
+        review.reviewer_id = current_user.id
 
     review.comment_task_execution = payload.comment_task_execution
     review.comment_ownership = payload.comment_ownership

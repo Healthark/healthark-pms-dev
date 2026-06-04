@@ -11,6 +11,7 @@ import {
   type ProjectsFilterOptions,
 } from "../services/project.service";
 import type { Page } from "../services/pagination";
+import { coverageGapsQueryKey } from "./adminSettings";
 
 /**
  * Strict, shared query key for the admin projects list
@@ -73,6 +74,7 @@ export function useDeleteProject() {
     mutationFn: (projectId: number) => projectService.deleteProject(projectId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminProjectsQueryKey });
+      qc.invalidateQueries({ queryKey: coverageGapsQueryKey });
     },
   });
 }
@@ -83,6 +85,7 @@ export function useMarkProjectComplete() {
     mutationFn: (projectId: number) => projectService.markComplete(projectId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminProjectsQueryKey });
+      qc.invalidateQueries({ queryKey: coverageGapsQueryKey });
     },
   });
 }
@@ -92,7 +95,9 @@ export function useReopenProject() {
   return useMutation({
     mutationFn: (projectId: number) => projectService.reopen(projectId),
     onSuccess: () => {
+      // Re-opening can surface a project that now has no active PM.
       qc.invalidateQueries({ queryKey: adminProjectsQueryKey });
+      qc.invalidateQueries({ queryKey: coverageGapsQueryKey });
     },
   });
 }

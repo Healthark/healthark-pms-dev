@@ -172,6 +172,16 @@ export interface AdminNotifyPayload {
   channel: NotifyChannel;
 }
 
+/** Mentor/PM coverage gaps surfaced as the Admin-Panel warning banner. */
+export interface CoverageGapEntity {
+  id: number;
+  name: string;
+}
+export interface CoverageGaps {
+  orphaned_mentees: CoverageGapEntity[];
+  pm_less_projects: CoverageGapEntity[];
+}
+
 export interface AdminNotifyResult {
   recipients: number;
   emailed: boolean;
@@ -252,6 +262,12 @@ export const adminService = {
   // System Settings
   getSettings: async (): Promise<SystemSettings> => {
     const res = await apiClient.get<SystemSettings>("/admin/settings");
+    return res.data;
+  },
+
+  /** Live mentor/PM coverage gaps for the Admin-Panel warning banner. */
+  getCoverageGaps: async (): Promise<CoverageGaps> => {
+    const res = await apiClient.get<CoverageGaps>("/admin/coverage-gaps");
     return res.data;
   },
 

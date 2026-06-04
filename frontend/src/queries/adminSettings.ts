@@ -3,6 +3,7 @@ import {
   adminService,
   type AdminNotifyPayload,
   type AdminSettingsUpdatePayload,
+  type CoverageGaps,
   type SystemSettings,
   type YearOptionsResponse,
   type YearSettingsResponse,
@@ -26,6 +27,21 @@ export function useAdminSettings() {
   return useQuery<SystemSettings>({
     queryKey: adminSettingsQueryKey,
     queryFn: () => adminService.getSettings(),
+  });
+}
+
+/**
+ * Live mentor/PM coverage gaps that drive the Admin-Panel warning banner.
+ * Refetches on focus so a gap created in another tab/session surfaces, and is
+ * invalidated by user/project mutations (see adminProjects + the user hooks)
+ * so the banner clears the moment a reassignment fixes it.
+ */
+export const coverageGapsQueryKey = ["admin", "coverage-gaps"] as const;
+
+export function useCoverageGaps() {
+  return useQuery<CoverageGaps>({
+    queryKey: coverageGapsQueryKey,
+    queryFn: () => adminService.getCoverageGaps(),
   });
 }
 
