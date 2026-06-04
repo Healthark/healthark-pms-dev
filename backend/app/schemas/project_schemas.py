@@ -190,3 +190,13 @@ class ProjectResponse(BaseModel):
 class ProjectDetail(ProjectResponse):
     """Full project with nested assignments."""
     assignments: list[AssignmentResponse] = []
+
+
+class ProjectsFilterOptions(BaseModel):
+    """Distinct start years + PM names across the org's non-deleted
+    projects. Drives the Projects tab's Year + PM filter dropdowns once
+    the list is paginated. Served from a dedicated endpoint, cached with
+    a long staleTime like the other paginated grids' filter-options.
+    """
+    years: list[int]
+    pms: list[str]

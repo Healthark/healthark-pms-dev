@@ -14,10 +14,10 @@ Changes:
     - department_name resolved in assignment responses
 """
 
-from datetime import datetime, timezone
-from typing import List
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
-from sqlalchemy import func
+from datetime import date, datetime, timezone
+from typing import Optional
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_
 
 from app.api.dependencies import DbSession, CurrentUser
 from app.models.notification_models import NotificationCategory
@@ -35,7 +35,9 @@ from app.models.reference_models import Department
 from app.schemas.project_schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectDetail,
     AssignmentCreate, AssignmentUpdate, AssignmentResponse,
+    ProjectsFilterOptions,
 )
+from app.schemas.pagination import Page, PaginationParams
 
 router = APIRouter()
 
@@ -154,52 +156,158 @@ def _auto_fill_assignment(assignment_in: AssignmentCreate, db: DbSession) -> Ass
 # PROJECT CRUD
 # =====================================================================
 
-@router.get("/", response_model=List[ProjectResponse])
-def list_projects(
-    db: DbSession,
-    current_user: CurrentUser,
-    include_completed: bool = False,
-):
-    """List projects with member counts.
-
-    Defaults to active-only. Pass ``?include_completed=true`` to include
-    completed projects too (admins use this when reviewing the archive
-    or re-opening). ``is_deleted`` rows are always excluded.
-    """
-    _require_admin(current_user)
-
-    q = db.query(Project).filter(
-        Project.org_id == current_user.org_id,
-        Project.is_deleted == False,  # noqa: E712
-    )
-    if not include_completed:
-        q = q.filter(Project.status == PROJECT_STATUS_ACTIVE)
-
-    projects = q.order_by(Project.created_at.desc()).all()
-
-    count_map = dict(
-        db.query(ProjectAssignment.project_id, func.count(ProjectAssignment.id))
+def _project_pm_name_subquery(db: DbSession, org_id: int):
+    """Correlated scalar subquery → the Primary evaluator's name for the
+    outer Project row. Used for server-side PM sort + filter without
+    multiplying the main query's rows (≤1 active Primary per project).
+    Excludes soft-deleted assignments so a removed PM never shows."""
+    return (
+        db.query(User.full_name)
+        .join(ProjectAssignment, ProjectAssignment.user_id == User.id)
         .filter(
-            ProjectAssignment.org_id == current_user.org_id,
-            ProjectAssignment.is_deleted == False,  # noqa: E712
-        )
-        .group_by(ProjectAssignment.project_id)
-        .all()
-    )
-
-    pm_rows = (
-        db.query(ProjectAssignment.project_id, ProjectAssignment.user_id, User.full_name)
-        .join(User, User.id == ProjectAssignment.user_id)
-        .filter(
-            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.project_id == Project.id,
+            ProjectAssignment.org_id == org_id,
             ProjectAssignment.evaluator_type == "Primary",
             ProjectAssignment.is_deleted == False,  # noqa: E712
         )
-        .all()
+        .correlate(Project)
+        .limit(1)
+        .scalar_subquery()
     )
-    pm_map: dict[int, tuple[int, str]] = {row[0]: (row[1], row[2]) for row in pm_rows}
 
-    return [
+
+def _project_reports_to_name_subquery(db: DbSession):
+    """Correlated scalar subquery → the PM-reviewer (reports_to) name."""
+    return (
+        db.query(User.full_name)
+        .filter(User.id == Project.reports_to_id)
+        .correlate(Project)
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def _project_member_count_subquery(db: DbSession, org_id: int):
+    """Correlated scalar subquery → active assignment count for the outer
+    Project row. Used for server-side member_count sort. Excludes
+    soft-deleted assignments so removed members aren't counted."""
+    return (
+        db.query(func.count(ProjectAssignment.id))
+        .filter(
+            ProjectAssignment.project_id == Project.id,
+            ProjectAssignment.org_id == org_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
+
+@router.get("/", response_model=Page[ProjectResponse])
+def list_projects(
+    db: DbSession,
+    current_user: CurrentUser,
+    pg: PaginationParams = Depends(),
+    search: Optional[str] = Query(None, description="Matches project name or code"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="active | completed | all"
+    ),
+    year: Optional[int] = Query(None, description="Project start year"),
+    pm: Optional[str] = Query(None, description="Exact PM (Primary evaluator) name"),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
+):
+    """
+    Paginated project list with member counts + resolved PM. Admin-only.
+
+    Server-side search / status / year / PM filtering + sort + offset
+    pagination. The member-count and PM lookups are scoped to the page
+    slice (not the whole org) so they don't fetch data for off-page
+    projects. Soft-deleted assignments are excluded from member counts
+    and PM resolution. Filter-dropdown options come from
+    GET /projects/filter-options.
+    """
+    _require_admin(current_user)
+
+    pm_name_sq = _project_pm_name_subquery(db, current_user.org_id)
+    member_count_sq = _project_member_count_subquery(db, current_user.org_id)
+    reports_to_name_sq = _project_reports_to_name_subquery(db)
+
+    query = db.query(Project).filter(
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    )
+
+    # ── Filters (SQL, before pagination) ─────────────────────────────
+    if status_filter in (PROJECT_STATUS_ACTIVE, PROJECT_STATUS_COMPLETED):
+        query = query.filter(Project.status == status_filter)
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(Project.name.ilike(term), Project.project_code.ilike(term))
+        )
+    if year is not None:
+        # Date-range match (portable across SQLite + Postgres; avoids
+        # engine-specific year extraction on the DateTime column).
+        start = date(year, 1, 1)
+        end = date(year + 1, 1, 1)
+        query = query.filter(
+            Project.start_date >= start, Project.start_date < end
+        )
+    if pm:
+        query = query.filter(pm_name_sq == pm)
+
+    total = query.with_entities(func.count(Project.id)).order_by(None).scalar() or 0
+
+    # ── Sort (with stable id tiebreaker) ─────────────────────────────
+    sort_columns = {
+        "name": Project.name,
+        "project_code": Project.project_code,
+        "start_date": Project.start_date,
+        "expected_end_date": Project.expected_end_date,
+        "status": Project.status,
+        "pm_name": pm_name_sq,
+        "reports_to_name": reports_to_name_sq,
+        "member_count": member_count_sq,
+    }
+    sort_col = sort_columns.get(sort_by) if sort_by else None
+    if sort_col is not None:
+        direction = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
+        query = query.order_by(direction, Project.id.asc())
+    else:
+        query = query.order_by(Project.created_at.desc(), Project.id.asc())
+
+    projects = query.offset(pg.offset).limit(pg.limit).all()
+
+    # ── Resolve member counts + PMs for the PAGE slice only ──────────
+    page_ids = [p.id for p in projects]
+    count_map: dict[int, int] = {}
+    pm_map: dict[int, tuple[int, str]] = {}
+    if page_ids:
+        count_map = dict(
+            db.query(ProjectAssignment.project_id, func.count(ProjectAssignment.id))
+            .filter(
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+                ProjectAssignment.project_id.in_(page_ids),
+            )
+            .group_by(ProjectAssignment.project_id)
+            .all()
+        )
+        pm_rows = (
+            db.query(ProjectAssignment.project_id, ProjectAssignment.user_id, User.full_name)
+            .join(User, User.id == ProjectAssignment.user_id)
+            .filter(
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.evaluator_type == "Primary",
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+                ProjectAssignment.project_id.in_(page_ids),
+            )
+            .all()
+        )
+        pm_map = {row[0]: (row[1], row[2]) for row in pm_rows}
+
+    items = [
         _build_project_response(
             p,
             db,
@@ -209,6 +317,50 @@ def list_projects(
         )
         for p in projects
     ]
+
+    return Page[ProjectResponse](
+        items=items, total=total, page=pg.page, per_page=pg.per_page
+    )
+
+
+@router.get("/filter-options", response_model=ProjectsFilterOptions)
+def projects_filter_options(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Distinct project start years + PM names across the org's
+    non-deleted projects. Populates the Projects tab Year + PM
+    dropdowns. Declared before /{project_id} so the detail route
+    doesn't shadow it."""
+    _require_admin(current_user)
+
+    start_dates = (
+        db.query(Project.start_date)
+        .filter(
+            Project.org_id == current_user.org_id,
+            Project.is_deleted == False,  # noqa: E712
+            Project.start_date.isnot(None),
+        )
+        .all()
+    )
+    years = sorted({d[0].year for d in start_dates if d[0]}, reverse=True)
+
+    pm_names = (
+        db.query(User.full_name)
+        .join(ProjectAssignment, ProjectAssignment.user_id == User.id)
+        .join(Project, Project.id == ProjectAssignment.project_id)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+            Project.is_deleted == False,  # noqa: E712
+        )
+        .distinct()
+        .all()
+    )
+    pms = sorted({row[0] for row in pm_names if row[0]})
+
+    return ProjectsFilterOptions(years=years, pms=pms)
 
 
 @router.post("/", response_model=ProjectDetail, status_code=status.HTTP_201_CREATED)

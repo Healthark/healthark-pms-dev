@@ -13,6 +13,7 @@
  */
 
 import apiClient from "./api.client";
+import type { Page, PageQuery } from "./pagination";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -77,6 +78,19 @@ export interface ProjectDetail extends ProjectResponse {
   assignments: AssignmentResponse[];
 }
 
+/** Query params for the paginated Projects table. */
+export interface ProjectQuery extends PageQuery {
+  status?: "all" | "active" | "completed";
+  year?: number;
+  pm?: string;
+}
+
+/** Year + PM dropdown options for the Projects tab filters. */
+export interface ProjectsFilterOptions {
+  years: number[];
+  pms: string[];
+}
+
 export interface ProjectCreatePayload {
   project_code: string;
   name: string;
@@ -103,10 +117,30 @@ export interface ProjectUpdatePayload {
 // ── Service ─────────────────────────────────────────────────────────
 
 export const projectService = {
-  listProjects: async (includeCompleted = false): Promise<ProjectResponse[]> => {
-    const res = await apiClient.get<ProjectResponse[]>("/projects/", {
-      params: includeCompleted ? { include_completed: true } : undefined,
+  /** Paginated project list for the Admin Projects table. Server applies
+   *  search / status / year / PM filtering + sort + pagination. */
+  listProjects: async (params: ProjectQuery): Promise<Page<ProjectResponse>> => {
+    const res = await apiClient.get<Page<ProjectResponse>>("/projects/", {
+      params: {
+        page: params.page,
+        per_page: params.per_page,
+        search: params.search || undefined,
+        status:
+          params.status && params.status !== "all" ? params.status : undefined,
+        year: params.year ?? undefined,
+        pm: params.pm || undefined,
+        sort_by: params.sort_by || undefined,
+        sort_dir: params.sort_by ? params.sort_dir : undefined,
+      },
     });
+    return res.data;
+  },
+
+  /** Year + PM dropdown options for the Projects tab filters. */
+  getProjectsFilterOptions: async (): Promise<ProjectsFilterOptions> => {
+    const res = await apiClient.get<ProjectsFilterOptions>(
+      "/projects/filter-options",
+    );
     return res.data;
   },
 
