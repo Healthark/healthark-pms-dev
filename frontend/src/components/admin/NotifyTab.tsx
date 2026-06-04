@@ -185,7 +185,7 @@ export function NotifyTab() {
     }`;
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
       <div className="mb-6 flex items-center gap-2">
         <Megaphone className="h-5 w-5 text-brand" aria-hidden="true" />

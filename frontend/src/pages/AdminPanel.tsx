@@ -179,7 +179,7 @@ export default function AdminPanel() {
 
   // ── Tab style helper ──────────────────────────────────────────────────────
   const tabCls = (tab: ActiveTab) =>
-    `flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+    `flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
       activeTab === tab
         ? "border-brand text-brand"
         : "border-transparent text-text-muted hover:text-text-main"
@@ -188,8 +188,8 @@ export default function AdminPanel() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
+      {/* Page header — stacks on mobile, row on sm+ */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-xl font-semibold text-text-main">
             Admin Panel
@@ -202,7 +202,7 @@ export default function AdminPanel() {
           <button
             type="button"
             onClick={openAddModal}
-            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity sm:w-auto"
           >
             <UserPlus className="h-4 w-4" aria-hidden="true" />
             Add User
@@ -212,7 +212,7 @@ export default function AdminPanel() {
           <button
             type="button"
             onClick={() => projectsTabRef.current?.openCreate()}
-            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity sm:w-auto"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add Project
@@ -236,7 +236,7 @@ export default function AdminPanel() {
           header's scroll container and unstick it on page scroll. The card
           relies on rounded children instead of clipping. */}
       <div className="rounded-xl border border-border bg-surface shadow-sm">
-        <div className="flex border-b border-border px-2">
+        <div className="flex overflow-x-auto border-b border-border px-2">
           <button
             type="button"
             className={tabCls("users")}

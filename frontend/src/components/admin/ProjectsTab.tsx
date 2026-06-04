@@ -285,7 +285,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     <div>
       {/* Toolbar — search + filters */}
       <div className="border-b border-border px-5 py-4 flex items-center gap-4 flex-wrap">
-        <div className="relative max-w-sm flex-1 min-w-[200px]">
+        <div className="relative w-full sm:max-w-sm sm:flex-1 sm:min-w-[200px]">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
             aria-hidden="true"
@@ -385,11 +385,13 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
         // shell's <main> handles scrolling, so the page height adjusts to the
         // record count instead of trapping rows in a 75vh box. Mirrors UsersTab.
         // Dim + aria-busy while a page/filter/sort request is in flight.
+        // Below lg, the wide table scrolls horizontally; at lg+ overflow is
+        // visible so the sticky <th> can pin to <main> as the page scrolls.
         <div
-          className={`transition-opacity ${isFetching ? "opacity-60" : "opacity-100"}`}
+          className={`overflow-x-auto lg:overflow-x-visible transition-opacity ${isFetching ? "opacity-60" : "opacity-100"}`}
           aria-busy={isFetching}
         >
-          <table className="w-full text-sm border-separate border-spacing-0">
+          <table className="w-full min-w-[820px] text-sm border-separate border-spacing-0 lg:min-w-0">
             <thead>
               <tr className="bg-surface-muted text-left">
                 <th className={HEADER_CELL_CLS}>
