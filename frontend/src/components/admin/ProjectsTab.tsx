@@ -40,7 +40,7 @@ import {
   useMarkProjectComplete,
   useReopenProject,
 } from "../../queries/adminProjects";
-import { coverageGapsQueryKey } from "../../queries/adminSettings";
+import { coverageGapsQueryKey, useCoverageGaps } from "../../queries/adminSettings";
 import { exportService } from "../../services/export.service";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { extractFyToken } from "../../utils/fy";
@@ -172,6 +172,13 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const { data: filterOptions } = useProjectsFilterOptions();
   const availableYears = filterOptions?.years ?? [];
   const availablePms = filterOptions?.pms ?? [];
+
+  // PM-less projects (PM was deactivated/demoted) — highlight their rows amber
+  // so the admin can spot which projects need a PM. Mirrors the coverage banner.
+  const { data: coverageGaps } = useCoverageGaps();
+  const pmLessProjectIds = new Set(
+    (coverageGaps?.pm_less_projects ?? []).map((p) => p.id),
+  );
 
   // Mutation hooks — each invalidates ['admin', 'projects'] on success,
   // which triggers a refetch and updates the table without manual
@@ -418,7 +425,16 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
               {projects.map((project) => (
                 <tr
                   key={project.id}
-                  className="transition-colors hover:bg-surface-muted"
+                  title={
+                    pmLessProjectIds.has(project.id)
+                      ? "This project has no PM — assign a Primary evaluator."
+                      : undefined
+                  }
+                  className={`transition-colors ${
+                    pmLessProjectIds.has(project.id)
+                      ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60"
+                      : "hover:bg-surface-muted"
+                  }`}
                 >
                   <td className="px-5 py-3.5">
                     <div className="font-medium text-text-main">

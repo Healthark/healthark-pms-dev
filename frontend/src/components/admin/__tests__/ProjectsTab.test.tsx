@@ -68,6 +68,13 @@ vi.mock("../../../queries/adminProjects", () => ({
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
+const coverageState = vi.hoisted(() => ({
+  data: { orphaned_mentees: [] as { id: number; name: string }[], pm_less_projects: [] as { id: number; name: string }[] },
+}));
+vi.mock("../../../queries/adminSettings", () => ({
+  coverageGapsQueryKey: ["admin", "coverage-gaps"],
+  useCoverageGaps: () => ({ data: coverageState.data }),
+}));
 vi.mock("../../../queries/users", () => ({
   useUsers: () => ({ data: [], isLoading: false }),
 }));
@@ -98,6 +105,7 @@ void React;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  coverageState.data = { orphaned_mentees: [], pm_less_projects: [] };
 });
 
 describe("ProjectsTab — server-side pagination", () => {
@@ -146,5 +154,23 @@ describe("ProjectsTab — server-side pagination", () => {
         ),
       { timeout: 1000 },
     );
+  });
+
+  it("highlights a PM-less project row amber, leaving covered rows plain", () => {
+    coverageState.data = {
+      orphaned_mentees: [],
+      pm_less_projects: [{ id: 2, name: "Borealis" }], // Borealis is PM-less
+    };
+    render(<ProjectsTab />);
+
+    // The affected row carries the warning title + amber background.
+    const flagged = screen.getByTitle(/no PM/i);
+    expect(flagged).toHaveTextContent("Borealis");
+    expect(flagged.className).toMatch(/bg-red/);
+
+    // Apollo (id 1) is covered → no warning title on its row.
+    const apolloRow = screen.getByText("Apollo").closest("tr");
+    expect(apolloRow?.getAttribute("title")).toBeFalsy();
+    expect(apolloRow?.className).not.toMatch(/bg-red/);
   });
 });
