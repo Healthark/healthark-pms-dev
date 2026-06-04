@@ -249,6 +249,10 @@ def build_projects_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[s
     pm_by_project: dict[int, str] = {}
     members_by_project: dict[int, int] = {}
     for a in assignments:
+        # Member count + PM reflect the ACTIVE team (soft-removed members are
+        # listed separately on the Project Assignments sheet, marked removed).
+        if a.is_deleted:
+            continue
         members_by_project[a.project_id] = members_by_project.get(a.project_id, 0) + 1
         if a.evaluator_type == "Primary":
             pm_by_project[a.project_id] = _user_display(users_by_id, a.user_id)
@@ -282,6 +286,7 @@ PROJECT_ASSIGNMENTS_HEADERS = [
     "Employee Code", "Employee Name",
     "Assignment Role", "Department", "Evaluator Type",
     "Assigned Date", "Created At",
+    "Status", "Removed By", "Removed On",
 ]
 
 
@@ -310,6 +315,14 @@ def build_project_assignments_sheet(ws: Worksheet, db: Session, org_id: int) -> 
         ws.cell(row=r, column=8, value=a.evaluator_type or "")
         ws.cell(row=r, column=9, value=_dt(a.assigned_date))
         ws.cell(row=r, column=10, value=_dt(a.created_at))
+        # Soft-delete audit — removed members are kept in the export, marked.
+        ws.cell(row=r, column=11, value="Removed" if a.is_deleted else "Active")
+        ws.cell(
+            row=r,
+            column=12,
+            value=_user_display(users_by_id, a.removed_by_id) if a.is_deleted else "",
+        )
+        ws.cell(row=r, column=13, value=_dt(a.removed_at) if a.is_deleted else "")
         r += 1
     _autosize(ws)
     return r - 2

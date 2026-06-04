@@ -71,6 +71,15 @@ function toDateInput(val: string | null | undefined): string {
   return val.slice(0, 10);
 }
 
+/** Readable date for the "removed on …" audit line (e.g. "12 Mar 2026"). */
+function formatRemovedDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export function ProjectModal({
   projectId,
   users,
@@ -204,6 +213,16 @@ export function ProjectModal({
     setDraftAssignments((prev) => prev.filter((a) => a.tempId !== id));
   };
 
+  // Refresh just the assignment list after a soft remove / restore, so the
+  // member moves between the active and removed (greyed) groups without
+  // clobbering any unsaved edits to the project fields above.
+  const reloadAssignments = async () => {
+    if (projectId === null) return;
+    const detail = await projectService.getProjectDetail(projectId);
+    setExistingAssignments(detail.assignments);
+  };
+
+  // Soft remove: the row is kept (greyed at the bottom) with who/when audit.
   const removeExisting = async (assignmentId: number) => {
     const target = existingAssignments.find((a) => a.id === assignmentId);
     if (target?.evaluator_type === "Primary") {
@@ -212,7 +231,17 @@ export function ProjectModal({
     }
     try {
       await projectService.removeAssignment(assignmentId);
-      setExistingAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+      await reloadAssignments();
+    } catch (err: unknown) {
+      snackbar.error(getErrorMessage(err));
+    }
+  };
+
+  // Re-add a previously removed member (clears the removal marker).
+  const restoreExisting = async (assignmentId: number) => {
+    try {
+      await projectService.restoreAssignment(assignmentId);
+      await reloadAssignments();
     } catch (err: unknown) {
       snackbar.error(getErrorMessage(err));
     }
@@ -249,9 +278,13 @@ export function ProjectModal({
       .filter((id): id is number => id !== undefined),
   );
 
+  // Active (non-removed) rows drive every current-team derivation below, so a
+  // soft-removed member frees their slot (re-addable) and never counts as PM.
   const visibleExistingAssignments = existingAssignments.filter(
-    (a) => !editingExistingIds.has(a.id),
+    (a) => !a.is_deleted && !editingExistingIds.has(a.id),
   );
+  // Soft-removed rows render greyed at the very bottom with a Re-add action.
+  const removedAssignments = existingAssignments.filter((a) => a.is_deleted);
 
   const assignedUserIds = new Set([
     ...visibleExistingAssignments.map((a) => a.user_id),
@@ -732,6 +765,40 @@ export function ProjectModal({
                   <p className="text-xs text-text-muted italic text-center py-3">
                     No team members added yet. Click "Add Member" above.
                   </p>
+                )}
+
+                {/* Removed members — greyed, pinned at the very bottom (order-3),
+                    with the who/when audit line and a Re-add action. */}
+                {removedAssignments.length > 0 && (
+                  <div className="order-3 flex flex-col gap-2 border-t border-dashed border-border pt-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                      Removed members
+                    </p>
+                    {removedAssignments.map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted/40 px-3 py-2 opacity-70"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-text-muted line-through">
+                            {a.user_name}
+                          </span>
+                          <span className="ml-2 text-xs text-text-muted">
+                            Removed
+                            {a.removed_by_name ? ` by ${a.removed_by_name}` : ""}
+                            {a.removed_at ? ` on ${formatRemovedDate(a.removed_at)}` : ""}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => restoreExisting(a.id)}
+                          className="shrink-0 rounded-md px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand/10 transition-colors"
+                        >
+                          Re-add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </>

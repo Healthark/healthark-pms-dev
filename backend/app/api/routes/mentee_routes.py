@@ -299,6 +299,7 @@ def _build_mentee_project_assignments(
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == mentee_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
     )
@@ -310,6 +311,7 @@ def _build_mentee_project_assignments(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
             ProjectAssignment.project_id.in_(mentee_project_ids),
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
     ) if mentee_project_ids else []
@@ -353,6 +355,7 @@ def _build_mentee_project_assignments(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.evaluator_type == "Primary",
             ProjectAssignment.project_id.in_([a.project_id for a in assignments]),
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
     ) if assignments else []
@@ -477,6 +480,7 @@ def list_mentee_summaries(
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id.in_(mentee_ids),
+            ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
     )
