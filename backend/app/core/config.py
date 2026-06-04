@@ -101,6 +101,23 @@ class Settings(BaseSettings):
     # Panel's System Settings tab.
     ALLOW_DATE_SIMULATION: bool = False
 
+    # ── Exports ──────────────────────────────────────────────────────
+    # Hard ceiling on rows per sheet in an Excel export. Workbooks are built
+    # fully in memory (openpyxl), so an unbounded export of a huge org can
+    # OOM the worker. Past this many rows the export is refused with a 413 and
+    # a hint to narrow by FY/entity. Raise it for big orgs on a larger host;
+    # constant-memory streaming (write-only workbooks) is the longer-term fix.
+    EXPORT_MAX_ROWS: int = 100_000
+
+    # ── Login brute-force throttle ───────────────────────────────────
+    # Refuse /auth/login (429) once an account accumulates this many FAILED
+    # attempts within the sliding window. Windowed + per-email so it self-heals
+    # and a shared office IP isn't collectively locked out. Tune for your
+    # threat model; the defaults stop credential-stuffing without nagging
+    # fat-fingered users.
+    LOGIN_MAX_FAILED_ATTEMPTS: int = 10
+    LOGIN_FAILED_WINDOW_MINUTES: int = 15
+
     def cookie_kwargs(self) -> dict:
         """Shared cookie attributes for set_cookie / delete_cookie. SameSite=None
         requires Secure=True per browser spec, so we enforce that when the

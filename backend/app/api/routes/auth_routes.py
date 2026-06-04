@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.core.security import verify_password, create_access_token, get_password
 from app.core.config import settings
 from app.models.user_models import User
 from app.models.organization_models import Organization
+from app.models.login_attempt_models import LoginAttempt
 from app.models.password_reset_token_models import PasswordResetToken
 from app.models.reference_models import Department
 from app.schemas.auth_schemas import (
@@ -128,19 +129,63 @@ def _build_session(user: User, db: Session) -> dict:
     }
 
 
+def _client_ip(http_request: Request) -> str | None:
+    """Best-effort client IP for the failed-login ledger. Honors the first
+    X-Forwarded-For hop set by the PaaS edge (Render/most proxies); falls back
+    to the socket peer. Forensic only — never used in the throttle count, so
+    spoofing it can't lock anyone out."""
+    fwd = http_request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()[:64]
+    return http_request.client.host if http_request.client else None
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(
     request: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DbSession,
     response: Response,
+    http_request: Request,
 ):
     # Normalize email to lowercase so "David@x.com" and "david@x.com" both log
     # in the same account. Requires emails to be stored lowercase — enforced
     # at user creation time and verified with case-insensitive lookup here.
     email = (request.username or "").strip().lower()
+
+    # ── Brute-force throttle ─────────────────────────────────────────
+    # Refuse once an account has accumulated too many FAILED attempts in the
+    # window. Checked BEFORE the password hash so a throttled attacker can't
+    # even spend our bcrypt time. Per-email + windowed (self-healing); see
+    # LoginAttempt for why we don't key on IP.
+    window_start = datetime.now(timezone.utc) - timedelta(
+        minutes=settings.LOGIN_FAILED_WINDOW_MINUTES
+    )
+    recent_failures = (
+        db.query(func.count(LoginAttempt.id))
+        .filter(
+            LoginAttempt.email == email,
+            LoginAttempt.created_at >= window_start,
+        )
+        .scalar()
+        or 0
+    )
+    if recent_failures >= settings.LOGIN_MAX_FAILED_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "Too many failed login attempts. Please wait "
+                f"{settings.LOGIN_FAILED_WINDOW_MINUTES} minutes and try again, "
+                "or reset your password."
+            ),
+        )
+
     user = db.query(User).filter(func.lower(User.email) == email).first()
 
     if not user or not verify_password(request.password, user.password_hash):
+        # Record the failure (against the submitted email, even if unknown) so
+        # the window count climbs toward the cap.
+        db.add(LoginAttempt(email=email, ip=_client_ip(http_request)))
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

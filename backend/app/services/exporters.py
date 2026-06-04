@@ -17,12 +17,14 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
+from fastapi import HTTPException, status
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
 from app.core.cycle_utils import extract_fy_label
 from app.models.annual_review_models import AnnualReview
 from app.models.goal_criteria_models import GoalCriterion
@@ -71,6 +73,57 @@ def _stringify(value) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+# ── Security: CSV / Excel formula-injection hardening ───────────────
+#
+# A spreadsheet app evaluates a cell as a formula when its text begins with
+# one of these triggers. User-supplied strings (names, titles, descriptions,
+# free-text feedback) flow into cells verbatim, so a value like
+# `=HYPERLINK("http://evil",...)` or `=cmd|'/c ...'!A1` would execute when an
+# admin opens the export. We neutralize by prefixing a single quote, which
+# forces the cell to render as literal text. Applied to data rows only; the
+# header row is library-controlled. Numbers/bools/dates are non-str and skip.
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+# ── Memory guard: cap rows per sheet ────────────────────────────────
+#
+# Workbooks are assembled fully in memory, so an unbounded sheet can OOM the
+# worker. `_capped_all` fetches at most MAX_EXPORT_ROWS+1 rows and refuses the
+# whole export with a 413 if exceeded — turning an unpredictable process crash
+# (kills every in-flight request) into a recoverable, actionable error for the
+# one oversized request. Tunable via settings.EXPORT_MAX_ROWS.
+MAX_EXPORT_ROWS = getattr(settings, "EXPORT_MAX_ROWS", 100_000)
+
+
+def _capped_all(query, label: str) -> list:
+    """Materialize a query's rows, but refuse (413) if it exceeds the cap.
+    Uses limit(cap+1) so we never pull more than cap+1 rows into memory."""
+    rows = query.limit(MAX_EXPORT_ROWS + 1).all()
+    if len(rows) > MAX_EXPORT_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"{label} export exceeds the {MAX_EXPORT_ROWS:,}-row limit. "
+                "Narrow the export by financial year or entity and try again."
+            ),
+        )
+    return rows
+
+
+def _harden_formula_injection(wb: Workbook) -> None:
+    """Prefix any string cell that starts with a formula trigger with `'` so
+    Excel/Sheets/LibreOffice treat it as text rather than evaluating it.
+
+    openpyxl auto-stores a leading-`=` value as a real formula; reading and
+    re-assigning with the quote prefix demotes it back to an inert string."""
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                value = cell.value
+                if isinstance(value, str) and value[:1] in _FORMULA_TRIGGERS:
+                    cell.value = "'" + value
 
 
 def _dt(value) -> str:
@@ -188,12 +241,12 @@ USERS_HEADERS = [
 def build_users_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[str] = None) -> int:
     """`fy` is accepted for symmetry but Users have no cycle column — ignored."""
     _write_header(ws, USERS_HEADERS)
-    users = (
+    users = _capped_all(
         db.query(User)
         .options(joinedload(User.department), joinedload(User.designation))
         .filter(User.org_id == org_id)
-        .order_by(User.created_at.desc())
-        .all()
+        .order_by(User.created_at.desc()),
+        "Users",
     )
     users_by_id = {u.id: u for u in users}
 
@@ -234,11 +287,11 @@ PROJECTS_HEADERS = [
 def build_projects_sheet(ws: Worksheet, db: Session, org_id: int, fy: Optional[str] = None) -> int:
     """`fy` accepted for symmetry; Projects have no cycle column — ignored."""
     _write_header(ws, PROJECTS_HEADERS)
-    projects = (
+    projects = _capped_all(
         db.query(Project)
         .filter(Project.org_id == org_id)
-        .order_by(Project.created_at.desc())
-        .all()
+        .order_by(Project.created_at.desc()),
+        "Projects",
     )
     users_by_id = _build_user_lookup(db, org_id)
     assignments = (
@@ -292,11 +345,11 @@ PROJECT_ASSIGNMENTS_HEADERS = [
 
 def build_project_assignments_sheet(ws: Worksheet, db: Session, org_id: int) -> int:
     _write_header(ws, PROJECT_ASSIGNMENTS_HEADERS)
-    rows = (
+    rows = _capped_all(
         db.query(ProjectAssignment)
         .options(joinedload(ProjectAssignment.department))
-        .filter(ProjectAssignment.org_id == org_id)
-        .all()
+        .filter(ProjectAssignment.org_id == org_id),
+        "Project Assignments",
     )
     users_by_id = _build_user_lookup(db, org_id)
     projects_by_id = _project_lookup(db, org_id)
@@ -385,7 +438,7 @@ def build_goals_sheet(
     if user_id is not None:
         q = q.filter(Goal.user_id == user_id)
     q = _apply_fy_ilike(q, Goal.cycle_name, fy)
-    goals = q.order_by(Goal.created_at.desc()).all()
+    goals = _capped_all(q.order_by(Goal.created_at.desc()), "Annual Goals")
 
     users_by_id = _build_user_lookup(db, org_id)
 
@@ -456,7 +509,9 @@ def build_annual_reviews_sheet(
     if user_id is not None:
         q = q.filter(AnnualReview.user_id == user_id)
     q = _apply_fy_ilike(q, AnnualReview.cycle_name, fy)
-    reviews = q.order_by(AnnualReview.created_at.desc()).all()
+    reviews = _capped_all(
+        q.order_by(AnnualReview.created_at.desc()), "Annual Reviews"
+    )
 
     users_by_id = _build_user_lookup(db, org_id)
 
@@ -521,7 +576,9 @@ def build_project_reviews_sheet(
     if user_id is not None:
         q = q.filter(ProjectReview.user_id == user_id)
     q = _apply_fy_ilike(q, ProjectReview.cycle, fy)
-    reviews = q.order_by(ProjectReview.created_at.desc()).all()
+    reviews = _capped_all(
+        q.order_by(ProjectReview.created_at.desc()), "Project Reviews"
+    )
 
     users_by_id = _build_user_lookup(db, org_id)
     projects_by_id = _project_lookup(db, org_id)
@@ -575,10 +632,10 @@ PROJECT_REVIEW_EVALUATORS_HEADERS = [
 
 def build_project_review_evaluators_sheet(ws: Worksheet, db: Session, org_id: int) -> int:
     _write_header(ws, PROJECT_REVIEW_EVALUATORS_HEADERS)
-    rows = (
+    rows = _capped_all(
         db.query(ProjectReviewEvaluator)
-        .filter(ProjectReviewEvaluator.org_id == org_id)
-        .all()
+        .filter(ProjectReviewEvaluator.org_id == org_id),
+        "Project Review Evaluators",
     )
     users_by_id = _build_user_lookup(db, org_id)
     reviews = {
@@ -684,6 +741,7 @@ def build_single_entity_workbook(
         n = build_project_reviews_sheet(ws, db, org_id, fy, user_id)
     else:
         raise ValueError(f"Unknown entity: {entity}")
+    _harden_formula_injection(wb)
     return wb, n
 
 
@@ -708,6 +766,7 @@ def build_combined_workbook(
     ]:
         ws = wb.create_sheet(title=title)
         total += builder(ws)
+    _harden_formula_injection(wb)
     return wb, total
 
 
@@ -732,4 +791,5 @@ def build_per_employee_workbook(
     pr_ws = wb.create_sheet(title="Project Reviews")
     total += build_project_reviews_sheet(pr_ws, db, org_id, fy, user_id=target_user_id)
 
+    _harden_formula_injection(wb)
     return wb, total

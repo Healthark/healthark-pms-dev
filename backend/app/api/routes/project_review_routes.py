@@ -241,28 +241,67 @@ def get_my_projects(
         )
         .all()
     )
+    if not assignments:
+        return []
+
+    # ── Batch lookups (replaces the per-assignment N+1) ──────────────
+    project_ids = [a.project_id for a in assignments]
+    projects_by_id = {
+        p.id: p
+        for p in db.query(Project).filter(Project.id.in_(project_ids)).all()
+    }
+    dept_ids = {a.department_id for a in assignments if a.department_id}
+    depts_by_id = (
+        {d.id: d for d in db.query(Department).filter(Department.id.in_(dept_ids)).all()}
+        if dept_ids
+        else {}
+    )
+
+    # Active Primary (PM) per project, then PM names — two queries, not 2×N.
+    pm_user_id_by_project = dict(
+        db.query(ProjectAssignment.project_id, ProjectAssignment.user_id)
+        .filter(
+            ProjectAssignment.project_id.in_(project_ids),
+            ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+    pm_name_by_user_id = (
+        {
+            u.id: u.full_name
+            for u in db.query(User)
+            .filter(User.id.in_(set(pm_user_id_by_project.values())))
+            .all()
+        }
+        if pm_user_id_by_project
+        else {}
+    )
+
+    # This user's reviews across these projects, grouped by project_id.
+    reviews_by_project: dict[int, list[ProjectReview]] = {}
+    for rv in (
+        db.query(ProjectReview)
+        .filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.user_id == current_user.id,
+            ProjectReview.project_id.in_(project_ids),
+        )
+        .all()
+    ):
+        reviews_by_project.setdefault(rv.project_id, []).append(rv)
 
     cards: list[MyProjectCard] = []
     for a in assignments:
-        project = db.query(Project).filter(Project.id == a.project_id).first()
+        project = projects_by_id.get(a.project_id)
         if not project:
             continue
 
-        dept = db.query(Department).filter(Department.id == a.department_id).first() if a.department_id else None
+        dept = depts_by_id.get(a.department_id) if a.department_id else None
+        pm_name = pm_name_by_user_id.get(pm_user_id_by_project.get(a.project_id))
 
-        pm_assignment = db.query(ProjectAssignment).filter(
-            ProjectAssignment.project_id == a.project_id,
-            ProjectAssignment.evaluator_type == "Primary",
-            ProjectAssignment.is_deleted == False,  # noqa: E712
-        ).first()
-        pm_user = db.query(User).filter(User.id == pm_assignment.user_id).first() if pm_assignment else None
-
-        # Get ALL reviews for this user on this project (across all cycles)
-        reviews = db.query(ProjectReview).filter(
-            ProjectReview.org_id == current_user.org_id,
-            ProjectReview.user_id == current_user.id,
-            ProjectReview.project_id == a.project_id,
-        ).all()
+        # All reviews for this user on this project (across all cycles)
+        reviews = reviews_by_project.get(a.project_id, [])
 
         seen_cycles = set()
         for review in reviews:
@@ -281,7 +320,7 @@ def get_my_projects(
                 performance_group=_visible_performance_group(
                     review, current_user, db, current_user.org_id, current_cycle
                 ),
-                pm_name=pm_user.full_name if pm_user else None,
+                pm_name=pm_name,
                 cycle=review.cycle,
             ))
 
@@ -298,7 +337,7 @@ def get_my_projects(
                 assignment_role=a.assignment_role,
                 department_name=dept.name if dept else None,
                 review_status="pending",
-                pm_name=pm_user.full_name if pm_user else None,
+                pm_name=pm_name,
                 cycle=current_cycle,
             ))
 
@@ -341,49 +380,89 @@ def get_pm_evaluation_queue(
     if not pm_assignments:
         return []
 
-    cards: list[PMPendingReviewCard] = []
-
-    for pm_a in pm_assignments:
-        project = db.query(Project).filter(
-            Project.id == pm_a.project_id,
+    # ── Batch lookups (replaces the per-member / per-project N+1) ────
+    pm_project_ids = [pm.project_id for pm in pm_assignments]
+    projects_by_id = {
+        p.id: p
+        for p in db.query(Project)
+        .filter(
+            Project.id.in_(pm_project_ids),
             Project.is_deleted == False,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
-        ).first()
+        )
+        .all()
+    }
+    if not projects_by_id:
+        return []
+    visible_project_ids = list(projects_by_id.keys())
+
+    # All active team members across those projects (excluding the PM).
+    team_assignments = (
+        db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.project_id.in_(visible_project_ids),
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.user_id != current_user.id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+    if not team_assignments:
+        return []
+    team_by_project: dict[int, list[ProjectAssignment]] = {}
+    for ta in team_assignments:
+        team_by_project.setdefault(ta.project_id, []).append(ta)
+
+    member_ids = {ta.user_id for ta in team_assignments}
+    users_by_id = {
+        u.id: u for u in db.query(User).filter(User.id.in_(member_ids)).all()
+    }
+    dept_ids = {ta.department_id for ta in team_assignments if ta.department_id}
+    depts_by_id = (
+        {d.id: d for d in db.query(Department).filter(Department.id.in_(dept_ids)).all()}
+        if dept_ids
+        else {}
+    )
+    desig_ids = {u.designation_id for u in users_by_id.values() if u.designation_id}
+    desigs_by_id = (
+        {d.id: d for d in db.query(Designation).filter(Designation.id.in_(desig_ids)).all()}
+        if desig_ids
+        else {}
+    )
+
+    # All non-deleted reviews for these (project, member) pairs, grouped.
+    reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
+    for rv in (
+        db.query(ProjectReview)
+        .filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.project_id.in_(visible_project_ids),
+            ProjectReview.user_id.in_(member_ids),
+            ProjectReview.is_deleted == False,  # noqa: E712
+        )
+        .order_by(ProjectReview.created_at.desc())
+        .all()
+    ):
+        reviews_by_pair.setdefault((rv.project_id, rv.user_id), []).append(rv)
+
+    cards: list[PMPendingReviewCard] = []
+
+    # Iterate PM-project order, then members — preserves the original card order.
+    for pm_a in pm_assignments:
+        project = projects_by_id.get(pm_a.project_id)
         if not project:
             continue
 
-        # Get all team members on this project (excluding the PM themselves)
-        team_assignments = (
-            db.query(ProjectAssignment)
-            .filter(
-                ProjectAssignment.project_id == pm_a.project_id,
-                ProjectAssignment.org_id == current_user.org_id,
-                ProjectAssignment.user_id != current_user.id,
-                ProjectAssignment.is_deleted == False,  # noqa: E712
-            )
-            .all()
-        )
-
-        for ta in team_assignments:
-            user = db.query(User).filter(User.id == ta.user_id).first()
+        for ta in team_by_project.get(pm_a.project_id, []):
+            user = users_by_id.get(ta.user_id)
             if not user or user.is_deleted:
                 continue
 
-            dept = db.query(Department).filter(Department.id == ta.department_id).first() if ta.department_id else None
-            desig = db.query(Designation).filter(Designation.id == user.designation_id).first() if user.designation_id else None
+            dept = depts_by_id.get(ta.department_id) if ta.department_id else None
+            desig = desigs_by_id.get(user.designation_id) if user.designation_id else None
 
             # All ProjectReview rows for this (team_member, project) across cycles
-            reviews = (
-                db.query(ProjectReview)
-                .filter(
-                    ProjectReview.org_id == current_user.org_id,
-                    ProjectReview.user_id == ta.user_id,
-                    ProjectReview.project_id == pm_a.project_id,
-                    ProjectReview.is_deleted == False,  # noqa: E712
-                )
-                .order_by(ProjectReview.created_at.desc())
-                .all()
-            )
+            reviews = reviews_by_pair.get((ta.project_id, ta.user_id), [])
             cycles_with_review = {r.cycle for r in reviews}
 
             # One card per existing review (any cycle)
