@@ -199,9 +199,10 @@ export function AggregateView({
 
 /**
  * Horizontally-scrollable row of anonymous remark cards rendered below
- * the matrix on the My Feedback tab. Each card follows the same
- * blue (worked-with) / amber (not-worked-with) theme as the matrix.
- * Renders nothing when there are no surfaced remarks.
+ * the matrix (My / Mentee / All Feedback). Cards are fixed-height and
+ * equal-aligned; long remarks scroll inside their card. Each follows
+ * the same blue (worked-with) / amber (not-worked-with) theme as the
+ * matrix. Renders nothing when there are no surfaced remarks.
  */
 function RemarksStrip({ remarks }: { readonly remarks: FeedbackRemark[] }) {
   if (!remarks || remarks.length === 0) return null;
@@ -217,7 +218,7 @@ function RemarksStrip({ remarks }: { readonly remarks: FeedbackRemark[] }) {
           </span>
         </h3>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
         {remarks.map((r, i) => (
           <RemarkCard key={i} remark={r} />
         ))}
@@ -241,9 +242,9 @@ function RemarkCard({ remark }: { readonly remark: FeedbackRemark }) {
 
   return (
     <div
-      className={`shrink-0 snap-start w-72 rounded-xl border ${accent} p-4 shadow-sm flex flex-col`}
+      className={`shrink-0 snap-start w-72 h-56 rounded-xl border ${accent} p-4 shadow-sm flex flex-col`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <span
           className={`flex h-8 w-8 items-center justify-center rounded-full ${avatar}`}
         >
@@ -258,7 +259,9 @@ function RemarkCard({ remark }: { readonly remark: FeedbackRemark }) {
           </p>
         </div>
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-text-main">
+      {/* Fixed-height body — text scrolls inside the card when it
+          overflows, so every card stays the same size and aligned. */}
+      <p className="mt-3 flex-1 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-text-main pr-1">
         {remark.text}
       </p>
     </div>
