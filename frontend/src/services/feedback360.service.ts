@@ -114,9 +114,9 @@ export interface FeedbackAggregate {
   total_reviews: number;
   min_reviewers_threshold: number;
   questions: FeedbackQuestionAggregate[];
-  /** Anonymous remark cards. Only populated by the backend when the
-   *  requester views their OWN aggregate, and only for cohorts that
-   *  cleared `min_reviewers_threshold`. Empty otherwise. */
+  /** Anonymous remark cards. Populated by the backend for any aggregate
+   *  the requester may view (My / Mentee / Org Feedback), and only for
+   *  cohorts that cleared `min_reviewers_threshold`. Empty otherwise. */
   remarks: FeedbackRemark[];
 }
 

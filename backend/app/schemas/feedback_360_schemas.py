@@ -127,7 +127,7 @@ class FeedbackAggregateResponse(BaseModel):
     total_reviews: int
     min_reviewers_threshold: int
     questions: List[FeedbackQuestionAggregate]
-    # Anonymous remark cards. Only populated when the requester is
-    # viewing their OWN aggregate (My Feedback), and only for cohorts
-    # that cleared `min_reviewers_threshold`. Empty otherwise.
+    # Anonymous remark cards for any aggregate the requester may view
+    # (My / Mentee / Org Feedback). Only cohorts that cleared
+    # `min_reviewers_threshold` are included. Empty when there are none.
     remarks: List[FeedbackRemark] = Field(default_factory=list)

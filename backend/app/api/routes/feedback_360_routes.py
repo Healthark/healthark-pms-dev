@@ -98,14 +98,16 @@ def _build_question_aggregates(rows) -> list[FeedbackQuestionAggregate]:
     return out
 
 
-def _self_remark_cards(
+def _remark_cards(
     db: DbSession, target_user_id: int, fy_year: int
 ) -> list[FeedbackRemark]:
-    """Anonymous remark cards for a target's own My Feedback view. Pulls
-    every review's (worked_with, remarks) for the FY and applies the
-    per-cohort anonymity gate via select_visible_remarks() — a cohort's
-    remarks surface only once it has MIN_REVIEWERS_PER_COHORT reviewers.
-    Ordered worked-with then not-worked-with, each by created_at."""
+    """Anonymous remark cards for a target's aggregate view (My / Mentee
+    / Org Feedback — the caller has already passed can_view_target).
+    Pulls every review's (worked_with, remarks) for the FY and applies
+    the per-cohort anonymity gate via select_visible_remarks() — a
+    cohort's remarks surface only once it has MIN_REVIEWERS_PER_COHORT
+    reviewers. Ordered worked-with then not-worked-with, each by
+    created_at."""
     rows = (
         db.query(Feedback360Review.worked_with, Feedback360Review.remarks)
         .filter(
@@ -459,13 +461,11 @@ def get_aggregate(
 
     out = _build_question_aggregates(rows)
 
-    # Remark cards are private to the subject themselves — surfaced only
-    # on the user's own My Feedback view, never to mentors/management.
-    remarks = (
-        _self_remark_cards(db, target_user_id, fy_year)
-        if target_user_id == current_user.id
-        else []
-    )
+    # Remark cards are surfaced on every aggregate the requester is
+    # allowed to see (self, direct mentor, or management — already
+    # enforced by can_view_target above). The per-cohort 3+ reviewer
+    # gate keeps individual reviewers anonymous regardless of viewer.
+    remarks = _remark_cards(db, target_user_id, fy_year)
 
     return FeedbackAggregateResponse(
         target_user_id=target_user_id,

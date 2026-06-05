@@ -13,10 +13,10 @@ interface AggregateViewProps {
   readonly targetUserId: number;
   /** Label rendered in the table header (left side, above n=X). */
   readonly heading?: string;
-  /** Render the anonymous remark cards below the matrix. Only enabled
-   *  on the My Feedback tab — the backend also only populates
-   *  `remarks` for a self-view, so this is a display-side gate on top
-   *  of the API gate. */
+  /** Render the anonymous remark cards below the matrix. Enabled on the
+   *  My / Mentee / Org Feedback tabs. The backend only returns `remarks`
+   *  for aggregates the requester is allowed to view, so this is a
+   *  display-side toggle on top of the API permission gate. */
   readonly showRemarks?: boolean;
 }
 

@@ -178,6 +178,7 @@ function MenteeFeedbackTab() {
           key={selected.user_id}
           targetUserId={selected.user_id}
           heading={`${selected.full_name}'s aggregate`}
+          showRemarks
         />
       )}
     </div>
@@ -222,6 +223,7 @@ function OrgFeedbackTab() {
           key={selected.user_id}
           targetUserId={selected.user_id}
           heading={`${selected.full_name}'s aggregate`}
+          showRemarks
         />
       ) : (
         <div className="rounded-lg border-2 border-dashed border-border py-16 text-center text-sm text-text-muted">
