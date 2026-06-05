@@ -47,9 +47,16 @@ export interface FeedbackPeer {
 
 export type FeedbackRatings = Record<string, number>;
 
+/** Max length of a reviewer's free-text remark — mirrors the backend's
+ *  MAX_REMARK_LENGTH. Drives the textarea counter on the Give form. */
+export const MAX_REMARK_LENGTH = 1000;
+
 export interface FeedbackSubmitPayload {
   target_user_id: number;
   ratings: FeedbackRatings;
+  /** Optional free-text note (≤ MAX_REMARK_LENGTH). Omitted/blank → no
+   *  remark stored. */
+  remarks?: string | null;
 }
 
 // ── Single-peer + my-own-review (Give / Read-only page) ────────────
@@ -68,6 +75,9 @@ export interface FeedbackMyReview {
   /** null when the requester hasn't submitted yet → page is in submit mode.
    *  Non-null → read-only mode, sliders pre-filled and disabled. */
   ratings: FeedbackRatings | null;
+  /** The free-text note the requester left, echoed back in read-only
+   *  mode. null when none was given. */
+  remarks: string | null;
 }
 
 // ── Aggregate ───────────────────────────────────────────────────────
@@ -91,12 +101,23 @@ export interface FeedbackQuestionAggregate {
   not_worked_with: FeedbackBucketAggregate | null;
 }
 
+/** One anonymous free-text remark card. `worked_with` selects the
+ *  blue (worked-with) vs amber (not-worked-with) card treatment. */
+export interface FeedbackRemark {
+  worked_with: boolean;
+  text: string;
+}
+
 export interface FeedbackAggregate {
   target_user_id: number;
   fy_year: number;
   total_reviews: number;
   min_reviewers_threshold: number;
   questions: FeedbackQuestionAggregate[];
+  /** Anonymous remark cards. Only populated by the backend when the
+   *  requester views their OWN aggregate, and only for cohorts that
+   *  cleared `min_reviewers_threshold`. Empty otherwise. */
+  remarks: FeedbackRemark[];
 }
 
 // ── Service ─────────────────────────────────────────────────────────

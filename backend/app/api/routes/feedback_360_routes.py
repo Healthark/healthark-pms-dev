@@ -33,6 +33,7 @@ from app.schemas.feedback_360_schemas import (
     FeedbackPeerResponse,
     FeedbackQuestionAggregate,
     FeedbackQuestionResponse,
+    FeedbackRemark,
     FeedbackSubmitRequest,
     FeedbackTargetInfo,
 )
@@ -40,7 +41,9 @@ from app.services.feedback_360_service import (
     can_view_target,
     current_active_fy,
     did_work_together,
+    normalize_remark,
     reviewer_hash,
+    select_visible_remarks,
     shared_project_targets,
 )
 
@@ -56,6 +59,68 @@ def _resolved_active_fy(db: DbSession, org_id: int) -> int:
     """Resolve current active FY honoring `simulated_today` if set."""
     settings = db.query(SystemSettings).filter(SystemSettings.org_id == org_id).first()
     return current_active_fy(resolve_today(settings))
+
+
+def _build_question_aggregates(rows) -> list[FeedbackQuestionAggregate]:
+    """Fold the grouped (question_key, worked_with, count, avg, min, max)
+    rows into one FeedbackQuestionAggregate per registry question, with
+    each cohort hidden (set to None) when it falls below the per-cohort
+    reviewer threshold."""
+    by_q: dict[str, dict[bool, FeedbackBucketAggregate]] = {}
+    for question_key, ww, count, avg, mn, mx in rows:
+        by_q.setdefault(question_key, {})[bool(ww)] = FeedbackBucketAggregate(
+            count=int(count),
+            avg=float(avg) if avg is not None else 0.0,
+            min=int(mn) if mn is not None else 0,
+            max=int(mx) if mx is not None else 0,
+        )
+
+    out: list[FeedbackQuestionAggregate] = []
+    for q in FEEDBACK_QUESTIONS:
+        cohorts = by_q.get(q.key, {})
+        ww = cohorts.get(True)
+        nw = cohorts.get(False)
+        # Hide cohorts below the threshold.
+        if ww is not None and ww.count < MIN_REVIEWERS_PER_COHORT:
+            ww = None
+        if nw is not None and nw.count < MIN_REVIEWERS_PER_COHORT:
+            nw = None
+        out.append(
+            FeedbackQuestionAggregate(
+                key=q.key,
+                bucket=q.bucket,
+                text=q.text,
+                order=q.order,
+                worked_with=ww,
+                not_worked_with=nw,
+            )
+        )
+    return out
+
+
+def _self_remark_cards(
+    db: DbSession, target_user_id: int, fy_year: int
+) -> list[FeedbackRemark]:
+    """Anonymous remark cards for a target's own My Feedback view. Pulls
+    every review's (worked_with, remarks) for the FY and applies the
+    per-cohort anonymity gate via select_visible_remarks() — a cohort's
+    remarks surface only once it has MIN_REVIEWERS_PER_COHORT reviewers.
+    Ordered worked-with then not-worked-with, each by created_at."""
+    rows = (
+        db.query(Feedback360Review.worked_with, Feedback360Review.remarks)
+        .filter(
+            Feedback360Review.target_user_id == target_user_id,
+            Feedback360Review.fy_year == fy_year,
+        )
+        .order_by(Feedback360Review.created_at)
+        .all()
+    )
+    visible = select_visible_remarks(
+        ((bool(ww), rm) for ww, rm in rows), MIN_REVIEWERS_PER_COHORT
+    )
+    return [
+        FeedbackRemark(worked_with=ww, text=text) for ww, text in visible
+    ]
 
 
 # ── Static registry ─────────────────────────────────────────────────
@@ -212,6 +277,7 @@ def get_my_review(
         .first()
     )
     ratings: dict[str, int] | None = None
+    remarks: str | None = None
     if review is not None:
         rows = (
             db.query(Feedback360Answer.question_key, Feedback360Answer.rating)
@@ -219,6 +285,7 @@ def get_my_review(
             .all()
         )
         ratings = {key: int(rating) for key, rating in rows}
+        remarks = review.remarks
 
     return FeedbackMyReviewResponse(
         target=FeedbackTargetInfo(
@@ -230,6 +297,7 @@ def get_my_review(
         ),
         fy_year=fy_year,
         ratings=ratings,
+        remarks=remarks,
     )
 
 
@@ -307,6 +375,7 @@ def submit_review(
         fy_year=fy_year,
         reviewer_hash=rev_hash,
         worked_with=worked_with,
+        remarks=normalize_remark(payload.remarks),
     )
     db.add(review)
     try:
@@ -388,35 +457,15 @@ def get_aggregate(
         .all()
     )
 
-    by_q: dict[str, dict[bool, FeedbackBucketAggregate]] = {}
-    for question_key, ww, count, avg, mn, mx in rows:
-        by_q.setdefault(question_key, {})[bool(ww)] = FeedbackBucketAggregate(
-            count=int(count),
-            avg=float(avg) if avg is not None else 0.0,
-            min=int(mn) if mn is not None else 0,
-            max=int(mx) if mx is not None else 0,
-        )
+    out = _build_question_aggregates(rows)
 
-    out: list[FeedbackQuestionAggregate] = []
-    for q in FEEDBACK_QUESTIONS:
-        cohorts = by_q.get(q.key, {})
-        ww = cohorts.get(True)
-        nw = cohorts.get(False)
-        # Hide cohorts below the threshold.
-        if ww is not None and ww.count < MIN_REVIEWERS_PER_COHORT:
-            ww = None
-        if nw is not None and nw.count < MIN_REVIEWERS_PER_COHORT:
-            nw = None
-        out.append(
-            FeedbackQuestionAggregate(
-                key=q.key,
-                bucket=q.bucket,
-                text=q.text,
-                order=q.order,
-                worked_with=ww,
-                not_worked_with=nw,
-            )
-        )
+    # Remark cards are private to the subject themselves — surfaced only
+    # on the user's own My Feedback view, never to mentors/management.
+    remarks = (
+        _self_remark_cards(db, target_user_id, fy_year)
+        if target_user_id == current_user.id
+        else []
+    )
 
     return FeedbackAggregateResponse(
         target_user_id=target_user_id,
@@ -424,4 +473,5 @@ def get_aggregate(
         total_reviews=total_reviews,
         min_reviewers_threshold=MIN_REVIEWERS_PER_COHORT,
         questions=out,
+        remarks=remarks,
     )

@@ -93,6 +93,7 @@ export function Feedback360() {
             <AggregateView
               targetUserId={user.user_id}
               heading="Your aggregate"
+              showRemarks
             />
           )}
           {activeTab === "mentees" && hasMentees && <MenteeFeedbackTab />}

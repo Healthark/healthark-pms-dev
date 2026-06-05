@@ -10,6 +10,11 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+# Max length of a reviewer's free-text remark. Enforced here (pydantic)
+# and surfaced as a counter in the UI. Kept modest so a single card
+# stays readable in the horizontal scroller.
+MAX_REMARK_LENGTH = 1000
+
 
 # ── Question registry ───────────────────────────────────────────────
 
@@ -56,10 +61,13 @@ class FeedbackMyReviewResponse(BaseModel):
     """The requester's own review on a target, if any. `ratings` is null
     when the requester hasn't submitted yet (frontend renders the
     page in submit mode). When non-null, the page renders read-only
-    with the slider thumbs at these positions."""
+    with the slider thumbs at these positions. `remarks` echoes back
+    the free-text note the requester left (null if none / not yet
+    submitted)."""
     target: FeedbackTargetInfo
     fy_year: int
     ratings: Optional[Dict[str, int]] = None
+    remarks: Optional[str] = None
 
 
 # ── Submission ──────────────────────────────────────────────────────
@@ -69,9 +77,14 @@ class FeedbackSubmitRequest(BaseModel):
     """Body for POST /feedback-360/reviews. Skipped questions are
     simply absent from `ratings`. Ratings must be 1..5 (validated in
     the route handler so the per-key error message can name the
-    offending question key); at least one rating is required."""
+    offending question key); at least one rating is required.
+
+    `remarks` is an optional free-text note (≤ MAX_REMARK_LENGTH).
+    Blank / whitespace-only strings are normalized to None server-side
+    so they don't surface as empty cards."""
     target_user_id: int
     ratings: Dict[str, int] = Field(default_factory=dict)
+    remarks: Optional[str] = Field(default=None, max_length=MAX_REMARK_LENGTH)
 
 
 # ── Aggregate (My / Mentee / Org Feedback tabs) ─────────────────────
@@ -99,9 +112,22 @@ class FeedbackQuestionAggregate(BaseModel):
     not_worked_with: Optional[FeedbackBucketAggregate] = None
 
 
+class FeedbackRemark(BaseModel):
+    """One anonymous free-text remark card. `worked_with` drives the
+    blue (worked-with) vs amber (not-worked-with) card treatment in the
+    UI. No reviewer-identifying field is carried — the author is one of
+    the cohort's 3+ reviewers and is unrecoverable."""
+    worked_with: bool
+    text: str
+
+
 class FeedbackAggregateResponse(BaseModel):
     target_user_id: int
     fy_year: int
     total_reviews: int
     min_reviewers_threshold: int
     questions: List[FeedbackQuestionAggregate]
+    # Anonymous remark cards. Only populated when the requester is
+    # viewing their OWN aggregate (My Feedback), and only for cohorts
+    # that cleared `min_reviewers_threshold`. Empty otherwise.
+    remarks: List[FeedbackRemark] = Field(default_factory=list)

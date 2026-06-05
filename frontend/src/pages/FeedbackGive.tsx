@@ -24,6 +24,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import {
+  MAX_REMARK_LENGTH,
   type FeedbackQuestion,
   type FeedbackRatings,
 } from "../services/feedback360.service";
@@ -65,16 +66,18 @@ export function FeedbackGive() {
 
   const isReadOnly = my?.ratings != null;
   const [ratings, setRatings] = useState<FeedbackRatings>({});
+  const [remarks, setRemarks] = useState("");
   const [submitError, setSubmitError] = useState("");
   const isSubmitting = submitFeedbackMutation.isPending;
 
-  // Pre-fill ratings when the read-only payload arrives. Effect over a
-  // ref-style setter so re-renders during refetch don't clobber edits
-  // mid-session — but here read-only is a terminal state (can't go
+  // Pre-fill ratings + remarks when the read-only payload arrives. Effect
+  // over a ref-style setter so re-renders during refetch don't clobber
+  // edits mid-session — but here read-only is a terminal state (can't go
   // back to draft) so a simple effect is fine.
   useEffect(() => {
     if (my?.ratings) setRatings(my.ratings);
-  }, [my?.ratings]);
+    if (my?.remarks != null) setRemarks(my.remarks);
+  }, [my?.ratings, my?.remarks]);
 
   const grouped = useMemo(() => {
     const out: { bucket: string; questions: FeedbackQuestion[] }[] = [];
@@ -109,6 +112,7 @@ export function FeedbackGive() {
       await submitFeedbackMutation.mutateAsync({
         target_user_id: targetUserId,
         ratings,
+        remarks: remarks.trim() || null,
       });
       toast.success("Feedback submitted.");
       // Broadcast invalidation in the mutation hook flips the peer's
@@ -295,6 +299,49 @@ export function FeedbackGive() {
           </div>
         ))}
       </div>
+
+      {/* ── Remarks ───────────────────────────────────────────────── */}
+      {(!isReadOnly || remarks.trim().length > 0) && (
+        <div className="rounded-xl border border-border bg-surface shadow-sm p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[14px] font-bold text-brand">
+              {isReadOnly ? "Your remarks" : "Remarks"}
+              {!isReadOnly && (
+                <span className="ml-1.5 text-[11px] font-normal text-text-muted">
+                  (optional)
+                </span>
+              )}
+            </h3>
+            {!isReadOnly && (
+              <span className="text-[11px] text-text-muted tabular-nums">
+                {remarks.length}/{MAX_REMARK_LENGTH}
+              </span>
+            )}
+          </div>
+          {isReadOnly ? (
+            <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-text-main">
+              {remarks}
+            </p>
+          ) : (
+            <>
+              <textarea
+                value={remarks}
+                onChange={(e) =>
+                  setRemarks(e.target.value.slice(0, MAX_REMARK_LENGTH))
+                }
+                maxLength={MAX_REMARK_LENGTH}
+                rows={4}
+                placeholder="Add an optional note to go alongside your ratings. It's shown anonymously, so avoid anything that could identify you."
+                className="mt-2 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-[13px] leading-relaxed text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+              />
+              <p className="mt-1.5 text-[11px] text-text-muted">
+                Shared anonymously below the recipient's feedback matrix —
+                only once 3+ reviewers in your cohort have submitted.
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       {submitError && (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3">
