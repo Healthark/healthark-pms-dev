@@ -38,14 +38,14 @@ export function PeerList() {
   const error = queryError ? getErrorMessage(queryError) : "";
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "worked" | "not_worked">(
-    "worked",
+    "all",
   );
 
-  const hasActiveFilters = !!search || filter !== "worked";
+  const hasActiveFilters = !!search || filter !== "all";
 
   const clearFilters = () => {
     setSearch("");
-    setFilter("worked");
+    setFilter("all");
   };
 
   const filtered = useMemo(() => {
