@@ -1,13 +1,5 @@
 import apiClient from "./api.client";
 
-/** A computed standing-count notification (recomputed each load, no read state). */
-export interface NotificationItem {
-  type: string;
-  message: string;
-  count: number;
-  severity: "info" | "warning" | "blocking";
-}
-
 export type NotificationCategory = "personal" | "announcement";
 
 /** A persisted notification row — a personal event or an org-wide announcement. */
@@ -25,8 +17,6 @@ export interface StoredNotificationItem {
 
 export interface TopbarSummary {
   active_cycle: string | null;
-  /** Computed standing counts (Notifications tab). */
-  notifications: NotificationItem[];
   /** Persisted personal events (Notifications tab). */
   personal: StoredNotificationItem[];
   /** Persisted org-wide announcements (Announcements tab). */

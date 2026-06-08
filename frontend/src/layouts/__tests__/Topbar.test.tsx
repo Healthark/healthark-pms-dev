@@ -3,8 +3,8 @@
  *
  * Topbar pulls in auth / settings / notifications hooks and the panel; all are
  * mocked so we can assert just the badge: it shows the total unread count
- * (computed alerts + personal + announcements), caps at "9+", and disappears
- * when there's nothing unread.
+ * (unread personal + announcements), caps at "9+", and disappears when there's
+ * nothing unread.
  */
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
@@ -59,31 +59,24 @@ describe("Topbar bell badge", () => {
   it("shows the total unread count", () => {
     renderTopbar({
       active_cycle: "H1 FY26-27",
-      notifications: [{ type: "x", message: "m", count: 1, severity: "info" }],
       personal: [stored(1, false), stored(2, false)],
       announcements: [stored(3, false)],
     });
-    // 1 computed + 2 personal unread + 1 announcement unread = 4
-    expect(screen.getByText("4")).toBeInTheDocument();
+    // 2 personal unread + 1 announcement unread = 3
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
   it("caps the badge at 9+", () => {
     renderTopbar({
       active_cycle: null,
-      notifications: Array.from({ length: 12 }, (_, i) => ({
-        type: `x${i}`,
-        message: "m",
-        count: 1,
-        severity: "info" as const,
-      })),
-      personal: [],
+      personal: Array.from({ length: 12 }, (_, i) => stored(i + 1, false)),
       announcements: [],
     });
     expect(screen.getByText("9+")).toBeInTheDocument();
   });
 
   it("shows no badge when nothing is unread", () => {
-    renderTopbar({ active_cycle: null, notifications: [], personal: [], announcements: [] });
+    renderTopbar({ active_cycle: null, personal: [], announcements: [] });
     // Read rows don't count; no numeric badge rendered.
     expect(screen.queryByText(/^\d+\+?$/)).not.toBeInTheDocument();
   });

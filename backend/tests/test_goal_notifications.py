@@ -21,6 +21,7 @@ from app.api.routes.goal_routes import (
     approve_goal,
     bulk_approve_goals,
     remind_goal_self_review,
+    submit_goal,
     submit_goal_mentor_review,
     submit_goal_self_review,
 )
@@ -150,6 +151,39 @@ def test_changes_requested_notifies_owner(db):
 
     n = db.query(Notification).filter(Notification.type == "goal_changes_requested").one()
     assert n.recipient_id == mentee.id
+
+
+# ── submit for approval ──────────────────────────────────────────────
+
+
+def test_submit_goal_notifies_mentor(db):
+    org, mentor, mentee = _setup(db)
+    g = _goal(db, org, mentee, status=ApprovalStatus.DRAFT.value)
+    db.commit()
+
+    submit_goal(g.id, db, mentee)
+
+    n = db.query(Notification).filter(
+        Notification.type == "goal_submitted_for_approval"
+    ).one()
+    assert n.recipient_id == mentor.id
+    assert n.category == "personal"
+    assert n.link == "/annual-goals?tab=team"
+    assert n.actor_id == mentee.id
+
+
+def test_submit_goal_skips_self_notification_when_mentor_submits(db):
+    # An admin-mentor submitting their own mentee's draft IS the recipient,
+    # so the self-notify guard suppresses the row.
+    org, mentor, mentee = _setup(db)
+    g = _goal(db, org, mentee, status=ApprovalStatus.DRAFT.value)
+    db.commit()
+
+    submit_goal(g.id, db, mentor)
+
+    assert db.query(Notification).filter(
+        Notification.type == "goal_submitted_for_approval"
+    ).count() == 0
 
 
 def test_bulk_approve_notifies_each_owner(db):
