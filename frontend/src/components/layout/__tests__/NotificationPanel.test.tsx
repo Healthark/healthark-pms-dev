@@ -13,10 +13,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { NotificationPanel } from "../NotificationPanel";
-import type {
-  NotificationItem,
-  StoredNotificationItem,
-} from "../../../services/notification.service";
+import type { StoredNotificationItem } from "../../../services/notification.service";
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
@@ -27,10 +24,6 @@ vi.mock("react-router-dom", async () => {
 });
 
 void React;
-
-const computed: NotificationItem[] = [
-  { type: "goals_pending_approval", message: "2 goals await your approval.", count: 2, severity: "warning" },
-];
 
 const personal: StoredNotificationItem[] = [
   {
@@ -60,7 +53,6 @@ const announcements: StoredNotificationItem[] = [
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof NotificationPanel>> = {}) {
   const props = {
-    notifications: computed,
     personal,
     announcements,
     anchorRect: { bottom: 10, right: 10 } as DOMRect,
@@ -85,7 +77,8 @@ describe("NotificationPanel", () => {
     renderPanel();
     expect(screen.getByRole("button", { name: /Notifications/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Announcements/ })).toBeInTheDocument();
-    expect(screen.getByText("2 goals await your approval.")).toBeInTheDocument();
+    // Notifications tab shows persisted personal events; announcements stay
+    // hidden until that tab is selected.
     expect(screen.getByText("Goal approved")).toBeInTheDocument();
     expect(screen.queryByText("Second half has started")).not.toBeInTheDocument();
   });
@@ -112,10 +105,10 @@ describe("NotificationPanel", () => {
     renderPanel();
     await user.click(screen.getByRole("button", { name: /Announcements/ }));
     expect(screen.getByText("Second half has started")).toBeInTheDocument();
-    expect(screen.queryByText("2 goals await your approval.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Goal approved")).not.toBeInTheDocument();
   });
 
-  it("marks a personal row read by id; computed alerts have no tick", async () => {
+  it("marks a personal row read by id", async () => {
     const user = userEvent.setup();
     const props = renderPanel();
     const ticks = screen.getAllByLabelText("Mark as read");
@@ -137,7 +130,7 @@ describe("NotificationPanel", () => {
   });
 
   it("shows the empty state and hides 'Mark all' when nothing is actionable", () => {
-    renderPanel({ notifications: [], personal: [] });
+    renderPanel({ personal: [] });
     expect(screen.getByText(/all caught up/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Mark all as read" })).not.toBeInTheDocument();
   });

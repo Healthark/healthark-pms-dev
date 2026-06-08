@@ -1,16 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Info, CheckCircle, BellDot, Check } from "lucide-react";
-import type {
-  NotificationItem,
-  StoredNotificationItem,
-} from "../../services/notification.service";
+import { CheckCircle, BellDot, Check } from "lucide-react";
+import type { StoredNotificationItem } from "../../services/notification.service";
 import { timeAgo } from "../../utils/timeAgo";
 
 interface NotificationPanelProps {
-  /** Computed standing counts — Notifications tab. */
-  readonly notifications: NotificationItem[];
   /** Persisted personal events — Notifications tab. */
   readonly personal: StoredNotificationItem[];
   /** Persisted org-wide announcements — Announcements tab. */
@@ -26,44 +21,6 @@ interface NotificationPanelProps {
   readonly onMarkAllAnnouncements: () => void;
 }
 
-/**
- * Maps a computed (system) notification to the page where the user can act
- * on it. Goal-related notifications land on the Annual Goals page; the
- * `?tab=` param focuses the relevant tab (Team Goals for items awaiting the
- * mentor's approval, My Goals for the user's own goals).
- */
-function routeForNotification(type: string): string {
-  switch (type) {
-    case "goals_pending_approval":
-      return "/annual-goals?tab=team";
-    case "goals_changes_requested":
-    case "goals_draft":
-    default:
-      return "/annual-goals?tab=my";
-  }
-}
-
-const SEVERITY_STYLES: Record<
-  NotificationItem["severity"],
-  { icon: typeof Info; iconClass: string; bgClass: string }
-> = {
-  info: {
-    icon: Info,
-    iconClass: "text-blue-500 dark:text-blue-400 dark:text-blue-300",
-    bgClass: "bg-blue-50 dark:bg-blue-950/40",
-  },
-  warning: {
-    icon: AlertTriangle,
-    iconClass: "text-amber-500 dark:text-amber-400 dark:text-amber-300",
-    bgClass: "bg-amber-50 dark:bg-amber-950/40",
-  },
-  blocking: {
-    icon: AlertTriangle,
-    iconClass: "text-red-500 dark:text-red-400 dark:text-red-300",
-    bgClass: "bg-red-50 dark:bg-red-950/40",
-  },
-};
-
 type Tab = "notifications" | "announcements";
 
 function EmptyState({ label }: { readonly label: string }) {
@@ -77,7 +34,6 @@ function EmptyState({ label }: { readonly label: string }) {
 }
 
 export function NotificationPanel({
-  notifications,
   personal,
   announcements,
   anchorRect,
@@ -118,8 +74,6 @@ export function NotificationPanel({
 
   const personalUnread = personal.filter((p) => !p.is_read).length;
   const announcementsUnread = announcements.filter((a) => !a.is_read).length;
-  // Computed rows reaching this component are always undismissed → "active".
-  const notificationsCount = notifications.length + personalUnread;
 
   const tabCls = (t: Tab) =>
     `flex-1 px-3 py-2.5 text-center text-xs font-semibold border-b-2 transition-colors ${
@@ -196,10 +150,9 @@ export function NotificationPanel({
     );
   };
 
-  const notificationsEmpty = notifications.length === 0 && personal.length === 0;
-  // "Mark all as read" applies to whichever tab is active. Computed standing
-  // alerts aren't dismissable (they clear when resolved), so the Notifications
-  // tab's mark-all is gated only on unread stored personal rows.
+  const notificationsEmpty = personal.length === 0;
+  // "Mark all as read" applies to whichever tab is active — gated on that
+  // tab's unread stored-row count.
   const activeClearable =
     tab === "notifications" ? personalUnread > 0 : announcementsUnread > 0;
   const activeMarkAll =
@@ -228,7 +181,7 @@ export function NotificationPanel({
       {/* Tab bar — two equal, centered halves */}
       <div className="flex shrink-0 border-b border-border">
         <button type="button" className={tabCls("notifications")} onClick={() => setTab("notifications")}>
-          Notifications{unreadDot(notificationsCount > 0)}
+          Notifications{unreadDot(personalUnread > 0)}
         </button>
         <button type="button" className={tabCls("announcements")} onClick={() => setTab("announcements")}>
           Announcements{unreadDot(announcementsUnread > 0)}
@@ -248,32 +201,12 @@ export function NotificationPanel({
         </div>
       )}
 
-      {/* ── Notifications tab ── */}
+      {/* ── Notifications tab — persisted personal events ── */}
       {tab === "notifications" &&
         (notificationsEmpty ? (
-          <EmptyState label="No pending actions right now." />
+          <EmptyState label="No notifications right now." />
         ) : (
           <ul className="flex-1 divide-y divide-border overflow-y-auto">
-            {/* Computed standing alerts — live to-dos, not dismissable. They
-                clear themselves when the underlying work is resolved, so there
-                is no ✓ tick and no timestamp; the whole row deep-links to the
-                action. */}
-            {notifications.map((n) => {
-              const { icon: Icon, iconClass, bgClass } = SEVERITY_STYLES[n.severity];
-              return (
-                <li key={n.type} className={bgClass}>
-                  <button
-                    type="button"
-                    onClick={() => handleNavigate(routeForNotification(n.type))}
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
-                  >
-                    <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${iconClass}`} aria-hidden="true" />
-                    <p className="text-sm text-text-main">{n.message}</p>
-                  </button>
-                </li>
-              );
-            })}
-            {/* Persisted personal events */}
             {personal.map(renderStored)}
           </ul>
         ))}

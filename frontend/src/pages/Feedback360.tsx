@@ -5,7 +5,7 @@
  *   Give Feedback     — peer list w/ submit modal
  *   My Feedback       — aggregate of feedback received on the current user
  *   Mentee Feedback   — picker over direct mentees, then aggregate (hidden if !has_mentees)
- *   Org Feedback      — picker over the whole org, then aggregate (Management only)
+ *   All Feedback      — picker over the whole org, then aggregate (Management only)
  *
  * Aggregate access is checked at the API layer — the tabs themselves
  * are just navigation; a non-Management user can't see the Org tab,
@@ -82,7 +82,7 @@ export function Feedback360() {
               className={tabCls("org")}
               onClick={() => setActiveTab("org")}
             >
-              Org Feedback
+              All Feedback
             </button>
           )}
         </div>
@@ -93,6 +93,7 @@ export function Feedback360() {
             <AggregateView
               targetUserId={user.user_id}
               heading="Your aggregate"
+              showRemarks
             />
           )}
           {activeTab === "mentees" && hasMentees && <MenteeFeedbackTab />}
@@ -177,6 +178,7 @@ function MenteeFeedbackTab() {
           key={selected.user_id}
           targetUserId={selected.user_id}
           heading={`${selected.full_name}'s aggregate`}
+          showRemarks
         />
       )}
     </div>
@@ -221,6 +223,7 @@ function OrgFeedbackTab() {
           key={selected.user_id}
           targetUserId={selected.user_id}
           heading={`${selected.full_name}'s aggregate`}
+          showRemarks
         />
       ) : (
         <div className="rounded-lg border-2 border-dashed border-border py-16 text-center text-sm text-text-muted">

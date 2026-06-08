@@ -28,20 +28,14 @@ export function Topbar() {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
 
-  // Computed standing alerts (Notifications tab). These are NOT dismissable —
-  // they reflect live state and clear themselves when the underlying work is
-  // resolved (e.g. approving a pending goal drops the count to 0). Stored rows
-  // are split into personal (Notifications tab) + announcements (Announcements
-  // tab). The bell dot lights if any of the three has something.
-  const computedNotifications = summary?.notifications ?? [];
+  // Stored rows split into personal (Notifications tab) + announcements
+  // (Announcements tab). The bell badge counts unread rows across both tabs.
   const personal = summary?.personal ?? [];
   const announcements = summary?.announcements ?? [];
   const personalUnread = personal.filter((n) => !n.is_read).length;
   const announcementsUnread = announcements.filter((n) => !n.is_read).length;
-  // Total unread across computed standing alerts + both stored tabs. Drives
-  // the numeric badge on the bell.
-  const unreadCount =
-    computedNotifications.length + personalUnread + announcementsUnread;
+  // Total unread across both stored tabs. Drives the numeric badge on the bell.
+  const unreadCount = personalUnread + announcementsUnread;
   const hasNotifications = unreadCount > 0;
 
   const handleBellClick = useCallback(() => {
@@ -143,7 +137,6 @@ export function Topbar() {
       {/* Notification panel — Portal so it escapes the header's layout */}
       {anchorRect && summary && (
         <NotificationPanel
-          notifications={computedNotifications}
           personal={personal}
           announcements={announcements}
           anchorRect={anchorRect}

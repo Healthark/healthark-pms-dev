@@ -17,19 +17,20 @@ in `feedback_360.questions` is a code change with no migration.
 """
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     Column,
+    DateTime,
+    ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
-    Boolean,
-    DateTime,
-    ForeignKey,
-    CheckConstraint,
+    Text,
     UniqueConstraint,
-    Index,
 )
-from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from app.core.database import Base
 
@@ -53,6 +54,12 @@ class Feedback360Review(Base):
     # reviewer and target share at least one project_id at the moment of
     # submission. See feedback_360_service.did_work_together().
     worked_with = Column(Boolean, nullable=False)
+
+    # Optional free-text remark left by the reviewer (max 1000 chars,
+    # enforced at the API layer). Surfaced anonymously on the target's
+    # own My Feedback view, gated by the same per-cohort reviewer
+    # threshold as the rating matrix. NULL = no remark left.
+    remarks = Column(Text, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

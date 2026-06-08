@@ -679,6 +679,28 @@ def submit_goal(
         )
 
     goal.approval_status = ApprovalStatus.PENDING_APPROVAL.value
+
+    # Notify the assigned mentor that a goal now awaits their approval. In-app
+    # only — mirrors submit_goal_self_review's mentor ping; the open-window
+    # announcement covers the broader "submit your goals" nudge. Added to the
+    # session here so it commits atomically with the status change. Skip when
+    # the submitter IS the mentor (e.g. an admin-mentor clearing their own
+    # queue) so no one notifies themselves.
+    if goal_owner.mentor_id != current_user.id:
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=goal_owner.mentor_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_submitted_for_approval",
+            title="Goal awaiting your approval",
+            body=f'{goal_owner.full_name} submitted the goal "{goal.title}" for your approval.',
+            link="/annual-goals?tab=team",
+            entity_type="goal",
+            entity_id=goal.id,
+            actor_id=current_user.id,
+        )
+
     db.commit()
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 

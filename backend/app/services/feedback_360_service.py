@@ -31,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 from datetime import date
+from typing import Iterable
 
 from sqlalchemy import and_, exists
 from sqlalchemy.orm import Session, aliased
@@ -39,7 +40,6 @@ from app.core.config import settings
 from app.core.cycle_utils import current_half_and_fy
 from app.models.project_models import ProjectAssignment
 from app.models.user_models import User
-
 
 # ── Anonymity ────────────────────────────────────────────────────────
 
@@ -123,6 +123,57 @@ def shared_project_targets(
         .all()
     )
     return {r[0] for r in rows}
+
+
+# ── Remarks anonymity gating ─────────────────────────────────────────
+
+
+def normalize_remark(remark: str | None) -> str | None:
+    """Trim a submitted remark; collapse blank / whitespace-only to None
+    so empty notes never persist or surface as empty cards."""
+    if remark is None:
+        return None
+    trimmed = remark.strip()
+    return trimmed or None
+
+
+def select_visible_remarks(
+    reviews: Iterable[tuple[bool, str | None]],
+    min_reviewers_per_cohort: int,
+) -> list[tuple[bool, str]]:
+    """Decide which remarks are safe to surface, gated per cohort.
+
+    `reviews` is every (worked_with, remark_text) tuple for a target in
+    a FY — including reviews that left no remark, since they still count
+    toward the cohort's reviewer total. A cohort's remarks are returned
+    ONLY if that cohort has at least `min_reviewers_per_cohort` reviewers
+    total, mirroring the rating-matrix anonymity rule: with 3+ reviewers
+    in the cohort, no single remark can be attributed to its author.
+
+    Blank remarks are dropped. Returns (worked_with, text) tuples with
+    worked-with cards first, then not-worked-with — insertion order
+    within each cohort is preserved by the caller's query ordering."""
+    worked_count = 0
+    not_worked_count = 0
+    worked: list[tuple[bool, str]] = []
+    not_worked: list[tuple[bool, str]] = []
+
+    for worked_with, raw in reviews:
+        if worked_with:
+            worked_count += 1
+        else:
+            not_worked_count += 1
+        text = normalize_remark(raw)
+        if text is None:
+            continue
+        (worked if worked_with else not_worked).append((worked_with, text))
+
+    out: list[tuple[bool, str]] = []
+    if worked_count >= min_reviewers_per_cohort:
+        out.extend(worked)
+    if not_worked_count >= min_reviewers_per_cohort:
+        out.extend(not_worked)
+    return out
 
 
 # ── Viewing rules ────────────────────────────────────────────────────

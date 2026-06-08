@@ -6,39 +6,31 @@ Endpoints:
     POST /api/v1/notifications/{id}/mark-read       →  Recipient only
     POST /api/v1/notifications/mark-all-read        →  Recipient (optional ?category)
 
-The summary blends two sources: lightweight COUNT queries over existing
-tables (the computed standing-count `notifications`) and persisted rows from
-the generic `notifications` table, split into `personal` (events) and
-`announcements` (org-wide broadcasts) for the two Topbar tabs. Stored rows
-are written by the notification service (app/services/notifications.py).
+The summary serves persisted rows from the generic `notifications` table,
+split into `personal` (events) and `announcements` (org-wide broadcasts) for
+the two Topbar tabs. Rows are written by the notification service
+(app/services/notifications.py) on module events / admin broadcasts.
 
 Security Layers Applied:
     Layer 1 — Authentication:   CurrentUser dependency (JWT validation)
     Layer 2 — Tenant Isolation: All queries filter by current_user.org_id
-    Layer 3 — Role Awareness:   The "team awaiting approval" count is scoped to
-                                the user's DIRECT mentees (mentor_id) regardless
-                                of role — there is no Admin org-wide bypass, so
-                                the count matches the Team Goals tab exactly.
-    Layer 4 — Ownership:        Personal goal counts scoped to current_user.id
+    Layer 3 — Ownership:        Stored rows are scoped to current_user.id as
+                                the recipient — a user only ever sees their own.
 """
 
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import func
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.core.cycle_utils import get_current_cycle_info, resolve_today
-from app.models.goal_models import ApprovalStatus, Goal, GoalType
 from app.models.notification_models import (
     NOTIFICATION_RETENTION_DAYS,
     Notification,
     NotificationCategory,
 )
 from app.models.system_settings_models import SystemSettings
-from app.models.user_models import User
 from app.schemas.notification_schemas import (
-    NotificationItem,
     StoredNotificationItem,
     TopbarSummary,
 )
@@ -52,8 +44,8 @@ def get_topbar_summary(
     current_user: CurrentUser,
 ):
     """
-    Return the active cycle name and a list of computed notifications
-    for the currently authenticated user.
+    Return the active cycle name and the user's stored notifications
+    (personal events + org-wide announcements) for the Topbar bell.
     """
     # ── Retention: lazy purge (no scheduler exists) ──────────────────
     # Drop this org's stored rows older than the retention window on the
@@ -81,78 +73,6 @@ def get_topbar_summary(
         )
     else:
         active_cycle = None
-
-    # ── Computed Notifications ───────────────────────────────────────
-    # Every goal notification below deep-links to the Annual Goals page, whose
-    # My Goals and Team Goals tabs are ANNUAL-only. So each count is scoped to
-    # goal_type == "annual" — otherwise a pending/draft *regular* goal would
-    # inflate the bell with a number the page can never surface (a false
-    # alarm). See GET /goals (My Goals) and GET /goals/team (Team Goals).
-    notifications: list[NotificationItem] = []
-
-    # 1. Goals sent back by manager with "Changes Requested"
-    changes_count: int = db.query(func.count(Goal.id)).filter(
-        Goal.org_id == current_user.org_id,
-        Goal.user_id == current_user.id,
-        Goal.goal_type == GoalType.ANNUAL.value,
-        Goal.approval_status == ApprovalStatus.CHANGES_REQUESTED.value,
-    ).scalar() or 0
-
-    if changes_count > 0:
-        notifications.append(NotificationItem(
-            type="goals_changes_requested",
-            message=f"{changes_count} goal(s) need revisions — check manager feedback.",
-            count=changes_count,
-            severity="blocking",
-        ))
-
-    # 2. Goals in "Draft" that haven't been submitted for approval yet
-    draft_count: int = db.query(func.count(Goal.id)).filter(
-        Goal.org_id == current_user.org_id,
-        Goal.user_id == current_user.id,
-        Goal.goal_type == GoalType.ANNUAL.value,
-        Goal.approval_status == ApprovalStatus.DRAFT.value,
-    ).scalar() or 0
-
-    if draft_count > 0:
-        notifications.append(NotificationItem(
-            type="goals_draft",
-            message=f"{draft_count} goal(s) are still in draft — submit for approval.",
-            count=draft_count,
-            severity="info",
-        ))
-
-    # ── Mentor Notifications ─────────────────────────────────────────
-    # Scoped to the user's DIRECT mentees (mentor_id), mirroring the Team
-    # Goals tab's data source (GET /goals/team → _mentee_ids_for). There is
-    # deliberately NO Admin org-wide bypass here: that tab has none, so an
-    # Admin who relied on it would see a count they could never clear. A user
-    # who mentors nobody gets an empty list — and no "team" notification — by
-    # design. Mentor/mentee behaviour is unchanged: this matches what the
-    # non-Admin branch already did.
-    mentee_ids = [
-        row[0] for row in db.query(User.id).filter(
-            User.mentor_id == current_user.id,
-            User.org_id == current_user.org_id,
-            User.is_deleted == False,  # noqa: E712
-        ).all()
-    ]
-
-    if mentee_ids:
-        awaiting_count: int = db.query(func.count(Goal.id)).filter(
-            Goal.org_id == current_user.org_id,
-            Goal.user_id.in_(mentee_ids),
-            Goal.goal_type == GoalType.ANNUAL.value,
-            Goal.approval_status == ApprovalStatus.PENDING_APPROVAL.value,
-        ).scalar() or 0
-
-        if awaiting_count > 0:
-            notifications.append(NotificationItem(
-                type="goals_pending_approval",
-                message=f"{awaiting_count} goal(s) from your team await your approval.",
-                count=awaiting_count,
-                severity="warning",
-            ))
 
     # ── Stored notifications (generic table), split by category ──────
     # Personal events feed the "Notifications" tab; announcements feed the
@@ -185,7 +105,6 @@ def get_topbar_summary(
 
     return TopbarSummary(
         active_cycle=active_cycle,
-        notifications=notifications,
         personal=_recent(NotificationCategory.PERSONAL.value),
         announcements=_recent(NotificationCategory.ANNOUNCEMENT.value),
     )

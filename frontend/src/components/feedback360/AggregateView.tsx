@@ -1,7 +1,8 @@
-import { AlertCircle, Loader2, Users } from "lucide-react";
+import { AlertCircle, Loader2, MessageSquareText, UserCircle, Users } from "lucide-react";
 import {
   type FeedbackBucketAggregate,
   type FeedbackQuestionAggregate,
+  type FeedbackRemark,
 } from "../../services/feedback360.service";
 import { useFeedbackAggregate } from "../../queries/feedback360";
 import { getErrorMessage } from "../../utils/errors";
@@ -12,6 +13,11 @@ interface AggregateViewProps {
   readonly targetUserId: number;
   /** Label rendered in the table header (left side, above n=X). */
   readonly heading?: string;
+  /** Render the anonymous remark cards below the matrix. Enabled on the
+   *  My / Mentee / Org Feedback tabs. The backend only returns `remarks`
+   *  for aggregates the requester is allowed to view, so this is a
+   *  display-side toggle on top of the API permission gate. */
+  readonly showRemarks?: boolean;
 }
 
 /**
@@ -22,7 +28,11 @@ interface AggregateViewProps {
  * a muted placeholder line in the same slot, so spacing stays
  * consistent regardless of which cohorts cleared the threshold.
  */
-export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
+export function AggregateView({
+  targetUserId,
+  heading,
+  showRemarks = false,
+}: AggregateViewProps) {
   const {
     data,
     isPending,
@@ -77,6 +87,7 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
   }
 
   return (
+    <div className="space-y-6">
     <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
       {/* ── Header row ────────────────────────────────────────────── */}
       <div className="flex items-stretch border-b border-border bg-surface-muted/50">
@@ -176,6 +187,83 @@ export function AggregateView({ targetUserId, heading }: AggregateViewProps) {
           </div>
         </div>
       ))}
+    </div>
+
+      {showRemarks && <RemarksStrip remarks={data.remarks} />}
+    </div>
+  );
+}
+
+
+// ── Remarks strip ───────────────────────────────────────────────────
+
+/**
+ * Horizontally-scrollable row of anonymous remark cards rendered below
+ * the matrix (My / Mentee / All Feedback). Cards are fixed-height and
+ * equal-aligned; long remarks scroll inside their card. Each follows
+ * the same blue (worked-with) / amber (not-worked-with) theme as the
+ * matrix. Renders nothing when there are no surfaced remarks.
+ */
+function RemarksStrip({ remarks }: { readonly remarks: FeedbackRemark[] }) {
+  if (!remarks || remarks.length === 0) return null;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <MessageSquareText className="h-4 w-4 text-brand" />
+        <h3 className="text-[14px] font-bold text-text-main">
+          Remarks
+          <span className="ml-1.5 text-[11px] font-normal text-text-muted">
+            ({remarks.length} anonymous)
+          </span>
+        </h3>
+      </div>
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
+        {remarks.map((r, i) => (
+          <RemarkCard key={i} remark={r} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RemarkCard({ remark }: { readonly remark: FeedbackRemark }) {
+  const worked = remark.worked_with;
+  // Same orange/blue treatment as the matrix legend + badges.
+  const accent = worked
+    ? "border-brand/30 bg-brand/5"
+    : "border-amber-500/30 bg-amber-50 dark:bg-amber-950/30";
+  const avatar = worked
+    ? "bg-brand/10 text-brand"
+    : "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300";
+  const label = worked
+    ? "text-brand"
+    : "text-amber-700 dark:text-amber-300";
+
+  return (
+    <div
+      className={`shrink-0 snap-start w-72 h-56 rounded-xl border ${accent} p-4 shadow-sm flex flex-col`}
+    >
+      <div className="flex items-center gap-2 shrink-0">
+        <span
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${avatar}`}
+        >
+          <UserCircle className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-text-main leading-tight">
+            Anonymous user
+          </p>
+          <p className={`text-[10px] font-semibold ${label} leading-tight`}>
+            {worked ? "Worked with" : "Not worked with"}
+          </p>
+        </div>
+      </div>
+      {/* Fixed-height body — text scrolls inside the card when it
+          overflows, so every card stays the same size and aligned. */}
+      <p className="mt-3 flex-1 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-text-main pr-1">
+        {remark.text}
+      </p>
     </div>
   );
 }
