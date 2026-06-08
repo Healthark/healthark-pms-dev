@@ -35,8 +35,10 @@ import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { PerformanceRatingSelect } from "../reviews/PerformanceRatingSelect";
 import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
 import { getErrorMessage } from "../../utils/errors";
+import { extractFyToken, formatFyLabel } from "../../utils/fy";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useDebounce } from "../../hooks/useDebounce";
+import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { TablePagination } from "../common/TablePagination";
 import { SortableHeader } from "../SortableHeader";
 import { type SortState } from "../../utils/sort";
@@ -68,6 +70,15 @@ export function ManagementReviewTab() {
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [mentorFilter, setMentorFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // Year filter. Default = the active cycle's FY (current year); "all" spans
+  // every year so past management reviews are viewable. Stored as null until
+  // the user picks, so we can fall back to the active year as it resolves.
+  const { settings } = useSystemSettings();
+  const activeYear = settings?.active_cycle_name
+    ? extractFyToken(settings.active_cycle_name)
+    : "";
+  const [yearFilter, setYearFilter] = useState<string | null>(null);
+  const selectedYear = yearFilter ?? activeYear;
   const [sort, setSort] = useState<SortState<MgmtReviewSortKey> | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -83,7 +94,7 @@ export function ManagementReviewTab() {
   // dep, so clicking Next/Prev doesn't bounce back to 1).
   useEffect(() => {
     setPage(1);
-  }, [deptFilter, mentorFilter, statusFilter, sort, pageSize]);
+  }, [deptFilter, mentorFilter, statusFilter, selectedYear, sort, pageSize]);
 
   const query: CalibrationQuery = {
     page,
@@ -92,6 +103,9 @@ export function ManagementReviewTab() {
     department: deptFilter !== "all" ? deptFilter : undefined,
     mentor: mentorFilter !== "all" ? mentorFilter : undefined,
     status: statusFilter,
+    // selectedYear is an FY label ("FY25-26") or "all"; empty (settings still
+    // loading) → omit so the backend defaults to the active cycle.
+    year: selectedYear || undefined,
     sort_by: sort?.key,
     sort_dir: sort?.direction,
   };
@@ -107,12 +121,25 @@ export function ManagementReviewTab() {
   const { data: filterOptions } = useCalibrationFilterOptions();
   const availableDepts = filterOptions?.departments ?? [];
   const availableMentors = filterOptions?.mentors ?? [];
+  // Year options (newest first) from the server; guarantee the active year is
+  // present even before the options query resolves so the default selection
+  // always has a matching <option>.
+  const serverYears = filterOptions?.years ?? [];
+  const availableYears =
+    activeYear && !serverYears.includes(activeYear)
+      ? [activeYear, ...serverYears]
+      : serverYears;
+
+  // A year selection that isn't the default (current year) counts as active —
+  // including "all". Defends against activeYear being "" mid-load.
+  const yearIsFiltered = !!selectedYear && selectedYear !== activeYear;
 
   const hasActiveFilters =
     !!search ||
     deptFilter !== "all" ||
     mentorFilter !== "all" ||
-    statusFilter !== "all";
+    statusFilter !== "all" ||
+    yearIsFiltered;
 
   const clearFilters = () => {
     setSearchInput("");
@@ -120,6 +147,7 @@ export function ManagementReviewTab() {
     setDeptFilter("all");
     setMentorFilter("all");
     setStatusFilter("all");
+    setYearFilter(null); // back to the current year (default)
     setPage(1);
   };
 
@@ -196,6 +224,28 @@ export function ManagementReviewTab() {
             className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             aria-label="Search management reviews"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="mgmt-review-year-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Year
+          </label>
+          <select
+            id="mgmt-review-year-filter"
+            value={selectedYear}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer"
+          >
+            {availableYears.map((y) => (
+              <option key={y} value={y}>
+                {formatFyLabel(y)}
+              </option>
+            ))}
+            <option value="all">All</option>
+          </select>
         </div>
 
         <div className="flex items-center gap-2">
@@ -308,6 +358,9 @@ export function ManagementReviewTab() {
                 <th className="px-5 py-3">
                   <SortableHeader label="Department" columnKey="department" sort={sort} onSort={setSort} />
                 </th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                  Year
+                </th>
                 <th className="px-5 py-3">
                   <SortableHeader label="Self Review" columnKey="self_performance_rating" sort={sort} onSort={setSort} />
                 </th>
@@ -339,6 +392,9 @@ export function ManagementReviewTab() {
                   </td>
                   <td className="px-5 py-3.5 text-text-muted">
                     {r.department ?? "—"}
+                  </td>
+                  <td className="px-5 py-3.5 text-text-muted whitespace-nowrap">
+                    {formatFyLabel(r.cycle_name)}
                   </td>
                   <td className="px-5 py-3.5">
                     <PerformanceRatingBadge value={r.self_performance_rating} />

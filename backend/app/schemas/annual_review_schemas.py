@@ -110,6 +110,9 @@ class CalibrationRow(BaseModel):
     """Simplified row for the HR Calibration Grid datatable."""
     review_id: int
     user_id: int
+    # Bare FY label of the review (e.g. "FY25-26"). Lets the grid show a Year
+    # column — useful when the year filter is set to "all".
+    cycle_name: str
     employee_name: str
     employee_email: Optional[str] = None
     mentor_name: Optional[str] = None
@@ -124,8 +127,14 @@ class CalibrationRow(BaseModel):
 
 
 class CalibrationFilterOptions(BaseModel):
-    """Distinct department + mentor names across the active cycle's
+    """Distinct department + mentor names + fiscal years across the org's
     calibration set, used to populate the grid's filter dropdowns.
+
+    departments/mentors span ALL years (so the dropdowns stay valid when the
+    user switches the year filter to a past year or "all"). `years` is the
+    list of FY labels that have at least one calibration-stage review, newest
+    first, and always includes `active_year` (the default selection) even if
+    that year has no reviews yet.
 
     Served from a dedicated endpoint (not bundled into the paginated
     page response) so the FE can fetch it once with a long staleTime —
@@ -134,6 +143,8 @@ class CalibrationFilterOptions(BaseModel):
     """
     departments: list[str]
     mentors: list[str]
+    years: list[str]
+    active_year: str
 
 
 class MenteeAnnualReview(AnnualReviewResponse):

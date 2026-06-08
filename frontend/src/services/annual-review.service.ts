@@ -62,10 +62,15 @@ export interface MenteeAnnualReview extends AnnualReview {
 }
 
 /** Filter dropdown options for the calibration grid — distinct values
- *  across the active cycle's calibration set, fetched once. */
+ *  across the org's calibration set (all years), fetched once. */
 export interface CalibrationFilterOptions {
   departments: string[];
   mentors: string[];
+  /** FY labels with at least one calibration review, newest first; always
+   *  includes active_year. */
+  years: string[];
+  /** The active cycle's FY label — the grid's default year selection. */
+  active_year: string;
 }
 
 /** Query params accepted by GET /annual-reviews/calibration. Extends the
@@ -74,11 +79,15 @@ export interface CalibrationQuery extends PageQuery {
   department?: string;
   mentor?: string;
   status?: "all" | "pending" | "rated";
+  /** FY label (e.g. "FY25-26"), "all", or omitted (active cycle). */
+  year?: string;
 }
 
 export interface CalibrationRow {
   review_id: number;
   user_id: number;
+  /** Bare FY label of the review (e.g. "FY25-26") — drives the Year column. */
+  cycle_name: string;
   employee_name: string;
   employee_email: string | null;
   mentor_name: string | null;
@@ -215,6 +224,7 @@ export const annualReviewService = {
             params.status && params.status !== "all"
               ? params.status
               : undefined,
+          year: params.year || undefined,
           sort_by: params.sort_by || undefined,
           sort_dir: params.sort_by ? params.sort_dir : undefined,
         },
