@@ -619,10 +619,13 @@ _CALIBRATION_SORT_COLUMNS = {
 }
 
 
-def _calibration_base_query(db, org_id: int, cycle_name: str):
+def _calibration_base_query(db, org_id: int, cycle_name: Optional[str]):
     """Base calibration query joined to employee + mentor + employee's
     department/designation via aliases, so we can filter/sort/search on
     the resolved display names in SQL (not post-query in Python).
+
+    `cycle_name` scopes to one fiscal year; pass None for every year (the
+    "all" view, used by the year filter and by the dropdown-options query).
 
     Returns (query, Employee, Mentor, EmpDept, EmpDesig) so callers can
     reference the aliases for filtering and ordering.
@@ -640,14 +643,31 @@ def _calibration_base_query(db, org_id: int, cycle_name: str):
         .outerjoin(EmpDesig, Employee.designation_id == EmpDesig.id)
         .filter(
             AnnualReview.org_id == org_id,
-            AnnualReview.cycle_name == cycle_name,
             AnnualReview.status.in_([
                 ReviewStatus.PENDING_MANAGEMENT.value,
                 ReviewStatus.COMPLETED.value,
             ]),
         )
     )
+    if cycle_name is not None:
+        query = query.filter(AnnualReview.cycle_name == cycle_name)
     return query, Employee, Mentor, EmpDept, EmpDesig
+
+
+def _resolve_calibration_cycle(
+    db: DbSession, org_id: int, year: Optional[str]
+) -> Optional[str]:
+    """Map the calibration `year` query param to a cycle_name filter.
+
+        None / ""  → the active cycle's FY label (default view).
+        "all"      → None  (no year filter — every fiscal year).
+        "FY25-26"  → that label, as stored on AnnualReview.cycle_name.
+    """
+    if not year:
+        return _get_active_cycle(db, org_id)
+    if year.strip().lower() == "all":
+        return None
+    return year.strip()
 
 
 @router.get("/calibration", response_model=Page[CalibrationRow])
@@ -661,20 +681,25 @@ def get_calibration_grid(
     status_filter: Optional[str] = Query(
         None, alias="status", description="all | pending | rated"
     ),
+    year: Optional[str] = Query(
+        None,
+        description="FY label (e.g. 'FY25-26') | 'all' | omitted (active cycle)",
+    ),
     sort_by: Optional[str] = Query(None, description="CalibrationRow field name"),
     sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
 ):
     """
-    Paginated calibration grid for the active cycle (pending_management +
-    completed reviews). Management-only.
+    Paginated calibration grid (pending_management + completed reviews).
+    Management-only.
 
-    Server-side search / department / mentor / status filtering + sort +
-    offset pagination so the FE never holds the full org review set in
-    memory. Filter-dropdown option lists come from
-    GET /calibration/filter-options (fetched once, cached).
+    Scoped to the active cycle by default; pass `year=<FY label>` to view a
+    past year or `year=all` to span every fiscal year. Server-side search /
+    department / mentor / status filtering + sort + offset pagination so the
+    FE never holds the full org review set in memory. Filter-dropdown option
+    lists (incl. the year list) come from GET /calibration/filter-options.
     """
     _require_management(current_user)
-    cycle_name = _get_active_cycle(db, current_user.org_id)
+    cycle_name = _resolve_calibration_cycle(db, current_user.org_id, year)
 
     query, Employee, Mentor, EmpDept, EmpDesig = _calibration_base_query(
         db, current_user.org_id, cycle_name
@@ -724,6 +749,7 @@ def get_calibration_grid(
         CalibrationRow(
             review_id=r.id,
             user_id=r.user_id,
+            cycle_name=r.cycle_name,
             employee_name=emp.full_name if emp else "Unknown",
             employee_email=emp.email if emp else None,
             mentor_name=men.full_name if men else None,
@@ -750,23 +776,37 @@ def get_calibration_filter_options(
     current_user: CurrentUser,
 ):
     """
-    Distinct department + mentor names across the active cycle's
+    Distinct department + mentor names + fiscal years across the org's
     calibration set. Drives the grid's filter dropdowns. Management-only.
 
-    Computed from the unpaginated set so the dropdowns always show every
-    available value regardless of which page the user is on.
+    Spans ALL years (cycle_name=None) so the department/mentor/year lists
+    stay valid no matter which year the grid is filtered to. The active
+    cycle's FY label is always included in `years` (and returned as
+    `active_year`) so the default selection always has a matching option.
     """
     _require_management(current_user)
-    cycle_name = _get_active_cycle(db, current_user.org_id)
+    active_year = _get_active_cycle(db, current_user.org_id)
 
     query, _Employee, Mentor, EmpDept, _EmpDesig = _calibration_base_query(
-        db, current_user.org_id, cycle_name
+        db, current_user.org_id, None
     )
-    rows = query.with_entities(EmpDept.name, Mentor.full_name).all()
+    rows = query.with_entities(
+        EmpDept.name, Mentor.full_name, AnnualReview.cycle_name
+    ).all()
 
-    departments = sorted({d for (d, _m) in rows if d})
-    mentors = sorted({m for (_d, m) in rows if m})
-    return CalibrationFilterOptions(departments=departments, mentors=mentors)
+    departments = sorted({d for (d, _m, _c) in rows if d})
+    mentors = sorted({m for (_d, m, _c) in rows if m})
+    # Newest year first. Include the active year even if it has no reviews
+    # yet so the dropdown's default option always renders.
+    year_set = {c for (_d, _m, c) in rows if c}
+    year_set.add(active_year)
+    years = sorted(year_set, reverse=True)
+    return CalibrationFilterOptions(
+        departments=departments,
+        mentors=mentors,
+        years=years,
+        active_year=active_year,
+    )
 
 
 @router.patch("/{review_id}/management-rating", response_model=AnnualReviewResponse)
