@@ -84,7 +84,9 @@ GOAL_APPROVED_AT = datetime(2026, 4, 20, tzinfo=timezone.utc)
 CURRENT_FY_LABEL = "FY26-27"
 COMPLETED_FY_LABEL = "FY25-26"
 COMPLETED_ANNUAL_CYCLE = "FY25-26"
-COMPLETED_PROJECT_CYCLE = "H1 FY25-26"
+# Project reviews are FY-scoped (one per employee per project per fiscal
+# year), so the cycle tag is the bare FY label — no H1/H2 prefix.
+COMPLETED_PROJECT_CYCLE = "FY25-26"
 F360_FY = 2025  # FY25-26 → fiscal-year-start integer key used by the 360 module.
 
 

@@ -608,15 +608,31 @@ def seed_database():
         def _pr(user, project, reviewer, cycle, status, pg=None, impact=None, **comments):
             if not project:
                 return
-            if not db.query(ProjectReview).filter_by(
+            existing = db.query(ProjectReview).filter_by(
                 org_id=org.id, user_id=user.id, project_id=project.id, cycle=cycle,
-            ).first():
-                db.add(ProjectReview(
-                    org_id=org.id, user_id=user.id, project_id=project.id,
-                    reviewer_id=reviewer.id if reviewer else None,
-                    cycle=cycle, status=status,
-                    performance_group=pg, impact_statement=impact, **comments,
-                ))
+            ).first()
+            if existing is not None:
+                # Project reviews are FY-scoped — at most one row per
+                # (user, project, FY). The curated narratives below still
+                # carry separate H1/H2 entries that now collapse onto the
+                # same FY token, so reconcile in-place: a 'reviewed' row is
+                # never downgraded by a later 'pending' entry; otherwise the
+                # later entry refreshes the content (keeps the latest take).
+                if existing.status == "reviewed" and status != "reviewed":
+                    return
+                existing.reviewer_id = reviewer.id if reviewer else None
+                existing.status = status
+                existing.performance_group = pg
+                existing.impact_statement = impact
+                for field, value in comments.items():
+                    setattr(existing, field, value)
+                return
+            db.add(ProjectReview(
+                org_id=org.id, user_id=user.id, project_id=project.id,
+                reviewer_id=reviewer.id if reviewer else None,
+                cycle=cycle, status=status,
+                performance_group=pg, impact_statement=impact, **comments,
+            ))
 
         def _pre(review_id, evaluator, impact, status="submitted"):
             if not db.query(ProjectReviewEvaluator).filter_by(
@@ -632,7 +648,7 @@ def seed_database():
                 and proj_specialty and proj_trial and proj_safety and proj_payer:
 
             # ── H1 FY25-26 ────────────────────────────────────────────────────
-            _pr(arjun, proj_specialty, priya, "H1 FY25-26", "reviewed", pg="4",
+            _pr(arjun, proj_specialty, priya, "FY25-26", "reviewed", pg="4",
                 impact="Arjun led the payer landscape assessment with strong analytical depth across 4 markets.",
                 comment_task_execution="Structured the market assessment framework end-to-end.",
                 comment_ownership="Owned the multi-market comparison with proactive risk flagging.",
@@ -642,7 +658,7 @@ def seed_database():
                 comment_mentoring="Supported Neha on market sizing methodology.",
                 comment_competency_skills="Developing a strong specialty-therapy access lens.",
             )
-            _pr(neha, proj_specialty, priya, "H1 FY25-26", "reviewed", pg="3",
+            _pr(neha, proj_specialty, priya, "FY25-26", "reviewed", pg="3",
                 impact="Neha delivered clean research outputs and adapted quickly to client feedback.",
                 comment_task_execution="Completed secondary research tasks thoroughly with guidance.",
                 comment_ownership="Reliable on assigned modules; building proactive instincts.",
@@ -653,13 +669,13 @@ def seed_database():
                 comment_competency_skills="Building market access research fundamentals.",
             )
             db.flush()
-            arjun_spec_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=arjun.id, project_id=proj_specialty.id, cycle="H1 FY25-26").first()
-            neha_spec_h1  = db.query(ProjectReview).filter_by(org_id=org.id, user_id=neha.id,  project_id=proj_specialty.id, cycle="H1 FY25-26").first()
+            arjun_spec_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=arjun.id, project_id=proj_specialty.id, cycle="FY25-26").first()
+            neha_spec_h1  = db.query(ProjectReview).filter_by(org_id=org.id, user_id=neha.id,  project_id=proj_specialty.id, cycle="FY25-26").first()
             if arjun_spec_h1: _pre(arjun_spec_h1.id, david, "Arjun integrated IDT analytics cleanly into the access framework.")
             if neha_spec_h1:  _pre(neha_spec_h1.id,  david, "Neha was responsive on cross-functional data asks with clean documentation.")
             db.commit()
 
-            _pr(rahul, proj_trial, david, "H1 FY25-26", "reviewed", pg="4",
+            _pr(rahul, proj_trial, david, "FY25-26", "reviewed", pg="4",
                 impact="Rahul delivered the data mart ingestion layer ahead of schedule with strong quality.",
                 comment_task_execution="Independently designed and implemented the schema harmonization layer.",
                 comment_ownership="Full ownership of the ingestion workstream; unblocked the team consistently.",
@@ -669,7 +685,7 @@ def seed_database():
                 comment_mentoring="Ran code review sessions for Meera weekly.",
                 comment_competency_skills="Strong in SQL, Python, and data modeling; Senior Consultant trajectory.",
             )
-            _pr(meera, proj_trial, david, "H1 FY25-26", "reviewed", pg="3",
+            _pr(meera, proj_trial, david, "FY25-26", "reviewed", pg="3",
                 impact="Meera contributed meaningfully to the ETL pipelines and testing framework.",
                 comment_task_execution="Completed ETL tasks with guidance; learning independent structuring.",
                 comment_ownership="Dependable on assigned modules; growing confidence to own more.",
@@ -680,13 +696,13 @@ def seed_database():
                 comment_competency_skills="Progressing steadily in Python and data modeling.",
             )
             db.flush()
-            rahul_trial_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=rahul.id, project_id=proj_trial.id, cycle="H1 FY25-26").first()
-            meera_trial_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=meera.id, project_id=proj_trial.id, cycle="H1 FY25-26").first()
+            rahul_trial_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=rahul.id, project_id=proj_trial.id, cycle="FY25-26").first()
+            meera_trial_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=meera.id, project_id=proj_trial.id, cycle="FY25-26").first()
             if rahul_trial_h1: _pre(rahul_trial_h1.id, vikram, "Rahul's RWE schema integration accelerated our study data pipeline.")
             if meera_trial_h1: _pre(meera_trial_h1.id, vikram, "Meera supported cross-team data requests reliably.")
             db.commit()
 
-            _pr(ananya, proj_safety, vikram, "H1 FY25-26", "reviewed", pg="4",
+            _pr(ananya, proj_safety, vikram, "FY25-26", "reviewed", pg="4",
                 impact="Ananya led protocol design for the long-term safety study with scientific rigor.",
                 comment_task_execution="Structured the methodology independently with deep scientific reasoning.",
                 comment_ownership="Owned the protocol end-to-end and drove IRB submission.",
@@ -696,7 +712,7 @@ def seed_database():
                 comment_mentoring="Coached Karan on study design fundamentals.",
                 comment_competency_skills="Growing expertise in chronic-therapy safety methodology.",
             )
-            _pr(karan, proj_safety, vikram, "H1 FY25-26", "reviewed", pg="3",
+            _pr(karan, proj_safety, vikram, "FY25-26", "reviewed", pg="3",
                 impact="Karan supported the literature review and early data collection with good quality.",
                 comment_task_execution="Completed literature reviews with guidance on prioritization.",
                 comment_ownership="Dependable on assigned tasks; building initiative.",
@@ -708,7 +724,7 @@ def seed_database():
             )
             db.commit()
 
-            _pr(rahul, proj_payer, priya, "H1 FY25-26", "reviewed", pg="4",
+            _pr(rahul, proj_payer, priya, "FY25-26", "reviewed", pg="4",
                 impact="Rahul's data integration was a cornerstone of the payer evidence package.",
                 comment_task_execution="Delivered the data harmonization layer across strategy, RWE, and IDT.",
                 comment_ownership="Managed the data pipeline end-to-end across three teams.",
@@ -718,7 +734,7 @@ def seed_database():
                 comment_mentoring="Supported team members on data tooling and schema access.",
                 comment_competency_skills="Showcased breadth across analytics, data engineering, and RWE.",
             )
-            _pr(ananya, proj_payer, priya, "H1 FY25-26", "reviewed", pg="4",
+            _pr(ananya, proj_payer, priya, "FY25-26", "reviewed", pg="4",
                 impact="Ananya's RWE synthesis strengthened the payer evidence base significantly.",
                 comment_task_execution="Independently synthesized RWE signals into the evidence package.",
                 comment_ownership="Went beyond assigned scope to drive the evidence narrative.",
@@ -728,7 +744,7 @@ def seed_database():
                 comment_mentoring="Shared RWE context with strategy team members.",
                 comment_competency_skills="Strong rare-disease RWE capability in cross-functional setting.",
             )
-            _pr(neha, proj_payer, priya, "H1 FY25-26", "reviewed", pg="3",
+            _pr(neha, proj_payer, priya, "FY25-26", "reviewed", pg="3",
                 impact="Neha contributed to strategy slides and research compilation reliably.",
                 comment_task_execution="Handled research and slide compilation tasks dependably.",
                 comment_ownership="Growing confidence for broader module ownership.",
@@ -739,16 +755,16 @@ def seed_database():
                 comment_competency_skills="Growing grasp of integrated evidence requirements.",
             )
             db.flush()
-            rahul_pay_h1  = db.query(ProjectReview).filter_by(org_id=org.id, user_id=rahul.id,  project_id=proj_payer.id, cycle="H1 FY25-26").first()
-            ananya_pay_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=ananya.id, project_id=proj_payer.id, cycle="H1 FY25-26").first()
-            neha_pay_h1   = db.query(ProjectReview).filter_by(org_id=org.id, user_id=neha.id,   project_id=proj_payer.id, cycle="H1 FY25-26").first()
+            rahul_pay_h1  = db.query(ProjectReview).filter_by(org_id=org.id, user_id=rahul.id,  project_id=proj_payer.id, cycle="FY25-26").first()
+            ananya_pay_h1 = db.query(ProjectReview).filter_by(org_id=org.id, user_id=ananya.id, project_id=proj_payer.id, cycle="FY25-26").first()
+            neha_pay_h1   = db.query(ProjectReview).filter_by(org_id=org.id, user_id=neha.id,   project_id=proj_payer.id, cycle="FY25-26").first()
             if rahul_pay_h1:  _pre(rahul_pay_h1.id,  vikram, "Rahul's cross-functional data leadership was instrumental.")
             if ananya_pay_h1: _pre(ananya_pay_h1.id, vikram, "Ananya's RWE rigor kept the evidence story scientifically sound.")
             if neha_pay_h1:   _pre(neha_pay_h1.id,   vikram, "Neha was a reliable contributor across cross-functional workstreams.")
             db.commit()
 
             # ── H2 FY25-26 ────────────────────────────────────────────────────
-            _pr(arjun, proj_specialty, priya, "H2 FY25-26", "reviewed", pg="4",
+            _pr(arjun, proj_specialty, priya, "FY25-26", "reviewed", pg="4",
                 impact="Arjun took broader coordination responsibility across the launch portfolio.",
                 comment_task_execution="Structured research gaps proactively without prompting.",
                 comment_ownership="Owned two modules simultaneously without missed deadlines.",
@@ -758,7 +774,7 @@ def seed_database():
                 comment_mentoring="Guided Neha and Karan on research frameworks.",
                 comment_competency_skills="Strong growth in specialty-therapy strategy; Senior Consultant potential.",
             )
-            _pr(neha, proj_specialty, priya, "H2 FY25-26", "reviewed", pg="4",
+            _pr(neha, proj_specialty, priya, "FY25-26", "reviewed", pg="4",
                 impact="Neha stepped up measurably in quality and independence during H2.",
                 comment_task_execution="Structuring tasks more independently with less guidance.",
                 comment_ownership="More proactive in risk flagging and clarification.",
@@ -770,7 +786,7 @@ def seed_database():
             )
             db.commit()
 
-            _pr(rahul, proj_trial, david, "H2 FY25-26", "reviewed", pg="5",
+            _pr(rahul, proj_trial, david, "FY25-26", "reviewed", pg="5",
                 impact="Rahul delivered an exceptional H2 with technical leadership across the mart.",
                 comment_task_execution="Led architecture decisions for the expanded platform independently.",
                 comment_ownership="End-to-end ownership across three workstreams; zero misses.",
@@ -780,10 +796,10 @@ def seed_database():
                 comment_mentoring="Weekly coaching sessions with Meera throughout H2.",
                 comment_competency_skills="Senior Consultant-level depth across data engineering and analytics.",
             )
-            _pr(meera, proj_trial, david, "H2 FY25-26", "pending")
+            _pr(meera, proj_trial, david, "FY25-26", "pending")
             db.commit()
 
-            _pr(ananya, proj_safety, vikram, "H2 FY25-26", "reviewed", pg="5",
+            _pr(ananya, proj_safety, vikram, "FY25-26", "reviewed", pg="5",
                 impact="Ananya's leadership elevated the interim safety readouts meaningfully.",
                 comment_task_execution="Led the interim statistical analysis design independently.",
                 comment_ownership="Complete ownership of the protocol and evidence synthesis.",
@@ -793,10 +809,10 @@ def seed_database():
                 comment_mentoring="Coached Karan on study design and organized knowledge sessions.",
                 comment_competency_skills="Emerging SME in chronic-therapy safety RWE.",
             )
-            _pr(karan, proj_safety, vikram, "H2 FY25-26", "pending")
+            _pr(karan, proj_safety, vikram, "FY25-26", "pending")
             db.commit()
 
-            _pr(rahul, proj_payer, priya, "H2 FY25-26", "reviewed", pg="4",
+            _pr(rahul, proj_payer, priya, "FY25-26", "reviewed", pg="4",
                 impact="Rahul's H2 cross-functional contribution was outstanding.",
                 comment_task_execution="Led the data harmonization across workstreams with minimal guidance.",
                 comment_ownership="Managed multi-team dependencies with full accountability.",
@@ -806,7 +822,7 @@ def seed_database():
                 comment_mentoring="Supported strategy and RWE team members on tooling.",
                 comment_competency_skills="Strong cross-functional expertise demonstrated.",
             )
-            _pr(ananya, proj_payer, priya, "H2 FY25-26", "reviewed", pg="5",
+            _pr(ananya, proj_payer, priya, "FY25-26", "reviewed", pg="5",
                 impact="Ananya's RWE leadership was pivotal to the H2 payer evidence package.",
                 comment_task_execution="Led the RWE synthesis workstream at a high scientific bar.",
                 comment_ownership="Full ownership of the RWE narrative; exceeded scope.",
@@ -816,24 +832,24 @@ def seed_database():
                 comment_mentoring="Coached the strategy team on RWE interpretation.",
                 comment_competency_skills="Recognized as internal RWE SME.",
             )
-            _pr(neha, proj_payer, priya, "H2 FY25-26", "pending")
+            _pr(neha, proj_payer, priya, "FY25-26", "pending")
             db.commit()
 
             # ── H1 FY26-27 (current) ──────────────────────────────────────────
-            _pr(ananya, proj_safety, vikram, "H1 FY26-27", "pending")
-            _pr(karan,  proj_safety, vikram, "H1 FY26-27", "pending")
-            _pr(rahul,  proj_payer,  priya,  "H1 FY26-27", "pending")
-            _pr(ananya, proj_payer,  priya,  "H1 FY26-27", "pending")
-            _pr(neha,   proj_payer,  priya,  "H1 FY26-27", "pending")
+            _pr(ananya, proj_safety, vikram, "FY26-27", "pending")
+            _pr(karan,  proj_safety, vikram, "FY26-27", "pending")
+            _pr(rahul,  proj_payer,  priya,  "FY26-27", "pending")
+            _pr(ananya, proj_payer,  priya,  "FY26-27", "pending")
+            _pr(neha,   proj_payer,  priya,  "FY26-27", "pending")
             db.commit()
 
-            print("  [+] Created Project Reviews: PRJ-101..PRJ-104 across H1 FY25-26, H2 FY25-26, H1 FY26-27")
+            print("  [+] Created Project Reviews: PRJ-101..PRJ-104 across FY25-26 (closed) and FY26-27 (current)")
         else:
             print("  [~] Healthark Project Reviews already exist, skipping...")
 
         # PRJ-105 reviews for Riya and Tej (idempotent — uses _pr which checks existence)
         if proj_marketing and riya and tej and amol:
-            _pr(riya, proj_marketing, amol, "H1 FY25-26", "reviewed", pg="3",
+            _pr(riya, proj_marketing, amol, "FY25-26", "reviewed", pg="3",
                 impact="Riya contributed solid research and data gathering across the analytics platform build.",
                 comment_task_execution="Completed research and data analysis tasks reliably with guidance.",
                 comment_ownership="Dependable on assigned modules; building proactive instincts.",
@@ -843,7 +859,7 @@ def seed_database():
                 comment_mentoring="Active participant and quick learner in team sessions.",
                 comment_competency_skills="Building foundational marketing analytics knowledge.",
             )
-            _pr(tej, proj_marketing, amol, "H1 FY25-26", "reviewed", pg="4",
+            _pr(tej, proj_marketing, amol, "FY25-26", "reviewed", pg="4",
                 impact="Tej led the dashboard design and independently built the campaign performance module.",
                 comment_task_execution="Structured analytics tasks independently with strong methodology.",
                 comment_ownership="Owned the dashboard workstream end-to-end with minimal guidance.",
@@ -855,7 +871,7 @@ def seed_database():
             )
             db.commit()
 
-            _pr(riya, proj_marketing, amol, "H2 FY25-26", "reviewed", pg="4",
+            _pr(riya, proj_marketing, amol, "FY25-26", "reviewed", pg="4",
                 impact="Riya took on broader ownership in H2, driving the reporting automation workstream.",
                 comment_task_execution="Structuring tasks more independently with less guidance.",
                 comment_ownership="Stepped up to own the reporting automation module.",
@@ -865,7 +881,7 @@ def seed_database():
                 comment_mentoring="Supporting newer joiners on tooling onboarding.",
                 comment_competency_skills="Growing rapidly in marketing analytics and BI tools.",
             )
-            _pr(tej, proj_marketing, amol, "H2 FY25-26", "reviewed", pg="4",
+            _pr(tej, proj_marketing, amol, "FY25-26", "reviewed", pg="4",
                 impact="Tej delivered the full KPI framework and led client-facing dashboard rollout.",
                 comment_task_execution="Led the full KPI framework design with strong analytical depth.",
                 comment_ownership="End-to-end ownership of the dashboard rollout with zero misses.",
@@ -877,8 +893,8 @@ def seed_database():
             )
             db.commit()
 
-            _pr(riya, proj_marketing, amol, "H1 FY26-27", "pending")
-            _pr(tej,  proj_marketing, amol, "H1 FY26-27", "pending")
+            _pr(riya, proj_marketing, amol, "FY26-27", "pending")
+            _pr(tej,  proj_marketing, amol, "FY26-27", "pending")
             db.commit()
             print("  [+] Ensured PRJ-105 Project Reviews for Riya and Tej")
 
@@ -1457,7 +1473,7 @@ def seed_database():
         import hashlib as _hashlib
         from app.core.config import settings as _settings
 
-        # Active FY for the seeded "H1 FY26-27" cycle.
+        # Active FY for the seeded "FY26-27" cycle.
         _F360_FY = 2026
 
         def _f360_hash(reviewer_id: int, target_id: int, fy_year: int) -> str:

@@ -22,48 +22,46 @@ import { useManagementView } from "../../queries/projectReviews";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { getErrorMessage } from "../../utils/errors";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { extractFyToken } from "../../utils/fy";
 
 // ── Types ────────────────────────────────────────────────────────────
 
 type StatusFilter = "all" | "reviewed" | "pending";
 
-// ── Cycle Generator ──────────────────────────────────────────────────
+// ── FY Option Generator ──────────────────────────────────────────────
 
-function generateCycleOptions(
-  activeCycleName: string,
-  cycleType: string,
-  count = 6,
-): string[] {
-  const cycles: string[] = [activeCycleName];
-
-  if (cycleType === "half_yearly") {
-    const m = activeCycleName.match(/^H([12]) FY(\d+)$/);
-    if (!m) return cycles;
-    let half = parseInt(m[1]);
-    let year = parseInt(m[2]);
-    for (let i = 1; i < count; i++) {
-      if (half === 1) { half = 2; year--; } else { half = 1; }
-      cycles.push(`H${half} FY${year}`);
+/**
+ * Build the Year dropdown options: the active fiscal year plus the prior
+ * `count - 1` years, newest first.
+ *
+ * Project reviews are FY-scoped (one review per project per fiscal year),
+ * so the filter lists fiscal years — not H1/H2/Q* windows — regardless of
+ * the org's review cadence. Input is the bare FY token derived from
+ * `active_cycle_name` ("FY26-27"); legacy bare "FY26" is tolerated too.
+ */
+export function generateFyOptions(activeFyToken: string, count = 6): string[] {
+  // Spanning form: "FY26-27" → start year 26.
+  const span = /^FY(\d{2})-(\d{2})$/i.exec(activeFyToken);
+  if (span) {
+    const start = parseInt(span[1], 10);
+    const opts: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const a = (start - i + 100) % 100;
+      const b = (a + 1) % 100;
+      opts.push(`FY${a.toString().padStart(2, "0")}-${(b).toString().padStart(2, "0")}`);
     }
-  } else if (cycleType === "quarterly") {
-    const m = activeCycleName.match(/^Q([1-4]) FY(\d+)$/);
-    if (!m) return cycles;
-    let q = parseInt(m[1]);
-    let year = parseInt(m[2]);
-    for (let i = 1; i < count; i++) {
-      q--;
-      if (q === 0) { q = 4; year--; }
-      cycles.push(`Q${q} FY${year}`);
-    }
-  } else {
-    // annual: "FY26"
-    const m = activeCycleName.match(/^FY(\d+)$/);
-    if (!m) return cycles;
-    let year = parseInt(m[1]);
-    for (let i = 1; i < count; i++) { year--; cycles.push(`FY${year}`); }
+    return opts;
   }
-
-  return cycles;
+  // Legacy bare form: "FY26".
+  const bare = /^FY(\d{2,4})$/i.exec(activeFyToken);
+  if (bare) {
+    let year = parseInt(bare[1], 10);
+    const opts: string[] = [];
+    for (let i = 0; i < count; i++) { opts.push(`FY${year}`); year--; }
+    return opts;
+  }
+  // Unparseable — just offer the active token alone.
+  return [activeFyToken];
 }
 
 // ── Status Badge ─────────────────────────────────────────────────────
@@ -276,20 +274,23 @@ function ManagementSkeleton() {
 export function ManagementTab() {
   const { settings } = useSystemSettings();
 
-  const cycleOptions =
-    settings?.active_cycle_name
-      ? generateCycleOptions(settings.active_cycle_name, settings.cycle_type)
-      : [];
+  // FY token the filter operates on — reviews are FY-scoped, so we strip
+  // the cadence prefix ("H1 FY26-27" → "FY26-27") here and everywhere a
+  // default/clear value is derived below.
+  const activeFy = settings?.active_cycle_name
+    ? extractFyToken(settings.active_cycle_name)
+    : "";
+  const cycleOptions = activeFy ? generateFyOptions(activeFy) : [];
 
   const [selectedCycle, setSelectedCycle] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  // Initialise cycle from settings once available
+  // Initialise the selected FY from settings once available
   useEffect(() => {
-    if (settings?.active_cycle_name && !selectedCycle) {
-      setSelectedCycle(settings.active_cycle_name);
+    if (activeFy && !selectedCycle) {
+      setSelectedCycle(activeFy);
     }
-  }, [settings?.active_cycle_name, selectedCycle]);
+  }, [activeFy, selectedCycle]);
 
   // ['project-reviews', 'management', <cycle>] — shared TanStack cache.
   // Returns empty array while selectedCycle is "" so the initial render
@@ -313,9 +314,9 @@ export function ManagementTab() {
   const SELECT_CLS =
     "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer";
 
-  // The "cleared" cycle value is the active-cycle default the useEffect
+  // The "cleared" cycle value is the active-FY default the useEffect
   // seeds (or "" before settings load) — NOT "all".
-  const cycleDefault = settings?.active_cycle_name ?? "";
+  const cycleDefault = activeFy;
   const hasActiveFilters =
     statusFilter !== "all" || selectedCycle !== cycleDefault;
   const clearFilters = () => {
@@ -331,7 +332,7 @@ export function ManagementTab() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-              Cycle
+              Year
             </label>
             <select
               value={selectedCycle}
