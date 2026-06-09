@@ -98,7 +98,19 @@ def _pm_review_has_draft_content(review: ProjectReview) -> bool:
 
 
 def _get_active_cycle(db: DbSession, org_id: int) -> str:
-    """Return the admin-configured active cycle name from SystemSettings."""
+    """Return the bare fiscal-year label for the org's active cycle.
+
+    Project reviews are scoped to the FY, NOT the half/quarter window: a
+    project gets exactly one review per employee per fiscal year (unlike
+    annual goals, which carry an H1 and an H2 self/mentor review). We
+    therefore strip the cadence prefix off `active_cycle_name`
+    ("H1 FY26-27" → "FY26-27", "Q3 FY27-28" → "FY27-28") so the cycle the
+    ProjectReview row is keyed on, and every queue/management filter that
+    derives from this helper, all operate at FY granularity. When the
+    admin rotates H1 → H2 the FY label is unchanged, so the existing
+    `(org, user, project, cycle)` unique index now blocks a second review
+    in the same year.
+    """
     settings = db.query(SystemSettings).filter(
         SystemSettings.org_id == org_id
     ).first()
@@ -109,7 +121,7 @@ def _get_active_cycle(db: DbSession, org_id: int) -> str:
             detail="No active performance cycle configured.",
         )
 
-    return settings.active_cycle_name
+    return extract_fy_label(settings.active_cycle_name)
 
 
 def _visible_performance_group(

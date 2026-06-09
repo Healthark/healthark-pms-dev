@@ -191,7 +191,9 @@ class TestAnnualReviews:
 
     def test_completed_fy_constants(self, seed):
         assert seed.COMPLETED_ANNUAL_CYCLE == "FY25-26"
-        assert seed.COMPLETED_PROJECT_CYCLE == "H1 FY25-26"
+        # Project reviews are FY-scoped — the cycle tag is the bare FY label,
+        # no H1/H2 prefix (one review per employee per project per year).
+        assert seed.COMPLETED_PROJECT_CYCLE == "FY25-26"
         assert seed.F360_FY == 2025
 
 

@@ -87,9 +87,14 @@ export function ProjectReviews() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   // Lazy-init from settings so we don't run a follow-up effect just to
-  // copy `settings.active_cycle_name` into local state on first paint.
-  const [selectedCycle, setSelectedCycle] = useState<string>(
-    () => settings?.active_cycle_name ?? "",
+  // copy the active cycle into local state on first paint. Project reviews
+  // are FY-scoped, so the card `cycle` is the bare FY token ("FY26-27") —
+  // strip the cadence prefix off active_cycle_name to match, otherwise the
+  // default filter wouldn't equal any card and the list would render empty.
+  const [selectedCycle, setSelectedCycle] = useState<string>(() =>
+    settings?.active_cycle_name
+      ? extractFyToken(settings.active_cycle_name)
+      : "",
   );
   const [selectedCardKey, setSelectedCardKey] = useState<string | null>(null);
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
@@ -158,8 +163,11 @@ export function ProjectReviews() {
   }, [filteredCards, sort]);
 
   // The "cleared" cycle value is the active-cycle default the state is
-  // lazy-seeded with (or "" before settings load) — NOT "all".
-  const cycleDefault = settings?.active_cycle_name ?? "";
+  // lazy-seeded with (or "" before settings load) — NOT "all". Must match
+  // the FY-token seed above, not the raw active_cycle_name.
+  const cycleDefault = settings?.active_cycle_name
+    ? extractFyToken(settings.active_cycle_name)
+    : "";
   const hasActiveFilters =
     !!searchQuery ||
     pmFilter !== "all" ||
@@ -430,7 +438,7 @@ function renderMyReviewsBody(args: {
             </th>
             <th className="text-left px-4 py-2.5">
               <SortableHeader
-                label="Cycle"
+                label="Year"
                 columnKey="cycle"
                 sort={sort}
                 onSort={onSort}
