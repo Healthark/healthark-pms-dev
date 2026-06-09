@@ -8,11 +8,12 @@
  * subject/body; both stay fully editable.
  */
 import { useMemo, useState } from "react";
-import { Megaphone, Send, Building2, Briefcase, Users2 } from "lucide-react";
+import { Megaphone, Send, Building2, Briefcase, Users2, UserPlus, X } from "lucide-react";
 import { useSendNotify } from "../../queries/adminSettings";
 import type { NotifyChannel } from "../../services/admin.service";
 import { useDepartments, useDesignations } from "../../queries/adminReferenceData";
 import { useUsers } from "../../queries/users";
+import { UserCombobox } from "../common/UserCombobox";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -78,7 +79,7 @@ export function NotifyTab() {
 
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [mentorsOnly, setMentorsOnly] = useState(false);
+  const [userIds, setUserIds] = useState<number[]>([]);
   const [departmentIds, setDepartmentIds] = useState<number[]>([]);
   const [designationIds, setDesignationIds] = useState<number[]>([]);
   const [channel, setChannel] = useState<NotifyChannel>("both");
@@ -91,14 +92,11 @@ export function NotifyTab() {
   };
 
   // Live recipient preview — mirrors the backend notify_audience() filter
-  // (active users, AND-combined mentors-only / department / designation).
+  // (active users, AND-combined specific-users / department / designation).
   const recipientCount = useMemo(() => {
     const active = users.filter((u) => !u.is_deleted);
-    const mentorIds = new Set(
-      active.map((u) => u.mentor_id).filter((id): id is number => id != null),
-    );
     return active.filter((u) => {
-      if (mentorsOnly && !mentorIds.has(u.id)) return false;
+      if (userIds.length > 0 && !userIds.includes(u.id)) return false;
       if (departmentIds.length > 0 && !(u.department_id != null && departmentIds.includes(u.department_id))) {
         return false;
       }
@@ -107,7 +105,16 @@ export function NotifyTab() {
       }
       return true;
     }).length;
-  }, [users, mentorsOnly, departmentIds, designationIds]);
+  }, [users, userIds, departmentIds, designationIds]);
+
+  // Selected-user objects (for the removable chips), in selection order.
+  const selectedUsers = useMemo(
+    () =>
+      userIds
+        .map((id) => users.find((u) => u.id === id))
+        .filter((u): u is (typeof users)[number] => u != null),
+    [userIds, users],
+  );
 
   const hasContent = subject.trim().length > 0 && body.trim().length > 0;
   const canSend = hasContent && recipientCount > 0;
@@ -126,7 +133,9 @@ export function NotifyTab() {
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
-    if (mentorsOnly) parts.push("mentors");
+    if (userIds.length > 0) {
+      parts.push(`${userIds.length} user${userIds.length === 1 ? "" : "s"}`);
+    }
     if (departmentIds.length > 0) {
       parts.push(`${departmentIds.length} dept${departmentIds.length === 1 ? "" : "s"}`);
     }
@@ -134,7 +143,7 @@ export function NotifyTab() {
       parts.push(`${designationIds.length} designation${designationIds.length === 1 ? "" : "s"}`);
     }
     return parts.length > 0 ? parts.join(" · ") : "everyone";
-  }, [mentorsOnly, departmentIds, designationIds]);
+  }, [userIds, departmentIds, designationIds]);
 
   const channelPhrase: Record<NotifyChannel, string> = {
     email: "email them",
@@ -157,7 +166,7 @@ export function NotifyTab() {
       const result = await sendNotify.mutateAsync({
         subject,
         body,
-        mentors_only: mentorsOnly,
+        user_ids: userIds,
         department_ids: departmentIds,
         designation_ids: designationIds,
         channel,
@@ -278,16 +287,46 @@ export function NotifyTab() {
               <h3 className="text-sm font-semibold text-text-main">Recipients</h3>
             </div>
 
-            {/* Mentors-only quick toggle */}
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-text-main">
-              <input
-                type="checkbox"
-                checked={mentorsOnly}
-                onChange={(e) => setMentorsOnly(e.target.checked)}
-                className="rounded border-border"
+            {/* Specific-user search — add individual recipients by name/email. */}
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted">
+                <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                Specific users
+              </div>
+              <UserCombobox
+                value={null}
+                onChange={(id) => {
+                  if (id != null) {
+                    setUserIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+                  }
+                }}
+                label=""
+                placeholder="Search by name or email…"
+                excludeIds={userIds}
               />
-              Mentors only
-            </label>
+              {selectedUsers.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {selectedUsers.map((u) => (
+                    <span
+                      key={u.id}
+                      className="inline-flex items-center gap-1 rounded-full border border-brand bg-brand-light px-2.5 py-1 text-xs font-medium text-brand"
+                    >
+                      {u.full_name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUserIds((prev) => prev.filter((x) => x !== u.id))
+                        }
+                        className="rounded-full p-0.5 hover:bg-brand/20"
+                        aria-label={`Remove ${u.full_name}`}
+                      >
+                        <X className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Departments */}
             <div>

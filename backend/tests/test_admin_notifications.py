@@ -305,17 +305,16 @@ def test_admin_notify_no_filter_targets_everyone(db):
     assert rows[0].actor_id == admin.id
 
 
-def test_admin_notify_mentors_only(db):
+def test_admin_notify_specific_users(db):
     org = _org(db)
     admin = _user(db, org.id, role="Admin")
-    mentor = _user(db, org.id, role="Staff")
-    _user(db, org.id, role="Staff", mentor_id=mentor.id)  # mentee → makes mentor a mentor
-    _user(db, org.id, role="Staff")  # loner — mentors nobody
+    target = _user(db, org.id, role="Staff")
+    _user(db, org.id, role="Staff")  # not picked — excluded
     db.commit()
 
     result = admin_notify(
         AdminNotifyRequest(
-            subject="For mentors", body="Review goals.", mentors_only=True, channel="in_app"
+            subject="Just you", body="A note.", user_ids=[target.id], channel="in_app"
         ),
         db,
         admin,
@@ -325,7 +324,7 @@ def test_admin_notify_mentors_only(db):
     assert result.recipients == 1
     rows = db.query(Notification).filter(Notification.type == "admin_broadcast").all()
     assert len(rows) == 1
-    assert rows[0].recipient_id == mentor.id
+    assert rows[0].recipient_id == target.id
 
 
 def test_admin_notify_filters_by_department(db):

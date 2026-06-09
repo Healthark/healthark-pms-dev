@@ -24,11 +24,10 @@ const designations = [
   { id: 10, name: "Consultant", level: 1 },
   { id: 11, name: "HR Executive", level: 1 },
 ];
-// u1 mentors u2 & u3 → mentorIds = {1}; all active.
 const users = [
-  { id: 1, department_id: 1, designation_id: 10, mentor_id: null, is_deleted: false },
-  { id: 2, department_id: 1, designation_id: 11, mentor_id: 1, is_deleted: false },
-  { id: 3, department_id: 2, designation_id: 10, mentor_id: 1, is_deleted: false },
+  { id: 1, full_name: "Alice Admin", email: "alice@x.com", role: "Admin", department_id: 1, designation_id: 10, mentor_id: null, is_deleted: false },
+  { id: 2, full_name: "Bob Builder", email: "bob@x.com", role: "Employee", department_id: 1, designation_id: 11, mentor_id: 1, is_deleted: false },
+  { id: 3, full_name: "Carol Consultant", email: "carol@x.com", role: "Employee", department_id: 2, designation_id: 10, mentor_id: 1, is_deleted: false },
 ];
 
 vi.mock("../../../queries/adminSettings", () => ({
@@ -89,7 +88,7 @@ describe("NotifyTab — recipient targeting", () => {
     expect(mutateAsync).toHaveBeenCalledWith({
       subject: "The second half of the year has started",
       body: expect.stringContaining("second half"),
-      mentors_only: false,
+      user_ids: [],
       department_ids: [],
       designation_ids: [],
       channel: "both",
@@ -111,18 +110,22 @@ describe("NotifyTab — recipient targeting", () => {
     );
   });
 
-  it("supports the mentors-only toggle (count drops to mentors)", async () => {
+  it("narrows recipients to a specific user picked from the search", async () => {
     const user = userEvent.setup();
     render(<NotifyTab />);
     await fillMessage(user);
 
-    await user.click(screen.getByLabelText(/mentors only/i)); // only u1 mentors anyone
+    await user.type(screen.getByRole("combobox"), "Bob");
+    await user.click(screen.getByRole("option", { name: /Bob Builder/i }));
+    // Only the picked user (u2) is targeted.
     expect(screen.getByText(/1 person/)).toBeInTheDocument();
+    // Selected user shows as a removable chip.
+    expect(screen.getByRole("button", { name: /remove bob builder/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /send announcement/i }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     expect(mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ mentors_only: true }),
+      expect.objectContaining({ user_ids: [2] }),
     );
   });
 
