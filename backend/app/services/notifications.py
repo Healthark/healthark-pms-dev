@@ -292,14 +292,14 @@ def notify_audience(
     db: Session,
     org_id: int,
     *,
-    mentors_only: bool = False,
+    user_ids: Optional[Sequence[int]] = None,
     department_ids: Optional[Sequence[int]] = None,
     designation_ids: Optional[Sequence[int]] = None,
 ) -> list[User]:
     """Active org users narrowed by the Admin Notify filters (AND-combined).
 
     No filter set → every active user. Each filter further narrows the set:
-    ``mentors_only`` keeps only users who mentor someone; ``department_ids`` /
+    ``user_ids`` keeps only those specific users; ``department_ids`` /
     ``designation_ids`` keep only users in those departments / designations.
     Empty lists are treated as "no filter on that dimension".
     """
@@ -308,17 +308,8 @@ def notify_audience(
         User.is_deleted == False,  # noqa: E712
     )
 
-    if mentors_only:
-        mentor_ids = (
-            db.query(User.mentor_id)
-            .filter(
-                User.org_id == org_id,
-                User.is_deleted == False,  # noqa: E712
-                User.mentor_id.isnot(None),
-            )
-            .distinct()
-        )
-        query = query.filter(User.id.in_(mentor_ids))
+    if user_ids:
+        query = query.filter(User.id.in_(user_ids))
 
     if department_ids:
         query = query.filter(User.department_id.in_(department_ids))

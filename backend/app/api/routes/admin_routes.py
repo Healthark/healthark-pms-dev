@@ -1076,7 +1076,7 @@ def admin_notify(
     """
     Manual targeted announcement from the Admin "Notify" tab.
 
-    Resolves recipients from the request's filters (mentors-only / departments /
+    Resolves recipients from the request's filters (specific users / departments /
     designations, AND-combined; no filter → everyone), then delivers per
     ``channel``: "in_app" writes the Announcements-tab row only, "email" sends
     the email only (no in-app row), "both" does both.
@@ -1086,7 +1086,7 @@ def admin_notify(
     recipients = notify_audience(
         db,
         current_user.org_id,
-        mentors_only=payload.mentors_only,
+        user_ids=payload.user_ids,
         department_ids=payload.department_ids,
         designation_ids=payload.designation_ids,
     )

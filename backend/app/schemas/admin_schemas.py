@@ -192,7 +192,7 @@ class AdminNotifyRequest(BaseModel):
 
     Recipients are active org users narrowed by the (optional, AND-combined)
     filters below. With no filter set, every active user is targeted:
-        * `mentors_only`     → restrict to users who mentor someone.
+        * `user_ids`         → restrict to these specific users (any of).
         * `department_ids`   → restrict to these departments (any of).
         * `designation_ids`  → restrict to these designations/job titles (any of).
     `subject`/`body` are backend-authoritative (the UI presets only pre-fill).
@@ -203,7 +203,7 @@ class AdminNotifyRequest(BaseModel):
         * "both"   → in-app announcement + email."""
     subject: str = Field(..., min_length=1, max_length=200)
     body: str = Field(..., min_length=1, max_length=4000)
-    mentors_only: bool = False
+    user_ids: list[int] = Field(default_factory=list)
     department_ids: list[int] = Field(default_factory=list)
     designation_ids: list[int] = Field(default_factory=list)
     channel: Literal["email", "in_app", "both"] = "both"

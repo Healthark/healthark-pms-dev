@@ -162,8 +162,8 @@ export type NotifyChannel = "email" | "in_app" | "both";
 export interface AdminNotifyPayload {
   subject: string;
   body: string;
-  /** Restrict to users who mentor someone. */
-  mentors_only: boolean;
+  /** Restrict to these specific users (any of); empty = no user filter. */
+  user_ids: number[];
   /** Restrict to these departments (any of); empty = no department filter. */
   department_ids: number[];
   /** Restrict to these designations (any of); empty = no designation filter. */
