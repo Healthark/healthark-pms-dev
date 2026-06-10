@@ -90,10 +90,10 @@ export function MyReviewsToolbar({
       {/* Row 2: Filters */}
       <div className="flex items-center gap-4 flex-wrap">
         <FilterSelect
-          label="Year"
+          label="Cycle"
           value={selectedCycle}
           onChange={onSelectedCycleChange}
-          allLabel="All Years"
+          allLabel="All Cycles"
           options={availableCycles}
           minWidth={120}
         />
