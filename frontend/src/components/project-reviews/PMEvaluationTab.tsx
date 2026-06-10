@@ -36,7 +36,6 @@ import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
-import { extractFyToken } from "../../utils/fy";
 // EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
 // modal in the app at ~475 LOC; ImpactModal is paired (same parents)
 // so we split them together. Each opens on row-click only.
@@ -184,12 +183,7 @@ export function PMEvaluationTab() {
   const { user } = useAuth();
   const currentUserId = user?.user_id;
   const { settings } = useSystemSettings();
-  // Project reviews are FY-scoped, so queue rows carry the bare FY token
-  // ("FY26-27") as their cycle. Strip the cadence prefix off the active
-  // cycle so the default Cycle filter matches — otherwise it equals no row.
-  const activeCycle = settings?.active_cycle_name
-    ? extractFyToken(settings.active_cycle_name)
-    : null;
+  const activeCycle = settings?.active_cycle_name ?? null;
   const toast = useToast();
 
   // ['project-reviews', 'pm-queue' | 'secondary-queue' | 'role-expectations']
@@ -466,10 +460,10 @@ export function PMEvaluationTab() {
         </div>
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Year</label>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
             <select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)}
               className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
-              <option value="all">All Years</option>
+              <option value="all">All Cycles</option>
               {availableCycles.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -547,7 +541,7 @@ export function PMEvaluationTab() {
                   <SortableHeader label="Project" columnKey="project_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="hidden sm:table-cell text-left px-4 py-2.5">
-                  <SortableHeader label="Year" columnKey="cycle" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Cycle" columnKey="cycle" sort={sort} onSort={setSort} />
                 </th>
                 <th className="hidden md:table-cell text-left px-4 py-2.5">
                   <SortableHeader label="Dept" columnKey="department_name" sort={sort} onSort={setSort} />
