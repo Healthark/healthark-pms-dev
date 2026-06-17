@@ -2,13 +2,13 @@
 seed.py — Deterministic dev seed.
 
 Accounts (all passwords: password123):
-  Healthark Admin:  admin@healthark.com  (Sarah Admin)
-  New Admins:       amol@, founder1@, founder2@healthark.com
-  Mentors (→ Sarah): priya@, david@, vikram@healthark.com
-  Priya's mentees:  arjun@, neha@healthark.com
-  David's mentees:  rahul@, meera@healthark.com
-  Vikram's mentees: ananya@, karan@healthark.com
-  Amol's mentees:   riya@, tej@healthark.com
+  Healthark Admin:  admin@healthark.ai  (Sarah Admin)
+  New Admins:       amol@, founder1@, founder2@healthark.ai
+  Mentors (→ Sarah): priya@, david@, vikram@healthark.ai
+  Priya's mentees:  arjun@, neha@healthark.ai
+  David's mentees:  rahul@, meera@healthark.ai
+  Vikram's mentees: ananya@, karan@healthark.ai
+  Amol's mentees:   riya@, tej@healthark.ai
 
 Run:
   python seed.py
@@ -44,7 +44,7 @@ def seed_database():
         if not org:
             org = Organization(
                 name="Healthark",
-                domain="healthark.com",
+                domain="healthark.ai",
                 enabled_features=[
                     "dashboard", "goals", "project_reviews",
                     "annual_reviews", "mentoring", "admin", "feedback_360",
@@ -112,24 +112,24 @@ def seed_database():
 
         pw = get_password_hash("password123")
 
-        admin_user = db.query(User).filter(User.org_id == org.id, User.email == "admin@healthark.com").first()
+        admin_user = db.query(User).filter(User.org_id == org.id, User.email == "admin@healthark.ai").first()
 
         if not admin_user:
             admin_user = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
-                employee_code="EMP-000", full_name="Sarah Admin", email="admin@healthark.com",
+                employee_code="EMP-000", full_name="Sarah Admin", email="admin@healthark.ai",
                 phone="+91 98765 00000",
                 role="Admin", password_hash=pw,
             )
             db.add(admin_user)
             db.commit()
             db.refresh(admin_user)
-            print("  [+] Created: admin@healthark.com")
+            print("  [+] Created: admin@healthark.ai")
 
             # Mentors — all report to Sarah
             priya = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_manager.id,
-                employee_code="EMP-101", full_name="Priya Sharma", email="priya@healthark.com",
+                employee_code="EMP-101", full_name="Priya Sharma", email="priya@healthark.ai",
                 phone="+91 98765 10101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
             )
@@ -139,19 +139,19 @@ def seed_database():
 
             arjun = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_senior_consultant.id,
-                employee_code="EMP-102", full_name="Arjun Patel", email="arjun@healthark.com",
+                employee_code="EMP-102", full_name="Arjun Patel", email="arjun@healthark.ai",
                 phone="+91 98765 10102",
                 role="Staff", mentor_id=priya.id, password_hash=pw,
             )
             neha = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_consultant.id,
-                employee_code="EMP-103", full_name="Neha Gupta", email="neha@healthark.com",
+                employee_code="EMP-103", full_name="Neha Gupta", email="neha@healthark.ai",
                 phone="+91 98765 10103",
                 role="Staff", mentor_id=priya.id, password_hash=pw,
             )
             david = User(
                 org_id=org.id, department_id=dept_idt.id, designation_id=desig_manager.id,
-                employee_code="EMP-201", full_name="David Miller", email="david@healthark.com",
+                employee_code="EMP-201", full_name="David Miller", email="david@healthark.ai",
                 phone="+91 98765 20101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
             )
@@ -161,19 +161,19 @@ def seed_database():
 
             rahul = User(
                 org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_consultant.id,
-                employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.com",
+                employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.ai",
                 phone="+91 98765 20102",
                 role="Staff", mentor_id=david.id, password_hash=pw,
             )
             meera = User(
                 org_id=org.id, department_id=dept_idt.id, designation_id=desig_consultant.id,
-                employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.com",
+                employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.ai",
                 phone="+91 98765 20103",
                 role="Staff", mentor_id=david.id, password_hash=pw,
             )
             vikram = User(
                 org_id=org.id, department_id=dept_rwe.id, designation_id=desig_manager.id,
-                employee_code="EMP-301", full_name="Vikram Singh", email="vikram@healthark.com",
+                employee_code="EMP-301", full_name="Vikram Singh", email="vikram@healthark.ai",
                 phone="+91 98765 30101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
             )
@@ -183,13 +183,13 @@ def seed_database():
 
             ananya = User(
                 org_id=org.id, department_id=dept_rwe.id, designation_id=desig_senior_consultant.id,
-                employee_code="EMP-302", full_name="Ananya Reddy", email="ananya@healthark.com",
+                employee_code="EMP-302", full_name="Ananya Reddy", email="ananya@healthark.ai",
                 phone="+91 98765 30102",
                 role="Staff", mentor_id=vikram.id, password_hash=pw,
             )
             karan = User(
                 org_id=org.id, department_id=dept_rwe.id, designation_id=desig_consultant.id,
-                employee_code="EMP-303", full_name="Karan Mehta", email="karan@healthark.com",
+                employee_code="EMP-303", full_name="Karan Mehta", email="karan@healthark.ai",
                 phone="+91 98765 30103",
                 role="Staff", mentor_id=vikram.id, password_hash=pw,
             )
@@ -201,7 +201,7 @@ def seed_database():
             # Management Review tab (Amol + Founders).
             amol = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
-                employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.com",
+                employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.ai",
                 phone="+91 98765 00400",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
@@ -212,14 +212,14 @@ def seed_database():
 
             founder1 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
-                employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.com",
+                employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.ai",
                 phone="+91 98765 00401",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
             )
             founder2 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
-                employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.com",
+                employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.ai",
                 phone="+91 98765 00402",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
@@ -232,13 +232,13 @@ def seed_database():
             # Amol's mentees — Marketing staff
             riya = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_consultant.id,
-                employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.com",
+                employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.ai",
                 phone="+91 98765 40101",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             tej = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_senior_consultant.id,
-                employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.com",
+                employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.ai",
                 phone="+91 98765 40102",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
@@ -248,26 +248,26 @@ def seed_database():
 
         else:
             print("  [~] Healthark users already exist, resolving references...")
-            priya   = db.query(User).filter_by(org_id=org.id, email="priya@healthark.com").first()
-            arjun   = db.query(User).filter_by(org_id=org.id, email="arjun@healthark.com").first()
-            neha    = db.query(User).filter_by(org_id=org.id, email="neha@healthark.com").first()
-            david   = db.query(User).filter_by(org_id=org.id, email="david@healthark.com").first()
-            rahul   = db.query(User).filter_by(org_id=org.id, email="rahul@healthark.com").first()
-            meera   = db.query(User).filter_by(org_id=org.id, email="meera@healthark.com").first()
-            vikram  = db.query(User).filter_by(org_id=org.id, email="vikram@healthark.com").first()
-            ananya  = db.query(User).filter_by(org_id=org.id, email="ananya@healthark.com").first()
-            karan   = db.query(User).filter_by(org_id=org.id, email="karan@healthark.com").first()
-            amol    = db.query(User).filter_by(org_id=org.id, email="amol@healthark.com").first()
-            founder1 = db.query(User).filter_by(org_id=org.id, email="founder1@healthark.com").first()
-            founder2 = db.query(User).filter_by(org_id=org.id, email="founder2@healthark.com").first()
-            riya    = db.query(User).filter_by(org_id=org.id, email="riya@healthark.com").first()
-            tej     = db.query(User).filter_by(org_id=org.id, email="tej@healthark.com").first()
+            priya   = db.query(User).filter_by(org_id=org.id, email="priya@healthark.ai").first()
+            arjun   = db.query(User).filter_by(org_id=org.id, email="arjun@healthark.ai").first()
+            neha    = db.query(User).filter_by(org_id=org.id, email="neha@healthark.ai").first()
+            david   = db.query(User).filter_by(org_id=org.id, email="david@healthark.ai").first()
+            rahul   = db.query(User).filter_by(org_id=org.id, email="rahul@healthark.ai").first()
+            meera   = db.query(User).filter_by(org_id=org.id, email="meera@healthark.ai").first()
+            vikram  = db.query(User).filter_by(org_id=org.id, email="vikram@healthark.ai").first()
+            ananya  = db.query(User).filter_by(org_id=org.id, email="ananya@healthark.ai").first()
+            karan   = db.query(User).filter_by(org_id=org.id, email="karan@healthark.ai").first()
+            amol    = db.query(User).filter_by(org_id=org.id, email="amol@healthark.ai").first()
+            founder1 = db.query(User).filter_by(org_id=org.id, email="founder1@healthark.ai").first()
+            founder2 = db.query(User).filter_by(org_id=org.id, email="founder2@healthark.ai").first()
+            riya    = db.query(User).filter_by(org_id=org.id, email="riya@healthark.ai").first()
+            tej     = db.query(User).filter_by(org_id=org.id, email="tej@healthark.ai").first()
 
         # Ensure new users exist for existing DBs seeded before this update
         if not amol:
             amol = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_director.id,
-                employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.com",
+                employee_code="EMP-004", full_name="Amol Kulkarni", email="amol@healthark.ai",
                 phone="+91 98765 00400",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
@@ -275,12 +275,12 @@ def seed_database():
             db.add(amol)
             db.commit()
             db.refresh(amol)
-            print("  [+] Created: amol@healthark.com")
+            print("  [+] Created: amol@healthark.ai")
 
         if not founder1:
             founder1 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
-                employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.com",
+                employee_code="EMP-F01", full_name="Rohan Desai", email="founder1@healthark.ai",
                 phone="+91 98765 00401",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
@@ -288,12 +288,12 @@ def seed_database():
             db.add(founder1)
             db.commit()
             db.refresh(founder1)
-            print("  [+] Created: founder1@healthark.com")
+            print("  [+] Created: founder1@healthark.ai")
 
         if not founder2:
             founder2 = User(
                 org_id=org.id, department_id=dept_strategy.id, designation_id=desig_director.id,
-                employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.com",
+                employee_code="EMP-F02", full_name="Nisha Patel", email="founder2@healthark.ai",
                 phone="+91 98765 00402",
                 role="Admin", password_hash=pw, mentor_id=admin_user.id,
                 is_management=True,
@@ -301,31 +301,31 @@ def seed_database():
             db.add(founder2)
             db.commit()
             db.refresh(founder2)
-            print("  [+] Created: founder2@healthark.com")
+            print("  [+] Created: founder2@healthark.ai")
 
         if not riya:
             riya = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_consultant.id,
-                employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.com",
+                employee_code="EMP-401", full_name="Riya Kapoor", email="riya@healthark.ai",
                 phone="+91 98765 40101",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             db.add(riya)
             db.commit()
             db.refresh(riya)
-            print("  [+] Created: riya@healthark.com")
+            print("  [+] Created: riya@healthark.ai")
 
         if not tej:
             tej = User(
                 org_id=org.id, department_id=dept_marketing.id, designation_id=desig_senior_consultant.id,
-                employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.com",
+                employee_code="EMP-402", full_name="Tej Nair", email="tej@healthark.ai",
                 phone="+91 98765 40102",
                 role="Staff", password_hash=pw, mentor_id=amol.id,
             )
             db.add(tej)
             db.commit()
             db.refresh(tej)
-            print("  [+] Created: tej@healthark.com")
+            print("  [+] Created: tej@healthark.ai")
 
         # Fix any users without a mentor (anyone without one gets Sarah)
         for _u, _m in [
@@ -1617,21 +1617,21 @@ def seed_database():
         print("Database seeding completed successfully!")
         print("=" * 60)
         print("\n--- HEALTHARK Accounts (all passwords: password123) ---")
-        print("  ADMIN:    admin@healthark.com     Sarah Admin      (Admin, no mentor — top of hierarchy)")
-        print("  ADMIN:    amol@healthark.com      Amol Kulkarni    (Admin, mentor: Sarah, mentors Riya + Tej)")
-        print("  ADMIN:    founder1@healthark.com  Rohan Desai      (Admin, mentor: Sarah)")
-        print("  ADMIN:    founder2@healthark.com  Nisha Patel      (Admin, mentor: Sarah)")
-        print("  STRATEGY: priya@healthark.com     Priya Sharma     (mentor: Sarah, mentors Arjun + Neha)")
-        print("            arjun@healthark.com     Arjun Patel      (mentor: Priya)")
-        print("            neha@healthark.com      Neha Gupta       (mentor: Priya)")
-        print("  IDT:      david@healthark.com     David Miller     (mentor: Sarah, mentors Rahul + Meera)")
-        print("            rahul@healthark.com     Rahul Verma      (mentor: David)")
-        print("            meera@healthark.com     Meera Joshi      (mentor: David)")
-        print("  RWE:      vikram@healthark.com    Vikram Singh     (mentor: Sarah, mentors Ananya + Karan)")
-        print("            ananya@healthark.com    Ananya Reddy     (mentor: Vikram)")
-        print("            karan@healthark.com     Karan Mehta      (mentor: Vikram)")
-        print("  MARKETING:riya@healthark.com      Riya Kapoor      (mentor: Amol)")
-        print("            tej@healthark.com       Tej Nair         (mentor: Amol)")
+        print("  ADMIN:    admin@healthark.ai     Sarah Admin      (Admin, no mentor — top of hierarchy)")
+        print("  ADMIN:    amol@healthark.ai      Amol Kulkarni    (Admin, mentor: Sarah, mentors Riya + Tej)")
+        print("  ADMIN:    founder1@healthark.ai  Rohan Desai      (Admin, mentor: Sarah)")
+        print("  ADMIN:    founder2@healthark.ai  Nisha Patel      (Admin, mentor: Sarah)")
+        print("  STRATEGY: priya@healthark.ai     Priya Sharma     (mentor: Sarah, mentors Arjun + Neha)")
+        print("            arjun@healthark.ai     Arjun Patel      (mentor: Priya)")
+        print("            neha@healthark.ai      Neha Gupta       (mentor: Priya)")
+        print("  IDT:      david@healthark.ai     David Miller     (mentor: Sarah, mentors Rahul + Meera)")
+        print("            rahul@healthark.ai     Rahul Verma      (mentor: David)")
+        print("            meera@healthark.ai     Meera Joshi      (mentor: David)")
+        print("  RWE:      vikram@healthark.ai    Vikram Singh     (mentor: Sarah, mentors Ananya + Karan)")
+        print("            ananya@healthark.ai    Ananya Reddy     (mentor: Vikram)")
+        print("            karan@healthark.ai     Karan Mehta      (mentor: Vikram)")
+        print("  MARKETING:riya@healthark.ai      Riya Kapoor      (mentor: Amol)")
+        print("            tej@healthark.ai       Tej Nair         (mentor: Amol)")
         print()
         print("--- 360 FEEDBACK seeded for Healthark (FY26-27) ---")
         print("  Priya:  4 worked-with + 3 not-worked-with reviews -> both cohorts visible")
