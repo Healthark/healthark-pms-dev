@@ -107,8 +107,12 @@ class AnnualReviewResponse(BaseModel):
 
 
 class CalibrationRow(BaseModel):
-    """Simplified row for the HR Calibration Grid datatable."""
-    review_id: int
+    """Simplified row for the HR Calibration Grid datatable.
+
+    `review_id` is None for synthetic `not_started` rows (All Reviews roster)
+    — those employees have no AnnualReview row yet, so there is nothing to open.
+    """
+    review_id: Optional[int] = None
     user_id: int
     # Bare FY label of the review (e.g. "FY25-26"). Lets the grid show a Year
     # column — useful when the year filter is set to "all".
@@ -141,7 +145,9 @@ class CalibrationFilterOptions(BaseModel):
     the option set changes only when reviews enter/leave the calibration
     stage, which is rare relative to page/filter/sort interactions.
     """
+    employees: list[str]
     departments: list[str]
+    designations: list[str]
     mentors: list[str]
     years: list[str]
     active_year: str
@@ -157,3 +163,20 @@ class MenteeAnnualReview(AnnualReviewResponse):
     employee_email: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
+
+
+class AnnualReviewFunnel(BaseModel):
+    """Active-cycle annual-review progress for the admin dashboard card.
+
+    `total` is the active employee headcount (the denominator). The five
+    stage counts sum to `total`: `not_started` is the headcount with no
+    review row yet for the active cycle. `cycle_name` is None when no active
+    cycle is configured (the card renders an empty state).
+    """
+    cycle_name: Optional[str] = None
+    total: int
+    not_started: int
+    draft: int
+    pending_mentor: int
+    pending_management: int
+    completed: int

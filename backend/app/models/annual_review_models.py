@@ -44,6 +44,11 @@ class ReviewStatus(str, PyEnum):
     PENDING_MENTOR       = "pending_mentor"
     PENDING_MANAGEMENT   = "pending_management"
     COMPLETED            = "completed"
+    # Synthetic — NEVER persisted to the status column. Returned only by
+    # GET /annual-reviews/all for active employees who have no review row in
+    # the active cycle, so the All Reviews roster can surface who hasn't
+    # started yet. A draft counts as "started" (and stays private).
+    NOT_STARTED          = "not_started"
 
 
 class AnnualReview(Base):

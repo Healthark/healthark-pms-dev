@@ -6,6 +6,7 @@ import { MyAnnualReviewWidget } from "../components/dashboard/MyAnnualReviewWidg
 import { ActiveCycleWidget } from "../components/dashboard/ActiveCycleWidget";
 import { PendingMentorWorkWidget } from "../components/dashboard/PendingMentorWorkWidget";
 import { MenteesWidget } from "../components/dashboard/MenteesWidget";
+import { AnnualReviewFunnelCard } from "../components/dashboard/AnnualReviewFunnelCard";
 
 // Skeleton shown while the summary is loading. Matches the widget card
 // dimensions so the layout doesn't jump on first paint.
@@ -59,6 +60,8 @@ export function Dashboard() {
   // to hold, mirroring the sidebar's own visibility check.
   const showMentorLayer =
     hasFeature("mentoring") && (user?.has_mentees ?? false);
+  // Admin layer — org-wide oversight cards (annual-review progress funnel).
+  const isAdmin = user?.role === "Admin";
 
   if (isError) {
     return (
@@ -132,6 +135,19 @@ export function Dashboard() {
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             <PendingMentorWorkWidget summary={summary} />
             <MenteesWidget summary={summary} />
+          </div>
+        </section>
+      )}
+
+      {/* ── Admin layer — org-wide oversight ───────────────────────── */}
+      {isAdmin && (
+        <section className="space-y-4">
+          <SectionHeader
+            title="Organization"
+            subtitle="Org-wide review progress."
+          />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <AnnualReviewFunnelCard />
           </div>
         </section>
       )}

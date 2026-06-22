@@ -15,7 +15,9 @@ import type { CalibrationQuery } from "../../../services/annual-review.service";
 const gridCalls: CalibrationQuery[] = [];
 
 const filterOptions = {
+  employees: ["Current Emp"],
   departments: ["RWE"],
+  designations: ["Consultant"],
   mentors: ["Manager"],
   years: ["FY26-27", "FY25-26"],
   active_year: "FY26-27",

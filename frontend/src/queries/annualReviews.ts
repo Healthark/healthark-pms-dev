@@ -7,6 +7,7 @@ import {
 import {
   annualReviewService,
   type AnnualReview,
+  type AnnualReviewFunnel,
   type MenteeAnnualReview,
   type CalibrationRow,
   type CalibrationQuery,
@@ -54,6 +55,8 @@ export const calibrationFilterOptionsQueryKey = [
 ] as const;
 export const annualReviewDetailQueryKey = (reviewId: number) =>
   ["annual-reviews", "detail", reviewId] as const;
+export const allReviewsQueryKey = ["annual-reviews", "all"] as const;
+export const annualReviewFunnelQueryKey = ["annual-reviews", "funnel"] as const;
 
 // ── Reads ─────────────────────────────────────────────────────────────
 
@@ -91,6 +94,27 @@ export function useCalibrationFilterOptions() {
     queryKey: calibrationFilterOptionsQueryKey,
     queryFn: () => annualReviewService.getCalibrationFilterOptions(),
     staleTime: FILTER_OPTIONS_STALE_TIME,
+  });
+}
+
+/** Admin-only: org-wide annual reviews for the All Reviews tab (all years).
+ *  keepPreviousData avoids a flash while the (rare) refetch runs. */
+export function useAllReviews() {
+  return useQuery<CalibrationRow[]>({
+    queryKey: allReviewsQueryKey,
+    queryFn: () => annualReviewService.getAllReviews(),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Admin-only: active-cycle progress for the dashboard funnel card.
+ *  `enabled` lets the dashboard fetch it only for admins. */
+export function useAnnualReviewFunnel(enabled = true) {
+  return useQuery<AnnualReviewFunnel>({
+    queryKey: annualReviewFunnelQueryKey,
+    queryFn: () => annualReviewService.getFunnel(),
+    enabled,
+    staleTime: 60_000,
   });
 }
 

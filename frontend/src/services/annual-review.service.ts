@@ -21,7 +21,10 @@ export type ReviewStatus =
   | "draft"
   | "pending_mentor"
   | "pending_management"
-  | "completed";
+  | "completed"
+  // Synthetic — only the All Reviews roster returns this, for active-cycle
+  // employees with no review row yet. Never persisted.
+  | "not_started";
 
 // ── Response Types ──────────────────────────────────────────────────
 
@@ -64,7 +67,9 @@ export interface MenteeAnnualReview extends AnnualReview {
 /** Filter dropdown options for the calibration grid — distinct values
  *  across the org's calibration set (all years), fetched once. */
 export interface CalibrationFilterOptions {
+  employees: string[];
   departments: string[];
+  designations: string[];
   mentors: string[];
   /** FY labels with at least one calibration review, newest first; always
    *  includes active_year. */
@@ -76,7 +81,11 @@ export interface CalibrationFilterOptions {
 /** Query params accepted by GET /annual-reviews/calibration. Extends the
  *  shared PageQuery with the grid's domain-specific filters. */
 export interface CalibrationQuery extends PageQuery {
+  /** Exact employee name (from the Employee filter combobox). */
+  employee?: string;
   department?: string;
+  designation?: string;
+  /** Exact mentor name, or the "(No mentor)" sentinel for unmentored employees. */
   mentor?: string;
   status?: "all" | "pending" | "rated";
   /** FY label (e.g. "FY25-26"), "all", or omitted (active cycle). */
@@ -84,7 +93,8 @@ export interface CalibrationQuery extends PageQuery {
 }
 
 export interface CalibrationRow {
-  review_id: number;
+  /** null for synthetic not_started rows — there's no review to open yet. */
+  review_id: number | null;
   user_id: number;
   /** Bare FY label of the review (e.g. "FY25-26") — drives the Year column. */
   cycle_name: string;
@@ -103,6 +113,19 @@ export interface CalibrationRow {
 
 export interface ManagementRatingPayload {
   management_performance_rating: number;
+}
+
+/** Active-cycle annual-review progress for the admin dashboard funnel card.
+ *  The five stage counts sum to `total` (the active headcount); `cycle_name`
+ *  is null when no active cycle is configured. */
+export interface AnnualReviewFunnel {
+  cycle_name: string | null;
+  total: number;
+  not_started: number;
+  draft: number;
+  pending_mentor: number;
+  pending_management: number;
+  completed: number;
 }
 
 // ── Request Payload Types ───────────────────────────────────────────
@@ -218,7 +241,9 @@ export const annualReviewService = {
           // Only send filters/sort when set so the URL stays clean and
           // the backend treats absent params as "no filter".
           search: params.search || undefined,
+          employee: params.employee || undefined,
           department: params.department || undefined,
+          designation: params.designation || undefined,
           mentor: params.mentor || undefined,
           status:
             params.status && params.status !== "all"
@@ -238,6 +263,20 @@ export const annualReviewService = {
     const res = await apiClient.get<CalibrationFilterOptions>(
       "/annual-reviews/calibration/filter-options",
     );
+    return res.data;
+  },
+
+  /** Admin-only org-wide annual-review listing across every employee and
+   *  fiscal year (drafts + deactivated employees excluded). Powers the
+   *  All Reviews tab — the FE filters + paginates this set client-side. */
+  getAllReviews: async (): Promise<CalibrationRow[]> => {
+    const res = await apiClient.get<CalibrationRow[]>("/annual-reviews/all");
+    return res.data;
+  },
+
+  /** Admin-only active-cycle progress counts for the dashboard funnel card. */
+  getFunnel: async (): Promise<AnnualReviewFunnel> => {
+    const res = await apiClient.get<AnnualReviewFunnel>("/annual-reviews/funnel");
     return res.data;
   },
 

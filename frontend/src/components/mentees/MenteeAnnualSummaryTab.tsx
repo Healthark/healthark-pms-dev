@@ -66,6 +66,12 @@ const STATUS_PILL: Record<
     label: "Not started",
     cls: "bg-surface-hover text-text-muted",
   },
+  // Synthetic status from the All Reviews roster — never set on a real
+  // review row here, but ReviewStatus requires the key.
+  not_started: {
+    label: "Not started",
+    cls: "bg-surface-hover text-text-muted",
+  },
   draft: {
     label: "Mentee drafting",
     cls: "bg-surface-hover text-text-muted",
@@ -543,6 +549,14 @@ export function MenteeAnnualSummaryTab({
     return (
       <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface px-6 py-10 text-center text-sm text-text-muted">
         Loading annual summary…
+      </div>
+    );
+  }
+
+  if (goalsQuery.error || reviewsQuery.error || projectsQuery.error) {
+    return (
+      <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        Could not load the annual summary. Please try again.
       </div>
     );
   }
