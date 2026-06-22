@@ -89,6 +89,7 @@ def get_dashboard_summary(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
             Goal.goal_type == GoalType.ANNUAL.value,
+            Goal.is_deleted == False,  # noqa: E712
         )
         .group_by(Goal.approval_status)
         .all()

@@ -49,6 +49,8 @@ export const pendingTeamGoalsQueryKey = (goalType?: GoalType) =>
   ["goals", "team", "pending", goalType ?? "all"] as const;
 export const goalDetailQueryKey = (goalId: number) =>
   ["goals", "detail", goalId] as const;
+export const allGoalsQueryKey = (fyYear?: number | null) =>
+  ["goals", "all", fyYear ?? "all"] as const;
 
 // ── Reads ─────────────────────────────────────────────────────────────
 
@@ -77,6 +79,16 @@ export function useTeamGoalsFilterOptions(goalType?: GoalType) {
     queryKey: teamGoalsFilterOptionsQueryKey(goalType),
     queryFn: () => goalService.getTeamGoalsFilterOptions(goalType),
     staleTime: TEAM_GOALS_AUX_STALE_TIME,
+  });
+}
+
+/** Admin-only: org-wide goals for the All Goals tab, scoped to one FY.
+ *  Year drives the fetch; keepPreviousData avoids a flash on year switch. */
+export function useAllGoals(fyYear?: number | null) {
+  return useQuery<TeamGoal[]>({
+    queryKey: allGoalsQueryKey(fyYear),
+    queryFn: () => goalService.getAllGoals(fyYear),
+    placeholderData: keepPreviousData,
   });
 }
 

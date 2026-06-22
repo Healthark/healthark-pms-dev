@@ -158,16 +158,18 @@ class YearSettingsResponse(BaseModel):
     annual_review_final_rating_visible: bool
     annual_goals_edit_enabled: bool
     project_ratings_visible: bool
+    annual_goals_final_rating_visible: bool
     is_current: bool
     updated_at: Optional[datetime] = None
 
 
 class YearSettingsUpdate(BaseModel):
-    """PATCH payload — all four toggles required (Admin sees them together)."""
+    """PATCH payload — all toggles required (Admin sees them together)."""
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
     annual_goals_edit_enabled: bool
     project_ratings_visible: bool
+    annual_goals_final_rating_visible: bool
 
 
 class YearPreflightEntry(BaseModel):
@@ -183,6 +185,7 @@ class YearPreflightResponse(BaseModel):
     annual_reviews_enabled: YearPreflightEntry
     project_ratings_visible: YearPreflightEntry
     annual_review_final_rating_visible: YearPreflightEntry
+    annual_goals_final_rating_visible: YearPreflightEntry
 
 
 # ── Admin Broadcast (Notify tab) ─────────────────────────────────────

@@ -87,6 +87,7 @@ const TOGGLE_LABELS: Record<keyof YearSettingsUpdatePayload, string> = {
   annual_review_final_rating_visible: "Annual Review Rating Visibility",
   annual_goals_edit_enabled: "Annual Goal Edit Access",
   project_ratings_visible: "Project Rating Visibility",
+  annual_goals_final_rating_visible: "Annual Goal Review Visibility",
 };
 
 interface SaveConfirmationModalProps {
@@ -282,6 +283,7 @@ export function SystemSettingsTab({
     annual_review_final_rating_visible: false,
     annual_goals_edit_enabled: false,
     project_ratings_visible: false,
+    annual_goals_final_rating_visible: false,
   });
   const [formKey, setFormKey] = useState<string | null>(null);
   if (savedYear && formKey !== savedYear.fy_label) {
@@ -291,6 +293,8 @@ export function SystemSettingsTab({
         savedYear.annual_review_final_rating_visible,
       annual_goals_edit_enabled: savedYear.annual_goals_edit_enabled,
       project_ratings_visible: savedYear.project_ratings_visible,
+      annual_goals_final_rating_visible:
+        savedYear.annual_goals_final_rating_visible,
     });
     setFormKey(savedYear.fy_label);
   }
@@ -304,6 +308,7 @@ export function SystemSettingsTab({
       "annual_review_final_rating_visible",
       "annual_goals_edit_enabled",
       "project_ratings_visible",
+      "annual_goals_final_rating_visible",
     ];
     return keys
       .filter((k) => form[k] !== savedYear[k])
@@ -452,6 +457,18 @@ export function SystemSettingsTab({
                 disabled={yearLoading}
                 onChange={(next) =>
                   setForm((prev) => ({ ...prev, annual_goals_edit_enabled: next }))
+                }
+              />
+              <ToggleRow
+                label="Show Mentor Reviews on Annual Goals"
+                description="When on, employees can see their mentor's submitted review on each annual goal for this fiscal year. Drafts are never shown."
+                checked={form.annual_goals_final_rating_visible}
+                disabled={yearLoading}
+                onChange={(next) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    annual_goals_final_rating_visible: next,
+                  }))
                 }
               />
             </div>

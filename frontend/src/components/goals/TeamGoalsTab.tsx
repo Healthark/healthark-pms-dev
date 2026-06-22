@@ -1,10 +1,6 @@
 import { lazy, Suspense, useState, useEffect, Fragment } from "react";
-import { createPortal } from "react-dom";
 import {
   Users,
-  Search,
-  LayoutGrid,
-  Table2,
   ChevronDown,
   UserCircle,
   Check,
@@ -35,119 +31,30 @@ import { getErrorMessage } from "../../utils/errors";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
-import { useDebounce } from "../../hooks/useDebounce";
-import { TeamGoalCard } from "./TeamGoalCard";
 import { ApprovalStatusBadge } from "./ApprovalStatusBadge";
 import { CriteriaChecklist } from "./CriteriaChecklist";
 import { GoalMentorReviewModal } from "./GoalMentorReviewModal";
+import { RequestChangesModal } from "./RequestChangesModal";
 import { SelfReviewCycleMenu } from "./SelfReviewCycleMenu";
 // BulkApproveModal lazy-loaded (F3) — toolbar action, fires ~2-4
-// times per FY per mentor. ~16 kB raw split out of the TeamGoalCard
-// chunk.
+// times per FY per mentor; ~16 kB kept out of the main chunk.
 const BulkApproveModal = lazy(() =>
   import("./BulkApproveModal").then((m) => ({ default: m.BulkApproveModal })),
 );
 import { SortableHeader } from "../SortableHeader";
 import { TablePagination } from "../common/TablePagination";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { StringCombobox } from "../common/StringCombobox";
 import { type SortState } from "../../utils/sort";
 import { formatFyYearSpan } from "../../utils/fy";
 import { halfDisplayLabel, isPostApproved } from "../../utils/goalStatus";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 // ---------------------------------------------------------------------------
-// FeedbackModal — "Request Changes" portal
-// ---------------------------------------------------------------------------
-
-interface FeedbackModalProps {
-  readonly goal: TeamGoal;
-  readonly onSend: (feedback: string) => Promise<void>;
-  readonly onClose: () => void;
-  readonly isSaving: boolean;
-  readonly error: string;
-}
-
-function FeedbackModal({
-  goal,
-  onSend,
-  onClose,
-  isSaving,
-  error,
-}: FeedbackModalProps) {
-  const [feedback, setFeedback] = useState("");
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="feedback-modal-title"
-    >
-      <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
-        <div className="border-b border-border px-6 py-4">
-          <h2
-            id="feedback-modal-title"
-            className="font-display text-base font-semibold text-text-main"
-          >
-            Request Changes
-          </h2>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Explain what needs to be revised for{" "}
-            <strong>{goal.owner_name}</strong>.
-          </p>
-        </div>
-
-        <div className="px-6 py-5 space-y-3">
-          {error && (
-            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
-              {error}
-            </p>
-          )}
-          <label
-            htmlFor="feedback-text"
-            className="block text-xs font-medium text-text-muted mb-1"
-          >
-            Feedback *
-          </label>
-          <textarea
-            id="feedback-text"
-            rows={4}
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            placeholder="e.g. Please make the target more specific and measurable."
-            className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-          />
-        </div>
-
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onSend(feedback)}
-            disabled={isSaving || !feedback.trim()}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
-          >
-            {isSaving ? "Sending…" : "Send Feedback"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Filter config
 // ---------------------------------------------------------------------------
 
 type StatusFilter = "all" | ApprovalStatus;
-type ViewMode = "grid" | "table";
 
 function buildStatusFilters(
   cycleType: string | null,
@@ -228,21 +135,13 @@ export function TeamGoalsTab() {
   const isSavingReview = submitMentorReviewMutation.isPending;
   const isSavingReviewDraft = saveMentorReviewDraftMutation.isPending;
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState(""); // debounced value → server
   const [sort, setSort] = useState<SortState<TeamGoalsSortKey> | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [menteeFilter, setMenteeFilter] = useState("all");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-
-  const [debounceSearch] = useDebounce((value: string) => {
-    setSearch(value);
-    setPage(1);
-  }, 300);
 
   // Reset to page 1 (and collapse any expanded row) whenever a filter,
   // sort, or page size changes. `page` itself isn't a dep, so Next/Prev
@@ -252,16 +151,10 @@ export function TeamGoalsTab() {
     setExpandedGoalId(null);
   }, [statusFilter, yearFilter, menteeFilter, sort, pageSize]);
 
-  // Collapse expanded row on view-mode switch too.
-  useEffect(() => {
-    setExpandedGoalId(null);
-  }, [viewMode]);
-
   const query: TeamGoalQuery = {
     page,
     per_page: pageSize,
     goal_type: "annual",
-    search: search || undefined,
     year: yearFilter !== "all" ? Number(yearFilter) : undefined,
     mentee: menteeFilter !== "all" ? menteeFilter : undefined,
     status: statusFilter,
@@ -289,14 +182,11 @@ export function TeamGoalsTab() {
   ).length;
 
   const hasActiveFilters =
-    !!search ||
     statusFilter !== "all" ||
     yearFilter !== "all" ||
     menteeFilter !== "all";
 
   const clearFilters = () => {
-    setSearchInput("");
-    setSearch("");
     setStatusFilter("all");
     setYearFilter("all");
     setMenteeFilter("all");
@@ -445,13 +335,6 @@ export function TeamGoalsTab() {
     }
   };
 
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode
-        ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-surface-hover"
-    }`;
-
   if (isLoading) return <TeamGoalsSkeleton />;
 
   // Genuinely-empty state (no goals at all, no filters applied). When
@@ -475,66 +358,7 @@ export function TeamGoalsTab() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-col gap-3">
-        {/* Row 1: Search + View Toggle */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by goal or mentee..."
-              value={searchInput}
-              onChange={(e) => {
-                setSearchInput(e.target.value);
-                debounceSearch(e.target.value);
-              }}
-              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setBulkError("");
-                setBulkOpen(true);
-              }}
-              disabled={pendingApprovalCount === 0}
-              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title={
-                pendingApprovalCount === 0
-                  ? "No goals are currently awaiting approval"
-                  : `Bulk approve ${pendingApprovalCount} pending goal${
-                      pendingApprovalCount === 1 ? "" : "s"
-                    }`
-              }
-            >
-              <CheckCheck className="h-3.5 w-3.5" />
-              Bulk Approve
-              {pendingApprovalCount > 0 && (
-                <span className="rounded-full bg-surface/20 px-1.5 text-[10px] font-semibold">
-                  {pendingApprovalCount}
-                </span>
-              )}
-            </button>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-              <button
-                type="button"
-                className={viewBtnCls("grid")}
-                onClick={() => setViewMode("grid")}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" /> Cards
-              </button>
-              <button
-                type="button"
-                className={viewBtnCls("table")}
-                onClick={() => setViewMode("table")}
-              >
-                <Table2 className="h-3.5 w-3.5" /> Table
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2: Filters */}
+        {/* Filters, with Clear + Bulk Approve pushed to the right */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <label
@@ -552,7 +376,7 @@ export function TeamGoalsTab() {
               <option value="all">All Years</option>
               {availableYears.map((y) => (
                 <option key={y} value={y}>
-                  {y}
+                  {formatFyYearSpan(y)}
                 </option>
               ))}
             </select>
@@ -565,19 +389,13 @@ export function TeamGoalsTab() {
             >
               Mentee
             </label>
-            <select
+            <StringCombobox
               id="team-mentee-filter"
-              value={menteeFilter}
-              onChange={(e) => setMenteeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
-            >
-              <option value="all">All Mentees</option>
-              {availableMentees.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              options={availableMentees}
+              value={menteeFilter === "all" ? "" : menteeFilter}
+              onChange={(v) => setMenteeFilter(v || "all")}
+              placeholder="All mentees"
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -606,43 +424,43 @@ export function TeamGoalsTab() {
             onClear={clearFilters}
             className="ml-auto"
           />
+          <button
+            type="button"
+            onClick={() => {
+              setBulkError("");
+              setBulkOpen(true);
+            }}
+            disabled={pendingApprovalCount === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title={
+              pendingApprovalCount === 0
+                ? "No goals are currently awaiting approval"
+                : `Bulk approve ${pendingApprovalCount} pending goal${
+                    pendingApprovalCount === 1 ? "" : "s"
+                  }`
+            }
+          >
+            <CheckCheck className="h-3.5 w-3.5" />
+            Bulk Approve
+            {pendingApprovalCount > 0 && (
+              <span className="rounded-full bg-surface/20 px-1.5 text-[10px] font-semibold">
+                {pendingApprovalCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
       {/* Content */}
       {total === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center bg-background/50">
-          <Search className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
+          <Users className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
           <p className="font-display text-sm font-medium text-text-main">
             No goals match this filter
           </p>
           <p className="mt-1 text-xs text-text-muted">
             Try adjusting your search or filter options.
           </p>
-        </div>
-      ) : viewMode === "grid" ? (
-        /* ── Card / Grid View ── */
-        <div
-          className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 transition-opacity ${
-            isFetching ? "opacity-60" : "opacity-100"
-          }`}
-        >
-          {goals.map((goal) => (
-            <TeamGoalCard
-              key={goal.id}
-              goal={goal}
-              onApprove={handleApprove}
-              onRequestChanges={(g) => {
-                setModalError("");
-                setFeedbackTarget(g);
-              }}
-              onSelectHalf={openReview}
-              isActing={isActing}
-              onRemind={handleRemind}
-              isReminding={remindMutation.isPending}
-              statusViewerRole="mentor"
-            />
-          ))}
         </div>
       ) : (
         /* ── Table View ── */
@@ -870,7 +688,7 @@ export function TeamGoalsTab() {
 
       {/* "Request Changes" modal */}
       {feedbackTarget && (
-        <FeedbackModal
+        <RequestChangesModal
           goal={feedbackTarget}
           onSend={handleSendFeedback}
           onClose={() => setFeedbackTarget(null)}

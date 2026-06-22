@@ -358,6 +358,16 @@ export const goalService = {
     return res.data;
   },
 
+  // ── Admin — All Goals (org-wide, read-only) ─────────────────────
+  /** Admin-only: org-wide annual goals (every employee), optionally scoped to
+   *  one fiscal year (e.g. 2026). Powers the read-only All Goals tab; the tab
+   *  sends the selected Year so the browser loads just that year. */
+  getAllGoals: async (fyYear?: number | null): Promise<TeamGoal[]> => {
+    const params = fyYear != null ? { fy_year: fyYear } : undefined;
+    const res = await apiClient.get<TeamGoal[]>("/goals/all", { params });
+    return res.data;
+  },
+
   updateApproval: async (
     goalId: number,
     payload: GoalApprovalPayload,

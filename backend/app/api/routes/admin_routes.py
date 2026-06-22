@@ -44,7 +44,7 @@ from app.core.cycle_utils import (
 )
 from app.core.security import get_password_hash
 from app.models.annual_review_models import AnnualReview, ReviewStatus
-from app.models.goal_models import Goal, GoalType
+from app.models.goal_models import ApprovalStatus, Goal, GoalType
 from app.models.notification_models import NotificationCategory
 from app.models.project_models import (
     PROJECT_STATUS_COMPLETED,
@@ -386,31 +386,123 @@ def update_user(
     for field, value in update_data.items():
         setattr(user, field, value)
 
-    # Mentor reassignment → a single in-app + email notice to the mentee.
-    # Only when the mentor actually changed to a (non-null) new mentor.
-    if (
-        "mentor_id" in update_data
-        and user.mentor_id is not None
-        and user.mentor_id != old_mentor_id
-    ):
-        new_mentor = db.query(User).filter(User.id == user.mentor_id).first()
-        mentor_name = new_mentor.full_name if new_mentor else "a new mentor"
-        create_notification(
-            db,
-            org_id=current_user.org_id,
-            recipient_id=user.id,
-            category=NotificationCategory.PERSONAL.value,
-            type="mentor_reassigned",
-            title="Your mentor has changed",
-            body=f"{mentor_name} is now your mentor.",
-            link="/profile",
-            entity_type="user",
-            entity_id=user.id,
-            actor_id=current_user.id,
-            email=True,
-            background_tasks=background_tasks,
-            recipient_email=user.email,
+    # ── Mid-cycle mentor reassignment ────────────────────────────────
+    # Access already follows the LIVE mentor link (get_mentee_reviews,
+    # goal gates, submit re-stamps), so the new mentor can act immediately
+    # and the old one loses access. But a couple of things still read the
+    # per-row mentor STAMP — the dashboard "pending mentor" count and the
+    # mentor-side review drafts — so when the mentor actually changes we
+    # re-point the mentee's IN-FLIGHT annual reviews to the new mentor and
+    # wipe the previous mentor's half-typed draft (new mentor starts fresh;
+    # also stops the old mentor's dashboard from over-counting). Completed /
+    # pending-management rows stay frozen for audit attribution.
+    mentor_changed = "mentor_id" in update_data and user.mentor_id != old_mentor_id
+    if mentor_changed:
+        inflight_reviews = (
+            db.query(AnnualReview)
+            .filter(
+                AnnualReview.org_id == current_user.org_id,
+                AnnualReview.user_id == user.id,
+                AnnualReview.status == ReviewStatus.PENDING_MENTOR.value,
+            )
+            .all()
         )
+        for review in inflight_reviews:
+            review.mentor_id = user.mentor_id  # new mentor, or None on unassign
+            review.mentor_overall_review_draft = None
+            review.mentor_performance_rating_draft = None
+
+        # Re-point the mentee's still-active goals to the new mentor so the
+        # goals page "Mentor" column + the Excel export reflect who owns them
+        # now (manager_id is a creation-time snapshot, never re-read otherwise).
+        # Goals whose final review cycle is done (h2 / q4 mentor-reviewed) keep
+        # the mentor who actually reviewed them — historical attribution.
+        terminal_goal_states = (
+            ApprovalStatus.H2_MENTOR_REVIEWED.value,
+            ApprovalStatus.Q4_MENTOR_REVIEWED.value,
+        )
+        inflight_goals = (
+            db.query(Goal)
+            .filter(
+                Goal.org_id == current_user.org_id,
+                Goal.user_id == user.id,
+                Goal.approval_status.notin_(terminal_goal_states),
+                Goal.is_deleted == False,  # noqa: E712
+            )
+            .all()
+        )
+        for goal in inflight_goals:
+            goal.manager_id = user.mentor_id  # new mentor, or None on unassign
+
+        # Notify the affected parties. New mentor + mentee only when there's
+        # a new mentor; the old mentor whenever they were replaced/removed.
+        new_mentor = (
+            db.query(User).filter(User.id == user.mentor_id).first()
+            if user.mentor_id is not None
+            else None
+        )
+        old_mentor = (
+            db.query(User)
+            .filter(User.id == old_mentor_id, User.is_deleted == False)  # noqa: E712
+            .first()
+            if old_mentor_id is not None
+            else None
+        )
+
+        # Notifications fire only on a true REASSIGNMENT (mentor → a new,
+        # non-null mentor). A bare unassign (→ None) intentionally notifies
+        # nobody — that path is usually mentor deactivation, which is surfaced
+        # via the admin coverage-gap warnings instead.
+        if new_mentor is not None:
+            create_notification(
+                db,
+                org_id=current_user.org_id,
+                recipient_id=user.id,
+                category=NotificationCategory.PERSONAL.value,
+                type="mentor_reassigned",
+                title="Your mentor has changed",
+                body=f"{new_mentor.full_name} is now your mentor.",
+                link="/profile",
+                entity_type="user",
+                entity_id=user.id,
+                actor_id=current_user.id,
+                email=True,
+                background_tasks=background_tasks,
+                recipient_email=user.email,
+            )
+            create_notification(
+                db,
+                org_id=current_user.org_id,
+                recipient_id=new_mentor.id,
+                category=NotificationCategory.PERSONAL.value,
+                type="mentee_assigned",
+                title="New mentee assigned",
+                body=f"{user.full_name} has been assigned to you as a mentee.",
+                link="/my-mentees",
+                entity_type="user",
+                entity_id=user.id,
+                actor_id=current_user.id,
+                email=True,
+                background_tasks=background_tasks,
+                recipient_email=new_mentor.email,
+            )
+            if old_mentor is not None:
+                create_notification(
+                    db,
+                    org_id=current_user.org_id,
+                    recipient_id=old_mentor.id,
+                    category=NotificationCategory.PERSONAL.value,
+                    type="mentee_unassigned",
+                    title="Mentee reassigned",
+                    body=f"{user.full_name} is no longer your mentee.",
+                    link="/my-mentees",
+                    entity_type="user",
+                    entity_id=user.id,
+                    actor_id=current_user.id,
+                    email=True,
+                    background_tasks=background_tasks,
+                    recipient_email=old_mentor.email,
+                )
 
     db.commit()
 
@@ -838,6 +930,7 @@ def _build_year_settings_response(
         annual_review_final_rating_visible=row.annual_review_final_rating_visible,
         annual_goals_edit_enabled=row.annual_goals_edit_enabled,
         project_ratings_visible=row.project_ratings_visible,
+        annual_goals_final_rating_visible=row.annual_goals_final_rating_visible,
         is_current=(row.fy_label == current_fy),
         updated_at=row.updated_at,
     )
@@ -896,6 +989,7 @@ def list_settings_years(
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.goal_type == GoalType.ANNUAL.value,
+            Goal.is_deleted == False,  # noqa: E712
         )
         .distinct()
         .all()
@@ -993,6 +1087,11 @@ _TOGGLE_ANNOUNCEMENTS: dict[str, dict] = {
         "link": "/project-reviews",
         True: ("Project ratings visible", "Project ratings are now visible for {fy}."),
         False: ("Project ratings hidden", "Project ratings are now hidden for {fy}."),
+    },
+    "annual_goals_final_rating_visible": {
+        "link": "/annual-goals",
+        True: ("Goal reviews visible", "Mentor reviews on annual goals are now visible for {fy}."),
+        False: ("Goal reviews hidden", "Mentor reviews on annual goals are now hidden for {fy}."),
     },
 }
 
@@ -1159,6 +1258,7 @@ def year_settings_preflight(
             Goal.org_id == current_user.org_id,
             Goal.goal_type == GoalType.ANNUAL.value,
             Goal.cycle_name.in_([f"H1 {start_year}", f"H2 {start_year}"]),
+            Goal.is_deleted == False,  # noqa: E712
         )
         .distinct()
         .subquery()
@@ -1228,6 +1328,7 @@ def year_settings_preflight(
         ),
         project_ratings_visible=YearPreflightEntry(in_flight_count=0, warning=None),
         annual_review_final_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
+        annual_goals_final_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
     )
 
 

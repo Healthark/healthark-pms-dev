@@ -24,6 +24,7 @@ from datetime import date, datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased, joinedload, Session
 
 from app.api.dependencies import DbSession, CurrentUser
@@ -72,7 +73,7 @@ def _get_goal_with_relations(db: DbSession, goal_id: int, org_id: int) -> Goal:
     goal = (
         db.query(Goal)
         .options(joinedload(Goal.criteria), joinedload(Goal.manager))
-        .filter(Goal.id == goal_id, Goal.org_id == org_id)
+        .filter(Goal.id == goal_id, Goal.org_id == org_id, Goal.is_deleted == False)  # noqa: E712
         .first()
     )
     if not goal:
@@ -94,6 +95,47 @@ def _get_settings(db: DbSession, org_id: int) -> SystemSettings:
             detail="System settings have not been initialized for this organization.",
         )
     return settings
+
+
+def _apply_goal_review_visibility(
+    resp: GoalResponse,
+    db: DbSession,
+    org_id: int,
+    viewer: User,
+    owner_mentor_id: Optional[int],
+    active_fy_label: Optional[str],
+) -> None:
+    """Strip review text the viewer shouldn't see, on the RESPONSE object.
+
+    NEVER mutate the ORM goal's self_reviews/mentor_reviews — they're
+    delete-orphan relationships, so filtering them on the model would DELETE
+    the rows on flush. This filters the already-built Pydantic response.
+
+    Rules:
+      - A draft review is visible only to its author (the owner for
+        self-reviews, the mentor for mentor-reviews).
+      - Submitted mentor reviews are embargoed from the mentee until the
+        goal's FY is published (annual_goals_final_rating_visible). The
+        authoring mentor and admins always see them; past FYs always pass
+        through (closing the current year never hides a finalized prior year).
+    """
+    is_owner = resp.user_id == viewer.id
+    is_mentor = owner_mentor_id is not None and owner_mentor_id == viewer.id
+
+    if not is_owner:
+        resp.self_reviews = [sr for sr in resp.self_reviews if not sr.is_draft]
+    if not is_mentor:
+        resp.mentor_reviews = [mr for mr in resp.mentor_reviews if not mr.is_draft]
+
+    # Embargo submitted mentor reviews from the mentee until published.
+    if is_owner and not is_mentor:
+        goal_fy = _cycle_to_fy_label(resp.cycle_name)
+        published = True
+        if goal_fy is not None and goal_fy == active_fy_label:
+            override = get_year_override(db, org_id, goal_fy)
+            published = bool(override and override.annual_goals_final_rating_visible)
+        if not published:
+            resp.mentor_reviews = []
 
 
 def _self_reviewed_state(cycle_code: str) -> str:
@@ -190,13 +232,28 @@ def list_goals(
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id == current_user.id,
+            Goal.is_deleted == False,  # noqa: E712
         )
     )
 
     if goal_type:
         query = query.filter(Goal.goal_type == goal_type)
 
-    return query.order_by(Goal.created_at.desc()).all()
+    goals = query.order_by(Goal.created_at.desc()).all()
+
+    # Owner-facing list: embargo unpublished mentor reviews + hide mentor-review
+    # drafts. Strip on the response (not the ORM — delete-orphan relationships).
+    settings = _get_settings(db, current_user.org_id)
+    active_fy = _cycle_to_fy_label(settings.active_cycle_name)
+    out: list[GoalResponse] = []
+    for g in goals:
+        resp = GoalResponse.model_validate(g)
+        _apply_goal_review_visibility(
+            resp, db, current_user.org_id, current_user,
+            current_user.mentor_id, active_fy,
+        )
+        out.append(resp)
+    return out
 
 
 @router.post("/", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)
@@ -204,7 +261,6 @@ def create_goal(
     goal_in: GoalCreate,
     db: DbSession,
     current_user: CurrentUser,
-    user_id: Optional[int] = None,
 ):
     """
     Create a new goal.
@@ -218,24 +274,10 @@ def create_goal(
     For regular goals:
         - No gate check; follows existing project-cycle submission rules.
     """
-    # ── Authorization: creating on behalf of another user ─────────────
-    if user_id and user_id != current_user.id:
-        target_user = db.query(User).filter(
-            User.id == user_id, User.org_id == current_user.org_id
-        ).first()
-        if not target_user:
-            raise HTTPException(status_code=404, detail="Target user not found.")
-
-        if current_user.role != "Admin" and target_user.mentor_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not authorized to create goals for this user.",
-            )
-        target_user_id = user_id
-        target_manager_id = target_user.mentor_id
-    else:
-        target_user_id = current_user.id
-        target_manager_id = current_user.mentor_id
+    # Goals are always created for yourself; your own mentor approves them
+    # (no on-behalf-of creation — mentors/admins act on goals, not author them).
+    target_user_id = current_user.id
+    target_manager_id = current_user.mentor_id
 
     # Goals require mentor approval, so a user with no mentor (e.g. CEO/founders)
     # cannot create goals — they would get stuck at the approve step forever.
@@ -344,6 +386,7 @@ def _team_goals_base_query(db: DbSession, current_user: User, mentee_ids: list[i
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
             Goal.approval_status != ApprovalStatus.DRAFT.value,
+            Goal.is_deleted == False,  # noqa: E712
         )
     )
     return query, Owner
@@ -505,6 +548,59 @@ def list_pending_team_goals(
     return [TeamGoalListResponse.model_validate(g) for g in goals]
 
 
+# =====================================================================
+# ADMIN — ALL GOALS (org-wide, read-only)
+# =====================================================================
+
+@router.get("/all", response_model=List[TeamGoalListResponse])
+def list_all_goals(
+    db: DbSession,
+    current_user: CurrentUser,
+    fy_year: Optional[int] = Query(None, ge=2000, le=2100),
+):
+    """Admin-only: org-wide annual goals (every employee) — the read-only
+    "All Goals" tab, the goals equivalent of the project-reviews All Reviews
+    tab. Pass ``fy_year`` (e.g. 2026) to load just one fiscal year; the tab
+    sends the selected Year so the browser only fetches that year, then groups
+    by employee + filters/paginates client-side. Drafts (owner-private),
+    soft-deleted goals, and deactivated owners are excluded.
+    """
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can view all goals.",
+        )
+
+    Owner = aliased(User)
+    query = (
+        db.query(Goal)
+        .options(
+            joinedload(Goal.owner).joinedload(User.department),
+            joinedload(Goal.owner).joinedload(User.designation),
+            joinedload(Goal.manager),
+            joinedload(Goal.criteria),
+        )
+        .join(Owner, Goal.user_id == Owner.id)
+        .filter(
+            Goal.org_id == current_user.org_id,
+            Goal.goal_type == GoalType.ANNUAL.value,
+            Goal.approval_status != ApprovalStatus.DRAFT.value,
+            Goal.is_deleted == False,  # noqa: E712
+            Owner.is_deleted == False,  # noqa: E712
+        )
+    )
+    # Year filter — goal cycle_name is "H1 2026"/"H2 2026", so match both
+    # halves of the requested fiscal year.
+    if fy_year is not None:
+        query = query.filter(
+            Goal.cycle_name.in_([f"H1 {fy_year}", f"H2 {fy_year}"])
+        )
+
+    goals = query.order_by(Owner.full_name.asc(), Goal.created_at.desc()).all()
+    _inject_owner_fields(goals)
+    return [TeamGoalListResponse.model_validate(g) for g in goals]
+
+
 @router.get("/{goal_id}", response_model=GoalResponse)
 def get_goal(
     goal_id: int,
@@ -529,7 +625,17 @@ def get_goal(
             detail="You do not have access to view this goal.",
         )
 
-    return goal
+    resp = GoalResponse.model_validate(goal)
+    settings = _get_settings(db, current_user.org_id)
+    _apply_goal_review_visibility(
+        resp,
+        db,
+        current_user.org_id,
+        current_user,
+        goal_owner.mentor_id if goal_owner else None,
+        _cycle_to_fy_label(settings.active_cycle_name),
+    )
+    return resp
 
 
 @router.patch("/{goal_id}", response_model=GoalResponse)
@@ -540,49 +646,46 @@ def update_goal(
     current_user: CurrentUser,
 ):
     """
-    Update a goal's properties.
+    Update a goal's properties. Owner-only — mentors influence a goal via
+    Request Changes (the owner then edits); admins are view-only.
 
-    Additional gate for annual goals (employees only):
-        annual_goals_edit_enabled must be True.  Mentors and Admins bypass
-        this check — they can always leave feedback and adjust metadata.
-
-    Resets approval_status from CHANGES_REQUESTED → DRAFT when the employee
-    edits, so they can re-submit for another review cycle.
+    Locked once approved (the review cycle runs against the approved goal).
+    Annual goals also require the annual goal-setting window
+    (annual_goals_edit_enabled) to be open. Editing a pending_approval or
+    changes_requested goal resets it to DRAFT, so it must be re-submitted for
+    a fresh review rather than the mentor approving content changed after the
+    fact.
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
-    goal_owner = db.query(User).filter(User.id == goal.user_id).first()
 
-    is_manager = current_user.role == "Admin" or (
-        goal_owner and goal_owner.mentor_id == current_user.id
-    )
-    is_owner = goal.user_id == current_user.id
-
-    if not (is_owner or is_manager):
+    # Only the owner can edit. Mentors act via Request Changes; admins read-only.
+    if goal.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to edit this goal.",
+            detail="Only the goal's owner can edit it.",
         )
 
-    # Approved or post-approval goals (anything in the H1/H2 review segment)
-    # are locked for employees; managers can still update them.
-    if goal.approval_status in POST_APPROVAL_STATES and not is_manager:
+    # Approved / in-review goals are locked.
+    if goal.approval_status in POST_APPROVAL_STATES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Approved goals cannot be edited. Contact your mentor.",
+            detail="An approved goal can no longer be edited.",
         )
 
-    # Gate check: employees cannot edit annual goals when the window is closed.
-    # Managers bypass this — they need access to leave feedback at any time.
-    if goal.goal_type == GoalType.ANNUAL.value and not is_manager:
+    # Annual goal-setting window must be open.
+    if goal.goal_type == GoalType.ANNUAL.value:
         _assert_annual_gate_open(db, current_user.org_id, _fy_label_of_goal(goal))
 
     update_data = goal_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(goal, field, value)
 
-    # Reset to draft when an employee edits a changes_requested goal so they
-    # can go through the submit → approve flow again.
-    if is_owner and goal.approval_status == ApprovalStatus.CHANGES_REQUESTED.value:
+    # Editing after submission (pending_approval) or a change request returns
+    # the goal to DRAFT so it goes through submit → approve again.
+    if goal.approval_status in (
+        ApprovalStatus.PENDING_APPROVAL.value,
+        ApprovalStatus.CHANGES_REQUESTED.value,
+    ):
         goal.approval_status = ApprovalStatus.DRAFT.value
 
     db.commit()
@@ -596,39 +699,39 @@ def delete_goal(
     current_user: CurrentUser,
 ):
     """
-    Permanently delete a goal.
-
-    Employees can only delete their own DRAFT goals.
-    Annual-goal employees additionally need annual_goals_edit_enabled = True.
-    Mentors and Admins can delete any goal regardless of state or gate.
+    Soft-delete a goal (sets is_deleted=True so its criteria + self/mentor
+    review history survive). Owner-only, and only before approval — an
+    approved goal cannot be deleted. Annual goals also require the annual
+    goal-setting window to be open.
     """
     goal = db.query(Goal).filter(
-        Goal.id == goal_id, Goal.org_id == current_user.org_id
+        Goal.id == goal_id,
+        Goal.org_id == current_user.org_id,
+        Goal.is_deleted == False,  # noqa: E712
     ).first()
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found.")
 
-    goal_owner = db.query(User).filter(User.id == goal.user_id).first()
+    # Only the owner can delete (mentors/admins cannot).
+    if goal.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the goal's owner can delete it.",
+        )
 
-    is_manager = current_user.role == "Admin" or (
-        goal_owner and goal_owner.mentor_id == current_user.id
-    )
-    is_owner = goal.user_id == current_user.id
+    # Deletable only before approval; once approved the review cycle owns it.
+    if goal.approval_status in POST_APPROVAL_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A goal cannot be deleted once it has been approved.",
+        )
 
-    if not (is_owner or is_manager):
-        raise HTTPException(status_code=403, detail="Permission denied.")
+    # Gate check for annual goal deletion (same window as create/edit).
+    if goal.goal_type == GoalType.ANNUAL.value:
+        _assert_annual_gate_open(db, current_user.org_id, _fy_label_of_goal(goal))
 
-    if is_owner and not is_manager:
-        if goal.approval_status != ApprovalStatus.DRAFT.value:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete a goal that has already been submitted for approval.",
-            )
-        # Gate check for annual goal deletion (same window logic as create/edit).
-        if goal.goal_type == GoalType.ANNUAL.value:
-            _assert_annual_gate_open(db, current_user.org_id, _fy_label_of_goal(goal))
-
-    db.delete(goal)
+    # Soft-delete — preserves criteria + review history.
+    goal.is_deleted = True
     db.commit()
     return None
 
@@ -653,13 +756,12 @@ def submit_goal(
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
 
-    is_manager = current_user.role == "Admin" or (
-        goal_owner and goal_owner.mentor_id == current_user.id
-    )
-    is_owner = goal.user_id == current_user.id
-
-    if not (is_owner or is_manager):
-        raise HTTPException(status_code=403, detail="Permission denied.")
+    # Only the owner submits their own goal (mentors approve; admins view).
+    if goal.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the goal's owner can submit it.",
+        )
 
     # Defense-in-depth: if the goal owner's mentor was unassigned after the
     # draft was created, block submission — no one can approve it otherwise.
@@ -714,7 +816,7 @@ def approve_goal(
     background_tasks: BackgroundTasks,
 ):
     """
-    Mentor/Admin approves or rejects a submitted goal.
+    The goal owner's assigned mentor approves or rejects a submitted goal.
 
     When approved:
         - approval_status → APPROVED
@@ -899,7 +1001,11 @@ def bulk_approve_goals(
 
     goals = (
         db.query(Goal)
-        .filter(Goal.id.in_(requested_ids), Goal.org_id == current_user.org_id)
+        .filter(
+            Goal.id.in_(requested_ids),
+            Goal.org_id == current_user.org_id,
+            Goal.is_deleted == False,  # noqa: E712
+        )
         .all()
     )
     by_id = {g.id: g for g in goals}
@@ -1048,9 +1154,11 @@ def submit_goal_self_review(
         )
 
     if existing is not None:
-        # Promote draft → submitted.
+        # Promote draft → submitted; stamp the real submission time (the row's
+        # server_default submitted_at was set when the draft was created).
         existing.self_overall_review = payload.self_overall_review
         existing.is_draft = False
+        existing.submitted_at = datetime.now(timezone.utc)
     else:
         review = GoalSelfReview(
             goal_id=goal.id,
@@ -1090,7 +1198,14 @@ def submit_goal_self_review(
             actor_id=current_user.id,
         )
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A self-review for {half} was just submitted for this goal.",
+        )
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
 
@@ -1265,9 +1380,11 @@ def submit_goal_mentor_review(
         )
 
     if existing is not None:
-        # Promote draft → submitted.
+        # Promote draft → submitted; stamp the real submission time (the row's
+        # server_default submitted_at was set when the draft was created).
         existing.mentor_overall_review = payload.mentor_overall_review
         existing.is_draft = False
+        existing.submitted_at = datetime.now(timezone.utc)
     else:
         mentor_review = GoalMentorReview(
             goal_id=goal.id,
@@ -1302,7 +1419,14 @@ def submit_goal_mentor_review(
         cta_label="View review",
     )
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A mentor review for {half} was just submitted for this goal.",
+        )
     return _get_goal_with_relations(db, goal.id, current_user.org_id)
 
 

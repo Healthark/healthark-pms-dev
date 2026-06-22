@@ -172,15 +172,16 @@ def test_submit_goal_notifies_mentor(db):
     assert n.actor_id == mentee.id
 
 
-def test_submit_goal_skips_self_notification_when_mentor_submits(db):
-    # An admin-mentor submitting their own mentee's draft IS the recipient,
-    # so the self-notify guard suppresses the row.
+def test_submit_goal_is_owner_only(db):
+    # Submit is owner-only (permission model C): a mentor cannot submit their
+    # mentee's draft on their behalf — it 403s and no notification fires.
     org, mentor, mentee = _setup(db)
     g = _goal(db, org, mentee, status=ApprovalStatus.DRAFT.value)
     db.commit()
 
-    submit_goal(g.id, db, mentor)
-
+    with pytest.raises(HTTPException) as exc:
+        submit_goal(g.id, db, mentor)
+    assert exc.value.status_code == 403
     assert db.query(Notification).filter(
         Notification.type == "goal_submitted_for_approval"
     ).count() == 0

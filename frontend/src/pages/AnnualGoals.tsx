@@ -1,8 +1,7 @@
 import { useState, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Plus, Target, Lock, Search,
-  LayoutGrid, Table2, ChevronDown, ChevronUp, BookOpen,
+  Plus, Target, Lock, ChevronDown, ChevronUp, BookOpen,
   Pencil, SendHorizonal, Link, MessageSquare,
   UserCircle,
 } from "lucide-react";
@@ -28,17 +27,18 @@ import { useToast } from "../hooks/useToast";
 import { useSnackbar } from "../hooks/useSnackbar";
 import { useConfirm } from "../hooks/useConfirm";
 import { getErrorMessage } from "../utils/errors";
-import { AnnualGoalCard } from "../components/goals/AnnualGoalCard";
 import { GoalFormModal } from "../components/goals/GoalFormModal";
 import { GoalSelfReviewModal } from "../components/goals/GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "../components/goals/SelfReviewCycleMenu";
 import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
+import { AllGoalsTab } from "../components/goals/AllGoalsTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
 import { SortableHeader } from "../components/SortableHeader";
 import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
+import { TablePagination } from "../components/common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
-import { formatFyYearSpan, extractFyToken } from "../utils/fy";
+import { formatFyYearSpan, extractFyToken, fyTokenToStartYear } from "../utils/fy";
 import { type UserRoleExpectation } from "../services/profile.service";
 import { useMyExpectations } from "../queries/profile";
 import { isPostApproved } from "../utils/goalStatus";
@@ -85,8 +85,7 @@ function buildFilterConfig(
   ];
 }
 
-type ActiveTab = "my" | "team";
-type ViewMode = "grid" | "table";
+type ActiveTab = "my" | "team" | "all";
 
 // My Goals table sort config — Goal/Mentor/Status are alpha, Year is numeric.
 // Actions column is not sortable (has no backing data).
@@ -171,6 +170,8 @@ export function AnnualGoals() {
   // report to them via mentor_id — role is not the authority here.
   // The backend populates has_mentees on the login response.
   const isMentor = user?.has_mentees ?? false;
+  // Admins get a read-only, org-wide "All Goals" tab (backed by /goals/all).
+  const isAdmin = user?.role === "Admin";
   const annualGoalsEditEnabled = settings?.annual_goals_edit_enabled ?? false;
 
   // Extract bare FY label ("H1 FY26" → "FY26") for the page header.
@@ -186,8 +187,13 @@ export function AnnualGoals() {
   // switches tabs even when the user is already on this page. Team Goals is
   // mentor-only, so `tab=team` falls back to My Goals for non-mentors.
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const activeTab: ActiveTab =
-    searchParams.get("tab") === "team" && isMentor ? "team" : "my";
+    tabParam === "team" && isMentor
+      ? "team"
+      : tabParam === "all" && isAdmin
+        ? "all"
+        : "my";
   const setActiveTab = (tab: ActiveTab) => {
     setSearchParams(
       (prev) => {
@@ -200,11 +206,12 @@ export function AnnualGoals() {
   };
 
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
-  const [yearFilter, setYearFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  // "" = use the active-FY default; "all" = every year; else String(fy_year).
+  const [yearFilter, setYearFilter] = useState<string>("");
   const [sort, setSort] = useState<SortState<MyGoalsSortKey> | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [showModal, setShowModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [modalError, setModalError] = useState("");
@@ -216,7 +223,7 @@ export function AnnualGoals() {
   const [selfReviewError, setSelfReviewError] = useState("");
 
   // Goals data + mutations (shared TanStack cache via ['goals'])
-  const { data: goals = [], isLoading } = useMyGoals("annual");
+  const { data: goals = [], isLoading, error } = useMyGoals("annual");
   const createGoalMutation = useCreateGoal();
   const updateGoalMutation = useUpdateGoal();
   const submitGoalMutation = useSubmitGoal();
@@ -352,26 +359,34 @@ export function AnnualGoals() {
   // Criterion toggles now flow through useUpdateCriterion in
   // CriteriaChecklist; cache invalidation drives the UI refresh.
 
+  // Year default = the active FY (current year). "" state falls back to it;
+  // `effectiveYear` is what the <select> shows and what filters.
+  const activeFyYear = settings?.active_cycle_name
+    ? fyTokenToStartYear(settings.active_cycle_name)
+    : null;
+  const yearDefault = activeFyYear !== null ? String(activeFyYear) : "all";
+  const effectiveYear = yearFilter !== "" ? yearFilter : yearDefault;
+
   const hasActiveFilters =
-    !!searchQuery || approvalFilter !== "all" || yearFilter !== "all";
+    approvalFilter !== "all" || effectiveYear !== yearDefault;
 
   const clearFilters = () => {
-    setSearchQuery("");
     setApprovalFilter("all");
-    setYearFilter("all");
+    setYearFilter("");
   };
 
-  const availableYears = Array.from(
-    new Set(goals.map((g) => g.fy_year).filter((y): y is number => y !== null)),
-  ).sort((a, b) => b - a);
+  // Year dropdown: every year present in the data + the active FY, newest first.
+  const availableYears = (() => {
+    const ys = new Set<number>(
+      goals.map((g) => g.fy_year).filter((y): y is number => y !== null),
+    );
+    if (activeFyYear !== null) ys.add(activeFyYear);
+    return Array.from(ys).sort((a, b) => b - a);
+  })();
 
   const filteredGoals = goals
     .filter((g) => approvalFilter === "all" || g.approval_status === approvalFilter)
-    .filter((g) => yearFilter === "all" || g.fy_year === Number(yearFilter))
-    .filter((g) =>
-      searchQuery.trim() === "" ||
-      g.title.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    .filter((g) => effectiveYear === "all" || g.fy_year === Number(effectiveYear));
 
   // Sorting layered on top of filtering. Slice first to keep React state immutable.
   const sortedGoals = sort
@@ -381,18 +396,25 @@ export function AnnualGoals() {
       })
     : filteredGoals;
 
+  // Client-side pagination over the sorted rows. Reset to page 1 when the
+  // filter set / year / page size changes (tracked during render).
+  const filterKey = [approvalFilter, effectiveYear, pageSize].join("|");
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  let currentPage = page;
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+    currentPage = 1;
+  }
+  const totalPages = Math.max(1, Math.ceil(sortedGoals.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = sortedGoals.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const tabCls = (tab: ActiveTab) =>
     `px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
       activeTab === tab
         ? "border-brand text-brand"
         : "border-transparent text-text-muted hover:text-text-main"
-    }`;
-
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode
-        ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-surface-hover"
     }`;
 
   return (
@@ -471,6 +493,15 @@ export function AnnualGoals() {
               Team Goals
             </button>
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              className={tabCls("all")}
+              onClick={() => setActiveTab("all")}
+            >
+              All Goals
+            </button>
+          )}
         </div>
 
         <div className="p-5">
@@ -518,35 +549,13 @@ export function AnnualGoals() {
               {/* Toolbar */}
               {!isLoading && goals.length > 0 && (
                 <div className="flex flex-col gap-3">
-                  {/* Row 1: Search + View Toggle */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="relative flex-1 max-w-xs">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder="Search goals..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-                      <button type="button" className={viewBtnCls("grid")} onClick={() => setViewMode("grid")}>
-                        <LayoutGrid className="h-3.5 w-3.5" /> Cards
-                      </button>
-                      <button type="button" className={viewBtnCls("table")} onClick={() => setViewMode("table")}>
-                        <Table2 className="h-3.5 w-3.5" /> Table
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Filters */}
+                  {/* Filters */}
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
                       <label htmlFor="goal-year-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Year</label>
                       <select
                         id="goal-year-filter"
-                        value={yearFilter}
+                        value={effectiveYear}
                         onChange={(e) => setYearFilter(e.target.value)}
                         className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
                       >
@@ -583,6 +592,10 @@ export function AnnualGoals() {
               {/* Content */}
               {isLoading ? (
                 <GoalSkeleton />
+              ) : error ? (
+                <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                  Could not load your goals. Please try again.
+                </div>
               ) : goals.length === 0 ? (
                 <EmptyState
                   editGateOpen={annualGoalsEditEnabled}
@@ -593,20 +606,6 @@ export function AnnualGoals() {
                   editGateOpen={annualGoalsEditEnabled}
                   hasFilter={true}
                 />
-              ) : viewMode === "grid" ? (
-                /* ── Card / Grid View ── */
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {sortedGoals.map((goal) => (
-                    <AnnualGoalCard
-                      key={goal.id}
-                      goal={goal}
-                      onEdit={openEdit}
-                      onSubmit={handleSubmit}
-                      onSelfReview={(g, half) => openSelfReview(g, half)}
-                      editGateOpen={annualGoalsEditEnabled}
-                    />
-                  ))}
-                </div>
               ) : (
                 /* ── Table View ── */
                 <div className="overflow-x-auto rounded-lg border border-border">
@@ -629,7 +628,7 @@ export function AnnualGoals() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {sortedGoals.map((goal) => {
+                      {pageRows.map((goal) => {
                         const isExpanded = expandedGoalId === goal.id;
                         const isDraft = goal.approval_status === "draft";
                         const isChangesRequired = goal.approval_status === "changes_requested";
@@ -741,6 +740,26 @@ export function AnnualGoals() {
                                         interactive
                                       />
                                     )}
+                                    {/* Mentor's review per cycle — the backend
+                                        only sends these once the Admin publishes
+                                        them for the FY (drafts never arrive). */}
+                                    {goal.mentor_reviews.length > 0 && (
+                                      <div className="space-y-2">
+                                        {goal.mentor_reviews.map((mr) => (
+                                          <div
+                                            key={mr.cycle_half}
+                                            className="rounded-lg border border-emerald-100 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/40 px-3 py-2"
+                                          >
+                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-0.5">
+                                              {mr.cycle_half} Mentor Review
+                                            </p>
+                                            <p className="text-xs text-text-main whitespace-pre-wrap">
+                                              {mr.mentor_overall_review}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -750,6 +769,13 @@ export function AnnualGoals() {
                       })}
                     </tbody>
                   </table>
+                  <TablePagination
+                    page={safePage}
+                    pageSize={pageSize}
+                    totalItems={sortedGoals.length}
+                    onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                  />
                 </div>
               )}
             </div>
@@ -757,6 +783,9 @@ export function AnnualGoals() {
 
           {/* ── Team Goals tab ── */}
           {activeTab === "team" && isMentor && <TeamGoalsTab />}
+
+          {/* ── All Goals tab (admin, read-only) ── */}
+          {activeTab === "all" && isAdmin && <AllGoalsTab />}
         </div>
       </div>
 
