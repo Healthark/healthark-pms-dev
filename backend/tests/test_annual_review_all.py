@@ -96,7 +96,7 @@ def _setup(db):
     done = _user(db, org.id, name="Done Emp", mentor_id=mentor.id)
     pending = _user(db, org.id, name="Pending Emp", mentor_id=mentor.id)
     drafter = _user(db, org.id, name="Drafter Emp", mentor_id=mentor.id)
-    none = _user(db, org.id, name="None Emp", mentor_id=mentor.id)
+    _user(db, org.id, name="None Emp", mentor_id=mentor.id)  # not started
     past_only = _user(db, org.id, name="Past Emp", mentor_id=mentor.id)
 
     _review(db, org.id, done.id, ACTIVE, ReviewStatus.COMPLETED.value, mentor_id=mentor.id)
