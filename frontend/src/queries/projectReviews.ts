@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   projectReviewService,
   type AdminProjectSummary,
@@ -94,10 +99,20 @@ export function useProjectReviewDetail(reviewId: number | null) {
   });
 }
 
-export function useAllProjectReviews() {
+export function useAllProjectReviews(fyYear?: number | null) {
   return useQuery<ProjectReviewResponse[]>({
-    queryKey: allProjectReviewsQueryKey,
-    queryFn: () => projectReviewService.getAllReviews(),
+    queryKey: [...allProjectReviewsQueryKey, fyYear ?? "all"],
+    queryFn: () => projectReviewService.getAllReviews(fyYear),
+    // Keep the prior year's rows on screen while the new year loads (no
+    // skeleton flash when switching the Year filter).
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useAllReviewYears() {
+  return useQuery<number[]>({
+    queryKey: [...allProjectReviewsQueryKey, "years"],
+    queryFn: () => projectReviewService.getAllReviewYears(),
   });
 }
 

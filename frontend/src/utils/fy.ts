@@ -69,3 +69,36 @@ export function fyTokenToStartYear(token: string): number | null {
   const digits = single[1];
   return digits.length === 2 ? 2000 + Number(digits) : Number(digits);
 }
+
+/**
+ * Extract the cadence period prefix from a composite cycle name.
+ *   "H1 FY26-27" → "H1"
+ *   "Q3 FY26-27" → "Q3"
+ *   "FY26-27"    → null   (annual cadence — no period prefix)
+ * Returns null when no Q#/H# token is present.
+ */
+export function extractCyclePeriod(cycleName: string): string | null {
+  const tok = cycleName.split(" ").find((t) => /^(Q[1-4]|H[12])$/i.test(t));
+  return tok ? tok.toUpperCase() : null;
+}
+
+/**
+ * Order cycle labels newest-first (timeline descending): by fiscal start year
+ * desc, then period desc (so H2/Q4 sort before H1/Q1 within the same FY).
+ *   ["H1 FY25-26", "H1 FY26-27", "H2 FY25-26"]
+ *     → ["H1 FY26-27", "H2 FY25-26", "H1 FY25-26"]
+ * Period-less (annual) cycles get period index 0.
+ */
+export function sortCyclesDesc(cycles: readonly string[]): string[] {
+  const key = (c: string): [number, number] => {
+    const year = fyTokenToStartYear(c) ?? 0;
+    const period = extractCyclePeriod(c);
+    const periodIdx = period ? Number(period.slice(1)) || 0 : 0;
+    return [year, periodIdx];
+  };
+  return [...cycles].sort((a, b) => {
+    const [ya, pa] = key(a);
+    const [yb, pb] = key(b);
+    return yb - ya || pb - pa;
+  });
+}

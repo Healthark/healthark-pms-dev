@@ -1,17 +1,17 @@
 /**
  * ProjectReviews.tsx — Project Reviews Page (Revised PM-Centric Flow).
  *
- * Two tabs:
- *   My Reviews     — toggle between Card Grid and Table view; both
- *                    expand into a per-review detail (`ReviewDetailPanel`
- *                    in grid mode, `TableExpandedRow` in table mode).
+ * Tabs (role-dependent):
+ *   My Reviews     — the employee's own reviews as an expandable table
+ *                    (rows expand into `TableExpandedRow` for the detail).
  *   Evaluate Team  — gated on having any pending PM/Secondary work;
  *                    delegates entirely to `PMEvaluationTab`.
+ *   All Reviews    — Admin-only, read-only org-wide view (`AllReviewsTab`).
  *
  * The bulk of presentation logic lives in the extracted components in
  * `components/project-reviews/`. This file owns the page-level state,
  * data load, derived filters/sort, and the conditional render that
- * picks between Skeleton / Empty / Grid / Table.
+ * picks between Skeleton / Empty / Table.
  */
 
 import { useState, useMemo, Fragment } from "react";
@@ -34,23 +34,20 @@ import {
   useSecondaryQueue,
 } from "../queries/projectReviews";
 import { useSystemSettings } from "../hooks/useSystemSettings";
+import { useAuth } from "../hooks/useAuth";
 import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
-import { ProjectSummaryCard } from "../components/project-reviews/ProjectSummaryCard";
-import { ReviewDetailPanel } from "../components/project-reviews/ReviewDetailPanel";
+import { AllReviewsTab } from "../components/project-reviews/AllReviewsTab";
 import { TableExpandedRow } from "../components/project-reviews/TableExpandedRow";
 import { MyReviewsToolbar } from "../components/project-reviews/MyReviewsToolbar";
-import {
-  GridSkeleton,
-  TableSkeleton,
-} from "../components/project-reviews/MyReviewsSkeletons";
+import { PerformanceRatingBadge } from "../components/reviews/PerformanceRatingBadge";
+import { TableSkeleton } from "../components/project-reviews/MyReviewsSkeletons";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
 import { exportService } from "../services/export.service";
 import { extractFyToken } from "../utils/fy";
 
-type ActiveTab = "my" | "evaluate";
-type ViewMode = "grid" | "table";
+type ActiveTab = "my" | "evaluate" | "all-reviews";
 
 // Sortable columns in the My Reviews table + their value extractors and type.
 // Project/PM are plain alphabetical; project_code and cycle are alphanumeric
@@ -81,19 +78,19 @@ const MY_REVIEWS_SORT_CONFIG: Record<
 const cardKey = (c: MyProjectCard) => `${c.project_id}-${c.cycle}`;
 
 export function ProjectReviews() {
+  const { user } = useAuth();
   const { settings } = useSystemSettings();
   const projectRatingsVisible = settings?.project_ratings_visible ?? false;
+  // Admins get a read-only, org-wide "All Reviews" tab (backed by
+  // getAllReviews). Backend re-checks the role — this is a UI affordance.
+  const isAdmin = user?.role === "Admin";
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("my");
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
-  // Lazy-init from settings so we don't run a follow-up effect just to
-  // copy `settings.active_cycle_name` into local state on first paint.
-  const [selectedCycle, setSelectedCycle] = useState<string>(
-    () => settings?.active_cycle_name ?? "",
-  );
-  const [selectedCardKey, setSelectedCardKey] = useState<string | null>(null);
+  // My Reviews defaults to "All Cycles" — the employee usually wants to see
+  // every cycle, and a stable literal (vs lazy-seeding from settings, which
+  // may not be loaded at mount) avoids a false "active filter" state.
+  const [selectedCycle, setSelectedCycle] = useState<string>("all");
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [pmFilter, setPmFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -131,7 +128,6 @@ export function ProjectReviews() {
   );
 
   const filteredCards = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
     return cards.filter((c) => {
       if (selectedCycle && selectedCycle !== "all" && c.cycle !== selectedCycle)
         return false;
@@ -140,14 +136,9 @@ export function ProjectReviews() {
         return false;
       if (projectFilter !== "all" && c.project_name !== projectFilter)
         return false;
-      if (q) {
-        const matchesName = c.project_name.toLowerCase().includes(q);
-        const matchesCode = c.project_code.toLowerCase().includes(q);
-        if (!matchesName && !matchesCode) return false;
-      }
       return true;
     });
-  }, [cards, selectedCycle, pmFilter, statusFilter, projectFilter, searchQuery]);
+  }, [cards, selectedCycle, pmFilter, statusFilter, projectFilter]);
 
   const sortedCards = useMemo(() => {
     if (!sort) return filteredCards;
@@ -157,29 +148,23 @@ export function ProjectReviews() {
     });
   }, [filteredCards, sort]);
 
-  // The "cleared" cycle value is the active-cycle default the state is
-  // lazy-seeded with (or "" before settings load) — NOT "all".
-  const cycleDefault = settings?.active_cycle_name ?? "";
+  // "All Cycles" is the default, so Clear returns the filter to it and the
+  // Clear button only lights up once the user picks a specific cycle.
+  const cycleDefault = "all";
   const hasActiveFilters =
-    !!searchQuery ||
     pmFilter !== "all" ||
     statusFilter !== "all" ||
     projectFilter !== "all" ||
     selectedCycle !== cycleDefault;
   const clearFilters = () => {
-    setSearchQuery("");
     setPmFilter("all");
     setStatusFilter("all");
     setProjectFilter("all");
     setSelectedCycle(cycleDefault);
   };
 
-  // The selected card's validity is a function of the current filtered
-  // set — derive instead of clearing via effect when filters change.
-  const selectedCard =
-    selectedCardKey === null
-      ? null
-      : sortedCards.find((c) => cardKey(c) === selectedCardKey) ?? null;
+  // The expanded row's validity is a function of the current filtered set —
+  // derive instead of clearing via effect when filters change.
   const expandedRowVisible =
     expandedRowKey !== null &&
     sortedCards.some((c) => cardKey(c) === expandedRowKey);
@@ -191,17 +176,30 @@ export function ProjectReviews() {
         : "border-transparent text-text-muted hover:text-text-main"
     }`;
 
+  // Header text follows the active tab so the page title reflects what
+  // the user is doing — their own reviews vs evaluating their team.
+  const headerTitle =
+    activeTab === "evaluate"
+      ? "Evaluate Team"
+      : activeTab === "all-reviews"
+        ? "All Project Reviews"
+        : "My Project Reviews";
+  const headerSubtitle =
+    activeTab === "evaluate"
+      ? "Provide project feedback for your team members."
+      : activeTab === "all-reviews"
+        ? "Org-wide, read-only view of every project review this cycle."
+        : "Track your project-specific performance feedback across cycles.";
+
   return (
     <div className="flex flex-col gap-6 pb-10 animate-in fade-in duration-500">
       {/* ── Page Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-semibold text-text-main">
-            Project Reviews
+            {headerTitle}
           </h1>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Project-specific performance feedback and evaluations.
-          </p>
+          <p className="mt-0.5 text-sm text-text-muted">{headerSubtitle}</p>
         </div>
         <ExportExcelButton
           label="Export Project Reviews"
@@ -237,6 +235,15 @@ export function ProjectReviews() {
               Evaluate Team
             </button>
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              className={tabCls("all-reviews")}
+              onClick={() => setActiveTab("all-reviews")}
+            >
+              All Reviews
+            </button>
+          )}
         </div>
 
         <div className="p-5">
@@ -244,10 +251,6 @@ export function ProjectReviews() {
             <div className="flex flex-col gap-5">
               {!isLoading && cards.length > 0 && (
                 <MyReviewsToolbar
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
                   selectedCycle={selectedCycle}
                   onSelectedCycleChange={setSelectedCycle}
                   availableCycles={availableCycles}
@@ -266,18 +269,12 @@ export function ProjectReviews() {
 
               {renderMyReviewsBody({
                 isLoading,
-                viewMode,
                 cardsCount: cards.length,
                 filteredCount: filteredCards.length,
                 sortedCards,
-                selectedCardKey,
-                onSelectCard: (key) =>
-                  setSelectedCardKey(selectedCardKey === key ? null : key),
-                selectedCard,
                 expandedRowKey: expandedRowVisible ? expandedRowKey : null,
                 onToggleExpandedRow: (key) =>
                   setExpandedRowKey(expandedRowKey === key ? null : key),
-                onClearSelection: () => setSelectedCardKey(null),
                 expectations,
                 projectRatingsVisible,
                 sort,
@@ -287,6 +284,8 @@ export function ProjectReviews() {
           )}
 
           {activeTab === "evaluate" && showEvaluateTab && <PMEvaluationTab />}
+
+          {activeTab === "all-reviews" && isAdmin && <AllReviewsTab />}
         </div>
       </div>
     </div>
@@ -297,16 +296,11 @@ export function ProjectReviews() {
 
 function renderMyReviewsBody(args: {
   isLoading: boolean;
-  viewMode: ViewMode;
   cardsCount: number;
   filteredCount: number;
   sortedCards: MyProjectCard[];
-  selectedCardKey: string | null;
-  onSelectCard: (key: string) => void;
-  selectedCard: MyProjectCard | null;
   expandedRowKey: string | null;
   onToggleExpandedRow: (key: string) => void;
-  onClearSelection: () => void;
   expectations: RoleExpectation[];
   projectRatingsVisible: boolean;
   sort: SortState<MyReviewsSortKey> | null;
@@ -314,16 +308,11 @@ function renderMyReviewsBody(args: {
 }) {
   const {
     isLoading,
-    viewMode,
     cardsCount,
     filteredCount,
     sortedCards,
-    selectedCardKey,
-    onSelectCard,
-    selectedCard,
     expandedRowKey,
     onToggleExpandedRow,
-    onClearSelection,
     expectations,
     projectRatingsVisible,
     sort,
@@ -331,7 +320,7 @@ function renderMyReviewsBody(args: {
   } = args;
 
   if (isLoading) {
-    return viewMode === "grid" ? <GridSkeleton /> : <TableSkeleton />;
+    return <TableSkeleton />;
   }
   if (cardsCount === 0) {
     return (
@@ -357,40 +346,11 @@ function renderMyReviewsBody(args: {
           No matching reviews
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          Try adjusting your filters or search query.
+          Try adjusting your filters.
         </p>
       </div>
     );
   }
-  if (viewMode === "grid") {
-    return (
-      <>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sortedCards.map((card) => {
-            const key = cardKey(card);
-            return (
-              <ProjectSummaryCard
-                key={key}
-                card={card}
-                isSelected={selectedCardKey === key}
-                onClick={() => onSelectCard(key)}
-              />
-            );
-          })}
-        </div>
-
-        {selectedCard && (
-          <ReviewDetailPanel
-            key={selectedCardKey}
-            card={selectedCard}
-            expectations={expectations}
-            onClose={onClearSelection}
-          />
-        )}
-      </>
-    );
-  }
-  // Table view
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-[13px]">
@@ -525,12 +485,5 @@ function renderRatingCell(card: MyProjectCard, visible: boolean) {
       </span>
     );
   }
-  if (card.performance_group) {
-    return (
-      <span className="font-semibold text-text-main">
-        {card.performance_group}
-      </span>
-    );
-  }
-  return <span className="text-text-muted">—</span>;
+  return <PerformanceRatingBadge value={card.performance_group} />;
 }

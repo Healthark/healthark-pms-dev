@@ -5,11 +5,13 @@
  * table/card view with a Type column and filter.
  */
 
-import { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
-  UserCircle, Briefcase, ClipboardList, Pencil,
-  LayoutGrid, Table2, Search, CheckCircle2, Clock,
+  UserCircle, ClipboardList, Pencil,
+  Search, CheckCircle2, Clock,
 } from "lucide-react";
+import { StringCombobox } from "../common/StringCombobox";
+import { TablePagination } from "../common/TablePagination";
 import {
   type PMEvaluationPayload,
   type PMEvaluationDraftPayload,
@@ -36,6 +38,7 @@ import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { sortCyclesDesc } from "../../utils/fy";
 // EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
 // modal in the app at ~475 LOC; ImpactModal is paired (same parents)
 // so we split them together. Each opens on row-click only.
@@ -48,7 +51,6 @@ const ImpactModal = lazy(() =>
 
 // ── Constants ───────────────────────────────────────────────────────
 
-type ViewMode = "grid" | "table";
 type EvalType = "primary" | "secondary";
 
 // ── Sort column config ──────────────────────────────────────────────
@@ -100,83 +102,6 @@ const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEv
   performance_group: { kind: "numeric", get: (r) => r.performance_group },
 };
 
-// ── Card View ───────────────────────────────────────────────────────
-
-function EvalCard({
-  row, onAction,
-}: { readonly row: UnifiedEvalRow; readonly onAction: (row: UnifiedEvalRow) => void }) {
-  const isPrimary = row.type === "primary";
-  const isDone = row.review_status === "reviewed" || row.review_status === "submitted";
-  // Primary pending row with PM-typed content == draft saved. Backend sets
-  // has_draft_content=true only when at least one comment / rating / impact
-  // statement is filled, so empty placeholder pending rows stay "Pending".
-  const hasDraft = isPrimary && !isDone && row.has_draft_content;
-
-  return (
-    <div className={`rounded-xl border bg-surface p-4 shadow-sm flex flex-col gap-3 ${isDone ? "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/30" : "border-border"}`}>
-      <div className="flex items-center justify-between">
-        {row.cycle ? (
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-surface-hover text-text-muted">
-            {row.cycle}
-          </span>
-        ) : (
-          <span />
-        )}
-        {isDone ? (
-          <span className="flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700 dark:text-green-300">
-            <CheckCircle2 className="h-3 w-3" /> {row.review_status === "submitted" ? "Submitted" : "Reviewed"}
-          </span>
-        ) : hasDraft ? (
-          <span className="flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-bold uppercase text-brand">
-            <Pencil className="h-3 w-3" /> Draft
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
-            <Clock className="h-3 w-3" /> Pending
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <UserCircle className="h-5 w-5 text-text-muted shrink-0" />
-        <p className="text-[14px] font-semibold text-text-main">{row.employee_name}</p>
-      </div>
-
-      <div className="flex items-center gap-1.5 flex-wrap text-[12px] text-text-muted">
-        <Briefcase className="h-3 w-3 shrink-0" />
-        <span className="truncate">{row.project_name}</span>
-        <span className="font-mono text-[11px]">({row.project_code})</span>
-        {!isPrimary && (
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-surface-hover text-text-muted">
-            Secondary
-          </span>
-        )}
-      </div>
-
-      {isPrimary && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted">
-          {row.department_name && <span>Dept: <span className="font-medium text-text-main">{row.department_name}</span></span>}
-          {row.designation_name && <span>Desig: <span className="font-medium text-text-main">{row.designation_name}</span></span>}
-        </div>
-      )}
-
-      <div className="mt-auto pt-2 border-t border-border/60">
-        {isDone ? (
-          <button type="button" onClick={() => onAction(row)}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </button>
-        ) : (
-          <button type="button" onClick={() => onAction(row)}
-            className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity">
-            {isPrimary ? "Evaluate" : "Write Impact"}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Tab Component ───────────────────────────────────────────────────
 
 export function PMEvaluationTab() {
@@ -208,41 +133,44 @@ export function PMEvaluationTab() {
   const isDraftSaving =
     savePMDraftMutation.isPending || saveSecDraftMutation.isPending;
 
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
-  // Cycle filter — defaults to the active cycle so the page UX matches
-  // what it was before we expanded the queue across all cycles. Setting
-  // it to "" until settings load, then we sync below.
+  // Cycle filter. "" = no explicit choice → fall back to `cycleDefault`
+  // (computed below). We deliberately DON'T seed the active cycle into state
+  // via an effect: if the queue has no active-cycle rows (e.g. a Secondary
+  // evaluator whose reviewed items are all in a past cycle), that value
+  // wouldn't be in the dropdown's options and the <select> would silently
+  // display "All Cycles" while still filtering to the empty active cycle.
+  // Deriving the effective value during render avoids that mismatch.
   const [cycleFilter, setCycleFilter] = useState<string>("");
-  useEffect(() => {
-    if (cycleFilter === "" && activeCycle) setCycleFilter(activeCycle);
-  }, [activeCycle, cycleFilter]);
   const [sort, setSort] = useState<SortState<EvalSortKey> | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
-  // The "cleared" cycle value is the active-cycle default the useEffect
-  // seeds (or "" before settings load) — NOT "all".
-  const cycleDefault = activeCycle ?? "";
+  // Default the Cycle filter to the active cycle — the current cycle is the
+  // canonical landing view. The active cycle is always added to the dropdown
+  // options below, so the <select> shows it selected even when it has no rows;
+  // the table is then legitimately empty until the user picks another cycle.
+  // `effectiveCycle` is what the table + <select> use ("" state → this default).
+  const cycleDefault = activeCycle ?? "all";
+  const effectiveCycle = cycleFilter === "" ? cycleDefault : cycleFilter;
   const hasActiveFilters =
-    !!searchQuery ||
     statusFilter !== "all" ||
     typeFilter !== "all" ||
     deptFilter !== "all" ||
     projectFilter !== "all" ||
     employeeFilter !== "all" ||
-    cycleFilter !== cycleDefault;
+    effectiveCycle !== cycleDefault;
   const clearFilters = () => {
-    setSearchQuery("");
     setStatusFilter("all");
     setTypeFilter("all");
     setDeptFilter("all");
     setProjectFilter("all");
     setEmployeeFilter("all");
-    setCycleFilter(cycleDefault);
+    setCycleFilter("");
   };
 
   // Modal state
@@ -301,12 +229,24 @@ export function PMEvaluationTab() {
   // Dropdown options
   const availableDepts = Array.from(new Set(unifiedRows.map((r) => r.department_name).filter(Boolean) as string[]));
   const availableEmployees = Array.from(new Set(unifiedRows.map((r) => r.employee_name)));
-  const availableCycles = Array.from(new Set(unifiedRows.map((r) => r.cycle).filter((c): c is string => !!c)));
+  // Always include the active cycle so it's selectable/displayable even with
+  // no queue rows — the default selection lands there and the table is simply
+  // empty until the user switches to a cycle that has reviews. Ordered
+  // newest-first (timeline descending) so the dropdown reads H1 FY26-27 →
+  // H2 FY25-26 → H1 FY25-26.
+  const availableCycles = sortCyclesDesc(
+    Array.from(
+      new Set([
+        ...(activeCycle ? [activeCycle] : []),
+        ...unifiedRows.map((r) => r.cycle).filter((c): c is string => !!c),
+      ]),
+    ),
+  );
   const availableProjects = Array.from(new Set(unifiedRows.map((r) => r.project_name))).sort();
 
   // Filters
   const filteredRows = unifiedRows.filter((r) => {
-    if (cycleFilter !== "all" && cycleFilter !== "" && r.cycle !== cycleFilter) return false;
+    if (effectiveCycle !== "all" && r.cycle !== effectiveCycle) return false;
     if (typeFilter !== "all" && r.type !== typeFilter) return false;
     // Status:
     //   pending → row is pending AND no draft content has been typed yet
@@ -320,10 +260,6 @@ export function PMEvaluationTab() {
     if (deptFilter !== "all" && r.department_name !== deptFilter) return false;
     if (projectFilter !== "all" && r.project_name !== projectFilter) return false;
     if (employeeFilter !== "all" && r.employee_name !== employeeFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      if (!r.employee_name.toLowerCase().includes(q) && !r.project_name.toLowerCase().includes(q) && !r.project_code.toLowerCase().includes(q)) return false;
-    }
     return true;
   });
 
@@ -334,6 +270,29 @@ export function PMEvaluationTab() {
         return compareValues(get(a), get(b), kind, sort.direction);
       })
     : filteredRows;
+
+  // Client-side pagination over the filtered+sorted rows — same pattern as the
+  // All Reviews tab. Reset to page 1 when the filter set or page size changes
+  // (tracked during render to avoid a reset-in-effect).
+  const pageKey = [
+    statusFilter,
+    typeFilter,
+    deptFilter,
+    projectFilter,
+    employeeFilter,
+    effectiveCycle,
+    pageSize,
+  ].join("|");
+  const [lastPageKey, setLastPageKey] = useState(pageKey);
+  let currentPage = page;
+  if (pageKey !== lastPageKey) {
+    setLastPageKey(pageKey);
+    setPage(1);
+    currentPage = 1;
+  }
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const getExpectation = (row: UnifiedEvalRow): RoleExpectation | null => {
     if (!row.department_name || !row.designation_name) return null;
@@ -424,8 +383,6 @@ export function PMEvaluationTab() {
     }
   };
 
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${viewMode === mode ? "bg-brand/10 text-brand" : "text-text-muted hover:bg-surface-hover"}`;
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20 text-sm text-text-muted animate-pulse">Loading evaluation queue…</div>;
@@ -446,22 +403,10 @@ export function PMEvaluationTab() {
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-            <input type="text" placeholder="Search employee or project..." value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand" />
-          </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-            <button type="button" className={viewBtnCls("grid")} onClick={() => setViewMode("grid")}><LayoutGrid className="h-3.5 w-3.5" /> Cards</button>
-            <button type="button" className={viewBtnCls("table")} onClick={() => setViewMode("table")}><Table2 className="h-3.5 w-3.5" /> Table</button>
-          </div>
-        </div>
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</label>
-            <select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)}
+            <select value={effectiveCycle} onChange={(e) => setCycleFilter(e.target.value)}
               className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
               <option value="all">All Cycles</option>
               {availableCycles.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -498,21 +443,25 @@ export function PMEvaluationTab() {
           )}
           {availableProjects.length > 0 && (
             <div className="flex items-center gap-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</label>
-              <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}
-                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer">
-                <option value="all">All Projects</option>
-                {availableProjects.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <label htmlFor="pm-project-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</label>
+              <StringCombobox
+                id="pm-project-filter"
+                options={availableProjects}
+                value={projectFilter === "all" ? "" : projectFilter}
+                onChange={(v) => setProjectFilter(v || "all")}
+                placeholder="All projects"
+              />
             </div>
           )}
           <div className="flex items-center gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</label>
-            <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[130px] cursor-pointer">
-              <option value="all">All</option>
-              {availableEmployees.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
+            <label htmlFor="pm-employee-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</label>
+            <StringCombobox
+              id="pm-employee-filter"
+              options={availableEmployees}
+              value={employeeFilter === "all" ? "" : employeeFilter}
+              onChange={(v) => setEmployeeFilter(v || "all")}
+              placeholder="All employees"
+            />
           </div>
           <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
         </div>
@@ -523,14 +472,11 @@ export function PMEvaluationTab() {
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center bg-background/50">
           <Search className="h-8 w-8 text-text-muted mb-2" />
           <p className="font-display text-sm font-medium text-text-main">No matching evaluations</p>
-          <p className="mt-1 text-xs text-text-muted">Try adjusting your filters or search query.</p>
-        </div>
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {sortedRows.map((r) => <EvalCard key={r.key} row={r} onAction={handleAction} />)}
+          <p className="mt-1 text-xs text-text-muted">Try adjusting your filters.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="rounded-lg border border-border">
+          <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
@@ -556,7 +502,7 @@ export function PMEvaluationTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {sortedRows.map((r) => {
+              {pageRows.map((r) => {
                 const isDone = r.review_status !== "pending";
                 const rowHasDraft = r.type === "primary" && !isDone && r.has_draft_content;
                 return (
@@ -622,6 +568,14 @@ export function PMEvaluationTab() {
               })}
             </tbody>
           </table>
+          </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={sortedRows.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
 

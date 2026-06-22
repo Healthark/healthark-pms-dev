@@ -1,26 +1,7 @@
 /**
- * Loading-state placeholders for the My Reviews tab. The grid version
- * mimics the project-summary card grid, the table version mimics the
- * sortable table — both keep the page layout from jumping when data
- * arrives.
+ * Loading-state placeholder for the My Reviews tab — mimics the sortable
+ * table so the page layout doesn't jump when data arrives.
  */
-
-export function GridSkeleton() {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="rounded-xl border border-border bg-surface p-4">
-          <div className="flex justify-between mb-3">
-            <div className="h-4 w-16 rounded bg-surface-hover" />
-            <div className="h-4 w-20 rounded-full bg-surface-hover" />
-          </div>
-          <div className="h-4 w-3/4 rounded bg-surface-hover mb-2" />
-          <div className="h-3 w-1/2 rounded bg-surface-hover" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function TableSkeleton() {
   return (

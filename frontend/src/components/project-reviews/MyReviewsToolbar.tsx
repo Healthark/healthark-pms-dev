@@ -1,21 +1,14 @@
-import { LayoutGrid, Search, Table2 } from "lucide-react";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
-
-type ViewMode = "grid" | "table";
+import { StringCombobox } from "../common/StringCombobox";
 
 /**
- * Toolbar for the My Reviews tab: text search, four filter selects
- * (cycle / project / pm / status), and a card↔table view toggle.
+ * Toolbar for the My Reviews tab: a cycle select, a searchable Project
+ * combobox, and pm / status selects.
  *
  * State lives in the parent (ProjectReviews page); this component is a
- * pure controlled-input collection. Splitting it out shrinks the parent
- * by ~70 lines and makes the markup easier to scan.
+ * pure controlled-input collection.
  */
 export function MyReviewsToolbar({
-  searchQuery,
-  onSearchChange,
-  viewMode,
-  onViewModeChange,
   selectedCycle,
   onSelectedCycleChange,
   availableCycles,
@@ -30,10 +23,6 @@ export function MyReviewsToolbar({
   hasActiveFilters,
   onClearFilters,
 }: {
-  readonly searchQuery: string;
-  readonly onSearchChange: (v: string) => void;
-  readonly viewMode: ViewMode;
-  readonly onViewModeChange: (v: ViewMode) => void;
   readonly selectedCycle: string;
   readonly onSelectedCycleChange: (v: string) => void;
   readonly availableCycles: readonly string[];
@@ -48,91 +37,58 @@ export function MyReviewsToolbar({
   readonly hasActiveFilters: boolean;
   readonly onClearFilters: () => void;
 }) {
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode
-        ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-surface-hover"
-    }`;
-
   return (
-    <div className="flex flex-col gap-3">
-      {/* Row 1: Search + View Toggle */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-          />
-        </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-          <button
-            type="button"
-            className={viewBtnCls("grid")}
-            onClick={() => onViewModeChange("grid")}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> Cards
-          </button>
-          <button
-            type="button"
-            className={viewBtnCls("table")}
-            onClick={() => onViewModeChange("table")}
-          >
-            <Table2 className="h-3.5 w-3.5" /> Table
-          </button>
-        </div>
-      </div>
-
-      {/* Row 2: Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <FilterSelect
-          label="Cycle"
-          value={selectedCycle}
-          onChange={onSelectedCycleChange}
-          allLabel="All Cycles"
-          options={availableCycles}
-          minWidth={120}
-        />
-        <FilterSelect
-          label="Project"
-          value={projectFilter}
-          onChange={onProjectFilterChange}
-          allLabel="All Projects"
+    <div className="flex items-center gap-4 flex-wrap">
+      <FilterSelect
+        label="Cycle"
+        value={selectedCycle}
+        onChange={onSelectedCycleChange}
+        allLabel="All Cycles"
+        options={availableCycles}
+        minWidth={120}
+      />
+      <div className="flex items-center gap-2">
+        <label
+          htmlFor="my-project-filter"
+          className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+        >
+          Project
+        </label>
+        <StringCombobox
+          id="my-project-filter"
           options={availableProjects}
-          minWidth={160}
-        />
-        <FilterSelect
-          label="PM"
-          value={pmFilter}
-          onChange={onPmFilterChange}
-          allLabel="All PMs"
-          options={availablePMs}
-          minWidth={140}
-        />
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
-          >
-            <option value="all">All</option>
-            <option value="reviewed">Reviewed</option>
-            <option value="pending">Pending</option>
-          </select>
-        </div>
-        <ClearFiltersButton
-          active={hasActiveFilters}
-          onClear={onClearFilters}
-          className="ml-auto"
+          value={projectFilter === "all" ? "" : projectFilter}
+          onChange={(v) => onProjectFilterChange(v || "all")}
+          placeholder="All projects"
         />
       </div>
+      <FilterSelect
+        label="PM"
+        value={pmFilter}
+        onChange={onPmFilterChange}
+        allLabel="All PMs"
+        options={availablePMs}
+        minWidth={140}
+      />
+      <div className="flex items-center gap-2">
+        <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+          Status
+        </label>
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+        >
+          <option value="all">All</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+      <ClearFiltersButton
+        active={hasActiveFilters}
+        onClear={onClearFilters}
+        className="ml-auto"
+      />
     </div>
   );
 }

@@ -51,6 +51,31 @@ def _require_admin(current_user: User) -> None:
         )
 
 
+def _validate_org_user(
+    db: DbSession, org_id: int, user_id: int | None, label: str
+) -> None:
+    """Ensure a referenced user exists, belongs to this org, and is active.
+
+    Guards reviewer / member references (reports_to, secondary evaluator,
+    assignment members) against dangling IDs (FK 500 on Postgres / silent
+    dangling ref on SQLite) and cross-org references (tenant leak). Pass
+    None to skip — optional fields (e.g. secondary_evaluator_id) call this
+    unconditionally and it no-ops when unset.
+    """
+    if user_id is None:
+        return
+    exists = db.query(User.id).filter(
+        User.id == user_id,
+        User.org_id == org_id,
+        User.is_deleted == False,  # noqa: E712
+    ).first()
+    if exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} is not a valid, active user in your organization.",
+        )
+
+
 def _build_assignment_response(assignment: ProjectAssignment, db: DbSession) -> AssignmentResponse:
     """Resolve user name and department name for an assignment."""
     user = db.query(User).filter(User.id == assignment.user_id).first()
@@ -404,10 +429,14 @@ def create_project(
     """Create a project with optional initial team assignments."""
     _require_admin(current_user)
 
+    # Uniqueness check ignores is_deleted on purpose: the unique index
+    # `ix_projects_org_code` spans (org_id, project_code) WITHOUT is_deleted,
+    # so a soft-deleted project still owns its code. Filtering to active rows
+    # would pass here and then 500 on insert — so we 409 cleanly against any
+    # project (deleted or not) already holding the code.
     existing = db.query(Project).filter(
         Project.org_id == current_user.org_id,
         Project.project_code == project_in.project_code,
-        Project.is_deleted == False,  # noqa: E712
     ).first()
 
     if existing:
@@ -416,8 +445,16 @@ def create_project(
             detail=f"Project code '{project_in.project_code}' already exists.",
         )
 
-    # Pydantic validator on ProjectCreate already enforces exactly one Primary
-    # and a non-null reports_to_id; no extra route-level checks required here.
+    # Pydantic enforces exactly one Primary, a non-null reports_to_id, and no
+    # duplicate members. It can't verify the referenced users exist, so do it
+    # here: reviewers (reports_to / secondary) and every member must be a
+    # real, active user in this org.
+    _validate_org_user(db, current_user.org_id, project_in.reports_to_id, "PM Reports To")
+    _validate_org_user(
+        db, current_user.org_id, project_in.secondary_evaluator_id, "Secondary Evaluator"
+    )
+    for _member in project_in.assignments:
+        _validate_org_user(db, current_user.org_id, _member.user_id, "Assigned member")
 
     new_project = Project(
         org_id=current_user.org_id,
@@ -573,10 +610,11 @@ def update_project(
     update_data = project_in.model_dump(exclude_unset=True)
 
     if "project_code" in update_data and update_data["project_code"] != project.project_code:
+        # Ignore is_deleted (see create_project) — the unique index spans
+        # deleted rows, so 409 against any project already holding the code.
         existing = db.query(Project).filter(
             Project.org_id == current_user.org_id,
             Project.project_code == update_data["project_code"],
-            Project.is_deleted == False,  # noqa: E712
             Project.id != project_id,
         ).first()
         if existing:
@@ -584,6 +622,25 @@ def update_project(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Project code '{update_data['project_code']}' already exists.",
             )
+
+    # Validate any reviewer reference the payload is changing (existence +
+    # same-org + active). Skips fields the payload didn't touch.
+    if "reports_to_id" in update_data:
+        # reports_to_id is required on create; don't let an update clear it to
+        # NULL (which would break the PM-review chain). secondary_evaluator_id
+        # below is genuinely optional, so it may be nulled.
+        if update_data["reports_to_id"] is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="PM Reports To is required and cannot be cleared.",
+            )
+        _validate_org_user(
+            db, current_user.org_id, update_data["reports_to_id"], "PM Reports To"
+        )
+    if "secondary_evaluator_id" in update_data:
+        _validate_org_user(
+            db, current_user.org_id, update_data["secondary_evaluator_id"], "Secondary Evaluator"
+        )
 
     # Validate the *merged* reviewer-role state (current values for fields
     # the payload didn't touch + new values for fields it did). The PM,
@@ -691,6 +748,10 @@ def add_assignment(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot assign members to a completed project. Re-open it first.",
         )
+
+    # The member must be a real, active user in this org (guards dangling
+    # FK / cross-org assignment).
+    _validate_org_user(db, current_user.org_id, assignment_in.user_id, "Assigned member")
 
     # One row per (project, user) — unique index. A soft-deleted row is
     # RESTORED below (re-add) rather than inserted again; an active row 409s.
@@ -830,6 +891,15 @@ def update_assignment(
 
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
+
+    # A removed (soft-deleted) row can't be edited — restore it first. Without
+    # this, a removed row could be promoted to Primary while staying deleted,
+    # which disagrees with PM resolution (it ignores deleted rows).
+    if assignment.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This member has been removed. Restore them before editing.",
+        )
 
     update_data = assignment_in.model_dump(exclude_unset=True)
 
@@ -975,6 +1045,21 @@ def restore_assignment(
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
 
+    # Can't re-add members to a completed project — matches add_assignment's
+    # guard, so the "re-open it first" invariant holds for restores too.
+    project = db.query(Project).filter(
+        Project.id == assignment.project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot restore members on a completed project. Re-open it first.",
+        )
+
     if assignment.is_deleted:
         assignment.is_deleted = False
         assignment.removed_at = None
@@ -1102,6 +1187,12 @@ def reopen_project(
         project.completed_by_id = None
         db.commit()
         db.refresh(project)
+        # Reopening returns the project to the active review surface — warn
+        # admins if it no longer has an active PM (e.g. the PM was deactivated
+        # while the project was completed).
+        _warn_if_project_pm_less(
+            db, current_user.org_id, current_user.id, project.id
+        )
 
     pm_id, pm_name = _resolve_project_pm(db, project.id, current_user.org_id)
     return _build_project_response(project, db, count, pm_id=pm_id, pm_name=pm_name)
