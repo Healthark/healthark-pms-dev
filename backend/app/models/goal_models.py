@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, Text
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Index, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -77,10 +77,11 @@ class Goal(Base):
 
     # Classifies the goal as a full-year objective or a regular project goal.
     # Annual goals are created once per FY, gate-controlled by the Admin,
-    # and stamped with a cycle_name ("FY26") at creation time.
+    # and stamped with a cycle_name ("H1 2026") at creation time.
     goal_type  = Column(String, nullable=False, default=GoalType.REGULAR.value)
-    # Bare fiscal-year label stamped at creation for annual goals, e.g. "FY26".
-    # Null for regular goals. Enables future filtering like "all FY26 goals".
+    # Half-yearly cycle label stamped at creation for annual goals, e.g.
+    # "H1 2026"/"H2 2026" (carries the 4-digit fiscal start year, NOT an FY
+    # token). Null for regular goals; the FY is derived from this.
     cycle_name     = Column(String, nullable=True)
     # Optional URL to a Google Drive folder or external reference document.
     attachment_url = Column(String, nullable=True)
@@ -101,6 +102,11 @@ class Goal(Base):
     approved_at = Column(DateTime(timezone=True), nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Soft-delete marker. delete_goal sets this True instead of removing the
+    # row, so criteria + self/mentor review history survive. Every goal query
+    # must filter is_deleted == False.
+    is_deleted  = Column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
         Index("ix_goals_org_user", "org_id", "user_id"),

@@ -34,9 +34,10 @@ import {
 } from "../../services/project-review.service";
 import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
 import { formatFyYearSpan } from "../../utils/fy";
-import { halfDisplayLabel } from "../../utils/goalStatus";
+import { halfDisplayLabel, isHalfWindowOpen } from "../../utils/goalStatus";
 import { getOwnerRole } from "../../utils/goalOwner";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { useToday } from "../../hooks/useToday";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
@@ -85,6 +86,8 @@ export function GoalMentorReviewModal({
 }: GoalMentorReviewModalProps) {
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
+  const today = useToday();
+  const fiscalStartMonth = settings?.fiscal_start_month ?? 4;
 
   // The /goals/team list response was slimmed (PR 18) to drop the heavy
   // self_overall_review + mentor_overall_review text bodies. The modal
@@ -164,6 +167,15 @@ export function GoalMentorReviewModal({
       : null;
 
   const allFilled = overall.trim().length > 0;
+  // The mentor's submit is window-gated on the backend (is_review_window_open);
+  // reflect that here so Submit is disabled with a reason rather than erroring
+  // after the fact (mirrors the mentee-side SelfReviewCycleMenu gate).
+  const windowOpen = isHalfWindowOpen(
+    cycleHalf,
+    goal.fy_year,
+    fiscalStartMonth,
+    today,
+  );
 
   const handleSubmit = async () => {
     await onSubmit(cycleHalf, { mentor_overall_review: overall.trim() });
@@ -298,6 +310,13 @@ export function GoalMentorReviewModal({
                 </div>
               )}
 
+              {!isLoadingDetail && selfReview !== null && !isReadOnly && !windowOpen && (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                  The review window for this cycle is closed — a mentor review
+                  can no longer be submitted for it.
+                </div>
+              )}
+
               {(selfReview !== null || isReadOnly) && (
                 <div>
                   <label
@@ -365,7 +384,7 @@ export function GoalMentorReviewModal({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSaving || isDraftSaving || !allFilled}
+                disabled={isSaving || isDraftSaving || !allFilled || !windowOpen}
                 className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {isSaving ? (

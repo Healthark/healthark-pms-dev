@@ -223,8 +223,8 @@ class GoalResponse(GoalBase):
     # None when the owner has no mentor (frontend renders "No Mentor Assigned").
     manager_name: Optional[str] = None
     goal_type: str
-    # Bare FY label stamped at creation for annual goals (e.g. "FY26").
-    # None for regular goals.
+    # Cycle label stamped at creation for annual goals (e.g. "H1 2026" /
+    # "H2 2026"). None for regular goals; `fy_year` below derives the year.
     cycle_name: Optional[str] = None
     attachment_url: Optional[str] = None
     approval_status: str

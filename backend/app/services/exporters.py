@@ -433,7 +433,7 @@ def build_goals_sheet(
             joinedload(Goal.self_reviews),
             joinedload(Goal.mentor_reviews),
         )
-        .filter(Goal.org_id == org_id)
+        .filter(Goal.org_id == org_id, Goal.is_deleted == False)  # noqa: E712
     )
     if user_id is not None:
         q = q.filter(Goal.user_id == user_id)

@@ -246,6 +246,7 @@ YEAR_OVERRIDE_FLAGS: tuple[str, ...] = (
     "annual_review_final_rating_visible",
     "annual_goals_edit_enabled",
     "project_ratings_visible",
+    "annual_goals_final_rating_visible",
 )
 
 

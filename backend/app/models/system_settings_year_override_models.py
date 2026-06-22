@@ -58,6 +58,10 @@ class SystemSettingsYearOverride(Base):
     # Visibility: project_review.performance_group exposure to the rated
     # employee. Past-FY reads always pass through.
     project_ratings_visible = Column(Boolean, default=False, nullable=False)
+    # Visibility: a goal's submitted mentor reviews exposure to the mentee
+    # (goal-side equivalent of annual_review_final_rating_visible). Drafts are
+    # never shown regardless; past-FY reads always pass through.
+    annual_goals_final_rating_visible = Column(Boolean, default=False, nullable=False)
 
     # ── Audit Trail ──────────────────────────────────────────────────
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

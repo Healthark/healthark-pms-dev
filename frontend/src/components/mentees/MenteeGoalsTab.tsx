@@ -1,9 +1,5 @@
 import { useEffect, useState, Fragment } from "react";
-import { createPortal } from "react-dom";
 import {
-  Search,
-  LayoutGrid,
-  Table2,
   ChevronDown,
   Check,
   RotateCcw,
@@ -25,102 +21,21 @@ import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { TeamGoalCard } from "../goals/TeamGoalCard";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../goals/CriteriaChecklist";
 import { GoalSelfReviewModal } from "../goals/GoalSelfReviewModal";
 import { SelfReviewCycleMenu } from "../goals/SelfReviewCycleMenu";
+import { RequestChangesModal } from "../goals/RequestChangesModal";
 import { SortableHeader } from "../SortableHeader";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { TablePagination } from "../common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
-
-// ---------------------------------------------------------------------------
-// Feedback modal (Portal) — duplicated from TeamGoalsTab so the two views can
-// evolve independently. Same behavior: mentor writes feedback and sends.
-// ---------------------------------------------------------------------------
-
-interface FeedbackModalProps {
-  readonly goal: TeamGoal;
-  readonly onSend: (feedback: string) => Promise<void>;
-  readonly onClose: () => void;
-  readonly isSaving: boolean;
-  readonly error: string;
-}
-
-function FeedbackModal({ goal, onSend, onClose, isSaving, error }: FeedbackModalProps) {
-  const [feedback, setFeedback] = useState("");
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="mentee-feedback-modal-title"
-    >
-      <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
-        <div className="border-b border-border px-6 py-4">
-          <h2
-            id="mentee-feedback-modal-title"
-            className="font-display text-base font-semibold text-text-main"
-          >
-            Request Changes
-          </h2>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Explain what needs to be revised for <strong>{goal.owner_name}</strong>.
-          </p>
-        </div>
-
-        <div className="px-6 py-5 space-y-3">
-          {error && (
-            <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
-              {error}
-            </p>
-          )}
-          <label
-            htmlFor="mentee-feedback-text"
-            className="block text-xs font-medium text-text-muted mb-1"
-          >
-            Feedback *
-          </label>
-          <textarea
-            id="mentee-feedback-text"
-            rows={4}
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            placeholder="e.g. Please make the target more specific and measurable."
-            className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-          />
-        </div>
-
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onSend(feedback)}
-            disabled={isSaving || !feedback.trim()}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
-          >
-            {isSaving ? "Sending…" : "Send Feedback"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Filter + sort config
 // ---------------------------------------------------------------------------
 
 type StatusFilter = "all" | ApprovalStatus;
-type ViewMode = "grid" | "table";
 
 function buildStatusFilters(
   cycleType: string | null,
@@ -191,12 +106,12 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
 
   const updateApprovalMutation = useUpdateApproval();
   const isActing = updateApprovalMutation.isPending;
-  const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<SortState<MenteeGoalsSortKey> | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [expandedGoalId, setExpandedGoalId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Request-Changes modal
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
@@ -254,13 +169,12 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
   // Reset expanded row when filters change so the UI stays coherent
   useEffect(() => {
     setExpandedGoalId(null);
-  }, [statusFilter, yearFilter, searchQuery, viewMode]);
+  }, [statusFilter, yearFilter]);
 
   const hasActiveFilters =
-    !!searchQuery || statusFilter !== "all" || yearFilter !== "all";
+    statusFilter !== "all" || yearFilter !== "all";
 
   const clearFilters = () => {
-    setSearchQuery("");
     setStatusFilter("all");
     setYearFilter("all");
   };
@@ -271,11 +185,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
 
   const filtered = goals
     .filter((g) => statusFilter === "all" || g.approval_status === statusFilter)
-    .filter((g) => yearFilter === "all" || g.fy_year === Number(yearFilter))
-    .filter((g) => {
-      const q = searchQuery.trim().toLowerCase();
-      return q === "" || g.title.toLowerCase().includes(q);
-    });
+    .filter((g) => yearFilter === "all" || g.fy_year === Number(yearFilter));
 
   const sortedGoals = sort
     ? filtered.slice().sort((a, b) => {
@@ -284,12 +194,19 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
       })
     : filtered;
 
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode
-        ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-surface-hover"
-    }`;
+  // Client-side pagination over the sorted rows. Reset to page 1 when the
+  // filter set / page size changes — tracked during render.
+  const filterKey = [statusFilter, yearFilter, pageSize].join("|");
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  let currentPage = page;
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+    currentPage = 1;
+  }
+  const totalPages = Math.max(1, Math.ceil(sortedGoals.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = sortedGoals.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   if (isPending) {
     return (
@@ -326,37 +243,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-col gap-3">
-        {/* Row 1: search + view toggle */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search goals..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-            />
-          </div>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-            <button
-              type="button"
-              className={viewBtnCls("grid")}
-              onClick={() => setViewMode("grid")}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Cards
-            </button>
-            <button
-              type="button"
-              className={viewBtnCls("table")}
-              onClick={() => setViewMode("table")}
-            >
-              <Table2 className="h-3.5 w-3.5" /> Table
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: filters */}
+        {/* Filters */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <label
@@ -374,7 +261,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
               <option value="all">All Years</option>
               {availableYears.map((y) => (
                 <option key={y} value={y}>
-                  {y}
+                  {formatFyYearSpan(y)}
                 </option>
               ))}
             </select>
@@ -414,31 +301,13 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
       {/* Content */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-12 text-center bg-background/50">
-          <Search className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
+          <Target className="h-8 w-8 text-text-muted mb-2" aria-hidden="true" />
           <p className="font-display text-sm font-medium text-text-main">
             No goals match this filter
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Try adjusting your search or filter options.
+            Try adjusting your filter options.
           </p>
-        </div>
-      ) : viewMode === "grid" ? (
-        /* ── Cards view ── */
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {sortedGoals.map((goal) => (
-            <TeamGoalCard
-              key={goal.id}
-              goal={goal}
-              onApprove={handleApprove}
-              onRequestChanges={(g) => {
-                setModalError("");
-                setFeedbackTarget(g);
-              }}
-              onSelectHalf={openMenteeSelfReview}
-              isActing={isActing}
-              statusViewerRole="mentor"
-            />
-          ))}
         </div>
       ) : (
         /* ── Table view ── */
@@ -476,7 +345,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {sortedGoals.map((goal) => {
+              {pageRows.map((goal) => {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "pending_approval";
                 const isApproved = isPostApproved(goal.approval_status);
@@ -611,12 +480,19 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
               })}
             </tbody>
           </table>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={sortedGoals.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
 
       {/* Request-Changes modal */}
       {feedbackTarget && (
-        <FeedbackModal
+        <RequestChangesModal
           goal={feedbackTarget}
           onSend={handleSendFeedback}
           onClose={() => setFeedbackTarget(null)}

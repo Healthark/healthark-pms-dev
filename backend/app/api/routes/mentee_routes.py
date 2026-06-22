@@ -241,6 +241,7 @@ def _fetch_mentee_annual_goals(
         .filter(
             Goal.org_id == org_id,
             Goal.user_id == mentee.id,
+            Goal.is_deleted == False,  # noqa: E712
             Goal.goal_type == GoalType.ANNUAL.value,
         )
         .order_by(Goal.created_at.desc())
@@ -460,6 +461,7 @@ def list_mentee_summaries(
         .filter(
             Goal.org_id == current_user.org_id,
             Goal.user_id.in_(mentee_ids),
+            Goal.is_deleted == False,  # noqa: E712
             Goal.goal_type == GoalType.ANNUAL.value,
         )
         .all()
