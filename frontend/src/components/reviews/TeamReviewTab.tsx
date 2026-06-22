@@ -1,24 +1,20 @@
 /**
  * TeamReviewTab.tsx — Mentor's unified workspace for team annual reviews.
  *
- * Replaces the separate "Mentee Review" and "Team Review" tabs with one
- * surface: the mentor sees every mentee's review across cycles, evaluates
- * the ones in pending_mentor, and views the rest read-only via the same
- * detail modal the mentee's own "My Review" uses.
+ * The mentor sees every mentee's review across cycles in one table,
+ * evaluates the ones in pending_mentor, and views the rest read-only via
+ * the same detail modal the mentee's own "My Review" uses.
  *
  * Action column by status:
- *   pending_mentor     → Evaluate  (opens EvalModal with side-by-side form)
+ *   pending_mentor     → Evaluate  (opens the mentee summary eval form)
  *   pending_management → View      (read-only detail modal)
  *   completed          → View      (read-only detail modal)
  *   draft              → "Awaiting self-review" (mentee hasn't submitted)
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ClipboardCheck, Eye, LayoutGrid, Search,
-  Table2, UserCircle, Users,
-} from "lucide-react";
+import { ClipboardCheck, Eye, UserCircle, Users } from "lucide-react";
 import {
   type MenteeAnnualReview,
   type ReviewStatus,
@@ -30,10 +26,11 @@ import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
 import { TablePagination } from "../common/TablePagination";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { StringCombobox } from "../common/StringCombobox";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
+import { getErrorMessage } from "../../utils/errors";
 
-type ViewMode = "grid" | "table";
 type SortKey = "employee_name" | "cycle_name" | "status";
 type StatusFilter = "all" | ReviewStatus;
 
@@ -53,87 +50,6 @@ const SORT_CONFIG: Record<
   cycle_name:    { kind: "alpha", get: (r) => r.cycle_name },
   status:        { kind: "alpha", get: (r) => r.status },
 };
-
-// ── Card ────────────────────────────────────────────────────────────
-
-function TeamReviewCard({
-  review,
-  onEvaluate,
-  onView,
-}: {
-  readonly review: MenteeAnnualReview;
-  readonly onEvaluate: (r: MenteeAnnualReview) => void;
-  readonly onView: (r: MenteeAnnualReview) => void;
-}) {
-  const canEvaluate = review.status === "pending_mentor";
-  const canView =
-    review.status === "pending_management" || review.status === "completed";
-
-  return (
-    <div className="rounded-lg border border-border bg-surface p-4 shadow-sm flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <UserCircle
-            className="h-5 w-5 text-text-muted shrink-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <p className="font-medium text-text-main truncate">
-              {review.employee_name}
-            </p>
-            {review.designation && (
-              <p className="text-[11px] text-text-muted truncate">
-                {review.designation}
-              </p>
-            )}
-          </div>
-        </div>
-        <span className="text-[11px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded shrink-0">
-          {formatFyLabel(review.cycle_name)}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <ReviewStatusBadge status={review.status} />
-      </div>
-
-      <div className="flex items-center gap-4 text-xs">
-        <div className="flex items-center gap-1.5">
-          <span className="text-text-muted">Self</span>
-          <PerformanceRatingBadge value={review.self_performance_rating} />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-text-muted">Yours</span>
-          <PerformanceRatingBadge value={review.mentor_performance_rating} />
-        </div>
-      </div>
-
-      {canEvaluate ? (
-        <button
-          type="button"
-          onClick={() => onEvaluate(review)}
-          className="mt-auto flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-        >
-          <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
-          Evaluate
-        </button>
-      ) : canView ? (
-        <button
-          type="button"
-          onClick={() => onView(review)}
-          className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
-        >
-          <Eye className="h-4 w-4" aria-hidden="true" />
-          View Review
-        </button>
-      ) : (
-        <div className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm italic text-text-muted">
-          Awaiting self-review
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Empty state ─────────────────────────────────────────────────────
 
@@ -158,11 +74,10 @@ function EmptyState({ hasFilter }: { readonly hasFilter: boolean }) {
 export function TeamReviewTab() {
   const navigate = useNavigate();
   // ['annual-reviews', 'mentees'] — shared TanStack cache
-  const { data: reviews = [], isLoading } = useMenteeAnnualReviews();
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [searchQuery, setSearchQuery] = useState("");
+  const { data: reviews = [], isLoading, error } = useMenteeAnnualReviews();
   const [yearFilter, setYearFilter] = useState("all");
-  const [employeeFilter, setEmployeeFilter] = useState("all");
+  // "" = all (searchable combobox); Year/Status keep the "all" sentinel.
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
   const [viewTarget, setViewTarget] = useState<MenteeAnnualReview | null>(null);
@@ -182,13 +97,8 @@ export function TeamReviewTab() {
     .filter(
       (r) => yearFilter === "all" || extractFyToken(r.cycle_name) === yearFilter,
     )
-    .filter((r) => employeeFilter === "all" || r.employee_name === employeeFilter)
-    .filter((r) => statusFilter === "all" || r.status === statusFilter)
-    .filter(
-      (r) =>
-        searchQuery.trim() === "" ||
-        r.employee_name.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    .filter((r) => !employeeFilter || r.employee_name === employeeFilter)
+    .filter((r) => statusFilter === "all" || r.status === statusFilter);
 
   const sorted = sort
     ? filtered.slice().sort((a, b) => {
@@ -197,34 +107,34 @@ export function TeamReviewTab() {
       })
     : filtered;
 
-  // Page the sorted list. Applies to both card and table views.
-  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
-
-  // Snap back to page 1 whenever the filtered set or page size changes.
-  useEffect(() => {
+  // Client-side pagination. Reset to page 1 when filters / sort / page size
+  // change — tracked during render (React's reset-in-effect alternative).
+  const filterKey = [
+    yearFilter,
+    employeeFilter,
+    statusFilter,
+    pageSize,
+    sort ? `${sort.key}:${sort.direction}` : "",
+  ].join("|");
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  let currentPage = page;
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
     setPage(1);
-  }, [yearFilter, employeeFilter, statusFilter, searchQuery, pageSize]);
+    currentPage = 1;
+  }
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paged = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const hasActiveFilters =
-    !!searchQuery ||
-    yearFilter !== "all" ||
-    employeeFilter !== "all" ||
-    statusFilter !== "all";
+    yearFilter !== "all" || !!employeeFilter || statusFilter !== "all";
 
   const clearFilters = () => {
-    setSearchQuery("");
     setYearFilter("all");
-    setEmployeeFilter("all");
+    setEmployeeFilter("");
     setStatusFilter("all");
-    setPage(1);
   };
-
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode
-        ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-surface-hover"
-    }`;
 
   if (isLoading) {
     return (
@@ -234,19 +144,32 @@ export function TeamReviewTab() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        {getErrorMessage(error)}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       {reviews.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative max-w-xs flex-1 min-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search mentees…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="team-review-employee-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Employee
+            </label>
+            <StringCombobox
+              id="team-review-employee-filter"
+              options={availableEmployees}
+              value={employeeFilter}
+              onChange={setEmployeeFilter}
+              placeholder="All employees"
             />
           </div>
 
@@ -274,28 +197,6 @@ export function TeamReviewTab() {
 
           <div className="flex items-center gap-2">
             <label
-              htmlFor="team-review-employee-filter"
-              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-            >
-              Employee
-            </label>
-            <select
-              id="team-review-employee-filter"
-              value={employeeFilter}
-              onChange={(e) => setEmployeeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
-            >
-              <option value="all">All</option>
-              {availableEmployees.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label
               htmlFor="team-review-status-filter"
               className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
             >
@@ -315,172 +216,147 @@ export function TeamReviewTab() {
             </select>
           </div>
 
-          <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
-
-          <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-            <button
-              type="button"
-              className={viewBtnCls("grid")}
-              onClick={() => setViewMode("grid")}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Cards
-            </button>
-            <button
-              type="button"
-              className={viewBtnCls("table")}
-              onClick={() => setViewMode("table")}
-            >
-              <Table2 className="h-3.5 w-3.5" /> Table
-            </button>
-          </div>
+          <ClearFiltersButton
+            active={hasActiveFilters}
+            onClear={clearFilters}
+            className="ml-auto"
+          />
         </div>
       )}
 
       {/* Content */}
       {reviews.length === 0 ? (
         <EmptyState hasFilter={false} />
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <EmptyState hasFilter={true} />
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {paged.map((r) => (
-            <TeamReviewCard
-              key={r.id}
-              review={r}
-              onEvaluate={(rev) => navigate(`/my-mentees/${rev.user_id}?tab=summary`)}
-              onView={setViewTarget}
-            />
-          ))}
-        </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-surface-muted/80 border-b border-border">
-                <th className="text-left px-5 py-2.5">
-                  <SortableHeader
-                    label="Mentee"
-                    columnKey="employee_name"
-                    sort={sort}
-                    onSort={setSort}
-                  />
-                </th>
-                <th className="text-left px-4 py-2.5">
-                  <SortableHeader
-                    label="Year"
-                    columnKey="cycle_name"
-                    sort={sort}
-                    onSort={setSort}
-                  />
-                </th>
-                <th className="text-left px-4 py-2.5">
-                  <SortableHeader
-                    label="Status"
-                    columnKey="status"
-                    sort={sort}
-                    onSort={setSort}
-                  />
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Self Rating
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Your Rating
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Management Rating
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {paged.map((r) => {
-                const canEvaluate = r.status === "pending_mentor";
-                const canView =
-                  r.status === "pending_management" ||
-                  r.status === "completed";
+        <div className="rounded-lg border border-border">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="bg-surface-muted/80 border-b border-border">
+                  <th className="text-left px-5 py-2.5">
+                    <SortableHeader
+                      label="Mentee"
+                      columnKey="employee_name"
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                  </th>
+                  <th className="text-left px-4 py-2.5">
+                    <SortableHeader
+                      label="Year"
+                      columnKey="cycle_name"
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                  </th>
+                  <th className="text-left px-4 py-2.5">
+                    <SortableHeader
+                      label="Status"
+                      columnKey="status"
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Self Rating
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Your Rating
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Management Rating
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {paged.map((r) => {
+                  const canEvaluate = r.status === "pending_mentor";
+                  const canView =
+                    r.status === "pending_management" ||
+                    r.status === "completed";
 
-                return (
-                  <tr
-                    key={r.id}
-                    className="hover:bg-surface-muted/60 transition-colors"
-                  >
-                    <td className="px-5 py-3 font-medium text-text-main">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <UserCircle className="h-3.5 w-3.5 text-text-muted shrink-0" />
-                        <span className="truncate">{r.employee_name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
-                        {formatFyLabel(r.cycle_name)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ReviewStatusBadge status={r.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {r.self_performance_rating != null ? (
-                        <PerformanceRatingBadge value={r.self_performance_rating} />
-                      ) : (
-                        <span className="text-[11px] italic text-text-muted">Not rated yet</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {r.mentor_performance_rating != null ? (
-                        <PerformanceRatingBadge value={r.mentor_performance_rating} />
-                      ) : (
-                        <span className="text-[11px] italic text-text-muted">Not rated yet</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {r.management_performance_rating != null ? (
-                        <PerformanceRatingBadge value={r.management_performance_rating} />
-                      ) : (
-                        <span className="text-[11px] italic text-text-muted">Not rated yet</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {canEvaluate ? (
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/my-mentees/${r.user_id}?tab=summary`)}
-                          className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
-                        >
-                          <ClipboardCheck className="h-3 w-3" /> Evaluate
-                        </button>
-                      ) : canView ? (
-                        <button
-                          type="button"
-                          onClick={() => setViewTarget(r)}
-                          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
-                        >
-                          <Eye className="h-3 w-3" /> View
-                        </button>
-                      ) : (
-                        <span className="text-[11px] italic text-text-muted">
-                          Awaiting self-review
+                  return (
+                    <tr
+                      key={r.id}
+                      className="hover:bg-surface-muted/60 transition-colors"
+                    >
+                      <td className="px-5 py-3 font-medium text-text-main">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <UserCircle className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                          <span className="truncate">{r.employee_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
+                          {formatFyLabel(r.cycle_name)}
                         </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ReviewStatusBadge status={r.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.self_performance_rating != null ? (
+                          <PerformanceRatingBadge value={r.self_performance_rating} />
+                        ) : (
+                          <span className="text-[11px] italic text-text-muted">Not rated yet</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.mentor_performance_rating != null ? (
+                          <PerformanceRatingBadge value={r.mentor_performance_rating} />
+                        ) : (
+                          <span className="text-[11px] italic text-text-muted">Not rated yet</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.management_performance_rating != null ? (
+                          <PerformanceRatingBadge value={r.management_performance_rating} />
+                        ) : (
+                          <span className="text-[11px] italic text-text-muted">Not rated yet</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {canEvaluate ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/my-mentees/${r.user_id}?tab=summary`)}
+                            className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
+                          >
+                            <ClipboardCheck className="h-3 w-3" /> Evaluate
+                          </button>
+                        ) : canView ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewTarget(r)}
+                            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                          >
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                        ) : (
+                          <span className="text-[11px] italic text-text-muted">
+                            Awaiting self-review
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={sorted.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
-      )}
-
-      {reviews.length > 0 && filtered.length > 0 && (
-        <TablePagination
-          page={page}
-          pageSize={pageSize}
-          totalItems={filtered.length}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
       )}
 
       {viewTarget && (

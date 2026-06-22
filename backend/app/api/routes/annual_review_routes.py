@@ -35,7 +35,8 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from app.api.dependencies import CurrentUser, DbSession
@@ -51,6 +52,7 @@ from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.services.notifications import create_notification
 from app.schemas.annual_review_schemas import (
+    AnnualReviewFunnel,
     AnnualReviewResponse,
     CalibrationFilterOptions,
     CalibrationRow,
@@ -267,9 +269,17 @@ def create_self_appraisal(
         self_performance_rating=payload.self_performance_rating,
     )
     db.add(review)
-    db.flush()  # assign review.id before the notification references it
-    _notify_annual_self_submitted(db, current_user, review)
-    db.commit()
+    try:
+        db.flush()  # assign review.id before the notification references it
+        _notify_annual_self_submitted(db, current_user, review)
+        db.commit()
+    except IntegrityError:
+        # A concurrent submit raced us to the unique (org, user, cycle) row.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"You have already submitted a self-review for {cycle_name}.",
+        )
     db.refresh(review)
     return review
 
@@ -314,7 +324,18 @@ def create_self_appraisal_draft(
         self_performance_rating=payload.self_performance_rating,
     )
     db.add(review)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request created the row first (unique org/user/cycle).
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"A review for {cycle_name} already exists; use PATCH /draft "
+                f"to update an in-progress draft."
+            ),
+        )
     db.refresh(review)
     return review
 
@@ -439,6 +460,7 @@ def get_mentee_reviews(
         .filter(
             AnnualReview.org_id == current_user.org_id,
             User.mentor_id == current_user.id,
+            User.is_deleted == False,  # noqa: E712 — hide deactivated mentees
         )
         .order_by(AnnualReview.created_at.desc())
         .all()
@@ -643,6 +665,7 @@ def _calibration_base_query(db, org_id: int, cycle_name: Optional[str]):
         .outerjoin(EmpDesig, Employee.designation_id == EmpDesig.id)
         .filter(
             AnnualReview.org_id == org_id,
+            Employee.is_deleted == False,  # noqa: E712 — exclude deactivated employees
             AnnualReview.status.in_([
                 ReviewStatus.PENDING_MANAGEMENT.value,
                 ReviewStatus.COMPLETED.value,
@@ -670,14 +693,22 @@ def _resolve_calibration_cycle(
     return year.strip()
 
 
+# Mentor-filter sentinel: matches reviews whose employee has no mentor.
+_NO_MENTOR_SENTINEL = "(No mentor)"
+
+
 @router.get("/calibration", response_model=Page[CalibrationRow])
 def get_calibration_grid(
     db: DbSession,
     current_user: CurrentUser,
     pg: PaginationParams = Depends(),
     search: Optional[str] = Query(None, description="Matches employee name/email, mentor, or department"),
+    employee: Optional[str] = Query(None, description="Exact employee name"),
     department: Optional[str] = Query(None, description="Exact department name"),
-    mentor: Optional[str] = Query(None, description="Exact mentor name"),
+    designation: Optional[str] = Query(None, description="Exact designation name"),
+    mentor: Optional[str] = Query(
+        None, description="Exact mentor name, or '(No mentor)' for unmentored employees"
+    ),
     status_filter: Optional[str] = Query(
         None, alias="status", description="all | pending | rated"
     ),
@@ -716,9 +747,15 @@ def get_calibration_grid(
                 EmpDept.name.ilike(term),
             )
         )
+    if employee:
+        query = query.filter(Employee.full_name == employee)
     if department:
         query = query.filter(EmpDept.name == department)
-    if mentor:
+    if designation:
+        query = query.filter(EmpDesig.name == designation)
+    if mentor == _NO_MENTOR_SENTINEL:
+        query = query.filter(AnnualReview.mentor_id.is_(None))
+    elif mentor:
         query = query.filter(Mentor.full_name == mentor)
     if status_filter == "pending":
         query = query.filter(AnnualReview.management_performance_rating.is_(None))
@@ -787,25 +824,223 @@ def get_calibration_filter_options(
     _require_management(current_user)
     active_year = _get_active_cycle(db, current_user.org_id)
 
-    query, _Employee, Mentor, EmpDept, _EmpDesig = _calibration_base_query(
+    query, Employee, Mentor, EmpDept, EmpDesig = _calibration_base_query(
         db, current_user.org_id, None
     )
     rows = query.with_entities(
-        EmpDept.name, Mentor.full_name, AnnualReview.cycle_name
+        Employee.full_name,
+        EmpDept.name,
+        EmpDesig.name,
+        Mentor.full_name,
+        AnnualReview.cycle_name,
     ).all()
 
-    departments = sorted({d for (d, _m, _c) in rows if d})
-    mentors = sorted({m for (_d, m, _c) in rows if m})
+    employees = sorted({e for (e, _d, _g, _m, _c) in rows if e})
+    departments = sorted({d for (_e, d, _g, _m, _c) in rows if d})
+    designations = sorted({g for (_e, _d, g, _m, _c) in rows if g})
+    mentors = sorted({m for (_e, _d, _g, m, _c) in rows if m})
     # Newest year first. Include the active year even if it has no reviews
     # yet so the dropdown's default option always renders.
-    year_set = {c for (_d, _m, c) in rows if c}
+    year_set = {c for (_e, _d, _g, _m, c) in rows if c}
     year_set.add(active_year)
     years = sorted(year_set, reverse=True)
     return CalibrationFilterOptions(
+        employees=employees,
         departments=departments,
+        designations=designations,
         mentors=mentors,
         years=years,
         active_year=active_year,
+    )
+
+
+@router.get("/all", response_model=List[CalibrationRow])
+def get_all_reviews(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Admin-only org-wide annual-review listing — every submitted review for
+    every active employee across every fiscal year. The All Reviews tab's
+    data source; mirrors the All Goals tab so HR/management can audit the
+    full review universe, not just the calibration-stage subset the
+    calibration grid shows (pending_management + completed).
+
+    Drafts (employee-private WIP) and deactivated employees are excluded from
+    the real rows. Ratings are NOT stripped — admins see the finalized picture,
+    consistent with the product decision that admins may view management
+    ratings.
+
+    For the ACTIVE cycle, synthetic `not_started` rows are appended for every
+    active employee with no review row yet, so the roster shows who hasn't
+    started. (A draft counts as started and stays private.) Past cycles get
+    no synthetic rows — the current roster may differ from who was active then,
+    so a "not started" past-year row would be misleading.
+
+    Returns every year; the FE filters + paginates client-side and defaults
+    its Year filter to the active cycle (the All Goals pattern).
+    """
+    _require_admin(current_user)
+    active_cycle = _get_active_cycle(db, current_user.org_id)
+
+    Employee = aliased(User)
+    Mentor = aliased(User)
+    EmpDept = aliased(Department)
+    EmpDesig = aliased(Designation)
+
+    # ── Real reviews: every non-draft review across all fiscal years ─────
+    rows_raw = (
+        db.query(AnnualReview, Employee, Mentor, EmpDept, EmpDesig)
+        .join(Employee, AnnualReview.user_id == Employee.id)
+        .outerjoin(Mentor, AnnualReview.mentor_id == Mentor.id)
+        .outerjoin(EmpDept, Employee.department_id == EmpDept.id)
+        .outerjoin(EmpDesig, Employee.designation_id == EmpDesig.id)
+        .filter(
+            AnnualReview.org_id == current_user.org_id,
+            Employee.is_deleted == False,  # noqa: E712 — exclude deactivated employees
+            AnnualReview.status != ReviewStatus.DRAFT.value,
+        )
+        .all()
+    )
+    rows = [
+        CalibrationRow(
+            review_id=r.id,
+            user_id=r.user_id,
+            cycle_name=r.cycle_name,
+            employee_name=emp.full_name if emp else "Unknown",
+            employee_email=emp.email if emp else None,
+            mentor_name=men.full_name if men else None,
+            department=dept.name if dept else None,
+            designation=desig.name if desig else None,
+            self_performance_rating=r.self_performance_rating,
+            mentor_performance_rating=r.mentor_performance_rating,
+            management_performance_rating=r.management_performance_rating,
+            final_performance_rating=r.final_performance_rating,
+            status=r.status,
+            final_rating_enabled=r.final_rating_enabled,
+        )
+        for (r, emp, men, dept, desig) in rows_raw
+    ]
+
+    # ── Synthetic "not started" rows for the active cycle ────────────────
+    # Any active-cycle row (incl. a draft) counts as started.
+    started_ids = {
+        uid
+        for (uid,) in db.query(AnnualReview.user_id)
+        .filter(
+            AnnualReview.org_id == current_user.org_id,
+            AnnualReview.cycle_name == active_cycle,
+        )
+        .all()
+    }
+    emp_rows = (
+        db.query(Employee, Mentor, EmpDept, EmpDesig)
+        .outerjoin(Mentor, Employee.mentor_id == Mentor.id)
+        .outerjoin(EmpDept, Employee.department_id == EmpDept.id)
+        .outerjoin(EmpDesig, Employee.designation_id == EmpDesig.id)
+        .filter(
+            Employee.org_id == current_user.org_id,
+            Employee.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+    for (emp, men, dept, desig) in emp_rows:
+        if emp.id in started_ids:
+            continue
+        rows.append(
+            CalibrationRow(
+                review_id=None,
+                user_id=emp.id,
+                cycle_name=active_cycle,
+                employee_name=emp.full_name,
+                employee_email=emp.email,
+                mentor_name=men.full_name if men else None,
+                department=dept.name if dept else None,
+                designation=desig.name if desig else None,
+                self_performance_rating=None,
+                mentor_performance_rating=None,
+                management_performance_rating=None,
+                final_performance_rating=None,
+                status=ReviewStatus.NOT_STARTED,
+                final_rating_enabled=False,
+            )
+        )
+
+    # Employee asc, then cycle desc within an employee (two-pass stable sort).
+    rows.sort(key=lambda x: x.cycle_name, reverse=True)
+    rows.sort(key=lambda x: x.employee_name.lower())
+    return rows
+
+
+@router.get("/funnel", response_model=AnnualReviewFunnel)
+def get_review_funnel(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Admin-only annual-review progress for the active cycle — powers the
+    dashboard "Annual Review Progress" card. `total` is the active employee
+    headcount; `not_started` is that headcount minus the employees who have
+    a review row (any status, incl. draft) for the active cycle, so the five
+    stages always sum to `total`.
+
+    Tolerant of an unconfigured cycle: returns an all-zero funnel with
+    cycle_name=None rather than 400, so the dashboard card can render an
+    empty state instead of erroring.
+    """
+    _require_admin(current_user)
+
+    settings = (
+        db.query(SystemSettings)
+        .filter(SystemSettings.org_id == current_user.org_id)
+        .first()
+    )
+    active_cycle = (
+        extract_fy_label(settings.active_cycle_name)
+        if settings and settings.active_cycle_name
+        else None
+    )
+    if active_cycle is None:
+        return AnnualReviewFunnel(
+            cycle_name=None, total=0, not_started=0, draft=0,
+            pending_mentor=0, pending_management=0, completed=0,
+        )
+
+    total = (
+        db.query(func.count(User.id))
+        .filter(
+            User.org_id == current_user.org_id,
+            User.is_deleted == False,  # noqa: E712
+        )
+        .scalar()
+    ) or 0
+
+    status_rows = (
+        db.query(AnnualReview.status, func.count(AnnualReview.id))
+        .join(User, AnnualReview.user_id == User.id)
+        .filter(
+            AnnualReview.org_id == current_user.org_id,
+            AnnualReview.cycle_name == active_cycle,
+            User.is_deleted == False,  # noqa: E712
+        )
+        .group_by(AnnualReview.status)
+        .all()
+    )
+    counts = {s: c for (s, c) in status_rows}
+    draft = counts.get(ReviewStatus.DRAFT.value, 0)
+    pending_mentor = counts.get(ReviewStatus.PENDING_MENTOR.value, 0)
+    pending_management = counts.get(ReviewStatus.PENDING_MANAGEMENT.value, 0)
+    completed = counts.get(ReviewStatus.COMPLETED.value, 0)
+    not_started = max(0, total - (draft + pending_mentor + pending_management + completed))
+
+    return AnnualReviewFunnel(
+        cycle_name=active_cycle,
+        total=total,
+        not_started=not_started,
+        draft=draft,
+        pending_mentor=pending_mentor,
+        pending_management=pending_management,
+        completed=completed,
     )
 
 

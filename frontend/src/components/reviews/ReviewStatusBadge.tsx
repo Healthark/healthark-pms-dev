@@ -20,6 +20,11 @@ const STATUS_CONFIG: Record<
   ReviewStatus,
   { label: string; bgClass: string; textClass: string }
 > = {
+  not_started: {
+    label: "Not Started",
+    bgClass: "bg-surface-hover",
+    textClass: "text-text-muted/80",
+  },
   draft: {
     label: "Draft",
     bgClass: "bg-surface-hover",

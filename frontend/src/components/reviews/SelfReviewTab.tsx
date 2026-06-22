@@ -1,18 +1,16 @@
 /**
  * SelfReviewTab.tsx — "My Review" list for the logged-in user.
  *
- * Presentational: receives the review history from the parent page and renders
- * a toolbar (search + year filter + card/table toggle) over the list. The
- * "Start Self-Review" action lives in the AnnualReviews page header so it
- * stays reachable regardless of list state; this tab only shows the
- * read-only empty state when the user has no reviews at all.
+ * Presentational: receives the review history (+ load/error state) from the
+ * parent page and renders a single table over it with Year / Status filters,
+ * column sorting, and client-side pagination. The "Start Self-Review" action
+ * lives in the AnnualReviews page header so it stays reachable regardless of
+ * list state; this tab shows the read-only empty state when the user has no
+ * reviews at all.
  */
 
 import { useState } from "react";
-import {
-  Eye, LayoutGrid, Loader2, Lock, Search, Table2, UserCircle,
-  ClipboardCheck, Pencil,
-} from "lucide-react";
+import { Eye, Loader2, Lock, UserCircle, ClipboardCheck, Pencil } from "lucide-react";
 import type {
   AnnualReview,
   ReviewStatus,
@@ -22,8 +20,10 @@ import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { TablePagination } from "../common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
+import { getErrorMessage } from "../../utils/errors";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 
 function FinalRatingHiddenBadge() {
@@ -34,7 +34,6 @@ function FinalRatingHiddenBadge() {
   );
 }
 
-type ViewMode = "grid" | "table";
 type SortKey = "cycle_name" | "status" | "self_performance_rating";
 type StatusFilter = "all" | ReviewStatus;
 
@@ -55,82 +54,7 @@ const SORT_CONFIG: Record<
   self_performance_rating: { kind: "numeric", get: (r) => r.self_performance_rating },
 };
 
-// ── Card ────────────────────────────────────────────────────────────
-
-function SelfReviewCard({
-  review,
-  onView,
-  onEdit,
-  isEditable,
-  finalRatingVisible,
-}: {
-  readonly review: AnnualReview;
-  readonly onView: (r: AnnualReview) => void;
-  readonly onEdit: (r: AnnualReview) => void;
-  /** True for the active cycle's draft — show Edit instead of View. */
-  readonly isEditable: boolean;
-  readonly finalRatingVisible: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-surface p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <ClipboardCheck
-            className="h-5 w-5 text-text-muted shrink-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <p className="font-medium text-text-main truncate">
-              {formatFyLabel(review.cycle_name)}
-            </p>
-            <p className="text-[11px] text-text-muted">Self-Review</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <ReviewStatusBadge status={review.status} />
-      </div>
-
-      <div className="flex items-center gap-4 text-xs">
-        <div className="flex items-center gap-1.5">
-          <span className="text-text-muted">Self</span>
-          <PerformanceRatingBadge value={review.self_performance_rating} />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-text-muted">Final</span>
-          {finalRatingVisible ? (
-            <PerformanceRatingBadge value={review.final_performance_rating} />
-          ) : (
-            <FinalRatingHiddenBadge />
-          )}
-        </div>
-      </div>
-
-      {isEditable ? (
-        <button
-          type="button"
-          onClick={() => onEdit(review)}
-          className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
-        >
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-          Edit Draft
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onView(review)}
-          className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
-        >
-          <Eye className="h-4 w-4" aria-hidden="true" />
-          View
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Empty state (only when the user has zero reviews in DB) ─────────
+// ── Empty / load / error states ─────────────────────────────────────
 
 function NoReviewsEmptyState() {
   return (
@@ -163,6 +87,8 @@ function LoadingState() {
 interface SelfReviewTabProps {
   readonly reviews: readonly AnnualReview[];
   readonly isLoading: boolean;
+  /** Load error from the parent query, if any — shown as an inline banner. */
+  readonly error?: unknown;
   /** Active cycle label — the only review a draft can be edited for. */
   readonly activeCycle: string;
   /** Open the self-review form to edit the active-cycle draft. */
@@ -177,6 +103,7 @@ function isEditableDraft(r: AnnualReview, activeCycle: string): boolean {
 export function SelfReviewTab({
   reviews,
   isLoading,
+  error,
   activeCycle,
   onEditDraft,
 }: SelfReviewTabProps) {
@@ -184,11 +111,11 @@ export function SelfReviewTab({
   const finalRatingVisible =
     settings?.annual_review_final_rating_visible ?? false;
 
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [searchQuery, setSearchQuery] = useState("");
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const [viewTarget, setViewTarget] = useState<AnnualReview | null>(null);
 
@@ -200,12 +127,7 @@ export function SelfReviewTab({
     .filter(
       (r) => yearFilter === "all" || extractFyToken(r.cycle_name) === yearFilter,
     )
-    .filter((r) => statusFilter === "all" || r.status === statusFilter)
-    .filter(
-      (r) =>
-        searchQuery.trim() === "" ||
-        r.cycle_name.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    .filter((r) => statusFilter === "all" || r.status === statusFilter);
 
   const sorted = sort
     ? filtered.slice().sort((a, b) => {
@@ -214,23 +136,41 @@ export function SelfReviewTab({
       })
     : filtered;
 
-  const hasActiveFilters =
-    !!searchQuery || yearFilter !== "all" || statusFilter !== "all";
+  // Client-side pagination. Reset to page 1 when filters / sort / page size
+  // change — tracked during render (React's reset-in-effect alternative).
+  const filterKey = [
+    yearFilter,
+    statusFilter,
+    pageSize,
+    sort ? `${sort.key}:${sort.direction}` : "",
+  ].join("|");
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  let currentPage = page;
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setPage(1);
+    currentPage = 1;
+  }
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const hasActiveFilters = yearFilter !== "all" || statusFilter !== "all";
 
   const clearFilters = () => {
-    setSearchQuery("");
     setYearFilter("all");
     setStatusFilter("all");
   };
 
-  const viewBtnCls = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-      viewMode === mode
-        ? "bg-brand/10 text-brand"
-        : "text-text-muted hover:bg-surface-hover"
-    }`;
-
   if (isLoading) return <LoadingState />;
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        {getErrorMessage(error)}
+      </div>
+    );
+  }
 
   if (reviews.length === 0) return <NoReviewsEmptyState />;
 
@@ -238,17 +178,6 @@ export function SelfReviewTab({
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative max-w-xs flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search by cycle…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand"
-          />
-        </div>
-
         <div className="flex items-center gap-2">
           <label
             htmlFor="self-review-year-filter"
@@ -292,28 +221,15 @@ export function SelfReviewTab({
           </select>
         </div>
 
-        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
-
-        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
-          <button
-            type="button"
-            className={viewBtnCls("grid")}
-            onClick={() => setViewMode("grid")}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> Cards
-          </button>
-          <button
-            type="button"
-            className={viewBtnCls("table")}
-            onClick={() => setViewMode("table")}
-          >
-            <Table2 className="h-3.5 w-3.5" /> Table
-          </button>
-        </div>
+        <ClearFiltersButton
+          active={hasActiveFilters}
+          onClear={clearFilters}
+          className="ml-auto"
+        />
       </div>
 
       {/* Content */}
-      {filtered.length === 0 ? (
+      {sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-16 text-center">
           <UserCircle
             className="h-10 w-10 text-text-muted mb-3"
@@ -326,107 +242,101 @@ export function SelfReviewTab({
             Try selecting a different year.
           </p>
         </div>
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {sorted.map((r) => (
-            <SelfReviewCard
-              key={r.id}
-              review={r}
-              onView={setViewTarget}
-              onEdit={onEditDraft}
-              isEditable={isEditableDraft(r, activeCycle)}
-              finalRatingVisible={finalRatingVisible}
-            />
-          ))}
-        </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-surface-muted/80 border-b border-border">
-                <th className="text-left px-5 py-2.5">
-                  <SortableHeader
-                    label="Year"
-                    columnKey="cycle_name"
-                    sort={sort}
-                    onSort={setSort}
-                  />
-                </th>
-                <th className="text-left px-4 py-2.5">
-                  <SortableHeader
-                    label="Status"
-                    columnKey="status"
-                    sort={sort}
-                    onSort={setSort}
-                  />
-                </th>
-                <th className="text-left px-4 py-2.5">
-                  <SortableHeader
-                    label="Self Rating"
-                    columnKey="self_performance_rating"
-                    sort={sort}
-                    onSort={setSort}
-                  />
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Final Rating
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {sorted.map((r) => (
-                <tr
-                  key={r.id}
-                  className="hover:bg-surface-muted/60 transition-colors"
-                >
-                  <td className="px-5 py-3 font-medium text-text-main">
-                    <span className="text-[12.5px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
-                      {formatFyLabel(r.cycle_name)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <ReviewStatusBadge status={r.status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <PerformanceRatingBadge
-                      value={r.self_performance_rating}
+        <div className="rounded-lg border border-border">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="bg-surface-muted/80 border-b border-border">
+                  <th className="text-left px-5 py-2.5">
+                    <SortableHeader
+                      label="Year"
+                      columnKey="cycle_name"
+                      sort={sort}
+                      onSort={setSort}
                     />
-                  </td>
-                  <td className="px-4 py-3">
-                    {finalRatingVisible ? (
-                      <PerformanceRatingBadge
-                        value={r.final_performance_rating}
-                      />
-                    ) : (
-                      <FinalRatingHiddenBadge />
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {isEditableDraft(r, activeCycle) ? (
-                      <button
-                        type="button"
-                        onClick={() => onEditDraft(r)}
-                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
-                      >
-                        <Pencil className="h-3 w-3" /> Edit
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setViewTarget(r)}
-                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
-                      >
-                        <Eye className="h-3 w-3" /> View
-                      </button>
-                    )}
-                  </td>
+                  </th>
+                  <th className="text-left px-4 py-2.5">
+                    <SortableHeader
+                      label="Status"
+                      columnKey="status"
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                  </th>
+                  <th className="text-left px-4 py-2.5">
+                    <SortableHeader
+                      label="Self Rating"
+                      columnKey="self_performance_rating"
+                      sort={sort}
+                      onSort={setSort}
+                    />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Final Rating
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {pageRows.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="hover:bg-surface-muted/60 transition-colors"
+                  >
+                    <td className="px-5 py-3 font-medium text-text-main">
+                      <span className="text-[12.5px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
+                        {formatFyLabel(r.cycle_name)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <ReviewStatusBadge status={r.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <PerformanceRatingBadge value={r.self_performance_rating} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {finalRatingVisible ? (
+                        <PerformanceRatingBadge
+                          value={r.final_performance_rating}
+                        />
+                      ) : (
+                        <FinalRatingHiddenBadge />
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditableDraft(r, activeCycle) ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditDraft(r)}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" /> Edit
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setViewTarget(r)}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                        >
+                          <Eye className="h-3 w-3" /> View
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={sorted.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
 

@@ -7,6 +7,7 @@ import { useToast } from "../hooks/useToast";
 import { useConfirm } from "../hooks/useConfirm";
 import { SelfReviewTab } from "../components/reviews/SelfReviewTab";
 import { TeamReviewTab } from "../components/reviews/TeamReviewTab";
+import { AllReviewsTab } from "../components/reviews/AllReviewsTab";
 import { SelfReviewFormModal } from "../components/reviews/SelfReviewFormModal";
 import {
   type SelfReviewPayload,
@@ -23,7 +24,7 @@ import { formatFyLabel, extractFyToken } from "../utils/fy";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
 import { exportService } from "../services/export.service";
 
-type ActiveTab = "my" | "team";
+type ActiveTab = "my" | "team" | "all";
 
 export function AnnualReviews() {
   const { user } = useAuth();
@@ -32,6 +33,8 @@ export function AnnualReviews() {
   const confirm = useConfirm();
 
   const isMentor = user?.has_mentees ?? false;
+  // Admins get an org-wide "All Reviews" oversight tab (mirrors All Goals).
+  const isAdmin = user?.role === "Admin";
   // Annual reviews are tagged with the BARE fiscal-year label (e.g. "FY26-27"),
   // NOT the full active cycle ("H1 FY26-27"). Extract the FY token so it matches
   // review.cycle_name — otherwise currentReview never resolves, so the header
@@ -53,13 +56,18 @@ export function AnnualReviews() {
     ? extractFyToken(settings.active_cycle_name)
     : undefined;
 
-  // Active tab lives in the URL (`?tab=my|team`) so a notification can deep-link
-  // straight to the Team tab (e.g. "X submitted their self-review"). Derived
-  // from the URL — works even when already on the page. Team is mentor-only, so
-  // `tab=team` falls back to My Review for non-mentors.
+  // Active tab lives in the URL (`?tab=my|team|all`) so a notification can
+  // deep-link straight to a tab (e.g. "X submitted their self-review" → Team).
+  // Team is mentor-only and All Reviews is admin-only, so those tokens fall
+  // back to My Review for users who lack access.
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const activeTab: ActiveTab =
-    searchParams.get("tab") === "team" && isMentor ? "team" : "my";
+    tabParam === "team" && isMentor
+      ? "team"
+      : tabParam === "all" && isAdmin
+        ? "all"
+        : "my";
   const setActiveTab = (tab: ActiveTab) => {
     setSearchParams(
       (prev) => {
@@ -72,7 +80,8 @@ export function AnnualReviews() {
   };
 
   // ['annual-reviews', 'mine', 'history'] — shared TanStack cache
-  const { data: reviews = [], isLoading } = useMyAnnualReviewHistory();
+  const { data: reviews = [], isLoading, error: reviewsError } =
+    useMyAnnualReviewHistory();
   const submitSelfReviewMutation = useSubmitSelfReview();
   const createSelfDraftMutation = useCreateSelfDraft();
   const saveSelfDraftMutation = useSaveSelfDraft();
@@ -206,6 +215,15 @@ export function AnnualReviews() {
               Team Review
             </button>
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              className={tabCls("all")}
+              onClick={() => setActiveTab("all")}
+            >
+              All Reviews
+            </button>
+          )}
         </div>
 
         <div className="p-5">
@@ -213,6 +231,7 @@ export function AnnualReviews() {
             <SelfReviewTab
               reviews={reviews}
               isLoading={isLoading}
+              error={reviewsError}
               activeCycle={activeCycle}
               onEditDraft={() => {
                 setFormError("");
@@ -221,6 +240,7 @@ export function AnnualReviews() {
             />
           )}
           {activeTab === "team" && isMentor && <TeamReviewTab />}
+          {activeTab === "all" && isAdmin && <AllReviewsTab />}
         </div>
       </div>
 

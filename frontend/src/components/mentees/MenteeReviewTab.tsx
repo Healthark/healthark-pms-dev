@@ -130,6 +130,9 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                 Management Review
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                Final Review
+              </th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Actions
               </th>
             </tr>
@@ -162,6 +165,11 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                   <td className="px-4 py-3">
                     <PerformanceRatingBadge
                       value={r.management_performance_rating}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <PerformanceRatingBadge
+                      value={r.final_performance_rating}
                     />
                   </td>
                   <td

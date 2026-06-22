@@ -18,7 +18,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — registers every table on Base.metadata
-from app.api.routes.admin_routes import deactivate_user, get_coverage_gaps
+from app.api.routes.admin_routes import (
+    deactivate_user,
+    get_coverage_gaps,
+    update_user,
+)
 from app.api.routes.annual_review_routes import (
     get_mentee_reviews,
     get_review,
@@ -27,6 +31,7 @@ from app.api.routes.annual_review_routes import (
 from app.api.routes.project_review_routes import update_review
 from app.core.database import Base
 from app.models.annual_review_models import AnnualReview, ReviewStatus
+from app.models.goal_models import ApprovalStatus, Goal
 from app.models.notification_models import Notification
 from app.models.organization_models import Organization
 from app.models.project_models import PROJECT_STATUS_ACTIVE, Project, ProjectAssignment
@@ -40,6 +45,7 @@ from app.models.project_review_models import (
 from app.models.system_settings_models import SystemSettings
 from app.models.system_settings_year_override_models import SystemSettingsYearOverride
 from app.models.user_models import User
+from app.schemas.admin_schemas import UserUpdate
 from app.schemas.annual_review_schemas import MentorEvalUpdate
 from app.schemas.project_review_schemas import PMEvaluationSubmit
 
@@ -319,3 +325,84 @@ def test_no_warning_when_no_impact(db):
     assert db.query(Notification).filter(
         Notification.type == "coverage_gap_warning"
     ).count() == 0
+
+
+# ── Mentor reassignment: re-stamp in-flight reviews + clear draft + notify ──
+
+
+def test_reassignment_restamps_inflight_clears_draft_and_notifies(db):
+    org = _org_with_settings(db)
+    admin = _user(db, org.id, role="Admin")
+    old_m = _user(db, org.id)
+    new_m = _user(db, org.id)
+    mentee = _user(db, org.id, mentor_id=old_m.id)
+
+    # In-flight (pending_mentor) review stamped to the old mentor, carrying
+    # the old mentor's half-typed draft.
+    review = _annual_review(
+        db, org.id, mentee.id, old_m.id, ReviewStatus.PENDING_MENTOR.value
+    )
+    review.mentor_overall_review_draft = "old mentor half-typed"
+    review.mentor_performance_rating_draft = 3
+    # A completed prior-FY review must stay frozen (audit attribution).
+    done = _annual_review(
+        db, org.id, mentee.id, old_m.id, ReviewStatus.COMPLETED.value,
+        cycle_name="FY25-26",
+    )
+    done.mentor_overall_review_draft = "should stay"
+    db.commit()
+
+    update_user(
+        mentee.id, UserUpdate(mentor_id=new_m.id), db, admin, BackgroundTasks()
+    )
+    db.refresh(review)
+    db.refresh(done)
+
+    # In-flight review re-pointed to the new mentor + drafts wiped (so the
+    # new mentor starts fresh and the old mentor's dashboard stops counting it).
+    assert review.mentor_id == new_m.id
+    assert review.mentor_overall_review_draft is None
+    assert review.mentor_performance_rating_draft is None
+    # Completed review left untouched.
+    assert done.mentor_id == old_m.id
+    assert done.mentor_overall_review_draft == "should stay"
+
+    # Old mentor, new mentor, and mentee are each notified.
+    fired = {(n.recipient_id, n.type) for n in db.query(Notification).all()}
+    assert (new_m.id, "mentee_assigned") in fired
+    assert (old_m.id, "mentee_unassigned") in fired
+    assert (mentee.id, "mentor_reassigned") in fired
+
+
+def test_reassignment_restamps_inflight_goals_keeps_completed(db):
+    org = _org_with_settings(db)
+    admin = _user(db, org.id, role="Admin")
+    old_m = _user(db, org.id)
+    new_m = _user(db, org.id)
+    mentee = _user(db, org.id, mentor_id=old_m.id)
+
+    # An active (approved, mid-cycle) goal still owned by the mentor pipeline.
+    inflight = Goal(
+        org_id=org.id, user_id=mentee.id, manager_id=old_m.id,
+        title="In-flight goal",
+        approval_status=ApprovalStatus.APPROVED.value,
+    )
+    # A fully-completed goal (final cycle mentor-reviewed) — historical.
+    done = Goal(
+        org_id=org.id, user_id=mentee.id, manager_id=old_m.id,
+        title="Completed goal",
+        approval_status=ApprovalStatus.H2_MENTOR_REVIEWED.value,
+    )
+    db.add_all([inflight, done])
+    db.commit()
+
+    update_user(
+        mentee.id, UserUpdate(mentor_id=new_m.id), db, admin, BackgroundTasks()
+    )
+    db.refresh(inflight)
+    db.refresh(done)
+
+    # Active goal follows the new mentor (fixes the stale "Mentor" column/export)…
+    assert inflight.manager_id == new_m.id
+    # …but the completed goal keeps the mentor who actually reviewed it.
+    assert done.manager_id == old_m.id

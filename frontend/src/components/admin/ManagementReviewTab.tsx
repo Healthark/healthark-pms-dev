@@ -12,15 +12,9 @@
  */
 
 import { useEffect, useState } from "react";
-import {
-  Eye,
-  Loader2,
-  Pencil,
-  Search,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { Eye, Loader2, Pencil, ShieldCheck, X } from "lucide-react";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { StringCombobox } from "../common/StringCombobox";
 import {
   type CalibrationRow,
   type CalibrationQuery,
@@ -29,15 +23,13 @@ import {
   useCalibrationGrid,
   useCalibrationFilterOptions,
   useSetManagementRating,
-  useAnnualReviewDetail,
 } from "../../queries/annualReviews";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { PerformanceRatingSelect } from "../reviews/PerformanceRatingSelect";
-import { AnnualReviewDetailModal } from "../reviews/AnnualReviewDetailModal";
+import { ReviewDetailLoader } from "../reviews/ReviewDetailLoader";
 import { getErrorMessage } from "../../utils/errors";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 import { useConfirm } from "../../hooks/useConfirm";
-import { useDebounce } from "../../hooks/useDebounce";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { TablePagination } from "../common/TablePagination";
 import { SortableHeader } from "../SortableHeader";
@@ -60,15 +52,21 @@ type MgmtReviewSortKey =
   | "mentor_performance_rating"
   | "management_performance_rating";
 
+// Mentor-filter sentinel — must match the backend's _NO_MENTOR_SENTINEL.
+// Selecting it surfaces reviews whose employee has no mentor.
+const NO_MENTOR_OPTION = "(No mentor)";
+
 export function ManagementReviewTab() {
   const setManagementRatingMutation = useSetManagementRating();
   const isSaving = setManagementRatingMutation.isPending;
 
   // ── Filter / sort / paging state (drives the server query) ────────
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState(""); // debounced value sent to server
+  // Employee + mentor use the "" = all sentinel (searchable comboboxes);
+  // dept/status keep the "all" sentinel (short plain <select>s).
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState<string>("all");
-  const [mentorFilter, setMentorFilter] = useState<string>("all");
+  const [designationFilter, setDesignationFilter] = useState<string>("all");
+  const [mentorFilter, setMentorFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   // Year filter. Default = the active cycle's FY (current year); "all" spans
   // every year so past management reviews are viewable. Stored as null until
@@ -83,25 +81,19 @@ export function ManagementReviewTab() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Debounce the search box so we fire one request after the user pauses,
-  // not on every keystroke. Reset to page 1 on a new search term.
-  const [debounceSearch] = useDebounce((value: string) => {
-    setSearch(value);
-    setPage(1);
-  }, 300);
-
   // Any filter/sort/pageSize change resets to page 1 (page itself is not a
   // dep, so clicking Next/Prev doesn't bounce back to 1).
   useEffect(() => {
     setPage(1);
-  }, [deptFilter, mentorFilter, statusFilter, selectedYear, sort, pageSize]);
+  }, [employeeFilter, deptFilter, designationFilter, mentorFilter, statusFilter, selectedYear, sort, pageSize]);
 
   const query: CalibrationQuery = {
     page,
     per_page: pageSize,
-    search: search || undefined,
+    employee: employeeFilter || undefined,
     department: deptFilter !== "all" ? deptFilter : undefined,
-    mentor: mentorFilter !== "all" ? mentorFilter : undefined,
+    designation: designationFilter !== "all" ? designationFilter : undefined,
+    mentor: mentorFilter || undefined,
     status: statusFilter,
     // selectedYear is an FY label ("FY25-26") or "all"; empty (settings still
     // loading) → omit so the backend defaults to the active cycle.
@@ -119,8 +111,12 @@ export function ManagementReviewTab() {
   // Filter dropdown options — fetched once, cached 5 min, independent of
   // the current page so dropdowns always list every available value.
   const { data: filterOptions } = useCalibrationFilterOptions();
+  const availableEmployees = filterOptions?.employees ?? [];
   const availableDepts = filterOptions?.departments ?? [];
-  const availableMentors = filterOptions?.mentors ?? [];
+  const availableDesignations = filterOptions?.designations ?? [];
+  // Prepend the "(No mentor)" sentinel so HR can surface unmentored employees
+  // (backend maps it to mentor_id IS NULL).
+  const mentorOptions = [NO_MENTOR_OPTION, ...(filterOptions?.mentors ?? [])];
   // Year options (newest first) from the server; guarantee the active year is
   // present even before the options query resolves so the default selection
   // always has a matching <option>.
@@ -135,17 +131,18 @@ export function ManagementReviewTab() {
   const yearIsFiltered = !!selectedYear && selectedYear !== activeYear;
 
   const hasActiveFilters =
-    !!search ||
+    !!employeeFilter ||
     deptFilter !== "all" ||
-    mentorFilter !== "all" ||
+    designationFilter !== "all" ||
+    !!mentorFilter ||
     statusFilter !== "all" ||
     yearIsFiltered;
 
   const clearFilters = () => {
-    setSearchInput("");
-    setSearch("");
+    setEmployeeFilter("");
     setDeptFilter("all");
-    setMentorFilter("all");
+    setDesignationFilter("all");
+    setMentorFilter("");
     setStatusFilter("all");
     setYearFilter(null); // back to the current year (default)
     setPage(1);
@@ -158,6 +155,10 @@ export function ManagementReviewTab() {
 
   const handleSave = async () => {
     if (!editTarget) return;
+    // Calibration rows always carry a review_id (only the All Reviews roster
+    // produces id-less not_started rows), so this is a type guard in practice.
+    const reviewId = editTarget.row.review_id;
+    if (reviewId == null) return;
     if (editTarget.draft === "") {
       setSaveError("Please select a rating.");
       return;
@@ -178,7 +179,7 @@ export function ManagementReviewTab() {
     setSaveError("");
     try {
       await setManagementRatingMutation.mutateAsync({
-        reviewId: editTarget.row.review_id,
+        reviewId,
         payload: { management_performance_rating: editTarget.draft },
       });
       setEditTarget(null);
@@ -208,21 +209,19 @@ export function ManagementReviewTab() {
     <div>
       {/* Toolbar */}
       <div className="border-b border-border px-5 py-4 flex items-center gap-4 flex-wrap">
-        <div className="relative max-w-sm flex-1 min-w-[200px]">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            placeholder="Search name, email, mentor…"
-            value={searchInput}
-            onChange={(e) => {
-              setSearchInput(e.target.value);
-              debounceSearch(e.target.value);
-            }}
-            className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-4 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-            aria-label="Search management reviews"
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="mgmt-review-employee-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Employee
+          </label>
+          <StringCombobox
+            id="mgmt-review-employee-filter"
+            options={availableEmployees}
+            value={employeeFilter}
+            onChange={setEmployeeFilter}
+            placeholder="All employees"
           />
         </div>
 
@@ -272,24 +271,40 @@ export function ManagementReviewTab() {
 
         <div className="flex items-center gap-2">
           <label
+            htmlFor="mgmt-review-designation-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Designation
+          </label>
+          <select
+            id="mgmt-review-designation-filter"
+            value={designationFilter}
+            onChange={(e) => setDesignationFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[150px] cursor-pointer"
+          >
+            <option value="all">All</option>
+            {availableDesignations.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label
             htmlFor="mgmt-review-mentor-filter"
             className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
           >
             Mentor
           </label>
-          <select
+          <StringCombobox
             id="mgmt-review-mentor-filter"
+            options={mentorOptions}
             value={mentorFilter}
-            onChange={(e) => setMentorFilter(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
-          >
-            <option value="all">All</option>
-            {availableMentors.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+            onChange={setMentorFilter}
+            placeholder="All mentors"
+          />
         </div>
 
         <div className="flex items-center gap-2">
@@ -540,47 +555,5 @@ export function ManagementReviewTab() {
         </div>
       )}
     </div>
-  );
-}
-
-function ReviewDetailLoader({
-  reviewId,
-  onClose,
-}: {
-  readonly reviewId: number;
-  readonly onClose: () => void;
-}) {
-  // ['annual-reviews', 'detail', reviewId] — shared TanStack cache
-  const { data: review, error: queryError } = useAnnualReviewDetail(reviewId);
-  const error = queryError ? getErrorMessage(queryError) : "";
-
-  if (error) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-        <div className="w-full max-w-md rounded-xl bg-surface p-5 shadow-xl">
-          <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
-          <div className="mt-3 text-right">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium hover:bg-surface-muted"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!review) return null;
-
-  return (
-    <AnnualReviewDetailModal
-      review={review}
-      title="Annual Review"
-      subtitle={`Year: ${review.cycle_name}`}
-      onClose={onClose}
-    />
   );
 }

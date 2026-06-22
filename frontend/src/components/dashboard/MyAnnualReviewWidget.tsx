@@ -4,6 +4,7 @@ import type {
   AnnualReviewStatus,
   DashboardSummary,
 } from "../../services/dashboard.service";
+import { formatFyLabel } from "../../utils/fy";
 
 interface MyAnnualReviewWidgetProps {
   readonly summary: DashboardSummary;
@@ -81,7 +82,10 @@ function copyForStatus(
 
 export function MyAnnualReviewWidget({ summary }: MyAnnualReviewWidgetProps) {
   const { annual_review_status, annual_review_cycle } = summary;
-  const copy = copyForStatus(annual_review_status, annual_review_cycle);
+  // Format the raw cycle token ("H1 FY26-27" / "FY26-27") to a human label.
+  const cycleLabel =
+    annual_review_cycle === null ? null : formatFyLabel(annual_review_cycle);
+  const copy = copyForStatus(annual_review_status, cycleLabel);
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5 shadow-sm flex flex-col gap-4">
@@ -103,9 +107,9 @@ export function MyAnnualReviewWidget({ summary }: MyAnnualReviewWidgetProps) {
       </div>
 
       {/* Cycle label as the headline metric, mirrors ActiveCycleWidget. */}
-      {annual_review_cycle !== null && (
+      {cycleLabel !== null && (
         <p className="font-display text-2xl font-semibold text-text-main">
-          {annual_review_cycle}
+          {cycleLabel}
         </p>
       )}
 
