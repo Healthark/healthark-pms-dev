@@ -39,7 +39,7 @@ export function TableExpandedRow({
   const roleExp = expectations.find(
     (e) =>
       e.department_name === card.department_name &&
-      e.designation_name === card.assignment_role,
+      e.designation_name === card.designation_name,
   );
 
   if (isPending) {

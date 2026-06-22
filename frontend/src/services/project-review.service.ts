@@ -71,6 +71,7 @@ export interface MyProjectCard {
   project_expected_end_date: string | null;
   assigned_date: string | null;
   assignment_role: string | null;
+  designation_name: string | null;
   department_name: string | null;
   review_status: string | null; // "pending" | "reviewed" | null
   performance_group: string | null;
@@ -272,9 +273,17 @@ export const projectReviewService = {
   },
 
   // ── Admin ──────────────────────────────────────────────────────
-  /** Admin-only: all reviews for the active cycle. */
-  getAllReviews: async (): Promise<ProjectReviewResponse[]> => {
-    const res = await apiClient.get<ProjectReviewResponse[]>("/project-reviews/all");
+  /** Admin-only: project reviews, optionally scoped to one fiscal year
+   *  (e.g. 2026 → FY26-27). Omit `fyYear` to fetch every year. */
+  getAllReviews: async (fyYear?: number | null): Promise<ProjectReviewResponse[]> => {
+    const params = fyYear != null ? { fy_year: fyYear } : undefined;
+    const res = await apiClient.get<ProjectReviewResponse[]>("/project-reviews/all", { params });
+    return res.data;
+  },
+
+  /** Admin-only: distinct fiscal start years with project reviews (Year dropdown). */
+  getAllReviewYears: async (): Promise<number[]> => {
+    const res = await apiClient.get<number[]>("/project-reviews/all/years");
     return res.data;
   },
 

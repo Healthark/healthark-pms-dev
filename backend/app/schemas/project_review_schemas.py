@@ -147,6 +147,7 @@ class MyProjectCard(BaseModel):
     project_expected_end_date: Optional[date] = None
     assigned_date: Optional[date] = None
     assignment_role: Optional[str] = None
+    designation_name: Optional[str] = None
     department_name: Optional[str] = None
     review_status: Optional[str] = None  # null = no review yet, "pending", "reviewed"
     performance_group: Optional[str] = None

@@ -393,18 +393,22 @@ def _build_mentee_project_assignments(
                 if review.status == ProjectReviewStatus.REVIEWED.value
                 else None
             )
+            # Viewer is the subject's mentor (enforced by _assert_mentee_access)
+            # → is_mentor=True: mentors always see the rating (decision #6).
+            # Gate kept explicit so the per-FY rule is documented here. Apply
+            # it to the nested review_detail too so that object can never
+            # diverge from the gate if this helper is reused for a non-mentor.
+            gated_rating = _visible_performance_group(
+                review, current_user, db, current_user.org_id,
+                active_cycle, is_mentor=True,
+            )
+            if review_detail is not None:
+                review_detail.performance_group = gated_rating
             project_assignments_out.append(
                 MenteeProjectAssignment(
                     **common,
                     review_status=review.status,
-                    # Viewer is the subject's mentor (enforced by
-                    # _assert_mentee_access) → is_mentor=True: mentors always
-                    # see the rating (decision #6). Gate kept explicit so the
-                    # per-FY rule is documented at the read site.
-                    performance_group=_visible_performance_group(
-                        review, current_user, db, current_user.org_id,
-                        active_cycle, is_mentor=True,
-                    ),
+                    performance_group=gated_rating,
                     cycle=review.cycle,
                     review_detail=review_detail,
                 )

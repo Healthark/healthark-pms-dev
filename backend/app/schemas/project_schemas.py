@@ -149,6 +149,18 @@ class ProjectCreate(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _no_duplicate_members(self) -> "ProjectCreate":
+        """Each user may appear at most once in the initial assignments.
+        The (org, project, user) unique index would otherwise raise a DB
+        IntegrityError (500) on the duplicate insert."""
+        ids = [a.user_id for a in self.assignments]
+        if len(ids) != len(set(ids)):
+            raise ValueError(
+                "A user can only be added to a project once; remove the duplicate member."
+            )
+        return self
+
 
 class ProjectUpdate(BaseModel):
     """Payload for updating project metadata."""

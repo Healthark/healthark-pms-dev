@@ -24,7 +24,7 @@ Endpoints:
 
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import CurrentUser, DbSession
@@ -298,6 +298,17 @@ def get_my_projects(
     ):
         reviews_by_project.setdefault(rv.project_id, []).append(rv)
 
+    # The employee's designation drives role-expectation matching (same key the
+    # PM queue uses) — fetch once for all their cards.
+    my_designation = (
+        db.query(Designation)
+        .filter(Designation.id == current_user.designation_id)
+        .first()
+        if current_user.designation_id
+        else None
+    )
+    my_designation_name = my_designation.name if my_designation else None
+
     cards: list[MyProjectCard] = []
     for a in assignments:
         project = projects_by_id.get(a.project_id)
@@ -322,6 +333,7 @@ def get_my_projects(
                 project_expected_end_date=project.expected_end_date,
                 assigned_date=a.assigned_date,
                 assignment_role=a.assignment_role,
+                designation_name=my_designation_name,
                 department_name=dept.name if dept else None,
                 review_status=review.status,
                 performance_group=_visible_performance_group(
@@ -342,6 +354,7 @@ def get_my_projects(
                 project_expected_end_date=project.expected_end_date,
                 assigned_date=a.assigned_date,
                 assignment_role=a.assignment_role,
+                designation_name=my_designation_name,
                 department_name=dept.name if dept else None,
                 review_status="pending",
                 pm_name=pm_name,
@@ -588,11 +601,6 @@ def submit_pm_evaluation(
     ).first()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    if project.status == PROJECT_STATUS_COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot submit reviews on a completed project.",
-        )
 
     # Verify the target user is assigned to this project
     target_assignment = db.query(ProjectAssignment).filter(
@@ -645,6 +653,15 @@ def submit_pm_evaluation(
         review.performance_group = payload.performance_group.value
         review.impact_statement = payload.impact_statement
     else:
+        # Block only the creation of a NEW review on a completed project.
+        # In-flight pending/draft rows can still be finished or edited —
+        # matching PUT /{review_id} and the secondary-edit endpoints, so the
+        # completed-project rule is consistent across all review writes.
+        if project.status == PROJECT_STATUS_COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot start a new review on a completed project. Re-open it first.",
+            )
         review = ProjectReview(
             org_id=current_user.org_id,
             user_id=user_id,
@@ -710,11 +727,6 @@ def save_pm_evaluation_draft(
     ).first()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
-    if project.status == PROJECT_STATUS_COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot submit reviews on a completed project.",
-        )
 
     target_assignment = db.query(ProjectAssignment).filter(
         ProjectAssignment.org_id == current_user.org_id,
@@ -742,7 +754,7 @@ def save_pm_evaluation_draft(
 
     if review and review.status == ProjectReviewStatus.REVIEWED.value:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "This employee has already been evaluated; drafts can no "
                 "longer be saved."
@@ -750,6 +762,13 @@ def save_pm_evaluation_draft(
         )
 
     if not review:
+        # Block only NEW reviews on a completed project (see submit endpoint);
+        # an existing draft stays editable so completion can't strand it.
+        if project.status == PROJECT_STATUS_COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot start a new review on a completed project. Re-open it first.",
+            )
         review = ProjectReview(
             org_id=current_user.org_id,
             user_id=user_id,
@@ -826,7 +845,19 @@ def get_secondary_evaluation_queue(
         .all()
     )
 
-    return [_build_review_response(r, db, viewer_user_id=current_user.id) for r in reviews]
+    # Redact the PM's rating per the per-FY visibility rule — same gate as
+    # get_review, so the secondary queue can't bypass `project_ratings_visible`.
+    active_cycle = _get_active_cycle(db, current_user.org_id)
+    responses = []
+    for r in reviews:
+        resp = _build_review_response(r, db, viewer_user_id=current_user.id)
+        reviewee = db.query(User).filter(User.id == r.user_id).first()
+        is_mentor = bool(reviewee and reviewee.mentor_id == current_user.id)
+        resp.performance_group = _visible_performance_group(
+            r, current_user, db, current_user.org_id, active_cycle, is_mentor=is_mentor,
+        )
+        responses.append(resp)
+    return responses
 
 
 @router.post("/{review_id}/secondary", response_model=SecondaryEvalResponse, status_code=status.HTTP_201_CREATED)
@@ -861,11 +892,6 @@ def submit_secondary_evaluation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the Secondary evaluator for this project.",
         )
-    if project.status == PROJECT_STATUS_COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot submit reviews on a completed project.",
-        )
 
     if review.user_id == current_user.id:
         raise HTTPException(
@@ -890,6 +916,14 @@ def submit_secondary_evaluation(
         existing.impact_statement = payload.impact_statement
         evaluator = existing
     else:
+        # Block only the creation of a NEW impact statement on a completed
+        # project; an in-flight draft can still be finished — matching the PM
+        # flow and PUT /{review_id}/secondary.
+        if project.status == PROJECT_STATUS_COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot start a new review on a completed project. Re-open it first.",
+            )
         evaluator = ProjectReviewEvaluator(
             org_id=current_user.org_id,
             project_review_id=review.id,
@@ -946,11 +980,6 @@ def save_secondary_draft(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the Secondary evaluator for this project.",
         )
-    if project.status == PROJECT_STATUS_COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot submit reviews on a completed project.",
-        )
     if review.user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -963,7 +992,7 @@ def save_secondary_draft(
     ).first()
     if existing and existing.status == EvaluatorStatus.SUBMITTED.value:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "Your impact statement has already been submitted; drafts "
                 "can no longer be saved."
@@ -976,6 +1005,13 @@ def save_secondary_draft(
         existing.status = EvaluatorStatus.DRAFT.value
         evaluator = existing
     else:
+        # Block only NEW impact statements on a completed project; an existing
+        # draft stays editable (matches the PM flow).
+        if project.status == PROJECT_STATUS_COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot start a new review on a completed project. Re-open it first.",
+            )
         evaluator = ProjectReviewEvaluator(
             org_id=current_user.org_id,
             project_review_id=review.id,
@@ -1019,6 +1055,20 @@ def update_secondary_evaluation(
             detail="Reviewed project review not found.",
         )
 
+    # Caller must still be the project's Secondary evaluator — matches the
+    # POST/draft guards so a replaced secondary can't keep editing their old
+    # impact statement (and blocks edits on a soft-deleted project).
+    project = db.query(Project).filter(
+        Project.id == review.project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project or project.secondary_evaluator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not the Secondary evaluator for this project.",
+        )
+
     existing = db.query(ProjectReviewEvaluator).filter(
         ProjectReviewEvaluator.project_review_id == review.id,
         ProjectReviewEvaluator.evaluator_id == current_user.id,
@@ -1053,28 +1103,103 @@ def update_secondary_evaluation(
 def get_all_reviews(
     db: DbSession,
     current_user: CurrentUser,
+    cycle: Optional[str] = None,
+    fy_year: Optional[int] = Query(None, ge=2000, le=2100),
+    limit: Optional[int] = Query(None, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ):
-    """Admin-only: list all reviews across the org for the active cycle."""
+    """Admin-only: list project reviews across the org.
+
+    Pass ``fy_year`` (e.g. 2026 → FY26-27) to load just one fiscal year — the
+    All Reviews tab sends the selected Year so the browser only fetches that
+    year's reviews, then groups + filters (employee / project / reviewer /
+    progress) + paginates client-side. Omit it to return every cycle/year.
+    ``cycle`` narrows to a single exact cycle (e.g. "H1 FY26-27"). Reviews
+    whose project is soft-deleted or whose reviewee is deactivated are excluded
+    so the tab never shows orphaned rows. ``limit``/``offset`` are optional.
+    """
     if current_user.role != "Admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can view all reviews.",
         )
 
-    cycle = _get_active_cycle(db, current_user.org_id)
-
-    reviews = (
+    query = (
         db.query(ProjectReview)
+        .join(Project, Project.id == ProjectReview.project_id)
+        .join(User, User.id == ProjectReview.user_id)
         .filter(
             ProjectReview.org_id == current_user.org_id,
-            ProjectReview.cycle == cycle,
             ProjectReview.is_deleted == False,  # noqa: E712
+            Project.is_deleted == False,  # noqa: E712
+            User.is_deleted == False,  # noqa: E712
         )
-        .order_by(ProjectReview.created_at.desc())
-        .all()
+        .order_by(ProjectReview.created_at.desc(), ProjectReview.id.desc())
     )
 
+    # Year filter — load just one fiscal year. The cycle label embeds the FY
+    # token (e.g. "H1 FY26-27"), so match the FY suffix; "FY26-27" covers both
+    # H1 and H2 of that year.
+    if fy_year is not None:
+        token = f"FY{fy_year % 100:02d}-{(fy_year + 1) % 100:02d}"
+        query = query.filter(ProjectReview.cycle.like(f"%{token}"))
+
+    # Optional narrowing to one exact cycle.
+    if cycle:
+        query = query.filter(ProjectReview.cycle == cycle)
+
+    if limit is not None:
+        query = query.offset(offset).limit(limit)
+    elif offset:
+        query = query.offset(offset)
+
+    reviews = query.all()
     return [_build_review_response(r, db, viewer_user_id=current_user.id) for r in reviews]
+
+
+def _fy_start_year(cycle: Optional[str]) -> Optional[int]:
+    """Parse the fiscal start year from a cycle label ("H1 FY26-27" → 2026)."""
+    if not cycle:
+        return None
+    idx = cycle.find("FY")
+    if idx == -1:
+        return None
+    digits = cycle[idx + 2 : idx + 4]
+    return 2000 + int(digits) if digits.isdigit() else None
+
+
+@router.get("/all/years", response_model=List[int])
+def get_all_review_years(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Admin-only: distinct fiscal start years that have project reviews —
+    feeds the All Reviews tab's Year dropdown. Scoped like /all (non-deleted
+    reviews, non-deleted projects, active reviewees). Newest year first."""
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can view all reviews.",
+        )
+    cycles = (
+        db.query(ProjectReview.cycle)
+        .join(Project, Project.id == ProjectReview.project_id)
+        .join(User, User.id == ProjectReview.user_id)
+        .filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.is_deleted == False,  # noqa: E712
+            Project.is_deleted == False,  # noqa: E712
+            User.is_deleted == False,  # noqa: E712
+        )
+        .distinct()
+        .all()
+    )
+    years: set[int] = set()
+    for (cycle_name,) in cycles:
+        y = _fy_start_year(cycle_name)
+        if y is not None:
+            years.add(y)
+    return sorted(years, reverse=True)
 
 
 # =====================================================================
@@ -1269,17 +1394,30 @@ def get_review(
 
     is_admin = current_user.role == "Admin"
     is_owner = review.user_id == current_user.id
-    is_reviewer = review.reviewer_id == current_user.id
+    is_reviewer = review.reviewer_id == current_user.id  # the PM who authored it
 
-    # Check if caller is assigned to same project (active membership)
-    is_on_project = db.query(ProjectAssignment).filter(
+    # Current Primary PM of the project — covers a reassigned PM who didn't
+    # author the row. NOT "any active member": that leaked peers' reviews.
+    is_pm = db.query(ProjectAssignment).filter(
         ProjectAssignment.project_id == review.project_id,
         ProjectAssignment.user_id == current_user.id,
         ProjectAssignment.org_id == current_user.org_id,
+        ProjectAssignment.evaluator_type == "Primary",
         ProjectAssignment.is_deleted == False,  # noqa: E712
     ).first() is not None
 
-    if not (is_owner or is_reviewer or is_on_project or is_admin):
+    # Secondary evaluator is a project-level field.
+    project = db.query(Project).filter(
+        Project.id == review.project_id,
+        Project.org_id == current_user.org_id,
+    ).first()
+    is_secondary = bool(project and project.secondary_evaluator_id == current_user.id)
+
+    # Reviewee's live mentor (also drives rating visibility below).
+    reviewee = db.query(User).filter(User.id == review.user_id).first()
+    is_mentor = bool(reviewee and reviewee.mentor_id == current_user.id)
+
+    if not (is_owner or is_reviewer or is_pm or is_secondary or is_mentor or is_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this review.",
@@ -1292,4 +1430,17 @@ def get_review(
             detail="Your review has not been completed yet.",
         )
 
-    return _build_review_response(review, db, viewer_user_id=current_user.id)
+    resp = _build_review_response(review, db, viewer_user_id=current_user.id)
+    # Apply the same per-FY rating-visibility rule as /mine so this endpoint
+    # can't be used to bypass `project_ratings_visible` (e.g. the reviewee
+    # reading the raw rating before it's published). Admins, the rating's
+    # author, and the reviewee's mentor always see it.
+    resp.performance_group = _visible_performance_group(
+        review,
+        current_user,
+        db,
+        current_user.org_id,
+        _get_active_cycle(db, current_user.org_id),
+        is_mentor=is_mentor,
+    )
+    return resp
