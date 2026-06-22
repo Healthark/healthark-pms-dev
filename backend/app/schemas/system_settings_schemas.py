@@ -6,9 +6,10 @@ The CycleType enum is imported from the model layer (single source of truth)
 to ensure the API and database always agree on valid values.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.system_settings_models import CycleType
 
@@ -36,6 +37,10 @@ class SystemSettingsResponse(BaseModel):
     project_ratings_visible: bool
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
+    # Per-FY goal mentor-review embargo. One of YEAR_OVERRIDE_FLAGS, so it MUST
+    # be a field here — get_system_settings overlays each flag from the active
+    # FY's override row via setattr, and a missing field raises at runtime.
+    annual_goals_final_rating_visible: bool
 
     # Demo-only date simulation. When set, the backend treats this as
     # "today" for every cycle / window decision. The frontend renders a
