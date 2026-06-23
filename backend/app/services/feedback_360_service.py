@@ -57,15 +57,28 @@ def reviewer_hash(reviewer_id: int, target_id: int, fy_year: int) -> str:
 # ── Cycle ────────────────────────────────────────────────────────────
 
 
-def current_active_fy(today: date | None = None) -> int:
+def current_active_fy(
+    today: date | None = None,
+    fiscal_start_month: int | None = None,
+) -> int:
     """Return the integer fiscal-year-start for the active cycle (e.g.
     2026 for FY26-27 when fiscal_start_month=4 and today is May 2026).
+
+    `fiscal_start_month` should be the org's configured value
+    (`system_settings.fiscal_start_month`) so 360 lands on the same FY
+    boundary every other module uses. It falls back to the deployment
+    env default only when a caller can't supply the org's setting.
 
     Independent of cycle_type — 360 feedback is FY-scoped regardless of
     whether the org runs annual / half-yearly / quarterly review cycles.
     """
     instant = today or date.today()
-    _half, fy_year = current_half_and_fy(instant, settings.FISCAL_START_MONTH)
+    month = (
+        fiscal_start_month
+        if fiscal_start_month is not None
+        else settings.FISCAL_START_MONTH
+    )
+    _half, fy_year = current_half_and_fy(instant, month)
     return fy_year
 
 
@@ -196,7 +209,11 @@ def can_view_target(
 
     target = (
         db.query(User)
-        .filter(User.id == target_user_id, User.org_id == viewer.org_id)
+        .filter(
+            User.id == target_user_id,
+            User.org_id == viewer.org_id,
+            User.is_deleted == False,  # noqa: E712
+        )
         .first()
     )
     if target is None:
