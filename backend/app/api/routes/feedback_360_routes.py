@@ -56,9 +56,18 @@ MIN_REVIEWERS_PER_COHORT = 3
 
 
 def _resolved_active_fy(db: DbSession, org_id: int) -> int:
-    """Resolve current active FY honoring `simulated_today` if set."""
-    settings = db.query(SystemSettings).filter(SystemSettings.org_id == org_id).first()
-    return current_active_fy(resolve_today(settings))
+    """Resolve the active fiscal year, honoring `simulated_today` and the
+    org's configured `fiscal_start_month` — the same FY boundary every
+    other module uses, not the deployment env default."""
+    settings = (
+        db.query(SystemSettings)
+        .filter(SystemSettings.org_id == org_id)
+        .first()
+    )
+    fiscal_start_month = settings.fiscal_start_month if settings else None
+    return current_active_fy(
+        resolve_today(settings), fiscal_start_month=fiscal_start_month
+    )
 
 
 def _build_question_aggregates(rows) -> list[FeedbackQuestionAggregate]:
@@ -99,7 +108,7 @@ def _build_question_aggregates(rows) -> list[FeedbackQuestionAggregate]:
 
 
 def _remark_cards(
-    db: DbSession, target_user_id: int, fy_year: int
+    db: DbSession, org_id: int, target_user_id: int, fy_year: int
 ) -> list[FeedbackRemark]:
     """Anonymous remark cards for a target's aggregate view (My / Mentee
     / Org Feedback — the caller has already passed can_view_target).
@@ -111,6 +120,7 @@ def _remark_cards(
     rows = (
         db.query(Feedback360Review.worked_with, Feedback360Review.remarks)
         .filter(
+            Feedback360Review.org_id == org_id,
             Feedback360Review.target_user_id == target_user_id,
             Feedback360Review.fy_year == fy_year,
         )
@@ -413,7 +423,10 @@ def get_aggregate(
     current_user: CurrentUser,
     db: DbSession,
     fy_year: Optional[int] = Query(
-        None, description="Fiscal start year (e.g. 2026); defaults to the active cycle."
+        None,
+        ge=2000,
+        le=2100,
+        description="Fiscal start year (e.g. 2026); defaults to the active cycle.",
     ),
 ):
     """Per-question aggregate for the given target. Permission: self,
@@ -434,6 +447,7 @@ def get_aggregate(
     total_reviews = (
         db.query(func.count(Feedback360Review.id))
         .filter(
+            Feedback360Review.org_id == current_user.org_id,
             Feedback360Review.target_user_id == target_user_id,
             Feedback360Review.fy_year == fy_year,
         )
@@ -455,6 +469,7 @@ def get_aggregate(
             Feedback360Review.id == Feedback360Answer.review_id,
         )
         .filter(
+            Feedback360Review.org_id == current_user.org_id,
             Feedback360Review.target_user_id == target_user_id,
             Feedback360Review.fy_year == fy_year,
         )
@@ -470,7 +485,7 @@ def get_aggregate(
     # allowed to see (self, direct mentor, or management — already
     # enforced by can_view_target above). The per-cohort 3+ reviewer
     # gate keeps individual reviewers anonymous regardless of viewer.
-    remarks = _remark_cards(db, target_user_id, fy_year)
+    remarks = _remark_cards(db, current_user.org_id, target_user_id, fy_year)
 
     return FeedbackAggregateResponse(
         target_user_id=target_user_id,
@@ -498,7 +513,10 @@ def get_aggregate_years(
         )
     rows = (
         db.query(Feedback360Review.fy_year)
-        .filter(Feedback360Review.target_user_id == target_user_id)
+        .filter(
+            Feedback360Review.org_id == current_user.org_id,
+            Feedback360Review.target_user_id == target_user_id,
+        )
         .distinct()
         .all()
     )
