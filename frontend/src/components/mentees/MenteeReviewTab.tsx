@@ -127,10 +127,7 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                 Mentor Review
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Management Review
-              </th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Final Review
+                Management Rating
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Actions
@@ -165,11 +162,6 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                   <td className="px-4 py-3">
                     <PerformanceRatingBadge
                       value={r.management_performance_rating}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <PerformanceRatingBadge
-                      value={r.final_performance_rating}
                     />
                   </td>
                   <td
@@ -208,6 +200,7 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
         {viewing && (
           <AnnualReviewDetailModal
             review={viewing}
+            ratingLabel="Management Rating"
             title={`${menteeName} · Annual Review`}
             subtitle={`Year: ${formatFyLabel(viewing.cycle_name)}`}
             onClose={() => setViewing(null)}

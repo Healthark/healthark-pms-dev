@@ -362,6 +362,7 @@ export function TeamReviewTab() {
       {viewTarget && (
         <AnnualReviewDetailModal
           review={viewTarget}
+          ratingLabel="Management Rating"
           title={`${viewTarget.employee_name} · Annual Review`}
           subtitle={`Year: ${formatFyLabel(viewTarget.cycle_name)}${
             viewTarget.department ? ` · ${viewTarget.department}` : ""

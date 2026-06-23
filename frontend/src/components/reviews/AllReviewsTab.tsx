@@ -306,7 +306,7 @@ export function AllReviewsTab() {
                 <th className={thCls}>Status</th>
                 <th className={`${thCls} text-center`}>Self</th>
                 <th className={`${thCls} text-center`}>Mentor</th>
-                <th className={`${thCls} text-center`}>Final</th>
+                <th className={`${thCls} text-center`}>Management</th>
                 <th className={`${thCls} text-right`}>Action</th>
               </tr>
             </thead>

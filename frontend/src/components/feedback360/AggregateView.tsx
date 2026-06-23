@@ -11,6 +11,8 @@ import { Gridlines } from "./Gridlines";
 interface AggregateViewProps {
   /** Target whose 360 aggregate is being displayed. */
   readonly targetUserId: number;
+  /** Fiscal start year to show; omit for the active cycle. */
+  readonly fyYear?: number;
   /** Label rendered in the table header (left side, above n=X). */
   readonly heading?: string;
   /** Render the anonymous remark cards below the matrix. Enabled on the
@@ -30,6 +32,7 @@ interface AggregateViewProps {
  */
 export function AggregateView({
   targetUserId,
+  fyYear,
   heading,
   showRemarks = false,
 }: AggregateViewProps) {
@@ -37,7 +40,7 @@ export function AggregateView({
     data,
     isPending,
     error: queryError,
-  } = useFeedbackAggregate(targetUserId);
+  } = useFeedbackAggregate(targetUserId, fyYear);
   const isLoading = isPending;
   const error = queryError ? getErrorMessage(queryError) : "";
 

@@ -30,8 +30,10 @@ export const feedbackQuestionsQueryKey = [
 export const feedbackPeersQueryKey = ["feedback-360", "peers"] as const;
 export const myFeedbackReviewQueryKey = (targetUserId: number) =>
   ["feedback-360", "my-review", targetUserId] as const;
-export const feedbackAggregateQueryKey = (targetUserId: number) =>
-  ["feedback-360", "aggregate", targetUserId] as const;
+export const feedbackAggregateQueryKey = (targetUserId: number, fyYear?: number) =>
+  ["feedback-360", "aggregate", targetUserId, fyYear ?? "active"] as const;
+export const feedbackAggregateYearsQueryKey = (targetUserId: number) =>
+  ["feedback-360", "aggregate", targetUserId, "years"] as const;
 
 // Questions are an effectively-static registry — they change only when
 // HR edits the 360 form, which is rare. Long staleTime keeps the cache
@@ -69,11 +71,25 @@ export function useFeedbackMyReview(targetUserId: number | null) {
   });
 }
 
-export function useFeedbackAggregate(targetUserId: number | null) {
+export function useFeedbackAggregate(
+  targetUserId: number | null,
+  fyYear?: number,
+) {
   const id = targetUserId ?? -1;
   return useQuery<FeedbackAggregate>({
-    queryKey: feedbackAggregateQueryKey(id),
-    queryFn: () => feedback360Service.getAggregate(id),
+    queryKey: feedbackAggregateQueryKey(id, fyYear),
+    queryFn: () => feedback360Service.getAggregate(id, fyYear),
+    enabled: targetUserId !== null && Number.isFinite(targetUserId),
+  });
+}
+
+/** Fiscal years with 360 feedback for the target (newest first, incl. active
+ *  FY) — powers the My Mentees 360 tab year picker. */
+export function useFeedbackAggregateYears(targetUserId: number | null) {
+  const id = targetUserId ?? -1;
+  return useQuery<number[]>({
+    queryKey: feedbackAggregateYearsQueryKey(id),
+    queryFn: () => feedback360Service.getAggregateYears(id),
     enabled: targetUserId !== null && Number.isFinite(targetUserId),
   });
 }
