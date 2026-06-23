@@ -144,9 +144,22 @@ export const feedback360Service = {
     return res.data;
   },
 
-  getAggregate: async (targetUserId: number): Promise<FeedbackAggregate> => {
+  getAggregate: async (
+    targetUserId: number,
+    fyYear?: number,
+  ): Promise<FeedbackAggregate> => {
     const res = await apiClient.get<FeedbackAggregate>(
       `/feedback-360/aggregate/${targetUserId}`,
+      { params: fyYear != null ? { fy_year: fyYear } : undefined },
+    );
+    return res.data;
+  },
+
+  /** Fiscal years (newest first) that have 360 feedback for the target,
+   *  always including the active FY. Drives the My Mentees year picker. */
+  getAggregateYears: async (targetUserId: number): Promise<number[]> => {
+    const res = await apiClient.get<number[]>(
+      `/feedback-360/aggregate/${targetUserId}/years`,
     );
     return res.data;
   },

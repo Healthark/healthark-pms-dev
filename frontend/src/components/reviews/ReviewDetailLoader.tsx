@@ -48,6 +48,7 @@ export function ReviewDetailLoader({ reviewId, onClose }: ReviewDetailLoaderProp
   return (
     <AnnualReviewDetailModal
       review={review}
+      ratingLabel="Management Rating"
       title="Annual Review"
       subtitle={`Year: ${formatFyLabel(review.cycle_name)}`}
       onClose={onClose}

@@ -11,19 +11,24 @@ import {
   type TeamGoal,
   type ApprovalStatus,
   type SelfReviewCycleHalf,
+  type GoalMentorReviewPayload,
 } from "../../services/goal.service";
-import { useUpdateApproval } from "../../queries/goals";
+import {
+  useUpdateApproval,
+  useSubmitMentorReview,
+  useSaveMentorReviewDraft,
+} from "../../queries/goals";
 import { useMenteeGoals } from "../../queries/mentees";
 import { getErrorMessage } from "../../utils/errors";
 import { formatFyYearSpan } from "../../utils/fy";
-import { isPostApproved } from "../../utils/goalStatus";
+import { halfDisplayLabel, isPostApproved } from "../../utils/goalStatus";
 import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../goals/CriteriaChecklist";
-import { GoalSelfReviewModal } from "../goals/GoalSelfReviewModal";
+import { GoalMentorReviewModal } from "../goals/GoalMentorReviewModal";
 import { SelfReviewCycleMenu } from "../goals/SelfReviewCycleMenu";
 import { RequestChangesModal } from "../goals/RequestChangesModal";
 import { SortableHeader } from "../SortableHeader";
@@ -105,7 +110,11 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
   const cycleType = settings?.cycle_type ?? null;
 
   const updateApprovalMutation = useUpdateApproval();
+  const submitMentorReviewMutation = useSubmitMentorReview();
+  const saveMentorReviewDraftMutation = useSaveMentorReviewDraft();
   const isActing = updateApprovalMutation.isPending;
+  const isSavingReview = submitMentorReviewMutation.isPending;
+  const isSavingReviewDraft = saveMentorReviewDraftMutation.isPending;
   const [sort, setSort] = useState<SortState<MenteeGoalsSortKey> | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [yearFilter, setYearFilter] = useState("all");
@@ -117,17 +126,67 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
   const [feedbackTarget, setFeedbackTarget] = useState<TeamGoal | null>(null);
   const [modalError, setModalError] = useState("");
 
-  // View-only self-review modal
-  const [viewSelfReviewGoal, setViewSelfReviewGoal] = useState<TeamGoal | null>(null);
-  const [viewSelfReviewCycle, setViewSelfReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
+  // Mentor-review modal — opens for any post-approval half. The modal shows
+  // the mentee's self-review and lets the mentor write/submit their per-half
+  // review (editable until submitted, then read-only). Mirrors Team Goals so
+  // a mentor can complete goal reviews from My Mentees too.
+  const [reviewGoal, setReviewGoal] = useState<TeamGoal | null>(null);
+  const [reviewCycle, setReviewCycle] = useState<SelfReviewCycleHalf | null>(null);
+  const [reviewError, setReviewError] = useState("");
 
-  const openMenteeSelfReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
-    setViewSelfReviewGoal(goal);
-    setViewSelfReviewCycle(half);
+  const openReview = (goal: TeamGoal, half: SelfReviewCycleHalf) => {
+    setReviewError("");
+    setReviewGoal(goal);
+    setReviewCycle(half);
   };
-  const closeMenteeSelfReview = () => {
-    setViewSelfReviewGoal(null);
-    setViewSelfReviewCycle(null);
+  const closeReview = () => {
+    setReviewGoal(null);
+    setReviewCycle(null);
+    setReviewError("");
+  };
+
+  const handleSaveReviewDraft = async (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ) => {
+    if (!reviewGoal) return;
+    setReviewError("");
+    try {
+      await saveMentorReviewDraftMutation.mutateAsync({
+        goalId: reviewGoal.id,
+        cycleHalf,
+        payload,
+      });
+      toast.success("Draft saved.");
+    } catch (err) {
+      setReviewError(getErrorMessage(err));
+    }
+  };
+
+  const handleSubmitReview = async (
+    cycleHalf: SelfReviewCycleHalf,
+    payload: GoalMentorReviewPayload,
+  ) => {
+    if (!reviewGoal) return;
+    const halfLabel = halfDisplayLabel(cycleHalf, cycleType);
+    const ok = await confirm({
+      title: `Submit ${halfLabel} mentor review?`,
+      message: `Submit your ${halfLabel} review on "${reviewGoal.title}" for ${reviewGoal.owner_name}. Mentor reviews are one-shot — once submitted you can't edit this entry, and ${reviewGoal.owner_name} will see your assessment for this half.`,
+      variant: "warning",
+      confirmText: "Submit Mentor Review",
+    });
+    if (!ok) return;
+    setReviewError("");
+    try {
+      await submitMentorReviewMutation.mutateAsync({
+        goalId: reviewGoal.id,
+        cycleHalf,
+        payload,
+      });
+      closeReview();
+    } catch (err) {
+      setReviewError(getErrorMessage(err));
+    }
   };
 
   const handleApprove = async (goal: TeamGoal) => {
@@ -419,7 +478,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
                             <SelfReviewCycleMenu
                               goal={goal}
                               mode="mentor"
-                              onSelect={(half) => openMenteeSelfReview(goal, half)}
+                              onSelect={(half) => openReview(goal, half)}
                             />
                           )}
                           {isChangesRequested && (
@@ -501,16 +560,18 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
         />
       )}
 
-      {/* Read-only view of the mentee's self-review */}
-      <GoalSelfReviewModal
-        isOpen={viewSelfReviewGoal !== null && viewSelfReviewCycle !== null}
-        goal={viewSelfReviewGoal}
-        cycleHalf={viewSelfReviewCycle}
-        onClose={closeMenteeSelfReview}
-        onSubmit={async () => {}}
-        isSaving={false}
-        error=""
-        readOnly
+      {/* Mentor review modal — shows the mentee's self-review and lets the
+          mentor write/submit their per-half review (read-only once submitted). */}
+      <GoalMentorReviewModal
+        isOpen={reviewGoal !== null && reviewCycle !== null}
+        goal={reviewGoal}
+        cycleHalf={reviewCycle}
+        onClose={closeReview}
+        onSubmit={handleSubmitReview}
+        onSaveDraft={handleSaveReviewDraft}
+        isSaving={isSavingReview}
+        isDraftSaving={isSavingReviewDraft}
+        error={reviewError}
       />
     </div>
   );

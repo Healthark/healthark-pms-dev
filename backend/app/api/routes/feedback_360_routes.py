@@ -13,9 +13,9 @@ the id. API responses never include reviewer-identifying fields. See
 app.services.feedback_360_service for the threat model.
 """
 
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -412,6 +412,9 @@ def get_aggregate(
     target_user_id: int,
     current_user: CurrentUser,
     db: DbSession,
+    fy_year: Optional[int] = Query(
+        None, description="Fiscal start year (e.g. 2026); defaults to the active cycle."
+    ),
 ):
     """Per-question aggregate for the given target. Permission: self,
     direct mentor, or Management. Below the per-cohort minimum reviewer
@@ -423,7 +426,9 @@ def get_aggregate(
             detail="You don't have permission to view this person's feedback.",
         )
 
-    fy_year = _resolved_active_fy(db, current_user.org_id)
+    fy_year = (
+        fy_year if fy_year is not None else _resolved_active_fy(db, current_user.org_id)
+    )
 
     # Total review count (across both cohorts, all questions).
     total_reviews = (
@@ -475,3 +480,28 @@ def get_aggregate(
         questions=out,
         remarks=remarks,
     )
+
+
+@router.get("/aggregate/{target_user_id}/years", response_model=List[int])
+def get_aggregate_years(
+    target_user_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Fiscal years that have any 360 review for the target (newest first),
+    always including the active FY so the year picker has a current option.
+    Same permission gate as the aggregate (self, direct mentor, or Management)."""
+    if not can_view_target(current_user, target_user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to view this person's feedback.",
+        )
+    rows = (
+        db.query(Feedback360Review.fy_year)
+        .filter(Feedback360Review.target_user_id == target_user_id)
+        .distinct()
+        .all()
+    )
+    years = {int(r[0]) for r in rows}
+    years.add(_resolved_active_fy(db, current_user.org_id))
+    return sorted(years, reverse=True)

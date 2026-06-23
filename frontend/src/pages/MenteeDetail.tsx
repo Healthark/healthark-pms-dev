@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   FileText,
   Target,
+  MessageSquare,
   AlertTriangle,
   BadgeCheck,
   Mail,
@@ -27,6 +28,7 @@ import { MenteeGoalsTab } from "../components/mentees/MenteeGoalsTab";
 import { MenteeReviewTab } from "../components/mentees/MenteeReviewTab";
 import { MenteeProjectsTab } from "../components/mentees/MenteeProjectsTab";
 import { MenteeAnnualSummaryTab } from "../components/mentees/MenteeAnnualSummaryTab";
+import { MenteeFeedback360Tab } from "../components/mentees/MenteeFeedback360Tab";
 import { EvalDrawer } from "../components/reviews/EvalDrawer";
 import { usePageTitleOverride } from "../hooks/usePageTitleOverride";
 import { useConfirm } from "../hooks/useConfirm";
@@ -34,13 +36,14 @@ import { useToast } from "../hooks/useToast";
 import { getErrorMessage } from "../utils/errors";
 import { extractFyToken, formatFyLabel } from "../utils/fy";
 
-type TabKey = "summary" | "projects" | "goals" | "review";
+type TabKey = "summary" | "projects" | "goals" | "review" | "feedback";
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string; icon: typeof Target }> = [
   { key: "summary", label: "Annual Summary", icon: ClipboardCheck },
   { key: "projects", label: "Projects", icon: Briefcase },
   { key: "goals", label: "Annual Goals", icon: Target },
   { key: "review", label: "Annual Review", icon: FileText },
+  { key: "feedback", label: "360 Feedback", icon: MessageSquare },
 ];
 
 function initialsFor(name: string): string {
@@ -58,7 +61,8 @@ function isTabKey(value: string | null): value is TabKey {
     value === "goals" ||
     value === "summary" ||
     value === "review" ||
-    value === "projects"
+    value === "projects" ||
+    value === "feedback"
   );
 }
 
@@ -312,7 +316,12 @@ export function MenteeDetail() {
                 <MenteeProjectsTab
                   menteeId={menteeId}
                   menteeName={data.full_name}
-                  menteeUserId={data.user_id}
+                />
+              )}
+              {activeTab === "feedback" && (
+                <MenteeFeedback360Tab
+                  menteeId={menteeId}
+                  menteeName={data.full_name}
                 />
               )}
             </div>

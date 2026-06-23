@@ -19,6 +19,11 @@ interface AnnualReviewDetailModalProps {
   readonly review: AnnualReview | MenteeAnnualReview;
   readonly title: string;
   readonly subtitle?: string;
+  /** Label for the final/management rating. Mentee surfaces use the default
+   *  "Final Rating"; mentor + admin surfaces pass "Management Rating" — the
+   *  management rating IS the final rating (same value, audience-specific
+   *  label). */
+  readonly ratingLabel?: string;
   readonly onClose: () => void;
 }
 
@@ -26,6 +31,7 @@ export function AnnualReviewDetailModal({
   review,
   title,
   subtitle,
+  ratingLabel = "Final Rating",
   onClose,
 }: AnnualReviewDetailModalProps) {
   const showMentor = review.mentor_performance_rating != null;
@@ -91,7 +97,7 @@ export function AnnualReviewDetailModal({
             {showFinal && (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-text-muted">
-                  Final Rating
+                  {ratingLabel}
                 </span>
                 <PerformanceRatingBadge
                   value={review.final_performance_rating}
