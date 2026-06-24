@@ -30,6 +30,7 @@ from sqlalchemy.orm import joinedload
 from app.api.dependencies import CurrentUser, DbSession
 from app.core.cycle_utils import (
     _fy_label_of_project_review,
+    _half_label_of_project_review,
     extract_fy_label,
     get_year_override,
 )
@@ -150,7 +151,8 @@ def _visible_performance_group(
         return group
     if viewer.role == "Admin" or review.reviewer_id == viewer.id or is_mentor:
         return group
-    override = get_year_override(db, org_id, review_fy)
+    # Within the active FY, project-rating visibility is controlled per half.
+    override = get_year_override(db, org_id, _half_label_of_project_review(review))
     return group if (override and override.project_ratings_visible) else None
 
 

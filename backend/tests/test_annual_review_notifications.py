@@ -72,7 +72,7 @@ def _setup(db):
     db.add(
         SystemSettingsYearOverride(
             org_id=org.id,
-            fy_label=FY,
+            period_label=FY,
             annual_reviews_enabled=True,
             management_review_enabled=True,
         )
@@ -198,7 +198,7 @@ def test_management_rating_blocked_when_management_review_closed(db):
     org, mentor, mentee, mgmt = _setup(db)
     override = (
         db.query(SystemSettingsYearOverride)
-        .filter_by(org_id=org.id, fy_label=FY)
+        .filter_by(org_id=org.id, period_label=FY)
         .one()
     )
     override.management_review_enabled = False  # close calibration only

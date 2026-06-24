@@ -38,6 +38,8 @@ from app.core.cycle_utils import (
     YEAR_OVERRIDE_FLAGS,
     _cycle_to_fy_label,
     _format_fy_span,
+    _half_label_of_cycle_string,
+    canonical_period_label,
     ensure_year_override_row,
     extract_fy_label,
     get_year_override,
@@ -930,19 +932,17 @@ def _apply_cycle_change(
     _from_code, from_fy = parse_cycle(from_cycle)
     _to_code, to_fy = parse_cycle(to_cycle)
 
-    # Only a GENUINELY NEW fiscal year starts all-closed (default-deny). An
-    # existing FY — e.g. rolling BACK to a prior, already-configured year —
-    # keeps its saved window configuration; we never silently reset it.
+    # Ensure the new active period's override rows exist (default-deny). A
+    # genuinely new FY gets a fresh closed annual-review row; every roll-out
+    # gets a fresh closed goals/project row for the new half. Existing periods
+    # — e.g. rolling BACK to a configured one — are left untouched (ensure_*
+    # creates default-deny rows and returns existing rows unchanged).
     to_fy_label = extract_fy_label(to_cycle)
-    if (
-        to_fy != from_fy
-        and get_year_override(db, settings_row.org_id, to_fy_label) is None
-    ):
-        override = ensure_year_override_row(
-            db, settings_row.org_id, to_fy_label, updated_by_id=current_user.id
-        )
-        for flag in YEAR_OVERRIDE_FLAGS:
-            setattr(override, flag, False)
+    to_half_label = _half_label_of_cycle_string(to_cycle)
+    if to_fy != from_fy and get_year_override(db, settings_row.org_id, to_fy_label) is None:
+        ensure_year_override_row(db, settings_row.org_id, to_fy_label, updated_by_id=current_user.id)
+    if to_half_label and get_year_override(db, settings_row.org_id, to_half_label) is None:
+        ensure_year_override_row(db, settings_row.org_id, to_half_label, updated_by_id=current_user.id)
 
     settings_row.active_cycle_name = to_cycle
     settings_row.updated_by_id = current_user.id
@@ -1038,17 +1038,23 @@ def _current_fy_label(settings_row: SystemSettings) -> str:
 
 def _build_year_settings_response(
     row: SystemSettingsYearOverride,
-    current_fy: str,
+    active_cycle_name: str,
 ) -> YearSettingsResponse:
+    # A period is "current" when it matches the active FY (annual-review rows)
+    # or the active half (goal/project rows).
+    current = {
+        extract_fy_label(active_cycle_name),
+        _half_label_of_cycle_string(active_cycle_name),
+    }
     return YearSettingsResponse(
-        fy_label=row.fy_label,
+        period_label=row.period_label,
         annual_reviews_enabled=row.annual_reviews_enabled,
         annual_review_final_rating_visible=row.annual_review_final_rating_visible,
         annual_goals_edit_enabled=row.annual_goals_edit_enabled,
         project_ratings_visible=row.project_ratings_visible,
         annual_goals_final_rating_visible=row.annual_goals_final_rating_visible,
         management_review_enabled=row.management_review_enabled,
-        is_current=(row.fy_label == current_fy),
+        is_current=row.period_label in current,
         updated_at=row.updated_at,
     )
 
@@ -1112,11 +1118,14 @@ def list_settings_years(
         .all()
         if row[0]
     }
-    override_labels = {
-        row[0] for row in db.query(SystemSettingsYearOverride.fy_label)
+    period_labels = {
+        row[0] for row in db.query(SystemSettingsYearOverride.period_label)
         .filter(SystemSettingsYearOverride.org_id == current_user.org_id)
         .all()
     }
+    # Override rows mix FY rows (annual review) and half rows (goals/project).
+    fy_override_labels = {p for p in period_labels if not _half_label_of_cycle_string(p)}
+    half_override_labels = {p for p in period_labels if _half_label_of_cycle_string(p)}
 
     # D1: review cycle_name is a bare FY token, but goal cycle_name is
     # "H1 2026"/"H2 2026". _cycle_to_fy_label canonicalises BOTH shapes to
@@ -1126,7 +1135,7 @@ def list_settings_years(
         canonical = _cycle_to_fy_label(label)
         if canonical:
             all_labels.add(canonical)
-    all_labels.update(override_labels)
+    all_labels.update(fy_override_labels)
 
     # Sort descending so the most recent FY (typically the current one) is
     # at the top of the dropdown.
@@ -1138,13 +1147,28 @@ def list_settings_years(
     years = sorted(all_labels, key=_sort_key, reverse=True)
     options = [
         YearOption(
-            fy_label=fy,
+            period_label=fy,
             is_current=(fy == current_fy),
-            has_override=(fy in override_labels),
+            has_override=(fy in fy_override_labels),
         )
         for fy in years
     ]
-    return YearOptionsResponse(years=options)
+
+    # Half options (H1/H2 for each listed FY) drive the goals/project dropdown.
+    active_half = _half_label_of_cycle_string(settings_row.active_cycle_name)
+    half_labels = [f"{code} {fy}" for fy in years for code in ("H1", "H2")]
+    for hl in sorted(half_override_labels):
+        if hl not in half_labels:
+            half_labels.append(hl)
+    halves = [
+        YearOption(
+            period_label=hl,
+            is_current=(hl == active_half),
+            has_override=(hl in half_override_labels),
+        )
+        for hl in half_labels
+    ]
+    return YearOptionsResponse(years=options, halves=halves)
 
 
 @router.get("/settings/year/{fy_label}", response_model=YearSettingsResponse)
@@ -1166,20 +1190,15 @@ def get_year_settings(
             detail="System settings have not been configured.",
         )
 
-    canonical = extract_fy_label(fy_label)
-    if not canonical.upper().startswith("FY"):
+    canonical = canonical_period_label(fy_label)
+    if canonical is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{fy_label}' is not a valid fiscal-year label.",
+            detail=f"'{fy_label}' is not a valid period label.",
         )
 
-    row = ensure_year_override_row(
-        db,
-        current_user.org_id,
-        canonical,
-        seed_from_settings=settings_row,
-    )
-    return _build_year_settings_response(row, _current_fy_label(settings_row))
+    row = ensure_year_override_row(db, current_user.org_id, canonical)
+    return _build_year_settings_response(row, settings_row.active_cycle_name)
 
 
 # Announcement copy for each per-FY access toggle. Keyed by flag → link +
@@ -1225,7 +1244,8 @@ def update_year_settings(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Update the four access toggles for a specific FY."""
+    """Update the access toggles for a period — an FY (annual review) or a
+    half (goals/project). Only the flags the caller sends are written."""
     _require_admin(current_user)
 
     settings_row = db.query(SystemSettings).filter(
@@ -1237,29 +1257,35 @@ def update_year_settings(
             detail="System settings have not been configured.",
         )
 
-    canonical = extract_fy_label(fy_label)
-    if not canonical.upper().startswith("FY"):
+    canonical = canonical_period_label(fy_label)
+    if canonical is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{fy_label}' is not a valid fiscal-year label.",
+            detail=f"'{fy_label}' is not a valid period label.",
         )
 
     row = ensure_year_override_row(
         db,
         current_user.org_id,
         canonical,
-        seed_from_settings=settings_row,
         updated_by_id=current_user.id,
     )
+    # Only the flags the caller actually sent are written (the FY section sends
+    # the annual-review flags, the half section the goal/project flags).
+    provided = {
+        flag: getattr(payload, flag)
+        for flag in YEAR_OVERRIDE_FLAGS
+        if getattr(payload, flag) is not None
+    }
     # Snapshot before applying so we can announce only the toggles that flip.
-    old_flags = {flag: bool(getattr(row, flag)) for flag in YEAR_OVERRIDE_FLAGS}
-    for flag in YEAR_OVERRIDE_FLAGS:
-        setattr(row, flag, bool(getattr(payload, flag)))
+    old_flags = {flag: bool(getattr(row, flag)) for flag in provided}
+    for flag, value in provided.items():
+        setattr(row, flag, bool(value))
     row.updated_by_id = current_user.id
 
     # Announce each flipped toggle to all active org users (in-app only,
     # Announcements tab). Added to this session → committed atomically below.
-    flipped = [f for f in YEAR_OVERRIDE_FLAGS if old_flags[f] != bool(getattr(row, f))]
+    flipped = [f for f in provided if old_flags[f] != bool(getattr(row, f))]
     if flipped:
         recipients = active_org_users(db, current_user.org_id)
         for flag in flipped:
@@ -1284,7 +1310,7 @@ def update_year_settings(
     # the cache so it re-reads immediately after this write.
     invalidate_settings(current_user.org_id)
 
-    return _build_year_settings_response(row, _current_fy_label(settings_row))
+    return _build_year_settings_response(row, settings_row.active_cycle_name)
 
 
 @router.post("/notify", response_model=AdminNotifyResult)
@@ -1458,7 +1484,7 @@ def year_settings_preflight(
         )
 
     return YearPreflightResponse(
-        fy_label=canonical,
+        period_label=canonical,
         annual_goals_edit_enabled=YearPreflightEntry(
             in_flight_count=staff_without_goals,
             warning=_msg(staff_without_goals, "goals"),

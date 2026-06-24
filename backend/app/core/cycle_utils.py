@@ -206,16 +206,22 @@ def _format_fy_span(fiscal_year: int) -> str:
 # gating helpers in route modules don't each re-parse cycle strings or
 # duplicate the lazy-create logic.
 
-#: Flag names whose values move from `SystemSettings` to per-FY override
-#: rows. Listed once so seed paths can copy them as a unit.
-YEAR_OVERRIDE_FLAGS: tuple[str, ...] = (
+#: Annual-review toggles — keyed per FISCAL YEAR (reviewed once a year).
+FY_OVERRIDE_FLAGS: tuple[str, ...] = (
     "annual_reviews_enabled",
     "annual_review_final_rating_visible",
-    "annual_goals_edit_enabled",
-    "project_ratings_visible",
-    "annual_goals_final_rating_visible",
     "management_review_enabled",
 )
+#: Annual-goal + project-review toggles — keyed per HALF (H1/H2), reviewed
+#: twice a year so each half opens/closes independently.
+HALF_OVERRIDE_FLAGS: tuple[str, ...] = (
+    "annual_goals_edit_enabled",
+    "annual_goals_final_rating_visible",
+    "project_ratings_visible",
+)
+#: All override flags (the full column set on a period override row). Used by
+#: the get_system_settings overlay + the registry/schema alignment guard.
+YEAR_OVERRIDE_FLAGS: tuple[str, ...] = FY_OVERRIDE_FLAGS + HALF_OVERRIDE_FLAGS
 
 
 def _cycle_to_fy_label(cycle_name: str | None) -> str | None:
@@ -293,19 +299,68 @@ def _fy_label_of_project_review(review: "ProjectReview") -> str | None:
     return _fy_label_of_cycle_string(getattr(review, "cycle", None))
 
 
+def _half_label_of_cycle_string(cycle_text: str | None) -> str | None:
+    """Resolve any cycle string to a canonical HALF label ("H1 FY26-27"), or None.
+
+    Goals stamp "H1 2026"/"H2 2026"; project reviews carry "H1 FY26-27" or
+    "Q1 FY26-27". Quarterly codes fold into halves (Q1-2 → H1, Q3-4 → H2).
+    Returns None when no half can be derived (a bare FY, or a regular goal's
+    NULL cycle) so callers default-deny.
+    """
+    if not cycle_text:
+        return None
+    fy = _cycle_to_fy_label(cycle_text)
+    if fy is None:
+        return None
+    code = None
+    for token in cycle_text.upper().split():
+        if token[:1] in ("H", "Q"):
+            code = token
+            break
+    if code is None:
+        return None
+    half = code if code.startswith("H") else ("H1" if code in ("Q1", "Q2") else "H2")
+    return f"{half} {fy}"
+
+
+def _half_label_of_goal(goal: "Goal") -> str | None:
+    """HALF label ("H1 FY26-27") for a goal row, from its "H1 2026" stamp."""
+    return _half_label_of_cycle_string(getattr(goal, "cycle_name", None))
+
+
+def _half_label_of_project_review(review: "ProjectReview") -> str | None:
+    """HALF label ("H1 FY26-27") for a project review, from its "H1 FY26-27" cycle."""
+    return _half_label_of_cycle_string(getattr(review, "cycle", None))
+
+
+def canonical_period_label(label: str | None) -> str | None:
+    """Canonicalise a period label: a HALF ("H1 FY26-27") when the string
+    carries a half/quarter code, else a bare FY ("FY26-27"). Returns None when
+    no fiscal year can be derived (invalid input). Used by the admin period
+    get/update endpoints to accept either an FY or a half selection.
+    """
+    if not label:
+        return None
+    half = _half_label_of_cycle_string(label)
+    if half is not None:
+        return half
+    fy = extract_fy_label(label)
+    return fy if fy.upper().startswith("FY") else None
+
+
 def get_year_override(
     db: "SqlSession",
     org_id: int,
-    fy_label: str | None,
+    period_label: str | None,
 ) -> "SystemSettingsYearOverride | None":
-    """Look up the override row for (org_id, fy_label). Does NOT create.
+    """Look up the override row for (org_id, period_label). Does NOT create.
 
-    Returns None when the FY label is missing or no row exists. Gating
-    helpers use this when the default-deny / past-FY-passthrough policy
-    requires distinguishing "row missing" from "row present but flag
-    False" — `ensure_year_override_row` is for the admin write path.
+    `period_label` is a FISCAL-YEAR label ("FY26-27") for the annual-review
+    flags, or a HALF label ("H1 FY26-27") for the goal/project flags — one row
+    per period. Returns None when the label is missing or no row exists
+    (default-deny). `ensure_year_override_row` is the admin write path.
     """
-    if not fy_label:
+    if not period_label:
         return None
     # Local import dodges the model-layer circular: cycle_utils is
     # imported by route modules that import the model, and the model
@@ -317,7 +372,7 @@ def get_year_override(
         db.query(SystemSettingsYearOverride)
         .filter(
             SystemSettingsYearOverride.org_id == org_id,
-            SystemSettingsYearOverride.fy_label == fy_label,
+            SystemSettingsYearOverride.period_label == period_label,
         )
         .first()
     )
@@ -326,55 +381,31 @@ def get_year_override(
 def ensure_year_override_row(
     db: "SqlSession",
     org_id: int,
-    fy_label: str,
+    period_label: str,
     *,
-    seed_from_settings: "Optional[SystemSettings]" = None,
     updated_by_id: Optional[int] = None,
 ) -> "SystemSettingsYearOverride":
-    """Lazily create the override row for (org_id, fy_label) and return it.
+    """Lazily create the override row for (org_id, period_label) with every flag
+    default-deny (False), and return it. Existing rows are returned unchanged.
 
-    Seeding precedence on creation:
-      1. The most recent existing override row for the same org (so a
-         new FY inherits the previous FY's configuration — an Admin almost
-         always wants this).
-      2. The legacy flag values on `SystemSettings` when `seed_from_settings`
-         is supplied (used by the admin and read paths that already have
-         the row in hand).
-      3. All-False defaults.
+    `period_label` is an FY label ("FY26-27") or a half label ("H1 FY26-27").
+    Default-deny on creation: a new period starts fully closed; the admin opens
+    each toggle explicitly, and the roll-out relies on this for new periods.
 
-    The created row is committed before return so concurrent readers
-    don't see a phantom session-local row. Caller does NOT need to
-    commit again unless they're mutating the row in the same request.
+    Committed before return so concurrent readers don't see a phantom row.
     """
-    existing = get_year_override(db, org_id, fy_label)
+    existing = get_year_override(db, org_id, period_label)
     if existing is not None:
         return existing
 
     from app.models.system_settings_year_override_models import (
         SystemSettingsYearOverride,
     )
-
-    seed_values = {flag: False for flag in YEAR_OVERRIDE_FLAGS}
-
-    # Prefer the latest existing override for this org as the seed source.
-    latest_prior = (
-        db.query(SystemSettingsYearOverride)
-        .filter(SystemSettingsYearOverride.org_id == org_id)
-        .order_by(SystemSettingsYearOverride.created_at.desc())
-        .first()
-    )
-    if latest_prior is not None:
-        for flag in YEAR_OVERRIDE_FLAGS:
-            seed_values[flag] = bool(getattr(latest_prior, flag))
-    elif seed_from_settings is not None:
-        for flag in YEAR_OVERRIDE_FLAGS:
-            seed_values[flag] = bool(getattr(seed_from_settings, flag, False))
-
     row = SystemSettingsYearOverride(
         org_id=org_id,
-        fy_label=fy_label,
+        period_label=period_label,
         updated_by_id=updated_by_id,
-        **seed_values,
+        **{flag: False for flag in YEAR_OVERRIDE_FLAGS},
     )
     db.add(row)
     db.commit()

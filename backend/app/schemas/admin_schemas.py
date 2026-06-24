@@ -159,20 +159,24 @@ class CycleSetRequest(BaseModel):
 # the four toggles drive these values.
 
 class YearOption(BaseModel):
-    """One entry in the Year dropdown."""
-    fy_label: str            # canonical bare-FY token (e.g. "FY26-27")
-    is_current: bool         # True for the system-computed active FY
+    """One entry in a period dropdown (FY or half)."""
+    period_label: str        # "FY26-27" (FY dropdown) or "H1 FY26-27" (half)
+    is_current: bool         # True for the active FY / active half
     has_override: bool       # False until an Admin has saved at least once
 
 
 class YearOptionsResponse(BaseModel):
-    """Payload of `GET /admin/settings/years`."""
+    """Payload of `GET /admin/settings/years`. `years` feeds the Annual Review
+    (FY) dropdown; `halves` feeds the Goals & Project (H1/H2) dropdown."""
     years: list[YearOption]
+    halves: list[YearOption] = []
 
 
 class YearSettingsResponse(BaseModel):
-    """Per-FY settings payload — what the Admin Panel binds toggles to."""
-    fy_label: str
+    """Per-period settings payload — what the Admin Panel binds toggles to.
+    Carries all six flags; the FY section reads the annual-review ones, the
+    half section the goal/project ones."""
+    period_label: str
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
     annual_goals_edit_enabled: bool
@@ -184,13 +188,15 @@ class YearSettingsResponse(BaseModel):
 
 
 class YearSettingsUpdate(BaseModel):
-    """PATCH payload — all toggles required (Admin sees them together)."""
-    annual_reviews_enabled: bool
-    annual_review_final_rating_visible: bool
-    annual_goals_edit_enabled: bool
-    project_ratings_visible: bool
-    annual_goals_final_rating_visible: bool
-    management_review_enabled: bool
+    """PATCH payload — every toggle optional; only the flags sent are written.
+    The FY section sends the annual-review flags, the half section the
+    goal/project flags."""
+    annual_reviews_enabled: Optional[bool] = None
+    annual_review_final_rating_visible: Optional[bool] = None
+    annual_goals_edit_enabled: Optional[bool] = None
+    project_ratings_visible: Optional[bool] = None
+    annual_goals_final_rating_visible: Optional[bool] = None
+    management_review_enabled: Optional[bool] = None
 
 
 class YearPreflightEntry(BaseModel):
@@ -199,9 +205,8 @@ class YearPreflightEntry(BaseModel):
 
 
 class YearPreflightResponse(BaseModel):
-    """Per-FY in-flight counts. Same shape as the legacy preflight, with
-    counts scoped to the requested FY rather than the active one."""
-    fy_label: str
+    """Per-period in-flight counts for the save-confirmation modal."""
+    period_label: str
     annual_goals_edit_enabled: YearPreflightEntry
     annual_reviews_enabled: YearPreflightEntry
     project_ratings_visible: YearPreflightEntry

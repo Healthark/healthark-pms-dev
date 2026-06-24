@@ -276,7 +276,7 @@ def _seed_system_settings(db, org, admin_user):
     for fy_label in (CURRENT_FY_LABEL, COMPLETED_FY_LABEL):
         db.add(SystemSettingsYearOverride(
             org_id=org.id,
-            fy_label=fy_label,
+            period_label=fy_label,
             annual_reviews_enabled=True,
             annual_review_final_rating_visible=True,
             annual_goals_edit_enabled=True,
