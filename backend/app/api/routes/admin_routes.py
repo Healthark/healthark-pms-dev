@@ -1065,17 +1065,24 @@ def list_settings_years(
     current_user: CurrentUser,
 ):
     """
-    Return selectable years for the System Settings dropdown.
+    Return selectable periods for the System Settings dropdowns: `years`
+    (fiscal years, for the annual-review section) and `halves` (H1/H2, for
+    the goals & project section).
 
     Sources, unioned and de-duplicated:
-        - the current FY plus the two prior and two upcoming FYs
+        - the current FY plus the two prior FYs
         - every FY that appears on this org's annual reviews
         - every FY that appears on this org's annual goals (D1: goals stamp
           "H1 2026"/"H2 2026", so each is converted via _cycle_to_fy_label)
         - every FY that already has an override row
 
+    No FUTURE period is ever listed: in the manual-cycle model a period
+    becomes configurable only once the org has rolled into it, so both
+    dropdowns are capped at the current cycle (FYs at the current FY, halves
+    at the active half — e.g. on H1 the H2 of the same FY is not yet shown).
+
     `has_override` lets the UI distinguish "configured" vs "untouched"
-    years; the toggles reflect default-deny values on years not yet saved.
+    periods; the toggles reflect default-deny values on periods not yet saved.
     """
     _require_admin(current_user)
 
@@ -1090,13 +1097,15 @@ def list_settings_years(
 
     current_fy = _current_fy_label(settings_row)
 
-    # Current FY ± 2 — a small forward / backward window without cluttering
-    # the dropdown. The UNION with FY labels found on real data covers any
-    # straggler years outside that window.
+    # Current FY and the two prior years — a small backward window so the
+    # dropdown is never empty. We deliberately list NO future years: in the
+    # manual-cycle model you configure a period only once you've rolled into
+    # it, so nothing past the current cycle should be selectable. The UNION
+    # with FY labels found on real data covers any straggler past years.
     base_year = int(current_fy[2:4]) + 2000 if current_fy[2:4].isdigit() else None
     range_labels: set[str] = set()
     if base_year is not None:
-        for delta in range(-2, 3):
+        for delta in range(-2, 1):
             yr = base_year + delta
             range_labels.add(f"FY{yr % 100:02d}-{(yr + 1) % 100:02d}")
 
@@ -1144,6 +1153,10 @@ def list_settings_years(
         head = fy[2:4]
         return 2000 + int(head) if head.isdigit() else 0
 
+    # Never list a year beyond the current FY — no future periods.
+    if base_year is not None:
+        all_labels = {fy for fy in all_labels if _sort_key(fy) <= base_year}
+
     years = sorted(all_labels, key=_sort_key, reverse=True)
     options = [
         YearOption(
@@ -1155,11 +1168,23 @@ def list_settings_years(
     ]
 
     # Half options (H1/H2 for each listed FY) drive the goals/project dropdown.
+    # As with FYs, list nothing beyond the current half: order by (FY, H1<H2)
+    # and drop anything after the active half.
     active_half = _half_label_of_cycle_string(settings_row.active_cycle_name)
-    half_labels = [f"{code} {fy}" for fy in years for code in ("H1", "H2")]
-    for hl in sorted(half_override_labels):
-        if hl not in half_labels:
-            half_labels.append(hl)
+
+    def _half_ordinal(hl: str) -> tuple[int, int]:
+        code, fy = parse_cycle(hl)
+        return (fy, 0 if code == "H1" else 1)
+
+    cur_ord = _half_ordinal(active_half) if active_half else None
+    half_candidates = {f"{code} {fy}" for fy in years for code in ("H1", "H2")}
+    half_candidates.update(half_override_labels)
+    half_labels = [
+        hl
+        for hl in half_candidates
+        if cur_ord is None or _half_ordinal(hl) <= cur_ord
+    ]
+    half_labels.sort(key=_half_ordinal, reverse=True)
     halves = [
         YearOption(
             period_label=hl,
