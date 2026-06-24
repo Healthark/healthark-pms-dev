@@ -10,6 +10,7 @@
  */
 
 import type { ApprovalStatus, SelfReviewCycleHalf } from "../services/goal.service";
+import { extractCyclePeriod, extractFyToken, fyTokenToStartYear } from "./fy";
 
 /** Goals in any of these states are locked from employee editing and
  *  count as "approved" in dashboard / mentee-stat rollups. Covers both
@@ -75,60 +76,36 @@ export function halfDisplayLabel(
   return half;
 }
 
-// ── Calendar → cycle code ───────────────────────────────────────────
-
-/** Same calendar logic as backend `cycle_utils.current_half_and_fy`. */
-export function currentHalfAndFy(
-  today: Date = new Date(),
-  fiscalStartMonth = 4,
-): { half: "H1" | "H2"; fyYear: number } {
-  const month = today.getMonth() + 1;
-  const year = today.getFullYear();
-  const fiscalYear = month >= fiscalStartMonth ? year : year - 1;
-  const relativeMonth = (((month - fiscalStartMonth) % 12) + 12) % 12;
-  const half: "H1" | "H2" = relativeMonth < 6 ? "H1" : "H2";
-  return { half, fyYear: fiscalYear };
-}
-
-/** Same calendar logic as backend `cycle_utils.current_quarter_and_fy`. */
-export function currentQuarterAndFy(
-  today: Date = new Date(),
-  fiscalStartMonth = 4,
-): { quarter: "Q1" | "Q2" | "Q3" | "Q4"; fyYear: number } {
-  const month = today.getMonth() + 1;
-  const year = today.getFullYear();
-  const fiscalYear = month >= fiscalStartMonth ? year : year - 1;
-  const relativeMonth = (((month - fiscalStartMonth) % 12) + 12) % 12;
-  const qNum = Math.floor(relativeMonth / 3) + 1;
-  return { quarter: `Q${qNum}` as "Q1" | "Q2" | "Q3" | "Q4", fyYear: fiscalYear };
-}
-
-// ── Time-window gate ────────────────────────────────────────────────
+// ── Time-window gate (keyed off the manually-set active cycle) ───────
 
 /**
  * Mirror of backend `cycle_utils.is_review_window_open`.
  *
- * A cycle's window opens at the start of that cycle and stays open
- * through the end of the FY (so any earlier cycle can be backfilled
- * during a later one of the same FY). Returns false (locked) when
- * goalFyYear is null (legacy goals without a stamped cycle_name).
+ * The active cycle is admin-advanced (stored on SystemSettings), NOT derived
+ * from the calendar. A cycle's window is open when its FY matches the active
+ * cycle's FY and it is at or before the active cycle (so earlier cycles in the
+ * same FY stay open for backfill). A quarterly active cycle still maps to a
+ * half (Q1-2 → H1, Q3-4 → H2); an annual active cycle opens the whole FY.
+ * Returns false when the goal has no stamped FY or the active cycle is unset.
  */
 export function isHalfWindowOpen(
   cycle: SelfReviewCycleHalf,
   goalFyYear: number | null,
-  fiscalStartMonth = 4,
-  today: Date = new Date(),
+  activeCycleName: string | null | undefined,
 ): boolean {
-  if (goalFyYear == null) return false;
+  if (goalFyYear == null || !activeCycleName) return false;
+  const activeFy = fyTokenToStartYear(extractFyToken(activeCycleName));
+  if (activeFy == null || activeFy !== goalFyYear) return false;
+  const activeCode = extractCyclePeriod(activeCycleName);
+  if (activeCode == null) return true; // annual cadence — the whole FY is open
   const keys = cycleKeysFor(cycle);
-  const currentCode =
-    keys === HALF_KEYS
-      ? currentHalfAndFy(today, fiscalStartMonth).half
-      : currentQuarterAndFy(today, fiscalStartMonth).quarter;
-  const currentFy =
-    keys === HALF_KEYS
-      ? currentHalfAndFy(today, fiscalStartMonth).fyYear
-      : currentQuarterAndFy(today, fiscalStartMonth).fyYear;
-  if (currentFy !== goalFyYear) return false;
-  return keys.indexOf(cycle) <= keys.indexOf(currentCode);
+  let activeIdx: number;
+  if ((keys as readonly string[]).includes(activeCode)) {
+    activeIdx = keys.indexOf(activeCode as SelfReviewCycleHalf);
+  } else if (activeCode.startsWith("Q") && keys === HALF_KEYS) {
+    activeIdx = activeCode === "Q1" || activeCode === "Q2" ? 0 : 1;
+  } else {
+    return false;
+  }
+  return keys.indexOf(cycle) <= activeIdx;
 }

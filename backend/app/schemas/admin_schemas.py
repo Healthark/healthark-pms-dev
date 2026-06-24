@@ -109,12 +109,6 @@ class AdminSettingsResponse(BaseModel):
     project_ratings_visible: bool
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
-    # Dev / QA escape hatch. When set, the system treats this as "today"
-    # for every cycle-determination and review-window check.
-    simulated_today: Optional[date] = None
-    # Tells the UI whether the date-simulation field should be shown.
-    # Mirrors the backend's ALLOW_DATE_SIMULATION env flag.
-    simulation_allowed: bool = False
     updated_at: Optional[datetime] = None
 
 
@@ -127,11 +121,33 @@ class AdminSettingsUpdate(BaseModel):
     project_ratings_visible: Optional[bool] = None
     annual_reviews_enabled: Optional[bool] = None
     annual_review_final_rating_visible: Optional[bool] = None
-    # Optional[date] + clear flag: pass a real date to set, or pass
-    # `clear_simulated_today=true` to null the column. Omit both to leave
-    # unchanged (PATCH semantics — omission ≠ set-to-null).
-    simulated_today: Optional[date] = None
-    clear_simulated_today: Optional[bool] = None
+
+
+# ── Cycle Roll-out ───────────────────────────────────────────────────
+# The active cycle is admin-advanced (manual), not date-derived. These back
+# the System Settings "Cycle" card and its confirmation modals.
+
+class CycleEffects(BaseModel):
+    """What advancing `from_cycle` → `to_cycle` changes."""
+    from_cycle: str
+    to_cycle: str
+    # True when the FY changes (e.g. H2 FY26-27 → H1 FY27-28) — the heavyweight
+    # transition: new annual-review + goal cycles, a fresh all-closed FY config.
+    fy_rollover: bool
+    # The FE requires a typed confirmation for the (irreversible) FY rollover.
+    requires_typed_confirmation: bool
+
+
+class CycleStatusResponse(BaseModel):
+    """Current cycle + the cycle a roll-out would advance to, with effects."""
+    active_cycle: str
+    next_cycle: str
+    effects: CycleEffects
+
+
+class CycleSetRequest(BaseModel):
+    """Manual set / correction payload — a strict cycle label ('H1 FY26-27')."""
+    target_cycle: str = Field(..., min_length=1, max_length=50)
 
 
 # ── Per-Fiscal-Year Override Schemas ─────────────────────────────────

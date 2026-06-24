@@ -16,3 +16,4 @@ from app.models.role_expectation_models import RoleExpectation
 from app.models.password_reset_token_models import PasswordResetToken
 from app.models.export_audit_log_models import ExportAuditLog
 from app.models.login_attempt_models import LoginAttempt
+from app.models.cycle_rollout_log_models import CycleRolloutLog

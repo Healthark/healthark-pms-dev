@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import CurrentUser, DbSession
-from app.core.cycle_utils import get_current_cycle_info, resolve_today
 from app.models.notification_models import (
     NOTIFICATION_RETENTION_DAYS,
     Notification,
@@ -64,15 +63,8 @@ def get_topbar_summary(
         SystemSettings.org_id == current_user.org_id
     ).first()
 
-    # Dynamically calculate the active cycle based on the org's cadence
-    if settings:
-        active_cycle = get_current_cycle_info(
-            current_date=resolve_today(settings),
-            cycle_type=settings.cycle_type,
-            fiscal_start_month=settings.fiscal_start_month
-        )
-    else:
-        active_cycle = None
+    # The active cycle is the org's stored, admin-advanced label.
+    active_cycle = settings.active_cycle_name if settings else None
 
     # ── Stored notifications (generic table), split by category ──────
     # Personal events feed the "Notifications" tab; announcements feed the

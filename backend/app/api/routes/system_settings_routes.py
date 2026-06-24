@@ -23,9 +23,7 @@ from app.core.config import settings as app_settings
 from app.core.cycle_utils import (
     YEAR_OVERRIDE_FLAGS,
     extract_fy_label,
-    get_current_cycle_info,
     get_year_override,
-    resolve_today,
 )
 from app.models.system_settings_models import CycleType, SystemSettings
 from app.schemas.system_settings_schemas import (
@@ -64,11 +62,7 @@ def get_system_settings(
                 detail="System settings have not been configured for this organization."
             )
 
-        # simulation_allowed is not stored on the row — it's a per-deployment
-        # env flag. Splice it onto the response so the frontend can show/hide
-        # the Date Simulation control without a second round-trip.
         payload = SystemSettingsResponse.model_validate(row, from_attributes=True)
-        payload.simulation_allowed = app_settings.ALLOW_DATE_SIMULATION
 
         # Overlay the four per-FY access flags from the ACTIVE fiscal year's
         # override row. The four toggles now live per-(org, fy); surfacing the
@@ -77,11 +71,7 @@ def get_system_settings(
         # without touching each page. Falls back to the legacy columns already
         # on `row` when no override row exists for the active FY yet.
         # The year PATCH calls invalidate_settings() so this re-reads on save.
-        active_fy = extract_fy_label(
-            get_current_cycle_info(
-                resolve_today(row), CycleType(row.cycle_type), row.fiscal_start_month
-            )
-        )
+        active_fy = extract_fy_label(row.active_cycle_name)
         override = get_year_override(db, current_user.org_id, active_fy)
         if override is not None:
             for flag in YEAR_OVERRIDE_FLAGS:
@@ -196,6 +186,4 @@ def update_system_settings(
     db.refresh(settings)
     invalidate_settings(current_user.org_id)
 
-    payload = SystemSettingsResponse.model_validate(settings, from_attributes=True)
-    payload.simulation_allowed = app_settings.ALLOW_DATE_SIMULATION
-    return payload
+    return SystemSettingsResponse.model_validate(settings, from_attributes=True)

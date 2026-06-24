@@ -25,7 +25,7 @@ from app.api.routes.goal_routes import (
     submit_goal_mentor_review,
     submit_goal_self_review,
 )
-from app.core.cycle_utils import current_half_and_fy
+from app.core.cycle_utils import parse_cycle
 from app.core.database import Base
 from app.models.goal_models import ApprovalStatus, Goal, GoalType
 from app.models.goal_self_review_models import GoalSelfReview, SelfReviewCycleHalf
@@ -243,7 +243,7 @@ def test_reminder_rejects_unapproved_goal(db):
 
 def test_self_review_submit_notifies_mentor(db):
     org, mentor, mentee = _setup(db)
-    half, fy = current_half_and_fy(date.today(), 4)
+    half, fy = parse_cycle("H1 FY26-27")
     g = _goal(
         db, org, mentee, status=ApprovalStatus.APPROVED.value, cycle_name=f"{half} {fy}"
     )
@@ -266,7 +266,7 @@ def test_self_review_submit_notifies_mentor(db):
 
 def test_mentor_review_submit_notifies_owner(db):
     org, mentor, mentee = _setup(db)
-    half, fy = current_half_and_fy(date.today(), 4)
+    half, fy = parse_cycle("H1 FY26-27")
     g = _goal(
         db,
         org,

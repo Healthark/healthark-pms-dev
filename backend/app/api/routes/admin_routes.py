@@ -37,10 +37,11 @@ from app.core.config import settings
 from app.core.cycle_utils import (
     YEAR_OVERRIDE_FLAGS,
     _cycle_to_fy_label,
+    _format_fy_span,
     ensure_year_override_row,
     extract_fy_label,
-    get_current_cycle_info,
-    resolve_today,
+    next_cycle,
+    parse_cycle,
 )
 from app.core.security import get_password_hash
 from app.models.annual_review_models import AnnualReview, ReviewStatus
@@ -52,6 +53,7 @@ from app.models.project_models import (
     ProjectAssignment,
 )
 from app.models.reference_models import Department, Designation
+from app.models.cycle_rollout_log_models import CycleRolloutLog
 from app.models.system_settings_models import CycleType, SystemSettings
 from app.models.system_settings_year_override_models import SystemSettingsYearOverride
 from app.models.user_models import User
@@ -63,6 +65,9 @@ from app.schemas.admin_schemas import (
     CoverageGaps,
     CoverageGapProject,
     CoverageGapUser,
+    CycleEffects,
+    CycleSetRequest,
+    CycleStatusResponse,
     DepartmentBrief,
     DesignationBrief,
     UserCreate,
@@ -766,19 +771,10 @@ def get_admin_settings(
                 detail="System settings have not been configured.",
             )
 
-        # Recompute on read against resolve_today(row) so the label always
-        # matches what the rest of the app will see — covers both real
-        # clock-roll-over since the last write and an active simulation.
-        fresh_cycle = get_current_cycle_info(
-            resolve_today(row),
-            CycleType(row.cycle_type),
-            row.fiscal_start_month,
-        )
-
         return AdminSettingsResponse(
             id=row.id,
             org_id=row.org_id,
-            active_cycle=fresh_cycle,
+            active_cycle=row.active_cycle_name,
             cycle_type=row.cycle_type,
             fiscal_start_month=row.fiscal_start_month,
             goals_edit_enabled=row.goals_edit_enabled,
@@ -786,8 +782,6 @@ def get_admin_settings(
             project_ratings_visible=row.project_ratings_visible,
             annual_reviews_enabled=row.annual_reviews_enabled,
             annual_review_final_rating_visible=row.annual_review_final_rating_visible,
-            simulated_today=row.simulated_today,
-            simulation_allowed=settings.ALLOW_DATE_SIMULATION,
             updated_at=row.updated_at,
         )
 
@@ -818,32 +812,6 @@ def update_admin_settings(
             detail="System settings have not been configured.",
         )
 
-    # ── Date-simulation gates (run BEFORE applying any writes) ──────
-    # 1. Env-flag gate. Any attempt to set/clear simulated_today on a
-    #    deployment with ALLOW_DATE_SIMULATION=false is rejected outright
-    #    — keeps production safe from accidental cycle-time shifts.
-    # 2. Authorization gate. Even on dev/staging, only Admin +
-    #    is_management can pin a simulated date. Other admins can save
-    #    everything else on this PATCH, but not the simulation fields.
-    wants_simulation_write = (
-        settings_in.simulated_today is not None
-        or bool(settings_in.clear_simulated_today)
-    )
-    if wants_simulation_write:
-        if not settings.ALLOW_DATE_SIMULATION:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Date simulation is disabled for this deployment. "
-                    "Set ALLOW_DATE_SIMULATION=true on the backend to enable."
-                ),
-            )
-        if not (current_user.role == "Admin" and current_user.is_management):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Date simulation requires Admin + management.",
-            )
-
     if settings_in.cycle_type is not None:
         settings_row.cycle_type = settings_in.cycle_type
     if settings_in.fiscal_start_month is not None:
@@ -859,22 +827,8 @@ def update_admin_settings(
     if settings_in.annual_review_final_rating_visible is not None:
         settings_row.annual_review_final_rating_visible = settings_in.annual_review_final_rating_visible
 
-    # Apply simulated_today write. clear flag wins over set (defensive —
-    # both should never be sent together, but if they are, clear takes
-    # priority so the operator can recover from a stuck simulation).
-    if settings_in.clear_simulated_today:
-        settings_row.simulated_today = None
-    elif settings_in.simulated_today is not None:
-        settings_row.simulated_today = settings_in.simulated_today
-
-    # Recompute the cycle label from the (possibly updated) cadence +
-    # fiscal month, against resolve_today(settings_row) so a freshly-set
-    # simulated date also recomputes the label immediately.
-    settings_row.active_cycle_name = get_current_cycle_info(
-        resolve_today(settings_row),
-        CycleType(settings_row.cycle_type),
-        settings_row.fiscal_start_month,
-    )
+    # active_cycle_name is NOT touched here — it's advanced only by the
+    # cycle roll-out / set endpoints (the single manual source of truth).
     settings_row.updated_by_id = current_user.id
 
     db.commit()
@@ -892,10 +846,166 @@ def update_admin_settings(
         project_ratings_visible=settings_row.project_ratings_visible,
         annual_reviews_enabled=settings_row.annual_reviews_enabled,
         annual_review_final_rating_visible=settings_row.annual_review_final_rating_visible,
-        simulated_today=settings_row.simulated_today,
-        simulation_allowed=settings.ALLOW_DATE_SIMULATION,
         updated_at=settings_row.updated_at,
     )
+
+
+# =====================================================================
+# CYCLE ROLL-OUT (manual active-cycle advancement)
+# =====================================================================
+#
+# The active cycle is a stored, admin-advanced value — NOT date-derived.
+# "Roll out" advances to the next cycle in the org's cadence; "set" jumps to
+# an arbitrary valid cycle (corrections / first-time setup). Both share the
+# same side effects: on an FY rollover the new FY's per-FY windows are created
+# all-closed (default-deny), an audit row is written, and an org-wide
+# announcement is broadcast.
+
+_CADENCE_CODES = {
+    CycleType.HALF_YEARLY.value: ("H1", "H2"),
+    CycleType.QUARTERLY.value: ("Q1", "Q2", "Q3", "Q4"),
+}
+
+
+def _settings_or_404(db: DbSession, org_id: int) -> SystemSettings:
+    row = db.query(SystemSettings).filter(SystemSettings.org_id == org_id).first()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="System settings have not been configured.",
+        )
+    return row
+
+
+def _cycle_effects(from_cycle: str, to_cycle: str) -> CycleEffects:
+    _from_code, from_fy = parse_cycle(from_cycle)
+    _to_code, to_fy = parse_cycle(to_cycle)
+    fy_rollover = to_fy != from_fy
+    return CycleEffects(
+        from_cycle=from_cycle,
+        to_cycle=to_cycle,
+        fy_rollover=fy_rollover,
+        requires_typed_confirmation=fy_rollover,
+    )
+
+
+def _validate_target_cycle(target: str, cycle_type: str) -> str:
+    """Validate a manual target against the org's cadence and return the
+    canonical label. 400 on a malformed or off-cadence value."""
+    try:
+        code, fy = parse_cycle(target)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{target}' is not a valid cycle label (e.g. 'H1 FY26-27').",
+        ) from None
+    if cycle_type == CycleType.ANNUAL.value:
+        if code is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Annual orgs use a bare FY label (e.g. 'FY26-27').",
+            )
+        return _format_fy_span(fy)
+    allowed = _CADENCE_CODES.get(cycle_type, ())
+    if code not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{target}' does not match the org's {cycle_type} cadence.",
+        )
+    return f"{code} {_format_fy_span(fy)}"
+
+
+def _apply_cycle_change(
+    db: DbSession,
+    settings_row: SystemSettings,
+    to_cycle: str,
+    current_user: User,
+    kind: str,
+) -> None:
+    """Move the org's active cycle to `to_cycle`, handling FY-rollover side
+    effects (a fresh all-closed FY config), the audit row, and the org-wide
+    announcement. Commits."""
+    from_cycle = settings_row.active_cycle_name
+    _from_code, from_fy = parse_cycle(from_cycle)
+    _to_code, to_fy = parse_cycle(to_cycle)
+
+    # FY rollover → ensure the new FY's override row exists and force every
+    # window closed (default-deny — the Admin opens each one for the new year).
+    if to_fy != from_fy:
+        override = ensure_year_override_row(
+            db,
+            settings_row.org_id,
+            extract_fy_label(to_cycle),
+            updated_by_id=current_user.id,
+        )
+        for flag in YEAR_OVERRIDE_FLAGS:
+            setattr(override, flag, False)
+
+    settings_row.active_cycle_name = to_cycle
+    settings_row.updated_by_id = current_user.id
+    db.add(
+        CycleRolloutLog(
+            org_id=settings_row.org_id,
+            from_cycle=from_cycle,
+            to_cycle=to_cycle,
+            kind=kind,
+            rolled_by_id=current_user.id,
+        )
+    )
+
+    broadcast_notification(
+        db,
+        org_id=settings_row.org_id,
+        recipients=active_org_users(db, settings_row.org_id),
+        category=NotificationCategory.ANNOUNCEMENT.value,
+        type="cycle_rollout",
+        title="New cycle active",
+        body=f"The active performance cycle is now {to_cycle}.",
+        link="/dashboard",
+        actor_id=current_user.id,
+        send_email=False,
+    )
+
+    db.commit()
+    db.refresh(settings_row)
+    invalidate_settings(settings_row.org_id)
+
+
+def _cycle_status(settings_row: SystemSettings) -> CycleStatusResponse:
+    nxt = next_cycle(settings_row.active_cycle_name, settings_row.cycle_type)
+    return CycleStatusResponse(
+        active_cycle=settings_row.active_cycle_name,
+        next_cycle=nxt,
+        effects=_cycle_effects(settings_row.active_cycle_name, nxt),
+    )
+
+
+@router.get("/cycle", response_model=CycleStatusResponse)
+def get_cycle_status(db: DbSession, current_user: CurrentUser):
+    """Current active cycle + the cycle a roll-out would advance to."""
+    _require_admin(current_user)
+    return _cycle_status(_settings_or_404(db, current_user.org_id))
+
+
+@router.post("/cycle/rollout", response_model=CycleStatusResponse)
+def rollout_cycle(db: DbSession, current_user: CurrentUser):
+    """Advance the org to the next cycle in its cadence (one-click)."""
+    _require_admin(current_user)
+    settings_row = _settings_or_404(db, current_user.org_id)
+    to_cycle = next_cycle(settings_row.active_cycle_name, settings_row.cycle_type)
+    _apply_cycle_change(db, settings_row, to_cycle, current_user, kind="rollout")
+    return _cycle_status(settings_row)
+
+
+@router.post("/cycle/set", response_model=CycleStatusResponse)
+def set_cycle(payload: CycleSetRequest, db: DbSession, current_user: CurrentUser):
+    """Manually set the active cycle to an arbitrary valid label (corrections /
+    first-time setup)."""
+    _require_admin(current_user)
+    settings_row = _settings_or_404(db, current_user.org_id)
+    to_cycle = _validate_target_cycle(payload.target_cycle, settings_row.cycle_type)
+    _apply_cycle_change(db, settings_row, to_cycle, current_user, kind="set")
+    return _cycle_status(settings_row)
 
 
 # =====================================================================
@@ -910,14 +1020,8 @@ def update_admin_settings(
 # FY27-28 is the system-computed active cycle.
 
 def _current_fy_label(settings_row: SystemSettings) -> str:
-    """Compute the active FY label from a settings row (honours
-    simulated_today via resolve_today)."""
-    active_cycle = get_current_cycle_info(
-        resolve_today(settings_row),
-        CycleType(settings_row.cycle_type),
-        settings_row.fiscal_start_month,
-    )
-    return extract_fy_label(active_cycle)
+    """The active FY label, read from the org's stored active cycle."""
+    return extract_fy_label(settings_row.active_cycle_name)
 
 
 def _build_year_settings_response(
