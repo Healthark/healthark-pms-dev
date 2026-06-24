@@ -53,6 +53,10 @@ export function SelfReviewFormModal({
   const allFilled =
     overallReview.trim().length > 0 && typeof rating === "number";
 
+  // A draft is only meaningful once the user has typed something — keep the
+  // "Save Draft" action disabled until the first character is entered.
+  const hasDraftContent = overallReview.trim().length > 0;
+
   const handleSubmit = async () => {
     if (!allFilled || typeof rating !== "number") return;
     await onSubmit({
@@ -146,7 +150,7 @@ export function SelfReviewFormModal({
             <button
               type="button"
               onClick={handleSaveDraft}
-              disabled={isSaving || isDraftSaving}
+              disabled={isSaving || isDraftSaving || !hasDraftContent}
               className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
             >
               {isDraftSaving ? (

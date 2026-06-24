@@ -1,7 +1,7 @@
 import { useState, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Plus, Target, Lock, ChevronDown, ChevronUp, BookOpen,
+  Plus, Target, Lock, ChevronDown,
   Pencil, SendHorizonal, Link, MessageSquare,
   UserCircle,
 } from "lucide-react";
@@ -39,8 +39,8 @@ import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
 import { TablePagination } from "../components/common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { formatFyYearSpan, extractFyToken, fyTokenToStartYear } from "../utils/fy";
-import { type UserRoleExpectation } from "../services/profile.service";
 import { useMyExpectations } from "../queries/profile";
+import { RoleExpectationsCard } from "../components/goals/RoleExpectationsCard";
 import { isPostApproved } from "../utils/goalStatus";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
 import { exportService } from "../services/export.service";
@@ -104,11 +104,6 @@ const MY_GOALS_SORT_CONFIG: Record<
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const ROLE_EXP_FIELDS: { expKey: keyof UserRoleExpectation; label: string }[] = [
-  { expKey: "exp_firm_growth",       label: "Firm Growth" },
-  { expKey: "exp_competency_skills", label: "Competency & Skills" },
-];
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -239,7 +234,6 @@ export function AnnualGoals() {
   // query module means revisiting this tab in the same session is a
   // cache hit.
   const { data: roleExpectation = null } = useMyExpectations();
-  const [roleExpectationsOpen, setRoleExpectationsOpen] = useState(false);
 
   // Modal helpers
   const openAdd = () => {
@@ -509,42 +503,7 @@ export function AnnualGoals() {
           {activeTab === "my" && (
             <div className="space-y-4">
               {/* Role expectations — single collapsible container, all competencies */}
-              {roleExpectation && (
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setRoleExpectationsOpen((v) => !v)}
-                    className="flex w-full items-center justify-between px-4 py-2.5 bg-blue-50/50 dark:bg-blue-950/50 hover:bg-blue-50/80 dark:hover:bg-blue-950/80 transition-colors"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
-                      <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-300 shrink-0" />
-                      Your Role Expectations
-                    </span>
-                    {roleExpectationsOpen
-                      ? <ChevronUp className="h-3.5 w-3.5 text-text-muted shrink-0" />
-                      : <ChevronDown className="h-3.5 w-3.5 text-text-muted shrink-0" />}
-                  </button>
-                  {roleExpectationsOpen && (
-                    <div className="px-4 py-3 space-y-3 bg-blue-50/20 dark:bg-blue-950/20 border-t border-border">
-                      {ROLE_EXP_FIELDS.map(({ expKey, label }) => {
-                        const text = roleExpectation[expKey] as string | null | undefined;
-                        if (!text) return null;
-                        return (
-                          <div key={expKey}>
-                            <p className="text-[11px] font-semibold text-text-main mb-0.5">{label}</p>
-                            <p className="text-xs text-text-muted whitespace-pre-wrap leading-relaxed">
-                              {text.replace(/ \| /g, "\n• ")}
-                            </p>
-                          </div>
-                        );
-                      })}
-                      <p className="text-[10px] text-text-muted pt-1 border-t border-border">
-                        {roleExpectation.department_name} · {roleExpectation.designation_name}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <RoleExpectationsCard expectation={roleExpectation} />
 
               {/* Toolbar */}
               {!isLoading && goals.length > 0 && (
