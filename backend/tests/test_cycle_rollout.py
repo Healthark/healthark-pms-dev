@@ -173,3 +173,32 @@ def test_rollout_requires_admin(db):
     with pytest.raises(HTTPException) as exc:
         rollout_cycle(db, staff)
     assert exc.value.status_code == 403
+
+
+def test_rollback_across_fy_preserves_prior_config(db):
+    """Rolling BACK to a prior, already-configured fiscal year must NOT reset
+    its windows — only a genuinely new FY starts all-closed."""
+    org, admin = _setup(db, active="H2 FY26-27")
+    db.add(
+        SystemSettingsYearOverride(
+            org_id=org.id, fy_label="FY26-27", annual_reviews_enabled=True
+        )
+    )
+    db.commit()
+
+    rollout_cycle(db, admin)  # → H1 FY27-28 (new FY created all-closed)
+    set_cycle(CycleSetRequest(target_cycle="H2 FY26-27"), db, admin)  # roll back
+
+    prior = (
+        db.query(SystemSettingsYearOverride)
+        .filter_by(org_id=org.id, fy_label="FY26-27")
+        .one()
+    )
+    assert prior.annual_reviews_enabled is True  # preserved, not reset
+
+
+def test_status_reports_previous_cycle_for_rollback(db):
+    _org, admin = _setup(db)
+    assert get_cycle_status(db, admin).previous_cycle is None  # never changed
+    rollout_cycle(db, admin)  # H1 → H2
+    assert get_cycle_status(db, admin).previous_cycle == "H1 FY26-27"

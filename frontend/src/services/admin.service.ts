@@ -194,6 +194,9 @@ export interface CycleEffects {
 export interface CycleStatus {
   active_cycle: string;
   next_cycle: string;
+  /** The cycle the org was on before the most recent change — drives the
+   *  one-click "Roll back" action. null when the cycle has never changed. */
+  previous_cycle: string | null;
   effects: CycleEffects;
 }
 

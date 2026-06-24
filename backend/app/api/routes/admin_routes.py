@@ -40,6 +40,7 @@ from app.core.cycle_utils import (
     _format_fy_span,
     ensure_year_override_row,
     extract_fy_label,
+    get_year_override,
     next_cycle,
     parse_cycle,
 )
@@ -929,14 +930,16 @@ def _apply_cycle_change(
     _from_code, from_fy = parse_cycle(from_cycle)
     _to_code, to_fy = parse_cycle(to_cycle)
 
-    # FY rollover → ensure the new FY's override row exists and force every
-    # window closed (default-deny — the Admin opens each one for the new year).
-    if to_fy != from_fy:
+    # Only a GENUINELY NEW fiscal year starts all-closed (default-deny). An
+    # existing FY — e.g. rolling BACK to a prior, already-configured year —
+    # keeps its saved window configuration; we never silently reset it.
+    to_fy_label = extract_fy_label(to_cycle)
+    if (
+        to_fy != from_fy
+        and get_year_override(db, settings_row.org_id, to_fy_label) is None
+    ):
         override = ensure_year_override_row(
-            db,
-            settings_row.org_id,
-            extract_fy_label(to_cycle),
-            updated_by_id=current_user.id,
+            db, settings_row.org_id, to_fy_label, updated_by_id=current_user.id
         )
         for flag in YEAR_OVERRIDE_FLAGS:
             setattr(override, flag, False)
@@ -971,11 +974,20 @@ def _apply_cycle_change(
     invalidate_settings(settings_row.org_id)
 
 
-def _cycle_status(settings_row: SystemSettings) -> CycleStatusResponse:
+def _cycle_status(db: DbSession, settings_row: SystemSettings) -> CycleStatusResponse:
     nxt = next_cycle(settings_row.active_cycle_name, settings_row.cycle_type)
+    # `previous_cycle` powers the one-click "Roll back" affordance — the cycle
+    # the org was on before the most recent change (None if never changed).
+    last = (
+        db.query(CycleRolloutLog)
+        .filter(CycleRolloutLog.org_id == settings_row.org_id)
+        .order_by(CycleRolloutLog.created_at.desc(), CycleRolloutLog.id.desc())
+        .first()
+    )
     return CycleStatusResponse(
         active_cycle=settings_row.active_cycle_name,
         next_cycle=nxt,
+        previous_cycle=last.from_cycle if last else None,
         effects=_cycle_effects(settings_row.active_cycle_name, nxt),
     )
 
@@ -984,7 +996,7 @@ def _cycle_status(settings_row: SystemSettings) -> CycleStatusResponse:
 def get_cycle_status(db: DbSession, current_user: CurrentUser):
     """Current active cycle + the cycle a roll-out would advance to."""
     _require_admin(current_user)
-    return _cycle_status(_settings_or_404(db, current_user.org_id))
+    return _cycle_status(db, _settings_or_404(db, current_user.org_id))
 
 
 @router.post("/cycle/rollout", response_model=CycleStatusResponse)
@@ -994,7 +1006,7 @@ def rollout_cycle(db: DbSession, current_user: CurrentUser):
     settings_row = _settings_or_404(db, current_user.org_id)
     to_cycle = next_cycle(settings_row.active_cycle_name, settings_row.cycle_type)
     _apply_cycle_change(db, settings_row, to_cycle, current_user, kind="rollout")
-    return _cycle_status(settings_row)
+    return _cycle_status(db, settings_row)
 
 
 @router.post("/cycle/set", response_model=CycleStatusResponse)
@@ -1005,7 +1017,7 @@ def set_cycle(payload: CycleSetRequest, db: DbSession, current_user: CurrentUser
     settings_row = _settings_or_404(db, current_user.org_id)
     to_cycle = _validate_target_cycle(payload.target_cycle, settings_row.cycle_type)
     _apply_cycle_change(db, settings_row, to_cycle, current_user, kind="set")
-    return _cycle_status(settings_row)
+    return _cycle_status(db, settings_row)
 
 
 # =====================================================================

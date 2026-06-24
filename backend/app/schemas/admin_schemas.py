@@ -142,6 +142,9 @@ class CycleStatusResponse(BaseModel):
     """Current cycle + the cycle a roll-out would advance to, with effects."""
     active_cycle: str
     next_cycle: str
+    # The cycle the org was on before the most recent change — powers the
+    # one-click "Roll back" affordance. None when the cycle has never changed.
+    previous_cycle: Optional[str] = None
     effects: CycleEffects
 
 

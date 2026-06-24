@@ -8,7 +8,7 @@
  * requires a typed confirmation.
  */
 import { useState } from "react";
-import { CalendarClock, ArrowRight, Loader2, X } from "lucide-react";
+import { CalendarClock, ArrowRight, Loader2, X, Undo2 } from "lucide-react";
 import {
   useCycleStatus,
   useRolloutCycle,
@@ -28,6 +28,7 @@ export function CycleRolloutCard() {
 
   const [showRollout, setShowRollout] = useState(false);
   const [showSet, setShowSet] = useState(false);
+  const [setInitial, setSetInitial] = useState("");
 
   if (isPending) {
     return (
@@ -82,9 +83,26 @@ export function CycleRolloutCard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {status.previous_cycle && (
+            <button
+              type="button"
+              onClick={() => {
+                setSetInitial(status.previous_cycle ?? "");
+                setShowSet(true);
+              }}
+              title={`Roll back to ${status.previous_cycle}`}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted"
+            >
+              <Undo2 className="h-4 w-4" aria-hidden="true" />
+              Roll back
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setShowSet(true)}
+            onClick={() => {
+              setSetInitial("");
+              setShowSet(true);
+            }}
             className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-main hover:bg-surface-muted"
           >
             Set manually
@@ -112,6 +130,7 @@ export function CycleRolloutCard() {
       {showSet && (
         <SetCycleModal
           current={status.active_cycle}
+          initialTarget={setInitial}
           isSaving={setCycle.isPending}
           onConfirm={handleSet}
           onCancel={() => setShowSet(false)}
@@ -263,16 +282,18 @@ function RolloutModal({
 
 function SetCycleModal({
   current,
+  initialTarget,
   isSaving,
   onConfirm,
   onCancel,
 }: {
   readonly current: string;
+  readonly initialTarget: string;
   readonly isSaving: boolean;
   readonly onConfirm: (target: string) => void;
   readonly onCancel: () => void;
 }) {
-  const [target, setTarget] = useState("");
+  const [target, setTarget] = useState(initialTarget);
   const canConfirm = target.trim().length > 0;
 
   return (
@@ -298,9 +319,9 @@ function SetCycleModal({
           />
         </div>
         <p className="rounded-md border border-amber-200 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-          Manual set applies the same changes as a roll-out, including a fresh
-          all-closed configuration if the fiscal year changes. Use it for
-          corrections or first-time setup.
+          Manual set applies the same changes as a roll-out. A brand-new fiscal
+          year starts all-closed; rolling back to an existing year keeps its
+          saved window configuration. Use it for corrections or first-time setup.
         </p>
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
