@@ -6,7 +6,7 @@
  * fields being skipped.
  */
 import React from "react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -69,8 +69,7 @@ describe("RoleExpectationsCard", () => {
     expect(screen.getByText("Firm Growth")).toBeInTheDocument();
   });
 
-  it("skips a competency whose text is empty", async () => {
-    const user = userEvent.setup();
+  it("skips a competency whose text is empty", () => {
     render(
       <RoleExpectationsCard
         expectation={{ ...data, exp_competency_skills: null }}
@@ -79,6 +78,5 @@ describe("RoleExpectationsCard", () => {
     );
     expect(screen.getByText("Firm Growth")).toBeInTheDocument();
     expect(screen.queryByText("Competency & Skills")).not.toBeInTheDocument();
-    void user;
   });
 });
