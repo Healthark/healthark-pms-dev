@@ -159,6 +159,7 @@ class YearSettingsResponse(BaseModel):
     annual_goals_edit_enabled: bool
     project_ratings_visible: bool
     annual_goals_final_rating_visible: bool
+    management_review_enabled: bool
     is_current: bool
     updated_at: Optional[datetime] = None
 
@@ -170,6 +171,7 @@ class YearSettingsUpdate(BaseModel):
     annual_goals_edit_enabled: bool
     project_ratings_visible: bool
     annual_goals_final_rating_visible: bool
+    management_review_enabled: bool
 
 
 class YearPreflightEntry(BaseModel):
@@ -186,6 +188,7 @@ class YearPreflightResponse(BaseModel):
     project_ratings_visible: YearPreflightEntry
     annual_review_final_rating_visible: YearPreflightEntry
     annual_goals_final_rating_visible: YearPreflightEntry
+    management_review_enabled: YearPreflightEntry
 
 
 # ── Admin Broadcast (Notify tab) ─────────────────────────────────────

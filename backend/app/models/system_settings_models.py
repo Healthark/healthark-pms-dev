@@ -86,6 +86,11 @@ class SystemSettings(Base):
     # reviews. Mentors still see their own mentor_performance_rating while
     # evaluating (that's required for the workflow).
     annual_review_final_rating_visible = Column(Boolean, default=False, nullable=False)
+    # Admin gate for the Management Review (calibration) stage. INDEPENDENT of
+    # annual_reviews_enabled — calibration typically opens AFTER the employee /
+    # mentor submission window closes, so the management-rating publish is gated
+    # by this flag, not the review-window flag. Default-deny (opened per FY).
+    management_review_enabled = Column(Boolean, default=False, nullable=False)
 
     # ── Demo / QA Date Simulation ────────────────────────────────────
     # When non-null, every cycle-determination and review-window check

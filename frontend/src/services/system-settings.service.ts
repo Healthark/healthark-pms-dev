@@ -31,6 +31,10 @@ export interface SystemSettingsResponse {
   project_ratings_visible: boolean;
   annual_reviews_enabled: boolean;
   annual_review_final_rating_visible: boolean;
+  /** Per-FY gate for the Management Review (calibration) stage — independent
+   *  of annual_reviews_enabled. Drives the Management Reviews page's publish
+   *  affordance and the "window closed" banner. */
+  management_review_enabled: boolean;
   /** ISO date string. Non-null when Admin has pinned a simulated "today"
    *  for demo / QA purposes. The whole app shows an amber banner when set. */
   simulated_today: string | null;

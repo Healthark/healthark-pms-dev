@@ -62,6 +62,10 @@ class SystemSettingsYearOverride(Base):
     # (goal-side equivalent of annual_review_final_rating_visible). Drafts are
     # never shown regardless; past-FY reads always pass through.
     annual_goals_final_rating_visible = Column(Boolean, default=False, nullable=False)
+    # Gate: the management-rating publish (calibration stage) checks this for
+    # the review's FY. Separate from annual_reviews_enabled so calibration can
+    # open AFTER the employee/mentor window closes. Default-deny.
+    management_review_enabled = Column(Boolean, default=False, nullable=False)
 
     # ── Audit Trail ──────────────────────────────────────────────────
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

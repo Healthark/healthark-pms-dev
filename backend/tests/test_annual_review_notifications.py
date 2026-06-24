@@ -9,7 +9,7 @@ assert the in-app Notification rows.
 from __future__ import annotations
 
 import pytest
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -71,7 +71,10 @@ def _setup(db):
     )
     db.add(
         SystemSettingsYearOverride(
-            org_id=org.id, fy_label=FY, annual_reviews_enabled=True
+            org_id=org.id,
+            fy_label=FY,
+            annual_reviews_enabled=True,
+            management_review_enabled=True,
         )
     )
     mentor = _user(db, org.id, role="Admin")
@@ -185,4 +188,31 @@ def test_management_rating_notifies_employee_on_publish(db):
         .filter(Notification.type == "annual_management_published")
         .count()
         == 2
+    )
+
+
+def test_management_rating_blocked_when_management_review_closed(db):
+    """Publishing a management rating 403s when management_review_enabled is
+    False for the FY — even though annual_reviews_enabled is True. The
+    employee/mentor window and the calibration window are independent gates."""
+    org, mentor, mentee, mgmt = _setup(db)
+    override = (
+        db.query(SystemSettingsYearOverride)
+        .filter_by(org_id=org.id, fy_label=FY)
+        .one()
+    )
+    override.management_review_enabled = False  # close calibration only
+    review = _review(db, org, mentee, mentor, status=ReviewStatus.PENDING_MANAGEMENT.value)
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        set_management_rating(
+            review.id, ManagementRatingUpdate(management_performance_rating=2), db, mgmt
+        )
+    assert exc.value.status_code == 403
+    assert (
+        db.query(Notification)
+        .filter(Notification.type == "annual_management_published")
+        .count()
+        == 0
     )

@@ -58,7 +58,7 @@ vi.mock("../../../queries/annualReviews", () => ({
 }));
 vi.mock("../../../hooks/useSystemSettings", () => ({
   useSystemSettings: () => ({
-    settings: { active_cycle_name: "H1 FY26-27" },
+    settings: { active_cycle_name: "H1 FY26-27", management_review_enabled: true },
     isLoading: false,
   }),
 }));

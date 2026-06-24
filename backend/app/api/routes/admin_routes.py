@@ -931,6 +931,7 @@ def _build_year_settings_response(
         annual_goals_edit_enabled=row.annual_goals_edit_enabled,
         project_ratings_visible=row.project_ratings_visible,
         annual_goals_final_rating_visible=row.annual_goals_final_rating_visible,
+        management_review_enabled=row.management_review_enabled,
         is_current=(row.fy_label == current_fy),
         updated_at=row.updated_at,
     )
@@ -1092,6 +1093,11 @@ _TOGGLE_ANNOUNCEMENTS: dict[str, dict] = {
         "link": "/annual-goals",
         True: ("Goal reviews visible", "Mentor reviews on annual goals are now visible for {fy}."),
         False: ("Goal reviews hidden", "Mentor reviews on annual goals are now hidden for {fy}."),
+    },
+    "management_review_enabled": {
+        "link": "/management-reviews",
+        True: ("Management review opened", "Management review is now open for {fy}."),
+        False: ("Management review closed", "Management review is now closed for {fy}."),
     },
 }
 
@@ -1301,6 +1307,20 @@ def year_settings_preflight(
     )
     review_in_flight = in_flight_reviews + staff_without_reviews
 
+    # ── management_review_enabled ───────────────────────────────────
+    # Reviews awaiting a management rating — closing calibration blocks
+    # publishing these until it's re-opened.
+    pending_mgmt = (
+        db.query(func.count(AnnualReview.id))
+        .filter(
+            AnnualReview.org_id == current_user.org_id,
+            AnnualReview.cycle_name == canonical,
+            AnnualReview.status == ReviewStatus.PENDING_MANAGEMENT.value,
+        )
+        .scalar()
+        or 0
+    )
+
     def _msg(count: int, kind: str) -> str | None:
         if count <= 0:
             return None
@@ -1310,6 +1330,11 @@ def year_settings_preflight(
             return (
                 f"{count} {noun} {verb} created annual goals for {canonical} yet. "
                 f"Disabling will block them from doing so until you re-enable."
+            )
+        if kind == "management":
+            return (
+                f"{count} {noun} {verb} received a management rating for {canonical}. "
+                f"Disabling will block management from publishing until you re-enable."
             )
         return (
             f"{count} {noun} {verb} completed self-review/mentor evaluation for {canonical}. "
@@ -1329,6 +1354,10 @@ def year_settings_preflight(
         project_ratings_visible=YearPreflightEntry(in_flight_count=0, warning=None),
         annual_review_final_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
         annual_goals_final_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
+        management_review_enabled=YearPreflightEntry(
+            in_flight_count=pending_mgmt,
+            warning=_msg(pending_mgmt, "management"),
+        ),
     )
 
 

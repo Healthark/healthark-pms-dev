@@ -11,7 +11,7 @@
  * lets management set/override the management rating inline via a modal.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Eye, Loader2, Pencil, ShieldCheck, X } from "lucide-react";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { StringCombobox } from "../common/StringCombobox";
@@ -48,6 +48,7 @@ type MgmtReviewSortKey =
   | "employee_email"
   | "mentor_name"
   | "department"
+  | "cycle_name"
   | "self_performance_rating"
   | "mentor_performance_rating"
   | "management_performance_rating";
@@ -75,20 +76,41 @@ export function ManagementReviewTab() {
   const activeYear = settings?.active_cycle_name
     ? extractFyToken(settings.active_cycle_name)
     : "";
+  // Publishing a management rating is gated server-side by
+  // _require_management_review_open (the active FY's management_review_enabled
+  // flag — independent of the employee/mentor window). Mirror it here so the
+  // Edit affordance only lights up when a publish would actually succeed —
+  // past years and a closed management-review window are view-only.
+  const managementReviewEnabled = settings?.management_review_enabled ?? false;
   const [yearFilter, setYearFilter] = useState<string | null>(null);
   const selectedYear = yearFilter ?? activeYear;
   const [sort, setSort] = useState<SortState<MgmtReviewSortKey> | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Any filter/sort/pageSize change resets to page 1 (page itself is not a
-  // dep, so clicking Next/Prev doesn't bounce back to 1).
-  useEffect(() => {
+  // Reset to page 1 whenever a filter / sort / page-size changes — computed
+  // during render (not in a useEffect) so a filter change doesn't first fire a
+  // wasted request for the old page under keepPreviousData. Mirrors MyMentees.
+  const filterKey = [
+    employeeFilter,
+    deptFilter,
+    designationFilter,
+    mentorFilter,
+    statusFilter,
+    selectedYear,
+    sort ? `${sort.key}:${sort.direction}` : "",
+    pageSize,
+  ].join("|");
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  let activePage = page;
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
     setPage(1);
-  }, [employeeFilter, deptFilter, designationFilter, mentorFilter, statusFilter, selectedYear, sort, pageSize]);
+    activePage = 1;
+  }
 
   const query: CalibrationQuery = {
-    page,
+    page: activePage,
     per_page: pageSize,
     employee: employeeFilter || undefined,
     department: deptFilter !== "all" ? deptFilter : undefined,
@@ -333,6 +355,14 @@ export function ManagementReviewTab() {
         />
       </div>
 
+      {!managementReviewEnabled && (
+        <div className="border-b border-border bg-amber-50 dark:bg-amber-950/30 px-5 py-3 text-[13px] text-amber-800 dark:text-amber-200">
+          The management review window is currently closed. You can view
+          evaluations, but management ratings can't be published until an admin
+          opens Management Review for this fiscal year in System Settings.
+        </div>
+      )}
+
       {/* Table / Empty state */}
       {total === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -373,8 +403,8 @@ export function ManagementReviewTab() {
                 <th className="px-5 py-3">
                   <SortableHeader label="Department" columnKey="department" sort={sort} onSort={setSort} />
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                  Year
+                <th className="px-5 py-3">
+                  <SortableHeader label="Year" columnKey="cycle_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="px-5 py-3">
                   <SortableHeader label="Self Review" columnKey="self_performance_rating" sort={sort} onSort={setSort} />
@@ -435,25 +465,51 @@ export function ManagementReviewTab() {
                       >
                         <Eye className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSaveError("");
-                          setEditTarget({
-                            row: r,
-                            draft: r.management_performance_rating ?? "",
-                          });
-                        }}
-                        title={
-                          r.management_performance_rating == null
-                            ? "Add management rating"
-                            : "Edit management rating"
+                      {(() => {
+                        // Mirror the backend _require_reviews_open gate: only the
+                        // active FY, and only while its window is open, can be
+                        // published. Past years / closed window → read-only.
+                        const editable =
+                          r.cycle_name === activeYear && managementReviewEnabled;
+                        if (editable) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSaveError("");
+                                setEditTarget({
+                                  row: r,
+                                  draft: r.management_performance_rating ?? "",
+                                });
+                              }}
+                              title={
+                                r.management_performance_rating == null
+                                  ? "Add management rating"
+                                  : "Edit management rating"
+                              }
+                              className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
+                              aria-label={`Edit management rating for ${r.employee_name}`}
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          );
                         }
-                        className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
-                        aria-label={`Edit management rating for ${r.employee_name}`}
-                      >
-                        <Pencil className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                        const reason =
+                          r.cycle_name !== activeYear
+                            ? "Past reviews are read-only"
+                            : "Management review is closed — open it in System Settings to publish ratings";
+                        return (
+                          <button
+                            type="button"
+                            disabled
+                            title={reason}
+                            aria-label={reason}
+                            className="rounded-md p-1.5 text-text-muted/40 cursor-not-allowed"
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>
@@ -465,7 +521,7 @@ export function ManagementReviewTab() {
 
       {total > 0 && (
         <TablePagination
-          page={page}
+          page={activePage}
           pageSize={pageSize}
           totalItems={total}
           onPageChange={setPage}

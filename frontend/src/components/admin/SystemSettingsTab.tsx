@@ -88,6 +88,7 @@ const TOGGLE_LABELS: Record<keyof YearSettingsUpdatePayload, string> = {
   annual_goals_edit_enabled: "Annual Goal Edit Access",
   project_ratings_visible: "Project Rating Visibility",
   annual_goals_final_rating_visible: "Annual Goal Review Visibility",
+  management_review_enabled: "Management Review",
 };
 
 interface SaveConfirmationModalProps {
@@ -284,6 +285,7 @@ export function SystemSettingsTab({
     annual_goals_edit_enabled: false,
     project_ratings_visible: false,
     annual_goals_final_rating_visible: false,
+    management_review_enabled: false,
   });
   const [formKey, setFormKey] = useState<string | null>(null);
   if (savedYear && formKey !== savedYear.fy_label) {
@@ -295,6 +297,7 @@ export function SystemSettingsTab({
       project_ratings_visible: savedYear.project_ratings_visible,
       annual_goals_final_rating_visible:
         savedYear.annual_goals_final_rating_visible,
+      management_review_enabled: savedYear.management_review_enabled,
     });
     setFormKey(savedYear.fy_label);
   }
@@ -309,6 +312,7 @@ export function SystemSettingsTab({
       "annual_goals_edit_enabled",
       "project_ratings_visible",
       "annual_goals_final_rating_visible",
+      "management_review_enabled",
     ];
     return keys
       .filter((k) => form[k] !== savedYear[k])
@@ -425,6 +429,15 @@ export function SystemSettingsTab({
                     ...prev,
                     annual_review_final_rating_visible: next,
                   }))
+                }
+              />
+              <ToggleRow
+                label="Enable Management Review"
+                description="When on, management can publish or override final management ratings for this fiscal year. Independent of Annual Reviews — open this once self-reviews and mentor evaluations are complete."
+                checked={form.management_review_enabled}
+                disabled={yearLoading}
+                onChange={(next) =>
+                  setForm((prev) => ({ ...prev, management_review_enabled: next }))
                 }
               />
             </div>
