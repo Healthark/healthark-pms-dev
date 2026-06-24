@@ -3,9 +3,9 @@
  * self-review, simplified to a single paragraph each side.
  *
  * Layout:
- *   Top (full-width)  — collapsible role-expectation panels for Firm Growth
- *                       and Competency & Skills, scoped to the mentee's
- *                       (goal owner's) department × designation.
+ *   Top (full-width)  — the shared role-expectation card (RoleExpectationsCard),
+ *                       scoped to the mentee's (goal owner's) department ×
+ *                       designation. Same card used on the Annual Goals page.
  *   Left panel        — read-only display of the mentee's self-review paragraph.
  *   Right panel       — mentor fills a single paragraph (or views read-only
  *                       when a mentor review already exists for this half).
@@ -32,7 +32,7 @@ import {
   projectReviewService,
   type RoleExpectation,
 } from "../../services/project-review.service";
-import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
+import { RoleExpectationsCard } from "./RoleExpectationsCard";
 import { formatFyYearSpan } from "../../utils/fy";
 import { halfDisplayLabel, isHalfWindowOpen } from "../../utils/goalStatus";
 import { getOwnerRole } from "../../utils/goalOwner";
@@ -224,30 +224,14 @@ export function GoalMentorReviewModal({
           </button>
         </div>
 
-        {/* ── Role-expectation reference panels (above the split) ── */}
+        {/* ── Role-expectation reference card (above the split) — same card as
+            the Annual Goals page, scoped to the mentee being reviewed. ── */}
         {ownerExpectation && (
-          <div className="border-b border-border bg-blue-50/30 dark:bg-blue-950/30 px-6 py-3 space-y-2 shrink-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Mentee role expectations
-            </p>
-            <div>
-              <p className="text-[11px] font-semibold text-text-main mb-0.5">
-                Firm Growth
-              </p>
-              <ExpectationPanel
-                expectation={ownerExpectation}
-                expKey="exp_firm_growth"
-              />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-text-main mb-0.5">
-                Competency &amp; Skills
-              </p>
-              <ExpectationPanel
-                expectation={ownerExpectation}
-                expKey="exp_competency_skills"
-              />
-            </div>
+          <div className="border-b border-border px-6 py-3 shrink-0">
+            <RoleExpectationsCard
+              expectation={ownerExpectation}
+              title="Mentee Role Expectations"
+            />
           </div>
         )}
 

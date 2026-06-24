@@ -42,7 +42,7 @@ export function RequestChangesModal({
           </h2>
           <p className="mt-0.5 text-sm text-text-muted">
             Explain what needs to be revised for{" "}
-            <strong>{goal.owner_name}</strong>.
+            <strong>{goal.title}</strong>.
           </p>
         </div>
 

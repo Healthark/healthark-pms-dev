@@ -30,7 +30,7 @@ import {
   projectReviewService,
   type RoleExpectation,
 } from "../../services/project-review.service";
-import { ExpectationPanel } from "../project-reviews/ExpectationPanel";
+import { RoleExpectationsCard } from "./RoleExpectationsCard";
 import { formatFyYearSpan } from "../../utils/fy";
 import { getOwnerRole, getOwnerName } from "../../utils/goalOwner";
 import { halfDisplayLabel } from "../../utils/goalStatus";
@@ -51,8 +51,9 @@ function cycleLabel(
     : display;
 }
 
-/** Adapt the /users/me/expectations payload into the shape ExpectationPanel
- *  expects (it shares its interface with the Project Review forms). */
+/** Adapt the /users/me/expectations payload into the RoleExpectation shape
+ *  (shared with the Project Review forms) so it can feed RoleExpectationsCard
+ *  the same way the mentor-view org-expectation rows do. */
 function asRoleExpectation(u: UserRoleExpectation | null): RoleExpectation | null {
   if (!u) return null;
   return {
@@ -171,6 +172,10 @@ export function GoalSelfReviewModal({
 
   const allFilled = overall.trim().length > 0;
 
+  // A draft is only meaningful once the user has typed something — keep the
+  // "Save Draft" action disabled until the first character is entered.
+  const hasDraftContent = overall.trim().length > 0;
+
   const handleSubmit = async () => {
     await onSubmit(cycleHalf, { self_overall_review: overall.trim() });
   };
@@ -204,8 +209,8 @@ export function GoalSelfReviewModal({
   }
 
   const expectationsHeading = readOnly
-    ? `Refer to ${getOwnerName(goal)}'s role expectations`
-    : "Refer to your role expectations";
+    ? `${getOwnerName(goal)}'s Role Expectations`
+    : "Your Role Expectations";
 
   return createPortal(
     <div
@@ -252,32 +257,11 @@ export function GoalSelfReviewModal({
             </p>
           )}
 
-          {/* Role-expectation reference panels */}
-          {expectationForPanel && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                {expectationsHeading}
-              </p>
-              <div>
-                <p className="text-[11px] font-semibold text-text-main mb-0.5">
-                  Firm Growth
-                </p>
-                <ExpectationPanel
-                  expectation={expectationForPanel}
-                  expKey="exp_firm_growth"
-                />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold text-text-main mb-0.5">
-                  Competency &amp; Skills
-                </p>
-                <ExpectationPanel
-                  expectation={expectationForPanel}
-                  expKey="exp_competency_skills"
-                />
-              </div>
-            </div>
-          )}
+          {/* Role-expectation reference card — identical to the Annual Goals page. */}
+          <RoleExpectationsCard
+            expectation={expectationForPanel}
+            title={expectationsHeading}
+          />
 
           {!isLocked && (
             <p className="text-xs text-text-muted">
@@ -343,7 +327,7 @@ export function GoalSelfReviewModal({
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                disabled={isSaving || isDraftSaving}
+                disabled={isSaving || isDraftSaving || !hasDraftContent}
                 className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
               >
                 {isDraftSaving ? (

@@ -1,0 +1,83 @@
+import { useState } from "react";
+import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+
+/**
+ * Collapsible "Your Role Expectations" reference card.
+ *
+ * Single source of truth for the card shown on the Annual Goals (My Goals)
+ * page and inside the Goal Self-Review modal, so the two never drift. Shows
+ * the Firm Growth + Competency & Skills expectation text for one role, with
+ * the stored " | " separators rendered as bullet lines.
+ *
+ * Accepts any object carrying the four fields below — both the profile
+ * `UserRoleExpectation` and the project-review `RoleExpectation` satisfy it.
+ */
+export interface RoleExpectationCardData {
+  readonly department_name: string | null;
+  readonly designation_name: string | null;
+  readonly exp_firm_growth: string | null;
+  readonly exp_competency_skills: string | null;
+}
+
+const FIELDS: {
+  readonly key: keyof RoleExpectationCardData;
+  readonly label: string;
+}[] = [
+  { key: "exp_firm_growth", label: "Firm Growth" },
+  { key: "exp_competency_skills", label: "Competency & Skills" },
+];
+
+export function RoleExpectationsCard({
+  expectation,
+  title = "Your Role Expectations",
+  defaultOpen = false,
+}: {
+  readonly expectation: RoleExpectationCardData | null;
+  /** Header label — override for the mentor view (e.g. "Asha's Role Expectations"). */
+  readonly title?: string;
+  readonly defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!expectation) return null;
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-2.5 bg-blue-50/50 dark:bg-blue-950/50 hover:bg-blue-50/80 dark:hover:bg-blue-950/80 transition-colors"
+      >
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
+          <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-300 shrink-0" />
+          {title}
+        </span>
+        {open ? (
+          <ChevronUp className="h-3.5 w-3.5 text-text-muted shrink-0" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 text-text-muted shrink-0" />
+        )}
+      </button>
+      {open && (
+        <div className="px-4 py-3 space-y-3 bg-blue-50/20 dark:bg-blue-950/20 border-t border-border">
+          {FIELDS.map(({ key, label }) => {
+            const text = expectation[key];
+            if (!text) return null;
+            return (
+              <div key={key}>
+                <p className="text-[11px] font-semibold text-text-main mb-0.5">
+                  {label}
+                </p>
+                <p className="text-xs text-text-muted whitespace-pre-wrap leading-relaxed">
+                  {text.replace(/ \| /g, "\n• ")}
+                </p>
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-text-muted pt-1 border-t border-border">
+            {expectation.department_name} · {expectation.designation_name}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
