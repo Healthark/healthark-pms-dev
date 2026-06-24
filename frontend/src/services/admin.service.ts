@@ -55,12 +55,6 @@ export interface SystemSettings {
   project_ratings_visible: boolean;
   annual_reviews_enabled: boolean;
   annual_review_final_rating_visible: boolean;
-  /** ISO date string set by Admin + management when previewing cycle
-   *  behavior at a different point in time. NULL when unset. */
-  simulated_today: string | null;
-  /** Mirrors the backend's ALLOW_DATE_SIMULATION env flag. UI hides the
-   *  Date Simulation control entirely when false. */
-  simulation_allowed: boolean;
   updated_at: string | null;
 }
 
@@ -72,14 +66,6 @@ export interface AdminSettingsUpdatePayload {
   project_ratings_visible?: boolean;
   annual_reviews_enabled?: boolean;
   annual_review_final_rating_visible?: boolean;
-  /** ISO date string to pin "today" to. Pair with omitting
-   *  clear_simulated_today. Rejected with 400 when ALLOW_DATE_SIMULATION
-   *  is false on the backend. */
-  simulated_today?: string;
-  /** Set true to explicitly null the simulated_today column. PATCH
-   *  treats omission as "leave unchanged", so this companion flag is
-   *  the only way to express a clear. */
-  clear_simulated_today?: boolean;
 }
 
 /** Per-fiscal-year access configuration types. The System Settings tab's
@@ -191,6 +177,29 @@ export interface CoverageGaps {
 export interface AdminNotifyResult {
   recipients: number;
   emailed: boolean;
+}
+
+// ── Cycle roll-out ──────────────────────────────────────────────────
+// The active cycle is admin-advanced (manual), not date-derived.
+
+export interface CycleEffects {
+  from_cycle: string;
+  to_cycle: string;
+  /** True when advancing changes the FY (heavyweight transition). */
+  fy_rollover: boolean;
+  /** The FE requires a typed confirmation for the (irreversible) FY rollover. */
+  requires_typed_confirmation: boolean;
+}
+
+export interface CycleStatus {
+  active_cycle: string;
+  next_cycle: string;
+  effects: CycleEffects;
+}
+
+export interface CycleSetPayload {
+  /** Strict cycle label, e.g. "H1 FY26-27". */
+  target_cycle: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +333,22 @@ export const adminService = {
   // Admin "Notify" tab — fan out an org-wide announcement (in-app + optional email).
   sendNotify: async (payload: AdminNotifyPayload): Promise<AdminNotifyResult> => {
     const res = await apiClient.post<AdminNotifyResult>("/admin/notify", payload);
+    return res.data;
+  },
+
+  // ── Cycle roll-out (manual active-cycle advancement) ─────────────
+  getCycleStatus: async (): Promise<CycleStatus> => {
+    const res = await apiClient.get<CycleStatus>("/admin/cycle");
+    return res.data;
+  },
+
+  rolloutCycle: async (): Promise<CycleStatus> => {
+    const res = await apiClient.post<CycleStatus>("/admin/cycle/rollout");
+    return res.data;
+  },
+
+  setCycle: async (payload: CycleSetPayload): Promise<CycleStatus> => {
+    const res = await apiClient.post<CycleStatus>("/admin/cycle/set", payload);
     return res.data;
   },
 };

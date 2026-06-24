@@ -7,7 +7,6 @@ import {
   type UserResponse,
   type UserCreatePayload,
   type UserUpdatePayload,
-  type AdminSettingsUpdatePayload,
 } from "../services/admin.service";
 import type { CycleType } from "../services/system-settings.service";
 import { getErrorMessage } from "../utils/errors";
@@ -25,12 +24,10 @@ import { ExportsTab } from "../components/admin/ExportsTab";
 import { NotifyTab } from "../components/admin/NotifyTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
-import { useSnackbar } from "../hooks/useSnackbar";
 import { useAuth } from "../hooks/useAuth";
 import { useCreateUser, useUpdateUser } from "../queries/users";
 import {
   useAdminSettings,
-  useUpdateAdminSettings,
   useCoverageGaps,
 } from "../queries/adminSettings";
 import { useDepartments, useDesignations } from "../queries/adminReferenceData";
@@ -64,17 +61,8 @@ export default function AdminPanel() {
   // the ['admin-settings'] query whenever fresh data arrives.
   const [cycleType, setCycleType] = useState<CycleType>("half_yearly");
   const [fiscalStartMonth, setFiscalStartMonth] = useState(4);
-  // Dev/QA date simulation. simulatedToday is an ISO date string (or empty
-  // when unset). simulationAllowed mirrors the backend's env flag so the
-  // field hides itself outside dev/staging.
-  const [simulatedToday, setSimulatedToday] = useState<string>("");
-  // Tracks whether the next save should send `clear_simulated_today` —
-  // set when the admin clicks Clear so the PATCH explicitly drops the
-  // stored value (PATCH semantics treat omission as "leave unchanged").
-  const [clearSimulatedTodayPending, setClearSimulatedTodayPending] = useState(false);
 
   const toast = useToast();
-  const snackbar = useSnackbar();
 
   const projectsTabRef = useRef<ProjectsTabHandle>(null);
 
@@ -89,8 +77,6 @@ export default function AdminPanel() {
 
   // ── Admin settings (shared cache via ['admin-settings']) ──────────────────
   const { data: adminSettings } = useAdminSettings();
-  const updateAdminSettingsMutation = useUpdateAdminSettings();
-  const isSavingSettings = updateAdminSettingsMutation.isPending;
 
   // Hydrate form fields whenever the query produces a new snapshot — both
   // on initial load and after a mutation refetch.
@@ -98,8 +84,6 @@ export default function AdminPanel() {
     if (!adminSettings) return;
     setCycleType((adminSettings.cycle_type as CycleType) ?? "half_yearly");
     setFiscalStartMonth(adminSettings.fiscal_start_month ?? 4);
-    setSimulatedToday(adminSettings.simulated_today ?? "");
-    setClearSimulatedTodayPending(false);
   }, [adminSettings]);
 
   // ── User handlers ─────────────────────────────────────────────────────────
@@ -141,40 +125,6 @@ export default function AdminPanel() {
     } catch (err) {
       setModalError(getErrorMessage(err));
     }
-  };
-
-  // ── Settings handler ──────────────────────────────────────────────────────
-  // The mutation invalidates both ['admin-settings'] and ['system-settings'],
-  // so the form re-hydrates via the useEffect above and every consumer of
-  // useSystemSettings() picks up the new value on its next render.
-  const handleSaveSettings = async () => {
-    const payload: AdminSettingsUpdatePayload = {
-      cycle_type: cycleType,
-      fiscal_start_month: fiscalStartMonth,
-    };
-    // Date simulation: clear wins, otherwise set if a value is present.
-    // Omitting both leaves the column untouched on the backend.
-    if (clearSimulatedTodayPending) {
-      payload.clear_simulated_today = true;
-    } else if (simulatedToday) {
-      payload.simulated_today = simulatedToday;
-    }
-    try {
-      await updateAdminSettingsMutation.mutateAsync(payload);
-      toast.success("Configuration saved.");
-    } catch (err) {
-      snackbar.error(getErrorMessage(err));
-    }
-  };
-
-  const handleClearSimulatedToday = () => {
-    setSimulatedToday("");
-    setClearSimulatedTodayPending(true);
-  };
-
-  const handleSimulatedTodayChange = (value: string) => {
-    setSimulatedToday(value);
-    setClearSimulatedTodayPending(false);
   };
 
   // ── Tab style helper ──────────────────────────────────────────────────────
@@ -302,12 +252,6 @@ export default function AdminPanel() {
             activeCycleName={adminSettings?.active_cycle ?? ""}
             cycleType={cycleType}
             fiscalStartMonth={fiscalStartMonth}
-            simulatedToday={simulatedToday}
-            simulationAllowed={adminSettings?.simulation_allowed ?? false}
-            onSimulatedTodayChange={handleSimulatedTodayChange}
-            onClearSimulatedToday={handleClearSimulatedToday}
-            onSave={handleSaveSettings}
-            isSaving={isSavingSettings}
           />
         )}
       </div>

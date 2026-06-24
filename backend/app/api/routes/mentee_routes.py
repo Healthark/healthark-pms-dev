@@ -23,7 +23,6 @@ from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.api.routes.project_review_routes import _build_review_response, _visible_performance_group
-from app.core.cycle_utils import get_current_cycle_info, resolve_today
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.goal_models import POST_APPROVAL_STATES, ApprovalStatus, Goal, GoalType
 from app.models.project_models import Project, ProjectAssignment
@@ -46,19 +45,13 @@ router = APIRouter()
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def _get_active_cycle(db: DbSession, org_id: int) -> str:
-    """
-    Return the active cycle name for this org. Falls back to a computed
-    label if SystemSettings is missing an active_cycle_name so the endpoint
-    never 500s purely because settings are mid-setup.
-    """
+    """Return the org's stored active cycle name, or a neutral placeholder when
+    SystemSettings hasn't been configured yet (so the endpoint never 500s
+    purely because settings are mid-setup)."""
     settings = db.query(SystemSettings).filter(SystemSettings.org_id == org_id).first()
     if settings and settings.active_cycle_name:
         return settings.active_cycle_name
-    cycle_type = (
-        CycleType(settings.cycle_type) if settings else CycleType.HALF_YEARLY
-    )
-    fiscal_start = settings.fiscal_start_month if settings else 4
-    return get_current_cycle_info(resolve_today(settings), cycle_type, fiscal_start)
+    return "No active cycle"
 
 
 def _list_mentees(db: DbSession, mentor: User) -> list[User]:

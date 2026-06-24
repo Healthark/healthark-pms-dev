@@ -92,15 +92,6 @@ class Settings(BaseSettings):
 
     FISCAL_START_MONTH: int = 4
 
-    # ── Demo / QA escape hatches ─────────────────────────────────────
-    # Gates the `system_settings.simulated_today` write path. When False
-    # (default), the PATCH /admin/settings endpoint rejects any non-null
-    # `simulated_today` payload with a 400 — so production deployments
-    # are safe from accidental cycle-time shifts. Dev / staging set this
-    # to True in their .env to make the field editable from the Admin
-    # Panel's System Settings tab.
-    ALLOW_DATE_SIMULATION: bool = False
-
     # ── Exports ──────────────────────────────────────────────────────
     # Hard ceiling on rows per sheet in an Excel export. Workbooks are built
     # fully in memory (openpyxl), so an unbounded export of a huge org can

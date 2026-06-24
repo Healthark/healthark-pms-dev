@@ -37,7 +37,6 @@ import { formatFyYearSpan } from "../../utils/fy";
 import { halfDisplayLabel, isHalfWindowOpen } from "../../utils/goalStatus";
 import { getOwnerRole } from "../../utils/goalOwner";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { useToday } from "../../hooks/useToday";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
@@ -86,8 +85,6 @@ export function GoalMentorReviewModal({
 }: GoalMentorReviewModalProps) {
   const { settings } = useSystemSettings();
   const cycleType = settings?.cycle_type ?? null;
-  const today = useToday();
-  const fiscalStartMonth = settings?.fiscal_start_month ?? 4;
 
   // The /goals/team list response was slimmed (PR 18) to drop the heavy
   // self_overall_review + mentor_overall_review text bodies. The modal
@@ -173,8 +170,7 @@ export function GoalMentorReviewModal({
   const windowOpen = isHalfWindowOpen(
     cycleHalf,
     goal.fy_year,
-    fiscalStartMonth,
-    today,
+    settings?.active_cycle_name,
   );
 
   const handleSubmit = async () => {

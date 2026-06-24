@@ -21,7 +21,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import CurrentUser, DbSession
-from app.core.cycle_utils import resolve_today
 from app.feedback_360.questions import FEEDBACK_QUESTIONS, VALID_QUESTION_KEYS
 from app.models.feedback_360_models import Feedback360Answer, Feedback360Review
 from app.models.system_settings_models import SystemSettings
@@ -56,18 +55,19 @@ MIN_REVIEWERS_PER_COHORT = 3
 
 
 def _resolved_active_fy(db: DbSession, org_id: int) -> int:
-    """Resolve the active fiscal year, honoring `simulated_today` and the
-    org's configured `fiscal_start_month` — the same FY boundary every
-    other module uses, not the deployment env default."""
+    """Resolve the active fiscal year from the org's stored active cycle
+    (admin-advanced; not date-derived)."""
     settings = (
         db.query(SystemSettings)
         .filter(SystemSettings.org_id == org_id)
         .first()
     )
-    fiscal_start_month = settings.fiscal_start_month if settings else None
-    return current_active_fy(
-        resolve_today(settings), fiscal_start_month=fiscal_start_month
-    )
+    if not settings or not settings.active_cycle_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active performance cycle configured. Contact your HR administrator.",
+        )
+    return current_active_fy(settings.active_cycle_name)
 
 
 def _build_question_aggregates(rows) -> list[FeedbackQuestionAggregate]:

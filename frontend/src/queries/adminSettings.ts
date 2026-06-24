@@ -4,6 +4,8 @@ import {
   type AdminNotifyPayload,
   type AdminSettingsUpdatePayload,
   type CoverageGaps,
+  type CycleSetPayload,
+  type CycleStatus,
   type SystemSettings,
   type YearOptionsResponse,
   type YearSettingsResponse,
@@ -130,5 +132,38 @@ export function useUpdateYearSettings() {
       qc.invalidateQueries({ queryKey: adminSettingsQueryKey });
       qc.invalidateQueries({ queryKey: systemSettingsQueryKey });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cycle roll-out (manual active-cycle advancement)
+// ---------------------------------------------------------------------------
+
+export const cycleStatusQueryKey = ["admin", "cycle"] as const;
+
+/** Current active cycle + the cycle a roll-out would advance to (with effects). */
+export function useCycleStatus() {
+  return useQuery<CycleStatus>({
+    queryKey: cycleStatusQueryKey,
+    queryFn: () => adminService.getCycleStatus(),
+  });
+}
+
+/** Roll-out / manual-set both change the org's active cycle — a rare,
+ *  app-wide state change (FY-scoped data shifts everywhere). Invalidate the
+ *  whole query cache so every page reflects the new cycle. */
+export function useRolloutCycle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => adminService.rolloutCycle(),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useSetCycle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CycleSetPayload) => adminService.setCycle(payload),
+    onSuccess: () => qc.invalidateQueries(),
   });
 }

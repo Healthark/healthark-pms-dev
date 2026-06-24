@@ -30,14 +30,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from datetime import date
 from typing import Iterable
 
 from sqlalchemy import and_, exists
 from sqlalchemy.orm import Session, aliased
 
 from app.core.config import settings
-from app.core.cycle_utils import current_half_and_fy
+from app.core.cycle_utils import parse_cycle
 from app.models.project_models import ProjectAssignment
 from app.models.user_models import User
 
@@ -57,28 +56,15 @@ def reviewer_hash(reviewer_id: int, target_id: int, fy_year: int) -> str:
 # ── Cycle ────────────────────────────────────────────────────────────
 
 
-def current_active_fy(
-    today: date | None = None,
-    fiscal_start_month: int | None = None,
-) -> int:
-    """Return the integer fiscal-year-start for the active cycle (e.g.
-    2026 for FY26-27 when fiscal_start_month=4 and today is May 2026).
+def current_active_fy(active_cycle_name: str) -> int:
+    """Fiscal-year-start for the org's active cycle, parsed from the stored
+    `active_cycle_name` (e.g. 'H1 FY26-27' → 2026).
 
-    `fiscal_start_month` should be the org's configured value
-    (`system_settings.fiscal_start_month`) so 360 lands on the same FY
-    boundary every other module uses. It falls back to the deployment
-    env default only when a caller can't supply the org's setting.
-
-    Independent of cycle_type — 360 feedback is FY-scoped regardless of
-    whether the org runs annual / half-yearly / quarterly review cycles.
+    The active cycle is admin-advanced, not date-derived, so 360 reads the
+    same FY off the same stored label every other module uses. Independent
+    of cycle_type — 360 feedback is FY-scoped.
     """
-    instant = today or date.today()
-    month = (
-        fiscal_start_month
-        if fiscal_start_month is not None
-        else settings.FISCAL_START_MONTH
-    )
-    _half, fy_year = current_half_and_fy(instant, month)
+    _code, fy_year = parse_cycle(active_cycle_name)
     return fy_year
 
 

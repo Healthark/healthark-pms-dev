@@ -55,9 +55,8 @@ from app.schemas.goal_schemas import (
 from app.schemas.pagination import Page, PaginationParams
 from app.core.cycle_utils import (
     cycles_before,
-    get_goal_cycle_name,
+    goal_cycle_name_for_active,
     is_review_window_open,
-    resolve_today,
     get_year_override,
     _cycle_to_fy_label,
     _fy_label_of_goal,
@@ -192,7 +191,7 @@ def _goal_fy_year(goal: Goal) -> Optional[int]:
     """Extract the 4-digit fiscal start year from `goal.cycle_name`.
 
     Goal cycle names are stamped at creation as "H1 2026" / "H2 2025"
-    (4-digit year, no FY prefix — see get_goal_cycle_name). Returns None
+    (4-digit year, no FY prefix — see goal_cycle_name_for_active). Returns None
     when the goal predates this stamping or has no cycle_name.
     """
     if not goal.cycle_name:
@@ -310,11 +309,9 @@ def create_goal(
     cycle_name: Optional[str] = None
     if goal_in.goal_type == GoalType.ANNUAL:
         settings = _get_settings(db, current_user.org_id)
-        # Stamp the half-yearly cycle at creation time ("H1 2026", "H2 2025").
-        # Uses resolve_today(settings) so a simulated date pins goals into the
-        # simulated half too; falls back to real UTC date when no simulation.
+        # Stamp the half-yearly cycle from the active cycle ("H1 2026").
         # Stamp BEFORE gating so the per-FY check keys off the goal's own FY.
-        cycle_name = get_goal_cycle_name(resolve_today(settings))
+        cycle_name = goal_cycle_name_for_active(settings.active_cycle_name)
         _assert_annual_gate_open(
             db, current_user.org_id, _cycle_to_fy_label(cycle_name)
         )
@@ -1131,7 +1128,7 @@ def submit_goal_self_review(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Goal has no fiscal year on record; cannot submit reviews.",
         )
-    if not is_review_window_open(half, fy_year, resolve_today(settings), settings.fiscal_start_month):
+    if not is_review_window_open(half, fy_year, settings.active_cycle_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -1253,7 +1250,7 @@ def save_goal_self_review_draft(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Goal has no fiscal year on record; cannot draft reviews.",
         )
-    if not is_review_window_open(half, fy_year, resolve_today(settings), settings.fiscal_start_month):
+    if not is_review_window_open(half, fy_year, settings.active_cycle_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -1348,7 +1345,7 @@ def submit_goal_mentor_review(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Goal has no fiscal year on record; cannot submit reviews.",
         )
-    if not is_review_window_open(half, fy_year, resolve_today(settings), settings.fiscal_start_month):
+    if not is_review_window_open(half, fy_year, settings.active_cycle_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -1475,7 +1472,7 @@ def save_goal_mentor_review_draft(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Goal has no fiscal year on record; cannot draft reviews.",
         )
-    if not is_review_window_open(half, fy_year, resolve_today(settings), settings.fiscal_start_month):
+    if not is_review_window_open(half, fy_year, settings.active_cycle_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(

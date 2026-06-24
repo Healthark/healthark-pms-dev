@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Save, Info, FlaskConical, AlertTriangle } from "lucide-react";
+import { Save, Info, AlertTriangle } from "lucide-react";
 import type { CycleType } from "../../services/system-settings.service";
 import type {
   YearPreflightResponse,
@@ -16,18 +16,12 @@ import { useToast } from "../../hooks/useToast";
 import { useSnackbar } from "../../hooks/useSnackbar";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { getErrorMessage } from "../../utils/errors";
+import { CycleRolloutCard } from "./CycleRolloutCard";
 
 interface SystemSettingsTabProps {
   readonly activeCycleName: string;
   readonly cycleType: CycleType;
   readonly fiscalStartMonth: number;
-  // Date simulation (dev/QA only) — still prop-driven from AdminPanel.
-  readonly simulatedToday: string;
-  readonly simulationAllowed: boolean;
-  readonly onSimulatedTodayChange: (date: string) => void;
-  readonly onClearSimulatedToday: () => void;
-  readonly onSave: () => void;
-  readonly isSaving: boolean;
 }
 
 const MONTHS = [
@@ -239,12 +233,6 @@ export function SystemSettingsTab({
   activeCycleName,
   cycleType,
   fiscalStartMonth,
-  simulatedToday,
-  simulationAllowed,
-  onSimulatedTodayChange,
-  onClearSimulatedToday,
-  onSave,
-  isSaving,
 }: SystemSettingsTabProps) {
   const toast = useToast();
   const snackbar = useSnackbar();
@@ -353,6 +341,8 @@ export function SystemSettingsTab({
 
   return (
     <div className="p-4 space-y-4 sm:p-6 sm:space-y-6">
+      <CycleRolloutCard />
+
       {/* ── Year-scoped configuration header ────────────────────────── */}
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm">
         <div className="flex-1 min-w-[240px]">
@@ -523,17 +513,18 @@ export function SystemSettingsTab({
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                value={activeCycleName || "System Calculated..."}
+                value={activeCycleName || "Not set"}
                 disabled
                 className="w-full sm:w-64 rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-muted cursor-not-allowed"
               />
               <span className="flex items-center gap-1.5 text-xs text-text-muted bg-surface-hover px-2 py-1 rounded-md border border-border">
                 <Info className="w-3.5 h-3.5" />
-                System Calculated
+                Set via roll-out
               </span>
             </div>
             <p className="mt-1.5 text-xs text-text-muted">
-              Dynamically generated from the cadence and fiscal start month below.
+              Advanced manually — use the Cycle card at the top of this tab to roll
+              out the next cycle.
             </p>
           </div>
 
@@ -580,58 +571,6 @@ export function SystemSettingsTab({
           </div>
         </div>
       </div>
-
-      {/* ── Date Simulation (dev/QA escape hatch) ───────────────────── */}
-      {simulationAllowed && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display text-lg font-semibold text-text-main flex items-center gap-2">
-              <FlaskConical className="h-4 w-4 text-amber-600" aria-hidden="true" />
-              Developer · Date Simulation
-            </h3>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-hover disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              <Save className="h-4 w-4" aria-hidden="true" />
-              {isSaving ? "Saving…" : "Save Simulation"}
-            </button>
-          </div>
-          <div className="space-y-3 bg-surface p-5 rounded-xl border border-amber-200 dark:border-amber-500/40 shadow-sm">
-            <p className="text-xs text-text-muted">
-              Pin a fake &ldquo;today&rdquo; for cycle determination, review window
-              checks, and dashboards. The whole app shows an amber banner while
-              this is active so other users know. Audit timestamps and export
-              filenames keep using the real wall clock.
-            </p>
-            <div className="flex items-end gap-2 flex-wrap">
-              <div>
-                <label htmlFor="simulated-today" className="block text-xs font-medium text-text-muted mb-1">
-                  Simulated Today
-                </label>
-                <input
-                  id="simulated-today"
-                  type="date"
-                  value={simulatedToday}
-                  onChange={(e) => onSimulatedTodayChange(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-brand sm:w-52"
-                />
-              </div>
-              {simulatedToday && (
-                <button
-                  type="button"
-                  onClick={onClearSimulatedToday}
-                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-hover"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {showConfirm && selectedYear && (
         <SaveConfirmationModal

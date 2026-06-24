@@ -45,14 +45,6 @@ class SystemSettingsResponse(BaseModel):
     # so it MUST be a field here — get_system_settings overlays it via setattr.
     management_review_enabled: bool
 
-    # Demo-only date simulation. When set, the backend treats this as
-    # "today" for every cycle / window decision. The frontend renders a
-    # banner across the app so every user knows the dates are simulated.
-    simulated_today: Optional[date] = None
-    # Mirrors the backend's ALLOW_DATE_SIMULATION env flag. Tells the UI
-    # whether the date-simulation field should be visible at all.
-    simulation_allowed: bool = False
-
     updated_by_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

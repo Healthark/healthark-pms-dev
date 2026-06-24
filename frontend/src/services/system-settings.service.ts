@@ -35,13 +35,6 @@ export interface SystemSettingsResponse {
    *  of annual_reviews_enabled. Drives the Management Reviews page's publish
    *  affordance and the "window closed" banner. */
   management_review_enabled: boolean;
-  /** ISO date string. Non-null when Admin has pinned a simulated "today"
-   *  for demo / QA purposes. The whole app shows an amber banner when set. */
-  simulated_today: string | null;
-  /** Mirrors the backend's ALLOW_DATE_SIMULATION env flag. When false,
-   *  the simulated_today field is hidden from the System Settings UI and
-   *  PATCHing a non-null value is rejected with 400. */
-  simulation_allowed: boolean;
   updated_by_id: number | null;
   created_at: string;
   updated_at: string | null;
