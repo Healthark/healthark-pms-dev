@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Plus, Target, Lock, ChevronDown,
   Pencil, SendHorizonal, Link, MessageSquare,
-  UserCircle,
+  UserCircle, BookOpen,
 } from "lucide-react";
 import {
   type Goal,
@@ -40,7 +40,7 @@ import { TablePagination } from "../components/common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { formatFyYearSpan, extractFyToken, fyTokenToStartYear } from "../utils/fy";
 import { useMyExpectations } from "../queries/profile";
-import { RoleExpectationsCard } from "../components/goals/RoleExpectationsCard";
+import { RoleExpectationsModal } from "../components/goals/RoleExpectationsModal";
 import { isPostApproved } from "../utils/goalStatus";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
 import { exportService } from "../services/export.service";
@@ -234,6 +234,7 @@ export function AnnualGoals() {
   // query module means revisiting this tab in the same session is a
   // cache hit.
   const { data: roleExpectation = null } = useMyExpectations();
+  const [showRoleExp, setShowRoleExp] = useState(false);
 
   // Modal helpers
   const openAdd = () => {
@@ -502,8 +503,25 @@ export function AnnualGoals() {
           {/* ── My Goals tab ── */}
           {activeTab === "my" && (
             <div className="space-y-4">
-              {/* Role expectations — single collapsible container, all competencies */}
-              <RoleExpectationsCard expectation={roleExpectation} />
+              {/* Role expectations — read-only modal opened from a button. */}
+              {roleExpectation && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoleExp(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
+                  >
+                    <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+                    View Role Expectations
+                  </button>
+                </div>
+              )}
+              {showRoleExp && roleExpectation && (
+                <RoleExpectationsModal
+                  expectation={roleExpectation}
+                  onClose={() => setShowRoleExp(false)}
+                />
+              )}
 
               {/* Toolbar */}
               {!isLoading && goals.length > 0 && (

@@ -85,10 +85,27 @@ def seed_database():
             desig_associate_director = Designation(org_id=org.id, name="Associate Director",  level=5)
             desig_director           = Designation(org_id=org.id, name="Director",            level=6)
 
+            # IDT engineering ladder (L1–L4 IC track) + Engineering Manager (L7).
+            # IDT uses the June-2026 L1–L10 expectations framework; expectations
+            # are seeded by level (see EXPECTATIONS_DATA["IDT"]). Associate
+            # Director (L7) and Director (L8) already exist above.
+            idt_ladder = [
+                Designation(org_id=org.id, name="Associate Software Developer", level=1),
+                Designation(org_id=org.id, name="Software Developer",           level=2),
+                Designation(org_id=org.id, name="Senior Software Developer",    level=3),
+                Designation(org_id=org.id, name="Lead Software Developer",      level=4),
+                Designation(org_id=org.id, name="Associate Data Engineer",      level=1),
+                Designation(org_id=org.id, name="Data Engineer",                level=2),
+                Designation(org_id=org.id, name="Senior Data Engineer",         level=3),
+                Designation(org_id=org.id, name="Lead Data Engineer",           level=4),
+                Designation(org_id=org.id, name="Engineering Manager",          level=5),
+            ]
+
             db.add_all([
                 dept_strategy, dept_idt, dept_rwe, dept_marketing,
                 desig_consultant, desig_senior_consultant, desig_manager,
                 desig_senior_manager, desig_associate_director, desig_director,
+                *idt_ladder,
             ])
             db.commit()
             print("  [+] Created Healthark Departments & Designations")
@@ -109,6 +126,10 @@ def seed_database():
         desig_manager           = db.query(Designation).filter_by(org_id=org.id, name="Manager").first()
         desig_senior_manager    = db.query(Designation).filter_by(org_id=org.id, name="Senior Manager").first()
         desig_director          = db.query(Designation).filter_by(org_id=org.id, name="Director").first()
+        # IDT (new L1–L10 hierarchy) — used by the IDT demo users below.
+        desig_engineering_manager  = db.query(Designation).filter_by(org_id=org.id, name="Engineering Manager").first()
+        desig_senior_data_engineer = db.query(Designation).filter_by(org_id=org.id, name="Senior Data Engineer").first()
+        desig_data_engineer        = db.query(Designation).filter_by(org_id=org.id, name="Data Engineer").first()
 
         pw = get_password_hash("password123")
 
@@ -150,7 +171,7 @@ def seed_database():
                 role="Staff", mentor_id=priya.id, password_hash=pw,
             )
             david = User(
-                org_id=org.id, department_id=dept_idt.id, designation_id=desig_manager.id,
+                org_id=org.id, department_id=dept_idt.id, designation_id=desig_engineering_manager.id,
                 employee_code="EMP-201", full_name="David Miller", email="david@healthark.ai",
                 phone="+91 98765 20101",
                 role="Staff", password_hash=pw, mentor_id=admin_user.id,
@@ -160,13 +181,13 @@ def seed_database():
             db.refresh(david)
 
             rahul = User(
-                org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_consultant.id,
+                org_id=org.id, department_id=dept_idt.id, designation_id=desig_senior_data_engineer.id,
                 employee_code="EMP-202", full_name="Rahul Verma", email="rahul@healthark.ai",
                 phone="+91 98765 20102",
                 role="Staff", mentor_id=david.id, password_hash=pw,
             )
             meera = User(
-                org_id=org.id, department_id=dept_idt.id, designation_id=desig_consultant.id,
+                org_id=org.id, department_id=dept_idt.id, designation_id=desig_data_engineer.id,
                 employee_code="EMP-203", full_name="Meera Joshi", email="meera@healthark.ai",
                 phone="+91 98765 20103",
                 role="Staff", mentor_id=david.id, password_hash=pw,
@@ -468,6 +489,101 @@ def seed_database():
         # 7. ROLE EXPECTATIONS                                                #
         # ================================================================== #
 
+        # IDT adopted the L1–L10 expectations framework (June 2026). We seed the
+        # levels the department uses today — L1–L4 (IC track) and L7–L8
+        # (leadership) — and infer each designation's level from its title, so
+        # the level text is shared across role families (Software Developer,
+        # Data Engineer, …) without touching other departments' designations.
+        IDT_LEVEL_EXPECTATIONS = {
+            "L1": {
+                "exp_task_execution": "Execute straightforward, well-defined tasks under supervision. | Break problems into smaller components with guidance. | Ask clarifying questions to understand context before starting.",
+                "exp_ownership": "Execute tasks independently once goals are defined. | Proactively seek guidance when encountering roadblocks. | Self-review deliverables for quality before passing to a lead.",
+                "exp_project_management": "Adhere to timelines and communicate potential delays early. | Understand and follow project delivery processes; keep documents updated. | Proactively reach out to the project manager on progress.",
+                "exp_client_deliverables": "Produce quality code/deliverables with no major defects. | Draft well-formatted and accurate emails and documents. | Design simple visualisations to convey data insights.",
+                "exp_communication": "Draft clear meeting notes listing action items with ownership. | Actively listen to client and project manager needs and reflect them in deliverables. | Communicate progress updates and next steps to internal teams.",
+                "exp_mentoring": "Participate in team building and knowledge management sessions. | Share learnings on delivery processes and technology trends within the team.",
+                "exp_firm_growth": "Participate in firm activities and initiatives. | Contribute to knowledge sharing within the firm. | Support eminence and excellence activities in their practice area.",
+                "exp_competency_skills": "Developing proficiency in assigned technology area. | Demonstrates reduction in guidance needed as experience grows. | Understands the domain of the project assigned.",
+            },
+            "L2": {
+                "exp_task_execution": "Perform simple to medium complexity tasks independently. | Develop an initial approach for assigned tasks rather than waiting for instructions. | Identify gaps in requirements and raise them proactively.",
+                "exp_ownership": "Take full responsibility for assigned tasks and modules. | Demonstrate initiative by suggesting minor improvements in deliverables. | Assist senior team members during the absence of a lead, as needed.",
+                "exp_project_management": "Manage own time and tasks without needing reminders. | Identify and flag risks within assigned scope to the project manager. | Understand the project lifecycle and contribute to process compliance.",
+                "exp_client_deliverables": "Produce quality code/deliverables on time with minimal rework. | Draft clear client-facing communications with appropriate tone and structure. | Suggest improvements to existing templates and deliverable formats.",
+                "exp_communication": "Structure written communication effectively - clear emails with progress, next steps, and open items. | Start interpreting client asks and translate them into tasks under supervision. | Track open items and communicate to leadership when blocked.",
+                "exp_mentoring": "Guide junior team members on tasks, deliverables, and quality. | Encourage and participate in team building activities. | Conduct knowledge sessions on delivery processes and technology trends. | Provide upward feedback on team dynamics and process gaps.",
+                "exp_firm_growth": "Actively contribute to knowledge sharing and firm initiatives. | Support eminence and excellence activities in their practice area. | Participate in firm events and represent the team positively.",
+                "exp_competency_skills": "Proficient in assigned technology area; produces quality deliverables on time. | Suggests process improvements, innovation, and automation opportunities. | Demonstrates awareness of delivery processes and project management basics.",
+            },
+            "L3": {
+                "exp_task_execution": "Independently structure and solve moderately complex problems. | Develop technical approach and solution design for assigned module or workstream. | Translate ambiguous requirements into concrete deliverables.",
+                "exp_ownership": "Own multiple modules within a project and ensure quality delivery. | Regularly update managers on progress and raise potential issues proactively. | Anticipate next steps in the project lifecycle and take initiative beyond assigned tasks.",
+                "exp_project_management": "Perform work estimation, planning, and schedule management within the team. | Proactively manage deadlines and risks; escalate issues when needed. | Assess risk scope - determine what to manage independently vs. escalate.",
+                "exp_client_deliverables": "Review deliverables by junior team members to ensure quality standards. | Leverage domain expertise to produce contextual, polished, high-quality outputs. | Generate new content types as required by the engagement.",
+                "exp_communication": "Lead internal discussions on project updates and next steps. | Interpret client asks effectively and translate them into actionable requirements. | Independently interact with clients and lead one or more project threads.",
+                "exp_mentoring": "Actively mentor 1-2 junior team members with structured feedback. | Identify areas of improvement for junior practitioners and run regular cadence sessions. | Demonstrate maturity in coaching across client communication and project knowledge.",
+                "exp_firm_growth": "Lead and own eminence and excellence activities in their practice area. | Participate in new proposal or SoW creation as a contributor. | Participate in screening and hiring of new members.",
+                "exp_competency_skills": "Expertise in core technology area; can act as backup SME in adjacent areas. | Able to lead estimations for specific areas of expertise. | Demonstrates process awareness and structured project management.",
+            },
+            "L4": {
+                "exp_task_execution": "Lead problem definition and solution design across multiple modules. | Develop technical architecture in collaboration with relevant stack leads. | Present architecture to review boards or clients for acceptance.",
+                "exp_ownership": "Step in and take lead during the absence of a manager. | Anticipate project-level risks and act without being prompted. | Hold themselves and peers accountable to quality and timeline standards.",
+                "exp_project_management": "Manage 2-3 project threads simultaneously with confidence. | Communicate timely status, key updates, and next steps to stakeholders. | Anticipate risks across the full project, not just their own scope.",
+                "exp_client_deliverables": "Ensure final deliverables are free from critical or major defects. | Lead the design of complex or novel deliverables - compelling, story-driven, client-aligned. | Set quality benchmarks and coach the team to meet them consistently.",
+                "exp_communication": "Build and manage relationships with working-level client stakeholders. | Summarise and communicate client feedback clearly to the team. | Develop long-term client relationships within the engagement.",
+                "exp_mentoring": "Actively mentor 3-4 junior team members with structured feedback. | Identify stretch opportunities for juniors to level up in their careers. | Create space for team members to think, approach problems, and build autonomy. | Create/Contribute towards a structured upskilling roadmap for the designated practice area.",
+                "exp_firm_growth": "Play a leadership role within the team - face of the organisation to junior members. | Contribute meaningfully to proposals; own specific sections. | Support recruitment activities and hiring decisions.",
+                "exp_competency_skills": "Deep expertise across one or more technology or domain areas. | Drive process improvements, innovation, and automation across the team. | Demonstrates strong communication skills at working-team level.",
+            },
+            "L7": {
+                "exp_task_execution": "Translate strategic objectives into delivery plans for the team. | Remove systemic blockers that impede team problem-solving capacity. | Ensure cross-functional alignment on solution design and approach.",
+                "exp_ownership": "Hold the team accountable to delivery and performance standards. | Manage stated compliance parameters and drive a culture of meeting expectations. | Address team challenges or disputes promptly and fairly.",
+                "exp_project_management": "Oversee portfolio-level scheduling, resourcing, and risk management. | Actively monitor delivery to ensure scope, schedule, budget, and quality. | Plan and prioritise activity across multiple threads and initiate action.",
+                "exp_client_deliverables": "Govern quality standards across the team or department. | Identify systemic quality gaps and design solutions to address them. | Champion continuous improvement in how the team builds and presents work.",
+                "exp_communication": "Own stakeholder communication strategy for the engagement or department. | Provide regular, structured updates to client and firm leadership. | Resolve communication breakdowns quickly and constructively.",
+                "exp_mentoring": "Develop a team culture of continuous learning, creativity, and quality. | Manage performance formally - set expectations, run reviews, manage PIPs. | Address team challenges or disputes promptly and with fairness.",
+                "exp_firm_growth": "Own recruiting, onboarding, and retention for their team. | Contribute to firm-wide strategic planning and growth conversations. | Foster a culture of collaboration and continuous learning within the team.",
+                "exp_competency_skills": "Manages people and performance - sets expectations, conducts frequent check-ins. | Deep expertise in delivery management across large, complex engagements. | Demonstrates strong cross-functional leadership and organisational skills.",
+            },
+            "L8": {
+                "exp_task_execution": "Define the problem-solving methodology and standards for the department. | Lead critical client situations requiring senior-level solutioning. | Drive innovation roadmaps aligned to client and firm strategy.",
+                "exp_ownership": "Accountable for the overall health and performance of the department. | Own relationships with senior client stakeholders at the director level. | Drive corrective actions when delivery or culture deviates from standards.",
+                "exp_project_management": "Set delivery governance frameworks adopted across the department. | Lead crisis management for high-risk client situations. | Ensure the department consistently delivers within commercial parameters.",
+                "exp_client_deliverables": "Own the firm's quality assurance standards and frameworks. | Ensure the department's outputs are consistently differentiated in the market. | Build a culture where quality is a non-negotiable expectation.",
+                "exp_communication": "Build trust with C-suite and board-level client stakeholders. | Represent the firm in high-visibility client forums and steering committees. | Set the communication standard and cadence for the department.",
+                "exp_mentoring": "Build leadership capability in the layers below - grow future managers and directors. | Sponsor individuals for firm-wide leadership and recognition programmes. | Create an environment that enables others to be creative, agile, and innovative.",
+                "exp_firm_growth": "Lead the department's commercial growth - revenue, pipeline, and client expansion. | Represent the firm in market conversations, conferences, and partnerships. | Act as a role model - fostering positive culture and holding the team to high standards.",
+                "exp_competency_skills": "Defines the technical and delivery capability strategy for the department. | Demonstrates strong executive presence; influences at board and C-suite level. | Drives consensus on architecture, tech stack, and methodology with clients and leadership.",
+            },
+        }
+
+        def _idt_level(name: str) -> str:
+            """Map an IDT designation title to its framework level. Leadership
+            titles are matched first, then the IC-track seniority prefix; a bare
+            role (e.g. "Software Developer") is L2."""
+            if name in ("Engineering Manager", "Associate Director"):
+                return "L7"
+            if name == "Director":
+                return "L8"
+            if name.startswith("Associate "):
+                return "L1"
+            if name.startswith("Senior "):
+                return "L3"
+            if name.startswith("Lead "):
+                return "L4"
+            return "L2"
+
+        # Representative IDT designations across the seeded levels. The full
+        # title list isn't fixed yet — add a name here and its level (hence its
+        # expectations) is inferred automatically by _idt_level().
+        IDT_DESIGNATIONS = [
+            "Associate Software Developer", "Software Developer",
+            "Senior Software Developer", "Lead Software Developer",
+            "Associate Data Engineer", "Data Engineer",
+            "Senior Data Engineer", "Lead Data Engineer",
+            "Engineering Manager", "Associate Director", "Director",
+        ]
+
         EXPECTATIONS_DATA = {
             "Strategy": {
                 "Consultant": {
@@ -502,36 +618,8 @@ def seed_database():
                 },
             },
             "IDT": {
-                "Consultant": {
-                    "exp_task_execution": "Performs simple to medium complexity tasks and breaks down problems.",
-                    "exp_ownership": "Executes tasks independently once goals are defined.",
-                    "exp_project_management": "Adheres to timelines and communicates potential delays early.",
-                    "exp_client_deliverables": "Produces quality code and deliverables with no major defects.",
-                    "exp_communication": "Drafts clear meeting notes and written communications.",
-                    "exp_mentoring": "Encourages team building and knowledge sharing.",
-                    "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm | Contribute to Eminence and Excellence activities to grow the service offering for their respective practice area",
-                    "exp_competency_skills": "Proficient in assigned technology area and produces quality code on time.",
-                },
-                "Senior Consultant": {
-                    "exp_task_execution": "Independently structures and solves moderately complex technical problems.",
-                    "exp_ownership": "Owns multiple modules and guides junior team members.",
-                    "exp_project_management": "Performs work estimation, planning, and delivery management.",
-                    "exp_client_deliverables": "Reviews code and leverages expertise to produce high-quality deliverables.",
-                    "exp_communication": "Leads internal discussions and manages client relationships.",
-                    "exp_mentoring": "Provides guidance to junior team members and leads coaching.",
-                    "exp_firm_growth": "Plays a leadership role within the team; is the face of the organization / leadership team to junior team members | Participates in new proposals / SoW creation | Leads and owns Eminence and Excellence activities to grow the service offering for their respective practice area | Participates in screening and hiring of new members in the organization",
-                    "exp_competency_skills": "Leads technical eminence and demonstrates SME capability.",
-                },
-                "Manager": {
-                    "exp_task_execution": "Leads problem definition and architecture decisions for complex solutions.",
-                    "exp_ownership": "Independently manages multiple large projects end-to-end.",
-                    "exp_project_management": "Owns SoW governance and ensures quality, risk, and budget management.",
-                    "exp_client_deliverables": "Reviews and ensures final deliverables are free from defects.",
-                    "exp_communication": "Leads client discussions and builds strong stakeholder relationships.",
-                    "exp_mentoring": "Develops junior team members through structured coaching.",
-                    "exp_firm_growth": "Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Operates with full independence, managing projects and anticipating client needs | Identifies opportunities for process improvements and efficiency | Plays a leadership role within their firm, sometimes leading a new initiative or a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc.) | Leads proposals independently with minimal guidance from the leadership | Supports recruitment activities | Recruits, trains, and retains top talent while fostering a culture of collaboration and continuous learning",
-                    "exp_competency_skills": "Acts as role model and drives process improvements.",
-                },
+                name: IDT_LEVEL_EXPECTATIONS[_idt_level(name)]
+                for name in IDT_DESIGNATIONS
             },
             "RWE": {
                 "Consultant": {
