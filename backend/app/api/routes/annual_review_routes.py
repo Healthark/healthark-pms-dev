@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
@@ -133,6 +133,33 @@ def _require_reviews_open(db: DbSession, org_id: int, fy_label: Optional[str]) -
             detail=(
                 f"Annual review submissions for {fy_label} are currently closed. "
                 "Please wait for the Admin to open the review window."
+            ),
+        )
+
+
+def _require_management_review_open(
+    db: DbSession, org_id: int, fy_label: Optional[str]
+) -> None:
+    """Raise 403 when the Management Review (calibration) stage is closed for
+    `fy_label`.
+
+    INDEPENDENT of `_require_reviews_open` / `annual_reviews_enabled`:
+    calibration usually opens AFTER the employee + mentor submission window
+    closes, so the management-rating publish is gated by its own per-FY toggle,
+    `management_review_enabled`. Default-deny — closed until an Admin opens it.
+    """
+    if not fy_label:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot determine the fiscal year for this review.",
+        )
+    override = get_year_override(db, org_id, fy_label)
+    if override is None or not override.management_review_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Management review for {fy_label} is currently closed. "
+                "Please wait for the Admin to open the management review window."
             ),
         )
 
@@ -635,6 +662,7 @@ _CALIBRATION_SORT_COLUMNS = {
     "employee_name": lambda E, M: E.full_name,
     "employee_email": lambda E, M: E.email,
     "mentor_name": lambda E, M: M.full_name,
+    "cycle_name": lambda E, M: AnnualReview.cycle_name,
     "self_performance_rating": lambda E, M: AnnualReview.self_performance_rating,
     "mentor_performance_rating": lambda E, M: AnnualReview.mentor_performance_rating,
     "management_performance_rating": lambda E, M: AnnualReview.management_performance_rating,
@@ -660,7 +688,13 @@ def _calibration_base_query(db, org_id: int, cycle_name: Optional[str]):
     query = (
         db.query(AnnualReview, Employee, Mentor, EmpDept, EmpDesig)
         .join(Employee, AnnualReview.user_id == Employee.id)
-        .outerjoin(Mentor, AnnualReview.mentor_id == Mentor.id)
+        .outerjoin(
+            Mentor,
+            and_(
+                AnnualReview.mentor_id == Mentor.id,
+                Mentor.is_deleted == False,  # noqa: E712 — departed mentors drop to "—"
+            ),
+        )
         .outerjoin(EmpDept, Employee.department_id == EmpDept.id)
         .outerjoin(EmpDesig, Employee.designation_id == EmpDesig.id)
         .filter(
@@ -702,7 +736,6 @@ def get_calibration_grid(
     db: DbSession,
     current_user: CurrentUser,
     pg: PaginationParams = Depends(),
-    search: Optional[str] = Query(None, description="Matches employee name/email, mentor, or department"),
     employee: Optional[str] = Query(None, description="Exact employee name"),
     department: Optional[str] = Query(None, description="Exact department name"),
     designation: Optional[str] = Query(None, description="Exact designation name"),
@@ -724,10 +757,11 @@ def get_calibration_grid(
     Management-only.
 
     Scoped to the active cycle by default; pass `year=<FY label>` to view a
-    past year or `year=all` to span every fiscal year. Server-side search /
-    department / mentor / status filtering + sort + offset pagination so the
-    FE never holds the full org review set in memory. Filter-dropdown option
-    lists (incl. the year list) come from GET /calibration/filter-options.
+    past year or `year=all` to span every fiscal year. Server-side employee /
+    department / designation / mentor / status filtering + sort + offset
+    pagination so the FE never holds the full org review set in memory.
+    Filter-dropdown option lists (incl. the year list) come from
+    GET /calibration/filter-options.
     """
     _require_management(current_user)
     cycle_name = _resolve_calibration_cycle(db, current_user.org_id, year)
@@ -737,16 +771,6 @@ def get_calibration_grid(
     )
 
     # ── Filters (applied in SQL, BEFORE pagination) ──────────────────
-    if search:
-        term = f"%{search.strip()}%"
-        query = query.filter(
-            or_(
-                Employee.full_name.ilike(term),
-                Employee.email.ilike(term),
-                Mentor.full_name.ilike(term),
-                EmpDept.name.ilike(term),
-            )
-        )
     if employee:
         query = query.filter(Employee.full_name == employee)
     if department:
@@ -754,7 +778,10 @@ def get_calibration_grid(
     if designation:
         query = query.filter(EmpDesig.name == designation)
     if mentor == _NO_MENTOR_SENTINEL:
-        query = query.filter(AnnualReview.mentor_id.is_(None))
+        # Mentor alias is NULL for both unmentored employees and those whose
+        # mentor was deactivated (the outerjoin is is_deleted-guarded), so this
+        # matches exactly the rows that render "—" in the Mentor column.
+        query = query.filter(Mentor.id.is_(None))
     elif mentor:
         query = query.filter(Mentor.full_name == mentor)
     if status_filter == "pending":
@@ -824,24 +851,30 @@ def get_calibration_filter_options(
     _require_management(current_user)
     active_year = _get_active_cycle(db, current_user.org_id)
 
-    query, Employee, Mentor, EmpDept, EmpDesig = _calibration_base_query(
+    base, Employee, Mentor, EmpDept, EmpDesig = _calibration_base_query(
         db, current_user.org_id, None
     )
-    rows = query.with_entities(
-        Employee.full_name,
-        EmpDept.name,
-        EmpDesig.name,
-        Mentor.full_name,
-        AnnualReview.cycle_name,
-    ).all()
 
-    employees = sorted({e for (e, _d, _g, _m, _c) in rows if e})
-    departments = sorted({d for (_e, d, _g, _m, _c) in rows if d})
-    designations = sorted({g for (_e, _d, g, _m, _c) in rows if g})
-    mentors = sorted({m for (_e, _d, _g, m, _c) in rows if m})
+    # DISTINCT per column in SQL (one lightweight query each) rather than
+    # loading every calibration row and de-duping in Python — keeps memory
+    # flat as the org's review history grows. Deactivated mentors are already
+    # NULLed by the is_deleted-guarded outerjoin, so they drop out here too.
+    def _distinct(col) -> list[str]:
+        return [
+            v
+            for (v,) in base.with_entities(col)
+            .filter(col.isnot(None))
+            .distinct()
+            .all()
+        ]
+
+    employees = sorted(_distinct(Employee.full_name))
+    departments = sorted(_distinct(EmpDept.name))
+    designations = sorted(_distinct(EmpDesig.name))
+    mentors = sorted(_distinct(Mentor.full_name))
     # Newest year first. Include the active year even if it has no reviews
     # yet so the dropdown's default option always renders.
-    year_set = {c for (_e, _d, _g, _m, c) in rows if c}
+    year_set = set(_distinct(AnnualReview.cycle_name))
     year_set.add(active_year)
     years = sorted(year_set, reverse=True)
     return CalibrationFilterOptions(
@@ -1077,7 +1110,9 @@ def set_management_rating(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Management rating can only be set after mentor evaluation is submitted.",
         )
-    _require_reviews_open(db, current_user.org_id, _fy_label_of_review(review))
+    _require_management_review_open(
+        db, current_user.org_id, _fy_label_of_review(review)
+    )
 
     review.management_performance_rating = payload.management_performance_rating
     review.final_rating_enabled = True

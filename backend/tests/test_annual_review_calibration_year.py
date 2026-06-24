@@ -107,21 +107,20 @@ def _setup(db):
     return org, mgmt, emp_cur, emp_past
 
 
-def _grid(db, user, *, year=None):
+def _grid(db, user, *, year=None, mentor=None, sort_by=None, sort_dir="asc"):
     pg = PaginationParams(page=1, per_page=25)
     return get_calibration_grid(
         db,
         user,
         pg,
-        search=None,
         employee=None,
         department=None,
         designation=None,
-        mentor=None,
+        mentor=mentor,
         status_filter=None,
         year=year,
-        sort_by=None,
-        sort_dir="asc",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 
@@ -180,3 +179,31 @@ def test_non_management_user_forbidden(db):
     with pytest.raises(HTTPException) as exc:
         _grid(db, staff, year=None)
     assert exc.value.status_code == 403
+
+
+def test_sort_by_year_orders_by_cycle_name(db):
+    _org, mgmt, _c, _p = _setup(db)
+    page = _grid(db, mgmt, year="all", sort_by="cycle_name", sort_dir="asc")
+    assert [r.cycle_name for r in page.items] == ["FY25-26", "FY26-27"]
+
+
+def test_deactivated_mentor_hidden_and_treated_as_unmentored(db):
+    """A mentee whose mentor was deactivated: the departed mentor is hidden in
+    the grid (name → None), dropped from the filter options, and the row is
+    matched by the '(No mentor)' filter (the mentor alias is NULL)."""
+    org, mgmt, _c, _p = _setup(db)
+    gone = _user(db, org.id, role="Staff", name="Gone Mentor")
+    mentee = _user(db, org.id, name="Orphaned Mentee", mentor_id=gone.id)
+    _review(db, org.id, mentee.id, "FY26-27", mentor_id=gone.id)
+    gone.is_deleted = True
+    db.commit()
+
+    page = _grid(db, mgmt, year="FY26-27")
+    orphan = next(r for r in page.items if r.user_id == mentee.id)
+    assert orphan.mentor_name is None
+
+    opts = get_calibration_filter_options(db, mgmt)
+    assert "Gone Mentor" not in opts.mentors
+
+    no_mentor = _grid(db, mgmt, year="FY26-27", mentor="(No mentor)")
+    assert mentee.id in {r.user_id for r in no_mentor.items}

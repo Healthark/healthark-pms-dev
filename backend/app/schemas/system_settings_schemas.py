@@ -41,6 +41,9 @@ class SystemSettingsResponse(BaseModel):
     # be a field here — get_system_settings overlays each flag from the active
     # FY's override row via setattr, and a missing field raises at runtime.
     annual_goals_final_rating_visible: bool
+    # Per-FY management-review (calibration) gate. One of YEAR_OVERRIDE_FLAGS,
+    # so it MUST be a field here — get_system_settings overlays it via setattr.
+    management_review_enabled: bool
 
     # Demo-only date simulation. When set, the backend treats this as
     # "today" for every cycle / window decision. The frontend renders a

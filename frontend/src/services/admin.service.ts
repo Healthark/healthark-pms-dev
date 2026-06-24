@@ -104,6 +104,7 @@ export interface YearSettingsResponse {
   annual_goals_edit_enabled: boolean;
   project_ratings_visible: boolean;
   annual_goals_final_rating_visible: boolean;
+  management_review_enabled: boolean;
   is_current: boolean;
   updated_at: string | null;
 }
@@ -114,6 +115,7 @@ export interface YearSettingsUpdatePayload {
   annual_goals_edit_enabled: boolean;
   project_ratings_visible: boolean;
   annual_goals_final_rating_visible: boolean;
+  management_review_enabled: boolean;
 }
 
 export interface YearPreflightEntry {
@@ -128,6 +130,7 @@ export interface YearPreflightResponse {
   project_ratings_visible: YearPreflightEntry;
   annual_review_final_rating_visible: YearPreflightEntry;
   annual_goals_final_rating_visible: YearPreflightEntry;
+  management_review_enabled: YearPreflightEntry;
 }
 
 // ---------------------------------------------------------------------------

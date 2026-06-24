@@ -226,9 +226,9 @@ export const annualReviewService = {
   },
 
   // ── Stage 3: Management ─────────────────────────────────────────
-  /** Paginated calibration grid. Server applies search / department /
-   *  mentor / status filtering + sort + offset pagination; the response
-   *  is a Page<CalibrationRow> envelope. */
+  /** Paginated calibration grid. Server applies employee / department /
+   *  designation / mentor / status filtering + sort + offset pagination;
+   *  the response is a Page<CalibrationRow> envelope. */
   getCalibrationGrid: async (
     params: CalibrationQuery,
   ): Promise<Page<CalibrationRow>> => {
@@ -240,7 +240,6 @@ export const annualReviewService = {
           per_page: params.per_page,
           // Only send filters/sort when set so the URL stays clean and
           // the backend treats absent params as "no filter".
-          search: params.search || undefined,
           employee: params.employee || undefined,
           department: params.department || undefined,
           designation: params.designation || undefined,
