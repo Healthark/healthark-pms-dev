@@ -127,8 +127,31 @@ def _grid(db, user, *, year=None, mentor=None, sort_by=None, sort_dir="asc"):
 def test_default_year_scopes_to_active_cycle(db):
     _org, mgmt, _c, _p = _setup(db)
     page = _grid(db, mgmt, year=None)
-    assert page.total == 1
+    # 1 completed review + synthetic not_started rows for the two active
+    # employees with no FY26-27 review (the manager and the past-year employee).
+    assert page.total == 3
     assert {row.cycle_name for row in page.items} == {"FY26-27"}
+
+
+def test_pending_rows_are_visible_to_management(db):
+    """Self-pending (not started) and mentor-pending reviews appear in the grid
+    so management sees the whole pipeline — not just rows that already reached
+    the management stage."""
+    org, mgmt, _c, _p = _setup(db)
+    mentee = _user(db, org.id, name="Mentor Pending", mentor_id=mgmt.id)
+    _review(
+        db, org.id, mentee.id, "FY26-27",
+        mentor_id=mgmt.id, status=ReviewStatus.PENDING_MENTOR.value,
+    )
+    db.commit()
+
+    page = _grid(db, mgmt, year="FY26-27")
+    by_user = {r.user_id: r for r in page.items}
+    # Mentor-pending review is present (was hidden before).
+    assert by_user[mentee.id].status == ReviewStatus.PENDING_MENTOR.value
+    # The manager never started → surfaced as a synthetic not_started row.
+    assert by_user[mgmt.id].status == ReviewStatus.NOT_STARTED.value
+    assert by_user[mgmt.id].review_id is None
 
 
 def test_specific_past_year(db):
@@ -141,7 +164,9 @@ def test_specific_past_year(db):
 def test_all_years_spans_every_cycle(db):
     _org, mgmt, _c, _p = _setup(db)
     page = _grid(db, mgmt, year="all")
-    assert page.total == 2
+    # 2 real reviews (FY26-27 + FY25-26) + 2 synthetic not_started for the
+    # active cycle (manager + past-year employee, who have no FY26-27 row).
+    assert page.total == 4
     assert {row.cycle_name for row in page.items} == {"FY26-27", "FY25-26"}
 
 
@@ -184,7 +209,11 @@ def test_non_management_user_forbidden(db):
 def test_sort_by_year_orders_by_cycle_name(db):
     _org, mgmt, _c, _p = _setup(db)
     page = _grid(db, mgmt, year="all", sort_by="cycle_name", sort_dir="asc")
-    assert [r.cycle_name for r in page.items] == ["FY25-26", "FY26-27"]
+    # FY25-26 (the one past review) sorts before the FY26-27 rows (the current
+    # review + the two synthetic not_started rows).
+    assert [r.cycle_name for r in page.items] == [
+        "FY25-26", "FY26-27", "FY26-27", "FY26-27",
+    ]
 
 
 def test_deactivated_mentor_hidden_and_treated_as_unmentored(db):

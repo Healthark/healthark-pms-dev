@@ -378,7 +378,7 @@ export function ManagementReviewTab() {
           <p className="mt-1 text-sm text-text-muted">
             {hasActiveFilters
               ? "Try a different search term or adjust your filters."
-              : "Reviews appear here once they clear the mentor evaluation stage."}
+              : "No reviews to show for this period yet."}
           </p>
         </div>
       ) : (
@@ -456,19 +456,40 @@ export function ManagementReviewTab() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setViewReviewId(r.review_id)}
-                        title={`View review for ${r.employee_name}`}
-                        className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
-                        aria-label={`View review for ${r.employee_name}`}
-                      >
-                        <Eye className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                      {r.review_id != null && (
+                        <button
+                          type="button"
+                          onClick={() => setViewReviewId(r.review_id)}
+                          title={`View review for ${r.employee_name}`}
+                          className="rounded-md p-1.5 text-text-muted hover:bg-brand-light hover:text-brand transition-colors"
+                          aria-label={`View review for ${r.employee_name}`}
+                        >
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
                       {(() => {
-                        // Mirror the backend _require_reviews_open gate: only the
-                        // active FY, and only while its window is open, can be
-                        // published. Past years / closed window → read-only.
+                        // A management rating can only be published once the
+                        // mentor stage is done. Earlier rows (self-review not
+                        // submitted, or mentor evaluation pending) appear for
+                        // visibility but are read-only — surface WHY rather than
+                        // a rate button the backend would reject anyway.
+                        const mentorDone =
+                          r.status === "pending_management" ||
+                          r.status === "completed";
+                        if (!mentorDone) {
+                          const label =
+                            r.status === "pending_mentor"
+                              ? "Mentor review pending"
+                              : "Self-review pending";
+                          return (
+                            <span className="whitespace-nowrap text-xs italic text-text-muted">
+                              {label}
+                            </span>
+                          );
+                        }
+                        // Mirror the backend gate: only the active FY, and only
+                        // while its window is open, can be published. Past years /
+                        // closed window → read-only.
                         const editable =
                           r.cycle_name === activeYear && managementReviewEnabled;
                         if (editable) {
