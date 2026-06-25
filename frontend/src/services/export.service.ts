@@ -130,6 +130,15 @@ export const exportService = {
       "pms-annual-goals.xlsx",
     ),
 
+  // Self-service: the caller's OWN goals (any user, not HR-gated). `fy`
+  // limits to one fiscal year (current-year export); omit for all years.
+  downloadMyGoals: (fy?: string) =>
+    downloadBlob(
+      "/exports/my-goals",
+      { fy, scope: "inline" },
+      "pms-my-annual-goals.xlsx",
+    ),
+
   downloadAnnualReviews: (
     params: { fy?: string; user_id?: number },
     scope: "inline" | "central" = "inline",

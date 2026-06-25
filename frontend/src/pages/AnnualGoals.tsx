@@ -38,12 +38,11 @@ import { SortableHeader } from "../components/SortableHeader";
 import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
 import { TablePagination } from "../components/common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
-import { formatFyYearSpan, extractFyToken, fyTokenToStartYear } from "../utils/fy";
+import { formatFyYearSpan, fyTokenToStartYear } from "../utils/fy";
 import { useMyExpectations } from "../queries/profile";
 import { RoleExpectationsModal } from "../components/goals/RoleExpectationsModal";
 import { isPostApproved } from "../utils/goalStatus";
-import { ExportExcelButton } from "../components/exports/ExportExcelButton";
-import { exportService } from "../services/export.service";
+import { ExportMyGoalsMenu } from "../components/goals/ExportMyGoalsMenu";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -431,19 +430,10 @@ export function AnnualGoals() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <ExportExcelButton
-            label="Export Goals"
-            onDownload={() =>
-              exportService.downloadGoals(
-                {
-                  fy: settings?.active_cycle_name
-                    ? extractFyToken(settings.active_cycle_name)
-                    : undefined,
-                },
-                "inline",
-              )
-            }
-          />
+          {/* Self-service export of the user's OWN goals (current FY / all
+              years). Shown only on My Goals — the org-wide HR export lives in
+              the Admin Panel's Export tab. */}
+          {activeTab === "my" && <ExportMyGoalsMenu />}
           {activeTab === "my" &&
             (user?.has_mentor === false ? (
               <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs text-text-main">

@@ -28,6 +28,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentUser, DbSession
+from app.api.routes.goal_routes import list_goals
+from app.core.cycle_utils import extract_fy_label, fy_start_year
 from app.models.export_audit_log_models import ExportAuditLog
 from app.models.reference_models import Department
 from app.models.user_models import User
@@ -303,6 +305,66 @@ def download_goals(
         fy=fy,
         user_id=user_id,
     )
+
+
+# ── Self-service: my own goals (NOT HR/management-gated) ─────────────
+
+def _my_goals_for_export(db: Session, current_user: User, fy: Optional[str]) -> list:
+    """The caller's own annual goals, embargo-aware, optionally one FY.
+
+    Reuses goal_routes.list_goals so the mentor-review embargo + draft hiding
+    that govern the My Goals screen apply identically — no unpublished mentor
+    feedback can leak. `fy` (e.g. "FY26-27") narrows to a single fiscal year;
+    omit it for every year.
+    """
+    goals = list_goals(db, current_user, goal_type="annual")
+    if fy:
+        try:
+            year = fy_start_year(extract_fy_label(fy))
+        except (ValueError, KeyError):
+            year = None
+        if year is not None:
+            goals = [g for g in goals if g.fy_year == year]
+    return goals
+
+
+@router.get("/my-goals")
+def download_my_goals(
+    db: DbSession,
+    current_user: CurrentUser,
+    request: Request,
+    fy: Optional[str] = None,
+):
+    """Export the CALLER'S OWN annual goals.
+
+    Deliberately NOT behind _require_export_access: it is strictly scoped to
+    the caller (never a user_id param), so every user can download their own
+    goals from the My Goals tab. `fy` limits the file to one fiscal year (the
+    current-year export); omit it to export all years.
+    """
+    goals = _my_goals_for_export(db, current_user, fy)
+
+    filename = _build_filename("my-annual-goals", fy)
+    audit = _start_audit(
+        db,
+        user=current_user,
+        export_type="my_goals",
+        scope=_scope_from_request(request),
+        fy=fy,
+        target_user_id=current_user.id,
+        file_name=filename,
+        request=request,
+    )
+    try:
+        wb, row_count = exporters.build_my_goals_workbook(
+            goals, db, current_user.org_id
+        )
+        buf = _workbook_to_stream(wb)
+        _finish_audit_success(db, audit, row_count)
+    except Exception as e:
+        _finish_audit_failure(db, audit, e)
+        raise
+    return _stream_response(buf, filename)
 
 
 @router.get("/annual-reviews")

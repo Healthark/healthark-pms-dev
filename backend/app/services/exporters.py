@@ -793,3 +793,78 @@ def build_per_employee_workbook(
 
     _harden_formula_injection(wb)
     return wb, total
+
+
+# ── Self-service: one user's own goals ──────────────────────────────
+#
+# Unlike build_goals_sheet (HR/management — dumps EVERY review incl. drafts),
+# this renders from already-visibility-filtered GoalResponse objects produced
+# by goal_routes.list_goals. That upstream gate strips mentor-review drafts and
+# embargoes unpublished mentor reviews from the mentee, so a user exporting
+# their own goals can never see mentor feedback the My Goals screen hides.
+
+MY_GOALS_BASE_HEADERS = [
+    "Sr No", "Cycle", "Title", "Description",
+    "Status", "Mentor", "Mentor Feedback", "Progress Notes",
+    "Start Date", "Due Date", "Approved At",
+    "Criteria Total", "Criteria Completed", "Progress %",
+]
+
+
+def build_my_goals_workbook(goals, db: Session, org_id: int) -> tuple[Workbook, int]:
+    """Single-sheet workbook of ONE user's own annual goals.
+
+    `goals` is the visibility-filtered list of GoalResponse objects from
+    goal_routes.list_goals (the embargo / draft-hiding is applied upstream —
+    this only renders). Period columns follow the org cadence: H1/H2 for
+    half-yearly & annual orgs, Q1-Q4 for quarterly.
+    """
+    cycle_type = _get_cycle_type(db, org_id)
+    periods = (
+        ("Q1", "Q2", "Q3", "Q4")
+        if cycle_type == CycleType.QUARTERLY.value
+        else ("H1", "H2")
+    )
+    headers = list(MY_GOALS_BASE_HEADERS)
+    for p in periods:
+        headers.append(f"{p} Self Review")
+        headers.append(f"{p} Mentor Review")
+    headers.extend(["Created At", "Updated At"])
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "My Annual Goals"
+    _write_header(ws, headers)
+
+    r = 2
+    for g in goals:
+        total = len(g.criteria)
+        done = sum(1 for cr in g.criteria if bool(cr.is_completed))
+        pct = int(round((done / total) * 100)) if total else 0
+        values = [
+            r - 1,
+            g.cycle_name or "",
+            g.title,
+            g.description or "",
+            g.approval_status,
+            g.manager_name or "",
+            g.manager_feedback or "",
+            g.progress_notes or "",
+            _dt(g.start_date),
+            _dt(g.due_date),
+            _dt(g.approved_at),
+            total,
+            done,
+            pct,
+        ]
+        for p in periods:
+            values.append(_review_by_half(g.self_reviews, p, "self_overall_review"))
+            values.append(_review_by_half(g.mentor_reviews, p, "mentor_overall_review"))
+        values.append(_dt(g.created_at))
+        values.append(_dt(g.updated_at))
+        for col_idx, val in enumerate(values, start=1):
+            ws.cell(row=r, column=col_idx, value=val)
+        r += 1
+    _autosize(ws)
+    _harden_formula_injection(wb)
+    return wb, r - 2
