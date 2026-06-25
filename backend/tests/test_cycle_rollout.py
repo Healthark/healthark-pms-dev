@@ -115,7 +115,7 @@ def test_rollout_fy_rollover_creates_all_closed_fy(db):
     # Prior FY had a window open — it must NOT carry over to the new FY.
     db.add(
         SystemSettingsYearOverride(
-            org_id=org.id, fy_label="FY26-27", annual_reviews_enabled=True
+            org_id=org.id, period_label="FY26-27", annual_reviews_enabled=True
         )
     )
     db.commit()
@@ -125,7 +125,7 @@ def test_rollout_fy_rollover_creates_all_closed_fy(db):
 
     new = (
         db.query(SystemSettingsYearOverride)
-        .filter_by(org_id=org.id, fy_label="FY27-28")
+        .filter_by(org_id=org.id, period_label="FY27-28")
         .one()
     )
     # Every per-FY window starts closed (default-deny), overriding the seed.
@@ -181,7 +181,7 @@ def test_rollback_across_fy_preserves_prior_config(db):
     org, admin = _setup(db, active="H2 FY26-27")
     db.add(
         SystemSettingsYearOverride(
-            org_id=org.id, fy_label="FY26-27", annual_reviews_enabled=True
+            org_id=org.id, period_label="FY26-27", annual_reviews_enabled=True
         )
     )
     db.commit()
@@ -191,7 +191,7 @@ def test_rollback_across_fy_preserves_prior_config(db):
 
     prior = (
         db.query(SystemSettingsYearOverride)
-        .filter_by(org_id=org.id, fy_label="FY26-27")
+        .filter_by(org_id=org.id, period_label="FY26-27")
         .one()
     )
     assert prior.annual_reviews_enabled is True  # preserved, not reset

@@ -74,17 +74,20 @@ export interface AdminSettingsUpdatePayload {
  *  even after the system advances into the next fiscal year. */
 
 export interface YearOption {
-  fy_label: string;
+  period_label: string;
   is_current: boolean;
   has_override: boolean;
 }
 
 export interface YearOptionsResponse {
+  /** FY options for the Annual Review dropdown ("FY26-27"). */
   years: YearOption[];
+  /** Half options for the Goals & Project dropdown ("H1 FY26-27"). */
+  halves: YearOption[];
 }
 
 export interface YearSettingsResponse {
-  fy_label: string;
+  period_label: string;
   annual_reviews_enabled: boolean;
   annual_review_final_rating_visible: boolean;
   annual_goals_edit_enabled: boolean;
@@ -96,12 +99,12 @@ export interface YearSettingsResponse {
 }
 
 export interface YearSettingsUpdatePayload {
-  annual_reviews_enabled: boolean;
-  annual_review_final_rating_visible: boolean;
-  annual_goals_edit_enabled: boolean;
-  project_ratings_visible: boolean;
-  annual_goals_final_rating_visible: boolean;
-  management_review_enabled: boolean;
+  annual_reviews_enabled?: boolean;
+  annual_review_final_rating_visible?: boolean;
+  annual_goals_edit_enabled?: boolean;
+  project_ratings_visible?: boolean;
+  annual_goals_final_rating_visible?: boolean;
+  management_review_enabled?: boolean;
 }
 
 export interface YearPreflightEntry {
@@ -110,7 +113,7 @@ export interface YearPreflightEntry {
 }
 
 export interface YearPreflightResponse {
-  fy_label: string;
+  period_label: string;
   annual_goals_edit_enabled: YearPreflightEntry;
   annual_reviews_enabled: YearPreflightEntry;
   project_ratings_visible: YearPreflightEntry;

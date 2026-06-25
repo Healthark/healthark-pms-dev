@@ -59,7 +59,8 @@ from app.core.cycle_utils import (
     is_review_window_open,
     get_year_override,
     _cycle_to_fy_label,
-    _fy_label_of_goal,
+    _half_label_of_cycle_string,
+    _half_label_of_goal,
 )
 
 router = APIRouter()
@@ -131,7 +132,10 @@ def _apply_goal_review_visibility(
         goal_fy = _cycle_to_fy_label(resp.cycle_name)
         published = True
         if goal_fy is not None and goal_fy == active_fy_label:
-            override = get_year_override(db, org_id, goal_fy)
+            # Within the active FY, visibility is controlled per half.
+            override = get_year_override(
+                db, org_id, _half_label_of_cycle_string(resp.cycle_name)
+            )
             published = bool(override and override.annual_goals_final_rating_visible)
         if not published:
             resp.mentor_reviews = []
@@ -162,26 +166,26 @@ def _self_review_allowed_states(cycle_code: str) -> set[str]:
     return allowed
 
 
-def _assert_annual_gate_open(db: Session, org_id: int, fy_label: Optional[str]) -> None:
-    """Raise 403 when the annual-goal edit window is closed for `fy_label`.
+def _assert_annual_gate_open(db: Session, org_id: int, half_label: Optional[str]) -> None:
+    """Raise 403 when the annual-goal edit window is closed for `half_label`.
 
-    Per-FY gate: the toggle now lives on the (org, fy) override row rather
-    than the org-wide SystemSettings singleton.
-      - No resolvable fy_label → 400 (we can't tell which year to gate).
+    Per-HALF gate: annual-goal editing is opened/closed per half (H1/H2) on
+    the (org, half) override row.
+      - No resolvable half_label → 400 (we can't tell which half to gate).
       - Missing override row OR annual_goals_edit_enabled False →
-        403 (default-deny: a year is closed until an Admin opens it).
+        403 (default-deny: a half is closed until an Admin opens it).
     """
-    if not fy_label:
+    if not half_label:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot determine the fiscal year for this annual goal.",
+            detail="Cannot determine the half-cycle for this annual goal.",
         )
-    override = get_year_override(db, org_id, fy_label)
+    override = get_year_override(db, org_id, half_label)
     if override is None or not override.annual_goals_edit_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Annual goal submissions for {fy_label} are currently closed. "
+                f"Annual goal submissions for {half_label} are currently closed. "
                 "Please wait for the Admin to open the submission window."
             ),
         )
@@ -313,7 +317,7 @@ def create_goal(
         # Stamp BEFORE gating so the per-FY check keys off the goal's own FY.
         cycle_name = goal_cycle_name_for_active(settings.active_cycle_name)
         _assert_annual_gate_open(
-            db, current_user.org_id, _cycle_to_fy_label(cycle_name)
+            db, current_user.org_id, _half_label_of_cycle_string(cycle_name)
         )
 
     # ── Build the Goal record ──────────────────────────────────────────
@@ -671,7 +675,7 @@ def update_goal(
 
     # Annual goal-setting window must be open.
     if goal.goal_type == GoalType.ANNUAL.value:
-        _assert_annual_gate_open(db, current_user.org_id, _fy_label_of_goal(goal))
+        _assert_annual_gate_open(db, current_user.org_id, _half_label_of_goal(goal))
 
     update_data = goal_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -725,7 +729,7 @@ def delete_goal(
 
     # Gate check for annual goal deletion (same window as create/edit).
     if goal.goal_type == GoalType.ANNUAL.value:
-        _assert_annual_gate_open(db, current_user.org_id, _fy_label_of_goal(goal))
+        _assert_annual_gate_open(db, current_user.org_id, _half_label_of_goal(goal))
 
     # Soft-delete — preserves criteria + review history.
     goal.is_deleted = True

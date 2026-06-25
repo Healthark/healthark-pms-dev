@@ -127,7 +127,7 @@ export function useUpdateYearSettings() {
       payload: YearSettingsUpdatePayload;
     }) => adminService.updateYearSettings(fy, payload),
     onSuccess: (fresh) => {
-      qc.setQueryData(["admin-settings", "year", fresh.fy_label], fresh);
+      qc.setQueryData(["admin-settings", "year", fresh.period_label], fresh);
       qc.invalidateQueries({ queryKey: ["admin-settings", "years"] });
       qc.invalidateQueries({ queryKey: adminSettingsQueryKey });
       qc.invalidateQueries({ queryKey: systemSettingsQueryKey });

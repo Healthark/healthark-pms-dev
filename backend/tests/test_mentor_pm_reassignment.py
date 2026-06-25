@@ -164,7 +164,7 @@ def test_reassigned_mentor_can_submit_and_restamps(db):
     )
     # Open annual reviews for the FY (per-FY gate).
     db.add(SystemSettingsYearOverride(
-        org_id=org.id, fy_label=FY, annual_reviews_enabled=True
+        org_id=org.id, period_label=FY, annual_reviews_enabled=True
     ))
     db.commit()
 

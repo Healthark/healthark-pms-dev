@@ -1,24 +1,23 @@
 """
 SystemSettingsYearOverride — Per-Fiscal-Year Access Configuration.
 
-Where `SystemSettings` holds one row per org for cadence / fiscal start
-month / dev escape hatches, this table holds one row per `(org_id,
-fy_label)` for the four access-control toggles that previously lived
-on `SystemSettings`:
+This table holds one row per `(org_id, period_label)` for the access-control
+toggles. A PERIOD is either a fiscal year ("FY26-27") or a half ("H1 FY26-27"):
 
-    - annual_reviews_enabled
-    - annual_review_final_rating_visible
-    - annual_goals_edit_enabled
-    - project_ratings_visible
+    - Annual-review flags (reviewed once a year) are keyed per FISCAL YEAR:
+      annual_reviews_enabled, annual_review_final_rating_visible,
+      management_review_enabled.
+    - Goal + project-review flags (reviewed twice a year) are keyed per HALF:
+      annual_goals_edit_enabled, annual_goals_final_rating_visible,
+      project_ratings_visible.
 
-Why per-year: the singleton model couldn't express "FY26-27 is still
-open" while FY27-28 was beginning. With per-year rows, an Admin can
-configure each fiscal year independently — including reopening a past
-year while the current one is active.
+(Each row physically carries all six columns; only the flags relevant to its
+period type are read — see FY_OVERRIDE_FLAGS / HALF_OVERRIDE_FLAGS in
+cycle_utils.)
 
-Lookup convention: gating helpers in the route layer call
-`get_year_override(org_id, fy_label)` to resolve a row. Missing row =
-default-deny on writes; past-FY reads still pass through per the legacy
+Lookup convention: gating helpers call `get_year_override(org_id, period_label)`
+with the FY label (review gates) or the half label (goal/project gates).
+Missing row = default-deny; past-period reads still pass through per the legacy
 visibility semantics.
 """
 
@@ -37,14 +36,12 @@ class SystemSettingsYearOverride(Base):
     # ── Multi-Tenancy ────────────────────────────────────────────────
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
-    # ── Fiscal-Year Key ──────────────────────────────────────────────
-    # Canonical bare-FY label as produced by `extract_fy_label`
-    # (e.g. "FY26-27"). Matches the shape stored on `AnnualReview.cycle_name`.
-    # Annual `Goal.cycle_name` is "H1 2026"/"H2 2026" here, so resolve it
-    # via `_fy_label_of_goal` / `_cycle_to_fy_label` in `cycle_utils`; a
-    # project review's `cycle` ("Q1 FY26-27") resolves via
-    # `_fy_label_of_project_review`.
-    fy_label = Column(String, nullable=False)
+    # ── Period Key ───────────────────────────────────────────────────
+    # A bare-FY label ("FY26-27") for annual-review flags, OR a half label
+    # ("H1 FY26-27") for goal/project flags. Annual-review rows resolve the FY
+    # via `_fy_label_of_review`; goal/project rows resolve the half via
+    # `_half_label_of_goal` / `_half_label_of_project_review` in `cycle_utils`.
+    period_label = Column(String, nullable=False)
 
     # ── Access Control Toggles (per year) ────────────────────────────
     # Gate: state-changing annual review endpoints (submit self-review,
@@ -74,8 +71,8 @@ class SystemSettingsYearOverride(Base):
 
     # ── Constraints ──────────────────────────────────────────────────
     __table_args__ = (
-        # Exactly one override row per (org, fy) — the lookup contract.
-        UniqueConstraint("org_id", "fy_label", name="uq_settings_year_org_fy"),
+        # Exactly one override row per (org, period) — the lookup contract.
+        UniqueConstraint("org_id", "period_label", name="uq_settings_year_org_fy"),
     )
 
     # ── Relationships ────────────────────────────────────────────────

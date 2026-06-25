@@ -21,7 +21,9 @@ from app.api.dependencies import CurrentUser, DbSession
 from app.core.cache import invalidate_settings, system_settings_cache
 from app.core.config import settings as app_settings
 from app.core.cycle_utils import (
-    YEAR_OVERRIDE_FLAGS,
+    FY_OVERRIDE_FLAGS,
+    HALF_OVERRIDE_FLAGS,
+    _half_label_of_cycle_string,
     extract_fy_label,
     get_year_override,
 )
@@ -64,18 +66,24 @@ def get_system_settings(
 
         payload = SystemSettingsResponse.model_validate(row, from_attributes=True)
 
-        # Overlay the four per-FY access flags from the ACTIVE fiscal year's
-        # override row. The four toggles now live per-(org, fy); surfacing the
-        # active FY's values here keeps every app-wide `settings?.<flag>` read
-        # (feature pages, banners) consistent with the per-FY enforcement
-        # without touching each page. Falls back to the legacy columns already
-        # on `row` when no override row exists for the active FY yet.
-        # The year PATCH calls invalidate_settings() so this re-reads on save.
-        active_fy = extract_fy_label(row.active_cycle_name)
-        override = get_year_override(db, current_user.org_id, active_fy)
-        if override is not None:
-            for flag in YEAR_OVERRIDE_FLAGS:
-                setattr(payload, flag, bool(getattr(override, flag)))
+        # Annual-review flags are keyed per FY; goal/project flags per half.
+        # Overlay each from its own active-period override row so every
+        # app-wide `settings?.<flag>` read (feature pages, banners) matches the
+        # per-period enforcement. Falls back to the base columns on `row` when a
+        # period row doesn't exist yet. Period PATCH calls invalidate_settings()
+        # so this re-reads on save.
+        fy_override = get_year_override(
+            db, current_user.org_id, extract_fy_label(row.active_cycle_name)
+        )
+        if fy_override is not None:
+            for flag in FY_OVERRIDE_FLAGS:
+                setattr(payload, flag, bool(getattr(fy_override, flag)))
+        half_override = get_year_override(
+            db, current_user.org_id, _half_label_of_cycle_string(row.active_cycle_name)
+        )
+        if half_override is not None:
+            for flag in HALF_OVERRIDE_FLAGS:
+                setattr(payload, flag, bool(getattr(half_override, flag)))
         return payload
 
     return system_settings_cache.get_or_compute(current_user.org_id, _query)
