@@ -78,9 +78,9 @@ describe("ManagementReviewTab — Year filter", () => {
     gridCalls.length = 0;
   });
 
-  it("defaults the Year dropdown to the active cycle's FY", () => {
+  it("defaults the Fiscal Year dropdown to the active cycle's FY", () => {
     render(<ManagementReviewTab />);
-    const yearSelect = screen.getByLabelText("Year") as HTMLSelectElement;
+    const yearSelect = screen.getByLabelText("Fiscal Year") as HTMLSelectElement;
     expect(yearSelect.value).toBe("FY26-27");
     // The active year renders as a human label and an "All" option exists.
     expect(within(yearSelect).getByRole("option", { name: "FY 2026-27" })).toBeInTheDocument();
@@ -89,9 +89,9 @@ describe("ManagementReviewTab — Year filter", () => {
     expect(gridCalls.at(-1)?.year).toBe("FY26-27");
   });
 
-  it("renders a Year column with the row's fiscal year", () => {
+  it("renders a Fiscal Year column with the row's fiscal year", () => {
     render(<ManagementReviewTab />);
-    expect(screen.getByRole("columnheader", { name: "Year" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Fiscal Year" })).toBeInTheDocument();
     // The row's cycle_name shows formatted in the table body.
     const table = screen.getByRole("table");
     expect(within(table).getByText("FY 2026-27")).toBeInTheDocument();
@@ -100,14 +100,14 @@ describe("ManagementReviewTab — Year filter", () => {
   it("queries year='all' when All is selected", async () => {
     const user = userEvent.setup();
     render(<ManagementReviewTab />);
-    await user.selectOptions(screen.getByLabelText("Year"), "all");
+    await user.selectOptions(screen.getByLabelText("Fiscal Year"), "all");
     expect(gridCalls.at(-1)?.year).toBe("all");
   });
 
   it("queries a past year when selected", async () => {
     const user = userEvent.setup();
     render(<ManagementReviewTab />);
-    await user.selectOptions(screen.getByLabelText("Year"), "FY25-26");
+    await user.selectOptions(screen.getByLabelText("Fiscal Year"), "FY25-26");
     expect(gridCalls.at(-1)?.year).toBe("FY25-26");
   });
 });

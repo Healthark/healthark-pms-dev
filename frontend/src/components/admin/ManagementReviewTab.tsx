@@ -233,26 +233,10 @@ export function ManagementReviewTab() {
       <div className="border-b border-border px-5 py-4 flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <label
-            htmlFor="mgmt-review-employee-filter"
-            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-          >
-            Employee
-          </label>
-          <StringCombobox
-            id="mgmt-review-employee-filter"
-            options={availableEmployees}
-            value={employeeFilter}
-            onChange={setEmployeeFilter}
-            placeholder="All employees"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label
             htmlFor="mgmt-review-year-filter"
             className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
           >
-            Year
+            Fiscal Year
           </label>
           <select
             id="mgmt-review-year-filter"
@@ -271,10 +255,26 @@ export function ManagementReviewTab() {
 
         <div className="flex items-center gap-2">
           <label
+            htmlFor="mgmt-review-employee-filter"
+            className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Employee
+          </label>
+          <StringCombobox
+            id="mgmt-review-employee-filter"
+            options={availableEmployees}
+            value={employeeFilter}
+            onChange={setEmployeeFilter}
+            placeholder="All employees"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label
             htmlFor="mgmt-review-dept-filter"
             className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
           >
-            Dept
+            Department
           </label>
           <select
             id="mgmt-review-dept-filter"
@@ -404,7 +404,7 @@ export function ManagementReviewTab() {
                   <SortableHeader label="Department" columnKey="department" sort={sort} onSort={setSort} />
                 </th>
                 <th className="px-5 py-3">
-                  <SortableHeader label="Year" columnKey="cycle_name" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Fiscal Year" columnKey="cycle_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="px-5 py-3">
                   <SortableHeader label="Self Review" columnKey="self_performance_rating" sort={sort} onSort={setSort} />

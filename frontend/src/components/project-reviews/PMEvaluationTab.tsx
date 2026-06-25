@@ -418,34 +418,15 @@ export function PMEvaluationTab() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Type</label>
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
-              <option value="all">All</option>
-              <option value="primary">Primary</option>
-              <option value="secondary">Secondary</option>
-            </select>
+            <label htmlFor="pm-employee-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</label>
+            <StringCombobox
+              id="pm-employee-filter"
+              options={availableEmployees}
+              value={employeeFilter === "all" ? "" : employeeFilter}
+              onChange={(v) => setEmployeeFilter(v || "all")}
+              placeholder="All employees"
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="draft">Draft</option>
-              <option value="done">Completed</option>
-            </select>
-          </div>
-          {availableDepts.length > 0 && (
-            <div className="flex items-center gap-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Dept</label>
-              <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}
-                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
-                <option value="all">All Depts</option>
-                {availableDepts.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-          )}
           {availableProjects.length > 0 && (
             <div className="flex items-center gap-2">
               <label htmlFor="pm-project-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</label>
@@ -473,15 +454,34 @@ export function PMEvaluationTab() {
               />
             </div>
           )}
+          {availableDepts.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Department</label>
+              <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+                <option value="all">All Depts</option>
+                {availableDepts.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex items-center gap-2">
-            <label htmlFor="pm-employee-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</label>
-            <StringCombobox
-              id="pm-employee-filter"
-              options={availableEmployees}
-              value={employeeFilter === "all" ? "" : employeeFilter}
-              onChange={(v) => setEmployeeFilter(v || "all")}
-              placeholder="All employees"
-            />
+            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Type</label>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+              <option value="all">All</option>
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="draft">Draft</option>
+              <option value="done">Completed</option>
+            </select>
           </div>
           <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
         </div>
@@ -510,7 +510,7 @@ export function PMEvaluationTab() {
                   <SortableHeader label="Cycle" columnKey="cycle" sort={sort} onSort={setSort} />
                 </th>
                 <th className="hidden md:table-cell text-left px-4 py-2.5">
-                  <SortableHeader label="Dept" columnKey="department_name" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Department" columnKey="department_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="text-left px-4 py-2.5">
                   <SortableHeader label="Status" columnKey="review_status" sort={sort} onSort={setSort} />

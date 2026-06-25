@@ -365,7 +365,7 @@ export function TeamGoalsTab() {
               htmlFor="team-year-filter"
               className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
             >
-              Year
+              Fiscal Year
             </label>
             <select
               id="team-year-filter"
@@ -480,7 +480,7 @@ export function TeamGoalsTab() {
                   <SortableHeader label="Mentee" columnKey="owner_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="text-left px-4 py-2.5">
-                  <SortableHeader label="Year" columnKey="fy_year" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Fiscal Year" columnKey="fy_year" sort={sort} onSort={setSort} />
                 </th>
                 <th className="text-left px-4 py-2.5">
                   <SortableHeader label="Status" columnKey="approval_status" sort={sort} onSort={setSort} />

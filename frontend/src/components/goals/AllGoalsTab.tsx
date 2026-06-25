@@ -235,6 +235,26 @@ export function AllGoalsTab() {
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
+        {years.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="ag-year" className={filterLabelCls}>
+              Fiscal Year
+            </label>
+            <select
+              id="ag-year"
+              value={effectiveYear}
+              onChange={(e) => setYearFilter(e.target.value)}
+              className={`${filterSelectCls} min-w-[130px]`}
+            >
+              <option value="all">All Years</option>
+              {years.map((y) => (
+                <option key={y} value={String(y)}>
+                  {formatFyYearSpan(y)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {employees.length > 0 && (
           <div className="flex items-center gap-2">
             <label htmlFor="ag-employee" className={filterLabelCls}>
@@ -291,26 +311,6 @@ export function AllGoalsTab() {
             />
           </div>
         )}
-        {years.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="ag-year" className={filterLabelCls}>
-              Year
-            </label>
-            <select
-              id="ag-year"
-              value={effectiveYear}
-              onChange={(e) => setYearFilter(e.target.value)}
-              className={`${filterSelectCls} min-w-[130px]`}
-            >
-              <option value="all">All Years</option>
-              {years.map((y) => (
-                <option key={y} value={String(y)}>
-                  {formatFyYearSpan(y)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
         {statuses.length > 0 && (
           <div className="flex items-center gap-2">
             <label htmlFor="ag-status" className={filterLabelCls}>
@@ -352,7 +352,7 @@ export function AllGoalsTab() {
                 </th>
                 <th className={`hidden sm:table-cell ${thCls}`}>Department</th>
                 <th className={`hidden md:table-cell ${thCls}`}>Designation</th>
-                <th className={thCls}>Year</th>
+                <th className={thCls}>Fiscal Year</th>
                 <th className={thCls}>Mentor</th>
                 <th className={thCls}>Goals</th>
               </tr>

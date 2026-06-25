@@ -115,7 +115,7 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
           <thead>
             <tr className="bg-surface-muted/80 border-b border-border">
               <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Year
+                Fiscal Year
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Status

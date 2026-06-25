@@ -519,7 +519,7 @@ export function AnnualGoals() {
                   {/* Filters */}
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <label htmlFor="goal-year-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Year</label>
+                      <label htmlFor="goal-year-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Fiscal Year</label>
                       <select
                         id="goal-year-filter"
                         value={effectiveYear}
@@ -586,7 +586,7 @@ export function AnnualGoals() {
                           <SortableHeader label="Mentor" columnKey="manager_name" sort={sort} onSort={setSort} />
                         </th>
                         <th className="text-left px-4 py-2.5">
-                          <SortableHeader label="Year" columnKey="fy_year" sort={sort} onSort={setSort} />
+                          <SortableHeader label="Fiscal Year" columnKey="fy_year" sort={sort} onSort={setSort} />
                         </th>
                         <th className="text-left px-4 py-2.5">
                           <SortableHeader label="Status" columnKey="approval_status" sort={sort} onSort={setSort} />

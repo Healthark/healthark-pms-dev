@@ -305,19 +305,6 @@ export function SecondaryEvalTab() {
               className="rounded-lg border border-border bg-surface pl-9 pr-3 py-1.5 text-[13px] text-text-main placeholder:text-text-muted outline-none focus:border-brand w-56"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer"
-            >
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="submitted">Submitted</option>
-            </select>
-          </div>
-
           {/* Employee filter */}
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</label>
@@ -330,6 +317,19 @@ export function SecondaryEvalTab() {
               {availableEmployees.map((e) => (
                 <option key={e} value={e}>{e}</option>
               ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="submitted">Submitted</option>
             </select>
           </div>
 

@@ -159,26 +159,10 @@ export function TeamReviewTab() {
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <label
-              htmlFor="team-review-employee-filter"
-              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
-            >
-              Employee
-            </label>
-            <StringCombobox
-              id="team-review-employee-filter"
-              options={availableEmployees}
-              value={employeeFilter}
-              onChange={setEmployeeFilter}
-              placeholder="All employees"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label
               htmlFor="team-review-year-filter"
               className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
             >
-              Year
+              Fiscal Year
             </label>
             <select
               id="team-review-year-filter"
@@ -193,6 +177,22 @@ export function TeamReviewTab() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="team-review-employee-filter"
+              className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+            >
+              Mentee
+            </label>
+            <StringCombobox
+              id="team-review-employee-filter"
+              options={availableEmployees}
+              value={employeeFilter}
+              onChange={setEmployeeFilter}
+              placeholder="All mentees"
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -245,7 +245,7 @@ export function TeamReviewTab() {
                   </th>
                   <th className="text-left px-4 py-2.5">
                     <SortableHeader
-                      label="Year"
+                      label="Fiscal Year"
                       columnKey="cycle_name"
                       sort={sort}
                       onSort={setSort}

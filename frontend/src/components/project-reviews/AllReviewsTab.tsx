@@ -189,7 +189,7 @@ export function AllReviewsTab() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label htmlFor="ar-year" className={filterLabelCls}>
-            Year
+            Fiscal Year
           </label>
           <select
             id="ar-year"
@@ -268,7 +268,7 @@ export function AllReviewsTab() {
         )}
         <div className="flex items-center gap-2">
           <label htmlFor="ar-progress" className={filterLabelCls}>
-            Progress
+            Status
           </label>
           <select
             id="ar-progress"
@@ -311,7 +311,7 @@ export function AllReviewsTab() {
                   Reviewer
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  Year
+                  Fiscal Year
                 </th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Cycle Reviews
