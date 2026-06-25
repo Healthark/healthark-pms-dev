@@ -46,6 +46,7 @@ import { compareValues, type SortKind, type SortState } from "../utils/sort";
 import { ExportExcelButton } from "../components/exports/ExportExcelButton";
 import { exportService } from "../services/export.service";
 import { extractFyToken } from "../utils/fy";
+import { buildProjectCodeIndex } from "../utils/projectCodeIndex";
 
 type ActiveTab = "my" | "evaluate" | "all-reviews";
 
@@ -126,6 +127,14 @@ export function ProjectReviews() {
     () => Array.from(new Set(cards.map((c) => c.project_name))).sort(),
     [cards],
   );
+  // Project Code filter — a synced view onto the name-keyed projectFilter.
+  const projectIndex = useMemo(() => buildProjectCodeIndex(cards), [cards]);
+  const projectCodeFilter =
+    projectFilter !== "all"
+      ? projectIndex.nameToCode.get(projectFilter) ?? ""
+      : "";
+  const onProjectCodeFilterChange = (code: string) =>
+    setProjectFilter(code ? projectIndex.codeToName.get(code) ?? "all" : "all");
 
   const filteredCards = useMemo(() => {
     return cards.filter((c) => {
@@ -257,6 +266,9 @@ export function ProjectReviews() {
                   projectFilter={projectFilter}
                   onProjectFilterChange={setProjectFilter}
                   availableProjects={availableProjects}
+                  projectCodeFilter={projectCodeFilter}
+                  onProjectCodeFilterChange={onProjectCodeFilterChange}
+                  availableProjectCodes={projectIndex.codes}
                   pmFilter={pmFilter}
                   onPmFilterChange={setPmFilter}
                   availablePMs={availablePMs}

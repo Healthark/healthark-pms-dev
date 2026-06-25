@@ -15,6 +15,9 @@ export function MyReviewsToolbar({
   projectFilter,
   onProjectFilterChange,
   availableProjects,
+  projectCodeFilter,
+  onProjectCodeFilterChange,
+  availableProjectCodes,
   pmFilter,
   onPmFilterChange,
   availablePMs,
@@ -29,6 +32,9 @@ export function MyReviewsToolbar({
   readonly projectFilter: string;
   readonly onProjectFilterChange: (v: string) => void;
   readonly availableProjects: readonly string[];
+  readonly projectCodeFilter: string;
+  readonly onProjectCodeFilterChange: (v: string) => void;
+  readonly availableProjectCodes: readonly string[];
   readonly pmFilter: string;
   readonly onPmFilterChange: (v: string) => void;
   readonly availablePMs: readonly string[];
@@ -60,6 +66,22 @@ export function MyReviewsToolbar({
           value={projectFilter === "all" ? "" : projectFilter}
           onChange={(v) => onProjectFilterChange(v || "all")}
           placeholder="All projects"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <label
+          htmlFor="my-project-code-filter"
+          className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
+        >
+          Project Code
+        </label>
+        <StringCombobox
+          id="my-project-code-filter"
+          options={availableProjectCodes}
+          value={projectCodeFilter}
+          onChange={onProjectCodeFilterChange}
+          placeholder="All codes"
+          minWidth="150px"
         />
       </div>
       <FilterSelect

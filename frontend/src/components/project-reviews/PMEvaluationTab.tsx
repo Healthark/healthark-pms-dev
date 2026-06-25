@@ -38,6 +38,7 @@ import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
+import { buildProjectCodeIndex } from "../../utils/projectCodeIndex";
 import { sortCyclesDesc } from "../../utils/fy";
 // EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
 // modal in the app at ~475 LOC; ImpactModal is paired (same parents)
@@ -243,6 +244,10 @@ export function PMEvaluationTab() {
     ),
   );
   const availableProjects = Array.from(new Set(unifiedRows.map((r) => r.project_name))).sort();
+  // Project Code filter — a synced view onto the name-keyed projectFilter.
+  const projectIndex = buildProjectCodeIndex(unifiedRows);
+  const projectCodeFilter =
+    projectFilter !== "all" ? projectIndex.nameToCode.get(projectFilter) ?? "" : "";
 
   // Filters
   const filteredRows = unifiedRows.filter((r) => {
@@ -450,6 +455,21 @@ export function PMEvaluationTab() {
                 value={projectFilter === "all" ? "" : projectFilter}
                 onChange={(v) => setProjectFilter(v || "all")}
                 placeholder="All projects"
+              />
+            </div>
+          )}
+          {projectIndex.codes.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="pm-project-code-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Project Code</label>
+              <StringCombobox
+                id="pm-project-code-filter"
+                options={projectIndex.codes}
+                value={projectCodeFilter}
+                onChange={(code) =>
+                  setProjectFilter(code ? projectIndex.codeToName.get(code) ?? "all" : "all")
+                }
+                placeholder="All codes"
+                minWidth="150px"
               />
             </div>
           )}
