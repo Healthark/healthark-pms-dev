@@ -100,12 +100,6 @@ export function MyMentees() {
       </div>
 
       <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-        <div className="flex border-b border-border px-2">
-          <span className="px-4 py-2.5 text-sm font-semibold border-b-2 border-brand text-brand">
-            My Mentees
-          </span>
-        </div>
-
         <div className="p-5 space-y-5">
           {/* Toolbar */}
           {!isLoading && mentees.length > 0 && (
