@@ -309,7 +309,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
               htmlFor="mentee-goal-year-filter"
               className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
             >
-              Year
+              Fiscal Year
             </label>
             <select
               id="mentee-goal-year-filter"
@@ -384,7 +384,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
                 </th>
                 <th className="text-left px-4 py-2.5">
                   <SortableHeader
-                    label="Year"
+                    label="Fiscal Year"
                     columnKey="fy_year"
                     sort={sort}
                     onSort={setSort}

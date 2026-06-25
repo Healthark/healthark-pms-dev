@@ -42,7 +42,7 @@ export function MenteeFeedback360Tab({
               htmlFor="mentee-360-year"
               className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
             >
-              Year
+              Fiscal Year
             </label>
             <select
               id="mentee-360-year"

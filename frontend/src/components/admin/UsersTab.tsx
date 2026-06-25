@@ -216,19 +216,6 @@ export function UsersTab({
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="user-status-filter" className={FILTER_LABEL_CLS}>Status</label>
-          <select
-            id="user-status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className={`${FILTER_SELECT_CLS} min-w-[120px]`}
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
           <label htmlFor="user-department-filter" className={FILTER_LABEL_CLS}>Department</label>
           <select
             id="user-department-filter"
@@ -257,6 +244,19 @@ export function UsersTab({
             <option value="all">All</option>
             {designations.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="user-status-filter" className={FILTER_LABEL_CLS}>Status</label>
+          <select
+            id="user-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className={`${FILTER_SELECT_CLS} min-w-[120px]`}
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>

@@ -183,7 +183,7 @@ export function SelfReviewTab({
             htmlFor="self-review-year-filter"
             className="text-[11px] font-bold uppercase tracking-wider text-text-muted"
           >
-            Year
+            Fiscal Year
           </label>
           <select
             id="self-review-year-filter"
@@ -250,7 +250,7 @@ export function SelfReviewTab({
                 <tr className="bg-surface-muted/80 border-b border-border">
                   <th className="text-left px-5 py-2.5">
                     <SortableHeader
-                      label="Year"
+                      label="Fiscal Year"
                       columnKey="cycle_name"
                       sort={sort}
                       onSort={setSort}
