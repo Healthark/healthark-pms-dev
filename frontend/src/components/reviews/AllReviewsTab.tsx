@@ -304,9 +304,9 @@ export function AllReviewsTab() {
                 <th className={`hidden lg:table-cell ${thCls}`}>Designation</th>
                 <th className={`hidden md:table-cell ${thCls}`}>Mentor</th>
                 <th className={thCls}>Status</th>
-                <th className={`${thCls} text-center`}>Self</th>
-                <th className={`${thCls} text-center`}>Mentor</th>
-                <th className={`${thCls} text-center`}>Management</th>
+                <th className={`${thCls} text-center`}>Self Rating</th>
+                <th className={`${thCls} text-center`}>Mentor Rating</th>
+                <th className={`${thCls} text-center`}>Management Rating</th>
                 <th className={`${thCls} text-right`}>Action</th>
               </tr>
             </thead>

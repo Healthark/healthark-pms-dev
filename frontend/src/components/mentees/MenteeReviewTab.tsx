@@ -121,10 +121,10 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                 Status
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Self Review
+                Self Rating
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Mentor Review
+                Mentor Rating
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Management Rating

@@ -407,10 +407,10 @@ export function ManagementReviewTab() {
                   <SortableHeader label="Fiscal Year" columnKey="cycle_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="px-5 py-3">
-                  <SortableHeader label="Self Review" columnKey="self_performance_rating" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Self Rating" columnKey="self_performance_rating" sort={sort} onSort={setSort} />
                 </th>
                 <th className="px-5 py-3">
-                  <SortableHeader label="Mentor Review" columnKey="mentor_performance_rating" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Mentor Rating" columnKey="mentor_performance_rating" sort={sort} onSort={setSort} />
                 </th>
                 <th className="px-5 py-3">
                   <SortableHeader label="Management Rating" columnKey="management_performance_rating" sort={sort} onSort={setSort} />
