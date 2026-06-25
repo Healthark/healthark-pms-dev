@@ -25,6 +25,7 @@ import {
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { groupProjectReviews } from "../../utils/groupProjectReviews";
 import { formatFyYearSpan, fyTokenToStartYear } from "../../utils/fy";
+import { buildProjectCodeIndex } from "../../utils/projectCodeIndex";
 import { CycleReviewChip } from "../reviews/CycleReviewChip";
 import { ProjectReviewDetailModal } from "./ProjectReviewDetailModal";
 import { StringCombobox } from "../common/StringCombobox";
@@ -82,6 +83,11 @@ export function AllReviewsTab() {
     () => Array.from(new Set(grouped.map((g) => g.project_name))).sort(),
     [grouped],
   );
+  // Project Code filter — a synced view onto the name-keyed projectFilter.
+  const projectIndex = useMemo(() => buildProjectCodeIndex(grouped), [grouped]);
+  const projectCodeFilter = projectFilter
+    ? projectIndex.nameToCode.get(projectFilter) ?? ""
+    : "";
   const reviewers = useMemo(
     () =>
       Array.from(
@@ -224,6 +230,25 @@ export function AllReviewsTab() {
               value={projectFilter}
               onChange={setProjectFilter}
               placeholder="All projects"
+            />
+          </div>
+        )}
+        {projectIndex.codes.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="ar-project-code" className={filterLabelCls}>
+              Project Code
+            </label>
+            <StringCombobox
+              id="ar-project-code"
+              options={projectIndex.codes}
+              value={projectCodeFilter}
+              onChange={(code) =>
+                setProjectFilter(
+                  code ? projectIndex.codeToName.get(code) ?? "" : "",
+                )
+              }
+              placeholder="All codes"
+              minWidth="150px"
             />
           </div>
         )}
