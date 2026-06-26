@@ -9,10 +9,8 @@ import type {
 import { StatusBadge } from "./StatusBadge";
 import { SortableHeader } from "../SortableHeader";
 import { type SortState } from "../../utils/sort";
-import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { TablePagination } from "../common/TablePagination";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
-import { exportService } from "../../services/export.service";
 import {
   useDeactivateUser,
   useReactivateUser,
@@ -260,13 +258,7 @@ export function UsersTab({
             ))}
           </select>
         </div>
-        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
-        <div className="ml-auto">
-          <ExportExcelButton
-            label="Export Users"
-            onDownload={() => exportService.downloadUsers(undefined, "inline")}
-          />
-        </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
       </div>
 
       {/* Table */}

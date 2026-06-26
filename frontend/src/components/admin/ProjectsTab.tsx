@@ -41,10 +41,6 @@ import {
   useReopenProject,
 } from "../../queries/adminProjects";
 import { coverageGapsQueryKey, useCoverageGaps } from "../../queries/adminSettings";
-import { exportService } from "../../services/export.service";
-import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { extractFyToken } from "../../utils/fy";
-import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { TablePagination } from "../common/TablePagination";
 // ProjectModal lazy-loaded (F3) — it's a 718-LOC form with heavy
 // deps (UserCombobox, multiple queries) that only mounts when admin
@@ -133,10 +129,6 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const snackbar = useSnackbar();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const { settings } = useSystemSettings();
-  const exportFy = settings?.active_cycle_name
-    ? extractFyToken(settings.active_cycle_name)
-    : undefined;
 
   // Shared ['users'] cache — stays in sync after admin user mutations.
   // Same active-only filter that used to live in the old loadData.
@@ -353,13 +345,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
             <option value="all">All</option>
           </select>
         </div>
-        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
-        <div className="ml-auto">
-          <ExportExcelButton
-            label="Export Projects"
-            onDownload={() => exportService.downloadProjects(exportFy, "inline")}
-          />
-        </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
       </div>
 
       {isLoading ? (
