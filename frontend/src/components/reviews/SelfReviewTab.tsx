@@ -248,6 +248,7 @@ export function SelfReviewTab({
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="bg-surface-muted/80 border-b border-border">
+                  <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                   <th className="text-left px-5 py-2.5">
                     <SortableHeader
                       label="Fiscal Year"
@@ -281,11 +282,14 @@ export function SelfReviewTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {pageRows.map((r) => (
+                {pageRows.map((r, i) => (
                   <tr
                     key={r.id}
                     className="hover:bg-surface-muted/60 transition-colors"
                   >
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {((safePage - 1) * pageSize + i + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3 font-medium text-text-main">
                       <span className="text-[12.5px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                         {formatFyLabel(r.cycle_name)}

@@ -16,6 +16,7 @@ interface MenteeTableProps {
   readonly mentees: readonly MenteeSummary[];
   readonly sort: SortState<MenteeTableSortKey> | null;
   readonly onSort: (next: SortState<MenteeTableSortKey>) => void;
+  readonly startIndex?: number;
 }
 
 function initialsFor(name: string): string {
@@ -28,7 +29,7 @@ function initialsFor(name: string): string {
     .toUpperCase();
 }
 
-export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
+export function MenteeTable({ mentees, sort, onSort, startIndex = 0 }: MenteeTableProps) {
   // Padding mirrors the other app tables: the first column gets px-5, the
   // rest px-4. Row dividers use `divide-border/50` (set on <tbody> below) to
   // match the lighter separators used across Team Review / Team Goals tables.
@@ -42,6 +43,7 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
       <table className="w-full text-[13px]">
         <thead>
           <tr className="border-b border-border bg-surface-muted/80">
+            <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
             <th className={firstThCls}>
               <SortableHeader label="Mentee" columnKey="full_name" sort={sort} onSort={onSort} />
             </th>
@@ -65,7 +67,7 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          {mentees.map((m) => {
+          {mentees.map((m, idx) => {
             const hasPending = m.pending_actions_count > 0;
             const initials = initialsFor(m.full_name);
             return (
@@ -73,6 +75,9 @@ export function MenteeTable({ mentees, sort, onSort }: MenteeTableProps) {
                 key={m.user_id}
                 className="hover:bg-surface-muted/60 transition-colors"
               >
+                <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                  {(startIndex + idx + 1).toLocaleString()}
+                </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2.5">
                     <div

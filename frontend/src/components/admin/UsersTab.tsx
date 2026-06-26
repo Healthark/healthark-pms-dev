@@ -289,6 +289,7 @@ export function UsersTab({
           <table className="w-full min-w-[720px] text-sm border-separate border-spacing-0 lg:min-w-0">
             <thead>
               <tr className="bg-surface-muted text-left">
+                <th className={`${HEADER_CELL_CLS} text-center text-[11px] font-bold uppercase tracking-wider text-text-muted`}>#</th>
                 <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Employee" columnKey="full_name" sort={sort} onSort={setSort} />
                 </th>
@@ -319,7 +320,7 @@ export function UsersTab({
               {total === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-5 py-10 text-center text-text-muted"
                   >
                     {hasActiveFilters
@@ -328,7 +329,7 @@ export function UsersTab({
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
+                users.map((user, i) => (
                   <tr
                     key={user.id}
                     title={
@@ -342,6 +343,9 @@ export function UsersTab({
                         : "hover:bg-surface-muted"
                     }${user.is_deleted ? " opacity-60" : ""}`}
                   >
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {((page - 1) * pageSize + i + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-text-main">

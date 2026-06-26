@@ -391,6 +391,7 @@ export function ManagementReviewTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-muted text-left">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="px-5 py-3">
                   <SortableHeader label="User" columnKey="employee_name" sort={sort} onSort={setSort} />
                 </th>
@@ -421,11 +422,14 @@ export function ManagementReviewTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map((r) => (
+              {rows.map((r, i) => (
                 <tr
                   key={r.review_id}
                   className="transition-colors hover:bg-surface-muted"
                 >
+                  <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                    {((activePage - 1) * pageSize + i + 1).toLocaleString()}
+                  </td>
                   <td className="px-5 py-3.5 font-medium text-text-main">
                     {r.employee_name}
                   </td>

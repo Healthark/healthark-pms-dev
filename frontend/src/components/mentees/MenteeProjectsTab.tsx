@@ -254,6 +254,7 @@ export function MenteeProjectsTab({ menteeId, menteeName }: MenteeProjectsTabPro
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="bg-surface-muted/80 border-b border-border">
+                  <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                   <th className="text-left px-5 py-2.5">
                     <SortableHeader label="Project" columnKey="project_name" sort={sort} onSort={setSort} />
                   </th>
@@ -273,8 +274,11 @@ export function MenteeProjectsTab({ menteeId, menteeName }: MenteeProjectsTabPro
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {pageRows.map((r) => (
+                {pageRows.map((r, idx) => (
                   <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {((safePage - 1) * pageSize + idx + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3">
                       <div className="font-medium text-text-main">{r.project_name}</div>
                       <div className="text-[11px] font-mono text-text-muted">

@@ -142,6 +142,7 @@ export function MyMentees() {
                 mentees={pageRows}
                 sort={tableSort}
                 onSort={setTableSort}
+                startIndex={(safePage - 1) * pageSize}
               />
               <TablePagination
                 page={safePage}

@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../utils/errors";
 import { CompetencyBlock } from "./CompetencyBlock";
 import { ImpactBlock } from "./ImpactBlock";
 
-const TABLE_COLSPAN = 7;
+const TABLE_COLSPAN = 8;
 
 /**
  * Inline expansion shown beneath a clicked My Reviews table row.

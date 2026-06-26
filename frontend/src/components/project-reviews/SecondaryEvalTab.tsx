@@ -371,6 +371,7 @@ export function SecondaryEvalTab() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Employee</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Project</th>
                 <th className="hidden sm:table-cell text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Cycle</th>
@@ -379,11 +380,14 @@ export function SecondaryEvalTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {filteredReviews.map((r) => {
+              {filteredReviews.map((r, i) => {
                 const myEval = getMySubmission(r);
                 const isSubmitted = !!myEval;
                 return (
                   <tr key={r.id} className="hover:bg-surface-muted/60 transition-colors">
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {(i + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <UserCircle className="h-4 w-4 text-text-muted shrink-0" />

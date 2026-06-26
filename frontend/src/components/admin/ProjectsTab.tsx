@@ -394,6 +394,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
           <table className="w-full min-w-[820px] text-sm border-separate border-spacing-0 lg:min-w-0">
             <thead>
               <tr className="bg-surface-muted text-left">
+                <th className={`${HEADER_CELL_CLS} text-center text-[11px] font-bold uppercase tracking-wider text-text-muted`}>#</th>
                 <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Project" columnKey="name" sort={sort} onSort={setSort} />
                 </th>
@@ -424,7 +425,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {projects.map((project) => (
+              {projects.map((project, i) => (
                 <tr
                   key={project.id}
                   title={
@@ -438,6 +439,9 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                       : "hover:bg-surface-muted"
                   }`}
                 >
+                  <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                    {((page - 1) * pageSize + i + 1).toLocaleString()}
+                  </td>
                   <td className="px-5 py-3.5">
                     <div className="font-medium text-text-main">
                       {project.name}

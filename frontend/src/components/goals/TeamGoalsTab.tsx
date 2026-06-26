@@ -473,6 +473,7 @@ export function TeamGoalsTab() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5">
                   <SortableHeader label="Goal" columnKey="title" sort={sort} onSort={setSort} />
                 </th>
@@ -494,7 +495,7 @@ export function TeamGoalsTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {goals.map((goal) => {
+              {goals.map((goal, i) => {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "pending_approval";
                 const isApproved = isPostApproved(goal.approval_status);
@@ -510,6 +511,10 @@ export function TeamGoalsTab() {
                         setExpandedGoalId(isExpanded ? null : goal.id)
                       }
                     >
+                      <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                        {((page - 1) * pageSize + i + 1).toLocaleString()}
+                      </td>
+
                       {/* Goal title */}
                       <td className="px-5 py-3 font-medium text-text-main max-w-xs">
                         <div className="flex items-center gap-2">
@@ -619,10 +624,10 @@ export function TeamGoalsTab() {
                       </td>
                     </tr>
 
-                    {/* Expanded detail row — colSpan covers all 6 columns */}
+                    {/* Expanded detail row — colSpan covers all 7 columns */}
                     {isExpanded && (
                       <tr className="bg-brand/5">
-                        <td colSpan={6} className="px-10 py-4">
+                        <td colSpan={7} className="px-10 py-4">
                           <div className="space-y-3 max-w-2xl">
                             {goal.description && (
                               <p className="text-sm text-text-muted">

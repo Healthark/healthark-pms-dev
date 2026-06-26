@@ -368,6 +368,7 @@ function renderMyReviewsBody(args: {
       <table className="w-full text-[13px]">
         <thead>
           <tr className="bg-surface-muted/80 border-b border-border">
+            <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
             <th className="text-left px-5 py-2.5">
               <SortableHeader
                 label="Project"
@@ -427,7 +428,7 @@ function renderMyReviewsBody(args: {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          {sortedCards.map((card) => {
+          {sortedCards.map((card, i) => {
             const key = cardKey(card);
             const isExpanded = expandedRowKey === key;
             const isReviewed = card.review_status === "reviewed";
@@ -440,6 +441,9 @@ function renderMyReviewsBody(args: {
                   }`}
                   onClick={() => onToggleExpandedRow(key)}
                 >
+                  <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                    {(i + 1).toLocaleString()}
+                  </td>
                   <td className="px-5 py-3 font-medium text-text-main">
                     <div className="flex items-center gap-2">
                       <ChevronDown
