@@ -1,5 +1,5 @@
 /**
- * ExportMyGoalsMenu — small "Export Goals" split button for the My Goals tab.
+ * ExportMyGoalsMenu — small "Export My Goals" split button for the My Goals tab.
  *
  * Available to EVERY user (not the HR/management export gate) and strictly
  * scoped server-side to the caller's own goals — see GET /exports/my-goals.
@@ -72,7 +72,7 @@ export function ExportMyGoalsMenu() {
         ) : (
           <Download className="h-4 w-4" aria-hidden="true" />
         )}
-        <span>{busy ? "Preparing…" : "Export Goals"}</span>
+        <span>{busy ? "Preparing…" : "Export My Goals"}</span>
         {!busy && (
           <ChevronDown
             className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}

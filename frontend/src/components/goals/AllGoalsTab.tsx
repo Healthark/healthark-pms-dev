@@ -24,6 +24,8 @@ import { GoalReviewDetailsModal } from "./GoalReviewDetailsModal";
 import { StringCombobox } from "../common/StringCombobox";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { TablePagination } from "../common/TablePagination";
+import { ExportExcelButton } from "../exports/ExportExcelButton";
+import { exportService } from "../../services/export.service";
 
 interface EmployeeGroup {
   key: string; // `${user_id}_${fy_year}`
@@ -338,6 +340,19 @@ export function AllGoalsTab() {
           active={hasActiveFilters}
           onClear={clearFilters}
           className="ml-auto"
+        />
+        {/* Admin org-wide export — HR/management-gated (ExportExcelButton
+            renders null otherwise). Exports the selected fiscal year, or all
+            years when the Year filter is "All Years". */}
+        <ExportExcelButton
+          label="Export Goals"
+          size="sm"
+          onDownload={() =>
+            exportService.downloadGoals(
+              { fy: effectiveYear === "all" ? undefined : effectiveYear },
+              "inline",
+            )
+          }
         />
       </div>
 
