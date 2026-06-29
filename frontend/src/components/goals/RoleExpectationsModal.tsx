@@ -3,11 +3,11 @@
  * expectations, opened from the "View Role Expectations" button on Annual
  * Goals → My Goals.
  *
- * Shows the goal-relevant competencies (Firm Growth + Competency & Skills) as
- * a grid of numbered cards, with the stored " | " separators rendered as
- * bullet lines. Reuses RoleExpectationCardData so the field contract stays
- * shared with the inline RoleExpectationsCard (used inside the Self-Review
- * modal). Closes on Esc / X / backdrop.
+ * Shows all eight competency expectations as a grid of numbered cards, with
+ * the stored " | " separators rendered as bullet lines. Reuses
+ * RoleExpectationCardData so the field contract stays shared with the inline
+ * RoleExpectationsCard (used inside the Self-Review modal). Closes on
+ * Esc / X / backdrop.
  */
 import { createPortal } from "react-dom";
 import { useEffect } from "react";
@@ -18,6 +18,12 @@ const FIELDS: {
   readonly key: keyof RoleExpectationCardData;
   readonly label: string;
 }[] = [
+  { key: "exp_task_execution", label: "Task Execution" },
+  { key: "exp_ownership", label: "Ownership" },
+  { key: "exp_project_management", label: "Project Management" },
+  { key: "exp_client_deliverables", label: "Client Deliverables" },
+  { key: "exp_communication", label: "Communication" },
+  { key: "exp_mentoring", label: "Mentoring" },
   { key: "exp_firm_growth", label: "Firm Growth" },
   { key: "exp_competency_skills", label: "Competency & Skills" },
 ];
