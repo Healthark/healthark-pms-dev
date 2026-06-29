@@ -43,14 +43,37 @@ export function RoleExpectationsCard({
   expectation,
   title = "Your Role Expectations",
   defaultOpen = false,
+  emptyMessage,
 }: {
   readonly expectation: RoleExpectationCardData | null;
   /** Header label — override for the mentor view (e.g. "Asha's Role Expectations"). */
   readonly title?: string;
   readonly defaultOpen?: boolean;
+  /**
+   * When set and `expectation` is null, render the card shell with this muted
+   * note instead of returning null — so callers (e.g. the mentor review form)
+   * can surface "no expectations configured for this role" rather than a
+   * silently-blank section. Without it, a null expectation renders nothing.
+   */
+  readonly emptyMessage?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  if (!expectation) return null;
+  if (!expectation) {
+    if (!emptyMessage) return null;
+    return (
+      <div className="rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-50/50 dark:bg-blue-950/50">
+          <BookOpen className="h-3.5 w-3.5 text-blue-600 dark:text-blue-300 shrink-0" />
+          <span className="text-xs font-semibold text-text-main">{title}</span>
+        </div>
+        <div className="px-4 py-3 bg-blue-50/20 dark:bg-blue-950/20 border-t border-border">
+          <p className="text-xs text-text-muted leading-relaxed">
+            {emptyMessage}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border overflow-hidden">
