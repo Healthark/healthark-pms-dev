@@ -235,6 +235,7 @@ export function TeamReviewTab() {
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="bg-surface-muted/80 border-b border-border">
+                  <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                   <th className="text-left px-5 py-2.5">
                     <SortableHeader
                       label="Mentee"
@@ -274,7 +275,7 @@ export function TeamReviewTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {paged.map((r) => {
+                {paged.map((r, i) => {
                   const canEvaluate = r.status === "pending_mentor";
                   const canView =
                     r.status === "pending_management" ||
@@ -285,6 +286,9 @@ export function TeamReviewTab() {
                       key={r.id}
                       className="hover:bg-surface-muted/60 transition-colors"
                     >
+                      <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                        {((safePage - 1) * pageSize + i + 1).toLocaleString()}
+                      </td>
                       <td className="px-5 py-3 font-medium text-text-main">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <UserCircle className="h-3.5 w-3.5 text-text-muted shrink-0" />

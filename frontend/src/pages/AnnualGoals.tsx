@@ -38,11 +38,13 @@ import { SortableHeader } from "../components/SortableHeader";
 import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
 import { TablePagination } from "../components/common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
-import { formatFyYearSpan, fyTokenToStartYear } from "../utils/fy";
+import { formatFyYearSpan, fyTokenToStartYear, extractFyToken } from "../utils/fy";
 import { useMyExpectations } from "../queries/profile";
 import { RoleExpectationsModal } from "../components/goals/RoleExpectationsModal";
 import { isPostApproved } from "../utils/goalStatus";
 import { ExportMyGoalsMenu } from "../components/goals/ExportMyGoalsMenu";
+import { ExportExcelButton } from "../components/exports/ExportExcelButton";
+import { exportService } from "../services/export.service";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -430,10 +432,24 @@ export function AnnualGoals() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Self-service export of the user's OWN goals (current FY / all
-              years). Shown only on My Goals — the org-wide HR export lives in
-              the Admin Panel's Export tab. */}
-          {activeTab === "my" && <ExportMyGoalsMenu />}
+          {/* Admin org-wide export lives in the page header (All Goals tab).
+              HR/management-gated — ExportExcelButton renders null otherwise.
+              Exports the active fiscal year's org-wide annual goals. */}
+          {activeTab === "all" && (
+            <ExportExcelButton
+              label="Export Goals"
+              onDownload={() =>
+                exportService.downloadGoals(
+                  {
+                    fy: settings?.active_cycle_name
+                      ? extractFyToken(settings.active_cycle_name)
+                      : undefined,
+                  },
+                  "inline",
+                )
+              }
+            />
+          )}
           {activeTab === "my" &&
             (user?.has_mentor === false ? (
               <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs text-text-main">
@@ -552,6 +568,7 @@ export function AnnualGoals() {
                       onClear={clearFilters}
                       className="ml-auto"
                     />
+                    <ExportMyGoalsMenu />
                   </div>
                 </div>
               )}
@@ -579,6 +596,7 @@ export function AnnualGoals() {
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="bg-surface-muted/80 border-b border-border">
+                        <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                         <th className="text-left px-5 py-2.5">
                           <SortableHeader label="Goal" columnKey="title" sort={sort} onSort={setSort} />
                         </th>
@@ -595,7 +613,7 @@ export function AnnualGoals() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {pageRows.map((goal) => {
+                      {pageRows.map((goal, i) => {
                         const isExpanded = expandedGoalId === goal.id;
                         const isDraft = goal.approval_status === "draft";
                         const isChangesRequired = goal.approval_status === "changes_requested";
@@ -608,6 +626,9 @@ export function AnnualGoals() {
                               className={`transition-colors cursor-pointer ${isExpanded ? "bg-brand/5" : "hover:bg-surface-muted/60"}`}
                               onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
                             >
+                              <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                                {((safePage - 1) * pageSize + i + 1).toLocaleString()}
+                              </td>
                               <td className="px-5 py-3 font-medium text-text-main max-w-xs">
                                 <div className="flex items-center gap-2">
                                   <ChevronDown className={`h-4 w-4 text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
@@ -675,7 +696,7 @@ export function AnnualGoals() {
                             </tr>
                             {isExpanded && (
                               <tr className="bg-brand/5">
-                                <td colSpan={5} className="px-10 py-4">
+                                <td colSpan={6} className="px-10 py-4">
                                   <div className="space-y-3 max-w-2xl">
                                     {goal.description && (
                                       <p className="text-sm text-text-muted">{goal.description}</p>

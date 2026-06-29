@@ -4,7 +4,11 @@ import {
   MenteeTable,
   type MenteeTableSortKey,
 } from "../components/mentees/MenteeTable";
-import { MenteeToolbar } from "../components/mentees/MenteeToolbar";
+import { MenteeCard } from "../components/mentees/MenteeCard";
+import {
+  MenteeToolbar,
+  type MenteeViewMode,
+} from "../components/mentees/MenteeToolbar";
 import { type MenteeSummary } from "../services/mentee.service";
 import { useMenteeSummaries } from "../queries/mentees";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
@@ -34,6 +38,9 @@ export function MyMentees() {
   const [tableSort, setTableSort] = useState<SortState<MenteeTableSortKey> | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  // HR prefers the cards view, so it's the default; the table is one click
+  // away via the toolbar toggle.
+  const [viewMode, setViewMode] = useState<MenteeViewMode>("grid");
 
   const hasActiveFilters = !!employeeFilter || onlyPending;
   const clearFilters = () => {
@@ -100,12 +107,6 @@ export function MyMentees() {
       </div>
 
       <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-        <div className="flex border-b border-border px-2">
-          <span className="px-4 py-2.5 text-sm font-semibold border-b-2 border-brand text-brand">
-            My Mentees
-          </span>
-        </div>
-
         <div className="p-5 space-y-5">
           {/* Toolbar */}
           {!isLoading && mentees.length > 0 && (
@@ -118,6 +119,8 @@ export function MyMentees() {
               totalPendingActions={totalPendingActions}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
             />
           )}
 
@@ -143,12 +146,21 @@ export function MyMentees() {
           )}
 
           {!isLoading && visibleMentees.length > 0 && (
-            <div className="space-y-3">
-              <MenteeTable
-                mentees={pageRows}
-                sort={tableSort}
-                onSort={setTableSort}
-              />
+            <div className="space-y-4">
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {pageRows.map((m) => (
+                    <MenteeCard key={m.user_id} mentee={m} />
+                  ))}
+                </div>
+              ) : (
+                <MenteeTable
+                  mentees={pageRows}
+                  sort={tableSort}
+                  onSort={setTableSort}
+                  startIndex={(safePage - 1) * pageSize}
+                />
+              )}
               <TablePagination
                 page={safePage}
                 pageSize={pageSize}

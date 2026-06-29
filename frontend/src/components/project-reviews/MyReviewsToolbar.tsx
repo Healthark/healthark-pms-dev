@@ -92,25 +92,26 @@ export function MyReviewsToolbar({
         options={availablePMs}
         minWidth={140}
       />
-      <div className="flex items-center gap-2">
-        <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-          Status
-        </label>
-        <select
-          value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
-        >
-          <option value="all">All</option>
-          <option value="reviewed">Reviewed</option>
-          <option value="pending">Pending</option>
-        </select>
+      {/* Status + Clear share a non-wrapping group so Clear never lands alone
+          on its own row: when the toolbar wraps, the Status filter comes down
+          with it (instead of Clear stranded right-aligned in a sea of space). */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+            Status
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => onStatusFilterChange(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+          >
+            <option value="all">All</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={onClearFilters} />
       </div>
-      <ClearFiltersButton
-        active={hasActiveFilters}
-        onClear={onClearFilters}
-        className="ml-auto"
-      />
     </div>
   );
 }

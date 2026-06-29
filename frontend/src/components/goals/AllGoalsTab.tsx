@@ -347,6 +347,7 @@ export function AllGoalsTab() {
           <table className="w-full min-w-max text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Employee
                 </th>
@@ -360,7 +361,7 @@ export function AllGoalsTab() {
             <tbody className="divide-y divide-border/50">
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center">
+                  <td colSpan={7} className="px-5 py-10 text-center">
                     <Target
                       className="h-6 w-6 text-text-muted mx-auto mb-1"
                       aria-hidden="true"
@@ -374,7 +375,7 @@ export function AllGoalsTab() {
                   </td>
                 </tr>
               ) : (
-                pageRows.map((grp) => {
+                pageRows.map((grp, i) => {
                   const isExpanded = expandedKey === grp.key;
                   return (
                     <Fragment key={grp.key}>
@@ -386,6 +387,9 @@ export function AllGoalsTab() {
                           setExpandedKey(isExpanded ? null : grp.key)
                         }
                       >
+                        <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                          {((safePage - 1) * pageSize + i + 1).toLocaleString()}
+                        </td>
                         <td className="px-5 py-3 font-medium text-text-main">
                           <div className="flex items-center gap-2">
                             <ChevronDown
@@ -425,7 +429,7 @@ export function AllGoalsTab() {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-brand/5">
-                          <td colSpan={6} className="px-5 sm:px-10 py-3">
+                          <td colSpan={7} className="px-5 sm:px-10 py-3">
                             <table className="w-full text-[13px]">
                               <thead>
                                 <tr className="text-[11px] font-bold uppercase tracking-wider text-text-muted">

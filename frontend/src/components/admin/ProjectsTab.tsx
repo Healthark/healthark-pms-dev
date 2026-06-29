@@ -41,10 +41,6 @@ import {
   useReopenProject,
 } from "../../queries/adminProjects";
 import { coverageGapsQueryKey, useCoverageGaps } from "../../queries/adminSettings";
-import { exportService } from "../../services/export.service";
-import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { extractFyToken } from "../../utils/fy";
-import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { TablePagination } from "../common/TablePagination";
 // ProjectModal lazy-loaded (F3) — it's a 718-LOC form with heavy
 // deps (UserCombobox, multiple queries) that only mounts when admin
@@ -89,14 +85,11 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
-// Header cells, pinned to the page. The table has no internal scroll: it grows
-// to fit its rows and the app shell's <main> (overflow-y-auto) is the scroll
-// container, so `sticky top-0` pins each <th> to the top of <main> as the page
-// scrolls. Pinned per-cell (sticky on <thead> is flaky) with a fully OPAQUE
-// background + z-20 so rows scroll behind it; the bottom border lives on the
-// cell so it travels under border-separate. Mirrors UsersTab.
+// Header cells. The table has no internal scroll — it grows to fit its rows and
+// the app shell's <main> is the scroll container, so the header scrolls away
+// with the content like every other table in the app (no sticky pinning).
 const HEADER_CELL_CLS =
-  "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
+  "px-5 py-3 border-b border-border bg-surface-muted";
 
 export interface ProjectsTabHandle {
   openCreate: () => void;
@@ -133,10 +126,6 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const snackbar = useSnackbar();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const { settings } = useSystemSettings();
-  const exportFy = settings?.active_cycle_name
-    ? extractFyToken(settings.active_cycle_name)
-    : undefined;
 
   // Shared ['users'] cache — stays in sync after admin user mutations.
   // Same active-only filter that used to live in the old loadData.
@@ -353,13 +342,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
             <option value="all">All</option>
           </select>
         </div>
-        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
-        <div className="ml-auto">
-          <ExportExcelButton
-            label="Export Projects"
-            onDownload={() => exportService.downloadProjects(exportFy, "inline")}
-          />
-        </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
       </div>
 
       {isLoading ? (
@@ -385,15 +368,16 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
         // shell's <main> handles scrolling, so the page height adjusts to the
         // record count instead of trapping rows in a 75vh box. Mirrors UsersTab.
         // Dim + aria-busy while a page/filter/sort request is in flight.
-        // Below lg, the wide table scrolls horizontally; at lg+ overflow is
-        // visible so the sticky <th> can pin to <main> as the page scrolls.
+        // The wide table scrolls horizontally within its wrapper on narrow
+        // screens; vertical scrolling is the page's.
         <div
-          className={`overflow-x-auto lg:overflow-x-visible transition-opacity ${isFetching ? "opacity-60" : "opacity-100"}`}
+          className={`overflow-x-auto transition-opacity ${isFetching ? "opacity-60" : "opacity-100"}`}
           aria-busy={isFetching}
         >
           <table className="w-full min-w-[820px] text-sm border-separate border-spacing-0 lg:min-w-0">
             <thead>
               <tr className="bg-surface-muted text-left">
+                <th className={`${HEADER_CELL_CLS} text-center text-[11px] font-bold uppercase tracking-wider text-text-muted`}>#</th>
                 <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Project" columnKey="name" sort={sort} onSort={setSort} />
                 </th>
@@ -424,7 +408,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {projects.map((project) => (
+              {projects.map((project, i) => (
                 <tr
                   key={project.id}
                   title={
@@ -438,6 +422,9 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                       : "hover:bg-surface-muted"
                   }`}
                 >
+                  <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                    {((page - 1) * pageSize + i + 1).toLocaleString()}
+                  </td>
                   <td className="px-5 py-3.5">
                     <div className="font-medium text-text-main">
                       {project.name}

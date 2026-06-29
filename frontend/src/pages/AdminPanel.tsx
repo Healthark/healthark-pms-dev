@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
   UserPlus, Users, Settings, FolderOpen, Plus, Download, Megaphone,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   type UserResponse,
@@ -51,7 +52,6 @@ export default function AdminPanel() {
   const pmLessProjectCount = coverageGaps?.pm_less_projects.length ?? 0;
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<ActiveTab>("users");
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
@@ -69,6 +69,32 @@ export default function AdminPanel() {
   const { user } = useAuth();
   // HR-or-management gate for the Export tab + button (backend re-checks).
   const canSeeExport = canExport(user);
+
+  // Active tab lives in the URL (?tab=) so it survives reloads, deep links,
+  // and back/forward — matching the Annual Goals / Project Reviews pattern.
+  // An unknown tab (or `export` without access) falls back to Users.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab: ActiveTab =
+    tabParam === "projects"
+      ? "projects"
+      : tabParam === "notify"
+        ? "notify"
+        : tabParam === "export" && canSeeExport
+          ? "export"
+          : tabParam === "settings"
+            ? "settings"
+            : "users";
+  const setActiveTab = (tab: ActiveTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // ── User mutations (shared cache via ['users']) ───────────────────────────
   const createUserMutation = useCreateUser();

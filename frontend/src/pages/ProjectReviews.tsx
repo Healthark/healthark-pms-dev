@@ -192,7 +192,7 @@ export function ProjectReviews() {
       ? "Evaluate Team"
       : activeTab === "all-reviews"
         ? "All Project Reviews"
-        : "My Project Reviews";
+        : "Project Reviews";
   const headerSubtitle =
     activeTab === "evaluate"
       ? "Provide project feedback for your team members."
@@ -210,19 +210,22 @@ export function ProjectReviews() {
           </h1>
           <p className="mt-0.5 text-sm text-text-muted">{headerSubtitle}</p>
         </div>
-        <ExportExcelButton
-          label="Export Project Reviews"
-          onDownload={() =>
-            exportService.downloadProjectReviews(
-              {
-                fy: settings?.active_cycle_name
-                  ? extractFyToken(settings.active_cycle_name)
-                  : undefined,
-              },
-              "inline",
-            )
-          }
-        />
+        {/* Org-wide export — admins only, and only on the All Reviews tab. */}
+        {isAdmin && activeTab === "all-reviews" && (
+          <ExportExcelButton
+            label="Export Project Reviews"
+            onDownload={() =>
+              exportService.downloadProjectReviews(
+                {
+                  fy: settings?.active_cycle_name
+                    ? extractFyToken(settings.active_cycle_name)
+                    : undefined,
+                },
+                "inline",
+              )
+            }
+          />
+        )}
       </div>
 
       {/* ── Main Content Container ── */}
@@ -368,6 +371,7 @@ function renderMyReviewsBody(args: {
       <table className="w-full text-[13px]">
         <thead>
           <tr className="bg-surface-muted/80 border-b border-border">
+            <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
             <th className="text-left px-5 py-2.5">
               <SortableHeader
                 label="Project"
@@ -427,7 +431,7 @@ function renderMyReviewsBody(args: {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          {sortedCards.map((card) => {
+          {sortedCards.map((card, i) => {
             const key = cardKey(card);
             const isExpanded = expandedRowKey === key;
             const isReviewed = card.review_status === "reviewed";
@@ -440,6 +444,9 @@ function renderMyReviewsBody(args: {
                   }`}
                   onClick={() => onToggleExpandedRow(key)}
                 >
+                  <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                    {(i + 1).toLocaleString()}
+                  </td>
                   <td className="px-5 py-3 font-medium text-text-main">
                     <div className="flex items-center gap-2">
                       <ChevronDown

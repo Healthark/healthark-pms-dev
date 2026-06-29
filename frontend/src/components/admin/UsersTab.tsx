@@ -9,10 +9,8 @@ import type {
 import { StatusBadge } from "./StatusBadge";
 import { SortableHeader } from "../SortableHeader";
 import { type SortState } from "../../utils/sort";
-import { ExportExcelButton } from "../exports/ExportExcelButton";
 import { TablePagination } from "../common/TablePagination";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
-import { exportService } from "../../services/export.service";
 import {
   useDeactivateUser,
   useReactivateUser,
@@ -62,17 +60,11 @@ const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
   "rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer";
-// Header cells, pinned to the page. The table has no internal scroll: it grows
-// to fit its rows and the app shell's <main> (overflow-y-auto) is the scroll
-// container, so `sticky top-0` pins each <th> to the top of <main> as the page
-// scrolls — the column names stay visible while reading down a long table.
-// Each <th> is pinned individually (sticky on <thead> is flaky cross-engine)
-// with a fully OPAQUE background + z-20 so rows scroll completely behind it,
-// and the bottom border lives on the cell so it travels with the pinned row
-// under border-separate. (Works because the tab card has no overflow/transform
-// that would otherwise capture the sticky context.)
+// Header cells. The table has no internal scroll — it grows to fit its rows and
+// the app shell's <main> is the scroll container, so the header scrolls away
+// with the content like every other table in the app (no sticky pinning).
 const HEADER_CELL_CLS =
-  "sticky top-0 z-20 px-5 py-3 border-b border-border bg-surface-muted";
+  "px-5 py-3 border-b border-border bg-surface-muted";
 
 export function UsersTab({
   departments,
@@ -260,13 +252,7 @@ export function UsersTab({
             ))}
           </select>
         </div>
-        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} />
-        <div className="ml-auto">
-          <ExportExcelButton
-            label="Export Users"
-            onDownload={() => exportService.downloadUsers(undefined, "inline")}
-          />
-        </div>
+        <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
       </div>
 
       {/* Table */}
@@ -278,10 +264,10 @@ export function UsersTab({
         // No internal scroll: the table grows to fit all rows and the app
         // shell's <main> handles scrolling, so the page height adjusts to the
         // record count instead of trapping rows in a 75vh box.
-        // Below lg, the wide table scrolls horizontally; at lg+ overflow is
-        // visible so the sticky <th> can pin to <main> as the page scrolls.
+        // The wide table scrolls horizontally within its wrapper on narrow
+        // screens; vertical scrolling is the page's.
         <div
-          className={`overflow-x-auto lg:overflow-x-visible transition-opacity ${
+          className={`overflow-x-auto transition-opacity ${
             isFetching ? "opacity-60" : "opacity-100"
           }`}
           aria-busy={isFetching}
@@ -289,6 +275,7 @@ export function UsersTab({
           <table className="w-full min-w-[720px] text-sm border-separate border-spacing-0 lg:min-w-0">
             <thead>
               <tr className="bg-surface-muted text-left">
+                <th className={`${HEADER_CELL_CLS} text-center text-[11px] font-bold uppercase tracking-wider text-text-muted`}>#</th>
                 <th className={HEADER_CELL_CLS}>
                   <SortableHeader label="Employee" columnKey="full_name" sort={sort} onSort={setSort} />
                 </th>
@@ -319,7 +306,7 @@ export function UsersTab({
               {total === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-5 py-10 text-center text-text-muted"
                   >
                     {hasActiveFilters
@@ -328,7 +315,7 @@ export function UsersTab({
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
+                users.map((user, i) => (
                   <tr
                     key={user.id}
                     title={
@@ -342,6 +329,9 @@ export function UsersTab({
                         : "hover:bg-surface-muted"
                     }${user.is_deleted ? " opacity-60" : ""}`}
                   >
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {((page - 1) * pageSize + i + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-text-main">

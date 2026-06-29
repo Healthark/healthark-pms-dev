@@ -114,6 +114,7 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
         <table className="w-full text-[13px]">
           <thead>
             <tr className="bg-surface-muted/80 border-b border-border">
+              <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
               <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Fiscal Year
               </th>
@@ -121,10 +122,10 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                 Status
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Self Review
+                Self Rating
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Mentor Review
+                Mentor Rating
               </th>
               <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 Management Rating
@@ -135,7 +136,7 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
-            {visible.map((r) => {
+            {visible.map((r, idx) => {
               const awaitingMentor = r.status === "pending_mentor";
               return (
                 <tr
@@ -143,6 +144,9 @@ export function MenteeReviewTab({ menteeId, menteeName }: MenteeReviewTabProps) 
                   className="hover:bg-surface-muted/60 cursor-pointer transition-colors"
                   onClick={() => setViewing(r)}
                 >
+                  <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                    {(idx + 1).toLocaleString()}
+                  </td>
                   <td className="px-5 py-3">
                     <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">
                       {formatFyLabel(r.cycle_name)}

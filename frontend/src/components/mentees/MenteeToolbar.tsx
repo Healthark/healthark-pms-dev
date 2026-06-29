@@ -1,6 +1,8 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, LayoutGrid, Table2 } from "lucide-react";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { StringCombobox } from "../common/StringCombobox";
+
+export type MenteeViewMode = "grid" | "table";
 
 interface MenteeToolbarProps {
   readonly employeeFilter: string;
@@ -11,12 +13,14 @@ interface MenteeToolbarProps {
   readonly totalPendingActions: number;
   readonly hasActiveFilters: boolean;
   readonly onClearFilters: () => void;
+  readonly viewMode: MenteeViewMode;
+  readonly onViewModeChange: (mode: MenteeViewMode) => void;
 }
 
 /**
- * My Mentees list toolbar — standardized: a searchable Mentee combobox + a
- * "Needs attention" filter + Clear. No free-text search bar or Cards/Table
- * toggle (sorting is via the table's column headers).
+ * My Mentees list toolbar — a searchable Mentee combobox + a "Needs attention"
+ * filter, with Clear and a Cards/Table view toggle on the right. Table-view
+ * sorting is via the column headers.
  */
 export function MenteeToolbar({
   employeeFilter,
@@ -27,7 +31,14 @@ export function MenteeToolbar({
   totalPendingActions,
   hasActiveFilters,
   onClearFilters,
+  viewMode,
+  onViewModeChange,
 }: MenteeToolbarProps) {
+  const viewBtnCls = (mode: MenteeViewMode) =>
+    `flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+      viewMode === mode ? "bg-brand/10 text-brand" : "text-text-muted hover:bg-surface-hover"
+    }`;
+
   return (
     <div className="flex items-center gap-3 flex-wrap">
       <div className="flex items-center gap-2">
@@ -70,11 +81,27 @@ export function MenteeToolbar({
         )}
       </button>
 
-      <ClearFiltersButton
-        active={hasActiveFilters}
-        onClear={onClearFilters}
-        className="ml-auto"
-      />
+      <div className="ml-auto flex items-center gap-2">
+        <ClearFiltersButton active={hasActiveFilters} onClear={onClearFilters} />
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
+          <button
+            type="button"
+            onClick={() => onViewModeChange("grid")}
+            className={viewBtnCls("grid")}
+            aria-pressed={viewMode === "grid"}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> Cards
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewModeChange("table")}
+            className={viewBtnCls("table")}
+            aria-pressed={viewMode === "table"}
+          >
+            <Table2 className="h-3.5 w-3.5" aria-hidden="true" /> Table
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

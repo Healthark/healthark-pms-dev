@@ -168,12 +168,15 @@ export function AnnualReviews() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <ExportExcelButton
-            label="Export Reviews"
-            onDownload={() =>
-              exportService.downloadAnnualReviews({ fy: exportFy }, "inline")
-            }
-          />
+          {/* Org-wide export — admins only, and only on the All Reviews tab. */}
+          {isAdmin && activeTab === "all" && (
+            <ExportExcelButton
+              label="Export Reviews"
+              onDownload={() =>
+                exportService.downloadAnnualReviews({ fy: exportFy }, "inline")
+              }
+            />
+          )}
           {activeTab === "my" &&
             (canStart ? (
               <button

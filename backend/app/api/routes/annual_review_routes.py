@@ -658,14 +658,28 @@ def save_mentor_draft(
 # is handled separately in the route because it sorts on the joined
 # Department alias. Anything not in this map (or `department`) falls back
 # to the default created_at order — so a bad sort_by never 500s.
-_CALIBRATION_SORT_COLUMNS = {
-    "employee_name": lambda E, M: E.full_name,
-    "employee_email": lambda E, M: E.email,
-    "mentor_name": lambda E, M: M.full_name,
-    "cycle_name": lambda E, M: AnnualReview.cycle_name,
-    "self_performance_rating": lambda E, M: AnnualReview.self_performance_rating,
-    "mentor_performance_rating": lambda E, M: AnnualReview.mentor_performance_rating,
-    "management_performance_rating": lambda E, M: AnnualReview.management_performance_rating,
+def _sort_none_last_num(v):
+    """Sort key: numbers ascending, None last."""
+    return (v is None, v if v is not None else 0)
+
+
+def _sort_none_last_str(v):
+    """Sort key: strings ascending (case-insensitive), None/blank last."""
+    return (not v, (v or "").lower())
+
+
+# Calibration rows are assembled + sorted in Python (the grid mixes real
+# reviews with synthetic not_started rows), so the sort map yields key
+# functions over the CalibrationRow — not SQL columns. None values sort last.
+_CALIBRATION_ROW_SORT_KEYS = {
+    "employee_name": lambda r: (r.employee_name or "").lower(),
+    "employee_email": lambda r: _sort_none_last_str(r.employee_email),
+    "mentor_name": lambda r: _sort_none_last_str(r.mentor_name),
+    "department": lambda r: _sort_none_last_str(r.department),
+    "cycle_name": lambda r: r.cycle_name or "",
+    "self_performance_rating": lambda r: _sort_none_last_num(r.self_performance_rating),
+    "mentor_performance_rating": lambda r: _sort_none_last_num(r.mentor_performance_rating),
+    "management_performance_rating": lambda r: _sort_none_last_num(r.management_performance_rating),
 }
 
 
@@ -700,10 +714,11 @@ def _calibration_base_query(db, org_id: int, cycle_name: Optional[str]):
         .filter(
             AnnualReview.org_id == org_id,
             Employee.is_deleted == False,  # noqa: E712 — exclude deactivated employees
-            AnnualReview.status.in_([
-                ReviewStatus.PENDING_MANAGEMENT.value,
-                ReviewStatus.COMPLETED.value,
-            ]),
+            # Every SUBMITTED review (any stage from awaiting-mentor onward).
+            # Drafts stay private — a draft's in-progress self-rating must not
+            # leak to management; "not started" employees are surfaced via
+            # synthetic rows in the grid instead.
+            AnnualReview.status != ReviewStatus.DRAFT.value,
         )
     )
     if cycle_name is not None:
@@ -753,63 +768,32 @@ def get_calibration_grid(
     sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
 ):
     """
-    Paginated calibration grid (pending_management + completed reviews).
-    Management-only.
+    Paginated calibration grid. Management-only.
 
-    Scoped to the active cycle by default; pass `year=<FY label>` to view a
-    past year or `year=all` to span every fiscal year. Server-side employee /
-    department / designation / mentor / status filtering + sort + offset
-    pagination so the FE never holds the full org review set in memory.
-    Filter-dropdown option lists (incl. the year list) come from
-    GET /calibration/filter-options.
+    Shows every SUBMITTED review (awaiting-mentor → awaiting-management →
+    completed) so management sees the whole pipeline — not just rows that
+    already cleared the mentor stage. For the active cycle, synthetic
+    `not_started` rows are appended for employees with no review row, so
+    management can also see who still owes a self-review. Drafts stay private
+    (their in-progress self-rating must not leak), so a draft employee shows
+    as neither a real row nor a not_started row.
+
+    Management ratings can still only be published once a review reaches the
+    management stage — the rate action (and `set_management_rating`) enforce
+    that; pending rows are read-only here, for visibility.
+
+    Scoped to the active cycle by default; pass `year=<FY label>` for a past
+    year or `year=all` for every fiscal year. Rows are assembled, filtered,
+    sorted, and paged in Python (the set mixes real + synthetic rows). Filter
+    options come from GET /calibration/filter-options.
     """
     _require_management(current_user)
-    cycle_name = _resolve_calibration_cycle(db, current_user.org_id, year)
+    org_id = current_user.org_id
+    cycle_name = _resolve_calibration_cycle(db, org_id, year)
+    active_cycle = _get_active_cycle(db, org_id)
 
-    query, Employee, Mentor, EmpDept, EmpDesig = _calibration_base_query(
-        db, current_user.org_id, cycle_name
-    )
-
-    # ── Filters (applied in SQL, BEFORE pagination) ──────────────────
-    if employee:
-        query = query.filter(Employee.full_name == employee)
-    if department:
-        query = query.filter(EmpDept.name == department)
-    if designation:
-        query = query.filter(EmpDesig.name == designation)
-    if mentor == _NO_MENTOR_SENTINEL:
-        # Mentor alias is NULL for both unmentored employees and those whose
-        # mentor was deactivated (the outerjoin is is_deleted-guarded), so this
-        # matches exactly the rows that render "—" in the Mentor column.
-        query = query.filter(Mentor.id.is_(None))
-    elif mentor:
-        query = query.filter(Mentor.full_name == mentor)
-    if status_filter == "pending":
-        query = query.filter(AnnualReview.management_performance_rating.is_(None))
-    elif status_filter == "rated":
-        query = query.filter(AnnualReview.management_performance_rating.isnot(None))
-
-    # Total across all pages (after filtering, before offset/limit).
-    total = query.order_by(None).count()
-
-    # ── Sort (with a stable `id` tiebreaker so offset paging is
-    # deterministic across requests) ─────────────────────────────────
-    sort_col = None
-    if sort_by == "department":
-        sort_col = EmpDept.name
-    elif sort_by in _CALIBRATION_SORT_COLUMNS:
-        sort_col = _CALIBRATION_SORT_COLUMNS[sort_by](Employee, Mentor)
-    if sort_col is not None:
-        direction = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
-        query = query.order_by(direction, AnnualReview.id.asc())
-    else:
-        # Default order mirrors the pre-pagination behaviour.
-        query = query.order_by(AnnualReview.created_at.asc(), AnnualReview.id.asc())
-
-    # ── Page slice ───────────────────────────────────────────────────
-    rows_raw = query.offset(pg.offset).limit(pg.limit).all()
-
-    items = [
+    query, _Emp, _Men, _Dept, _Desig = _calibration_base_query(db, org_id, cycle_name)
+    rows: list[CalibrationRow] = [
         CalibrationRow(
             review_id=r.id,
             user_id=r.user_id,
@@ -826,11 +810,90 @@ def get_calibration_grid(
             status=r.status,
             final_rating_enabled=r.final_rating_enabled,
         )
-        for (r, emp, men, dept, desig) in rows_raw
+        for (r, emp, men, dept, desig) in query.all()
     ]
 
+    # ── Synthetic "not started" rows (active cycle only) ─────────────
+    # Surfaces employees who haven't submitted a self-review yet. A draft
+    # counts as started (and stays private), so it produces no row. Past
+    # cycles get none — the current roster may differ from who was active then.
+    if cycle_name is None or cycle_name == active_cycle:
+        started_ids = {
+            uid
+            for (uid,) in db.query(AnnualReview.user_id)
+            .filter(
+                AnnualReview.org_id == org_id,
+                AnnualReview.cycle_name == active_cycle,
+            )
+            .all()
+        }
+        EmpA = aliased(User)
+        MentorA = aliased(User)
+        DeptA = aliased(Department)
+        DesigA = aliased(Designation)
+        emp_rows = (
+            db.query(EmpA, MentorA, DeptA, DesigA)
+            .outerjoin(
+                MentorA,
+                and_(EmpA.mentor_id == MentorA.id, MentorA.is_deleted == False),  # noqa: E712
+            )
+            .outerjoin(DeptA, EmpA.department_id == DeptA.id)
+            .outerjoin(DesigA, EmpA.designation_id == DesigA.id)
+            .filter(EmpA.org_id == org_id, EmpA.is_deleted == False)  # noqa: E712
+            .all()
+        )
+        for (emp, men, dept, desig) in emp_rows:
+            if emp.id in started_ids:
+                continue
+            rows.append(
+                CalibrationRow(
+                    review_id=None,
+                    user_id=emp.id,
+                    cycle_name=active_cycle,
+                    employee_name=emp.full_name,
+                    employee_email=emp.email,
+                    mentor_name=men.full_name if men else None,
+                    department=dept.name if dept else None,
+                    designation=desig.name if desig else None,
+                    self_performance_rating=None,
+                    mentor_performance_rating=None,
+                    management_performance_rating=None,
+                    final_performance_rating=None,
+                    status=ReviewStatus.NOT_STARTED,
+                    final_rating_enabled=False,
+                )
+            )
+
+    # ── Filters (Python — the set now mixes real + synthetic rows) ───
+    if employee:
+        rows = [r for r in rows if r.employee_name == employee]
+    if department:
+        rows = [r for r in rows if r.department == department]
+    if designation:
+        rows = [r for r in rows if r.designation == designation]
+    if mentor == _NO_MENTOR_SENTINEL:
+        # Matches unmentored employees AND those whose mentor was deactivated
+        # (mentor_name is None in both cases — the "—" rows).
+        rows = [r for r in rows if r.mentor_name is None]
+    elif mentor:
+        rows = [r for r in rows if r.mentor_name == mentor]
+    if status_filter == "pending":
+        rows = [r for r in rows if r.management_performance_rating is None]
+    elif status_filter == "rated":
+        rows = [r for r in rows if r.management_performance_rating is not None]
+
+    # ── Sort (default: employee name asc, newest cycle first per employee) ──
+    if sort_by in _CALIBRATION_ROW_SORT_KEYS:
+        rows.sort(key=_CALIBRATION_ROW_SORT_KEYS[sort_by], reverse=(sort_dir == "desc"))
+    else:
+        rows.sort(key=lambda r: r.cycle_name or "", reverse=True)
+        rows.sort(key=lambda r: (r.employee_name or "").lower())
+
+    # ── Page slice ───────────────────────────────────────────────────
+    total = len(rows)
+    page_rows = rows[pg.offset : pg.offset + pg.limit]
     return Page[CalibrationRow](
-        items=items, total=total, page=pg.page, per_page=pg.per_page
+        items=page_rows, total=total, page=pg.page, per_page=pg.per_page
     )
 
 

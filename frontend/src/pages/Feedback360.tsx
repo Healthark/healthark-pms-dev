@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2, Search, UserCircle } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { type MenteeSummary } from "../services/mentee.service";
 import { type FeedbackPeer } from "../services/feedback360.service";
@@ -30,7 +31,30 @@ export function Feedback360() {
   const isMgmt = !!user?.is_management;
   const hasMentees = !!user?.has_mentees;
 
-  const [activeTab, setActiveTab] = useState<TabKey>("give");
+  // Active tab lives in the URL (?tab=) so it survives reloads, deep links,
+  // and back/forward — matching the Annual Goals / Project Reviews pattern.
+  // A tab the user can't access (mentees without mentees, org without
+  // management) falls back to Give Feedback.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabKey =
+    tabParam === "my"
+      ? "my"
+      : tabParam === "mentees" && hasMentees
+        ? "mentees"
+        : tabParam === "org" && isMgmt
+          ? "org"
+          : "give";
+  const setActiveTab = (tab: TabKey) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   const tabCls = (tab: TabKey) =>
     `px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
@@ -47,7 +71,7 @@ export function Feedback360() {
         </h1>
         <p className="mt-0.5 text-sm text-text-muted">
           Share peer feedback and view the aggregate of feedback received.
-          Reviews are anonymous — submit-once per employee, per fiscal year.
+          Reviews are anonymous - submit-once per employee, per fiscal year.
         </p>
       </div>
 

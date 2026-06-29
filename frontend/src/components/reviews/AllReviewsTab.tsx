@@ -296,6 +296,7 @@ export function AllReviewsTab() {
           <table className="w-full min-w-max text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Employee
                 </th>
@@ -304,16 +305,16 @@ export function AllReviewsTab() {
                 <th className={`hidden lg:table-cell ${thCls}`}>Designation</th>
                 <th className={`hidden md:table-cell ${thCls}`}>Mentor</th>
                 <th className={thCls}>Status</th>
-                <th className={`${thCls} text-center`}>Self</th>
-                <th className={`${thCls} text-center`}>Mentor</th>
-                <th className={`${thCls} text-center`}>Management</th>
+                <th className={`${thCls} text-center`}>Self Rating</th>
+                <th className={`${thCls} text-center`}>Mentor Rating</th>
+                <th className={`${thCls} text-center`}>Management Rating</th>
                 <th className={`${thCls} text-right`}>Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-10 text-center">
+                  <td colSpan={11} className="px-5 py-10 text-center">
                     <ClipboardList
                       className="h-6 w-6 text-text-muted mx-auto mb-1"
                       aria-hidden="true"
@@ -327,11 +328,14 @@ export function AllReviewsTab() {
                   </td>
                 </tr>
               ) : (
-                pageRows.map((r: CalibrationRow) => (
+                pageRows.map((r: CalibrationRow, i) => (
                   <tr
                     key={`${r.user_id}_${r.cycle_name}`}
                     className="transition-colors hover:bg-surface-muted/60"
                   >
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {((safePage - 1) * pageSize + i + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3 font-medium text-text-main">
                       {r.employee_name}
                     </td>

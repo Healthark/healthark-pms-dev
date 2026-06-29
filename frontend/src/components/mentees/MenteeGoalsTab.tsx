@@ -374,6 +374,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5">
                   <SortableHeader
                     label="Goal"
@@ -404,7 +405,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {pageRows.map((goal) => {
+              {pageRows.map((goal, idx) => {
                 const isExpanded = expandedGoalId === goal.id;
                 const isSubmitted = goal.approval_status === "pending_approval";
                 const isApproved = isPostApproved(goal.approval_status);
@@ -421,6 +422,9 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
                         setExpandedGoalId(isExpanded ? null : goal.id)
                       }
                     >
+                      <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                        {((safePage - 1) * pageSize + idx + 1).toLocaleString()}
+                      </td>
                       <td className="px-5 py-3 font-medium text-text-main max-w-xs">
                         <div className="flex items-center gap-2">
                           <ChevronDown
@@ -491,7 +495,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
                     </tr>
                     {isExpanded && (
                       <tr className="bg-brand/5">
-                        <td colSpan={4} className="px-10 py-4">
+                        <td colSpan={5} className="px-10 py-4">
                           <div className="space-y-3 max-w-2xl">
                             {goal.description && (
                               <p className="text-sm text-text-muted">

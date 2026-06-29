@@ -500,6 +500,7 @@ export function PMEvaluationTab() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-muted/80 border-b border-border">
+                <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5">
                   <SortableHeader label="Employee" columnKey="employee_name" sort={sort} onSort={setSort} />
                 </th>
@@ -522,11 +523,14 @@ export function PMEvaluationTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {pageRows.map((r) => {
+              {pageRows.map((r, i) => {
                 const isDone = r.review_status !== "pending";
                 const rowHasDraft = r.type === "primary" && !isDone && r.has_draft_content;
                 return (
                   <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
+                    <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
+                      {((safePage - 1) * pageSize + i + 1).toLocaleString()}
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <UserCircle className="h-4 w-4 text-text-muted shrink-0" />

@@ -22,8 +22,8 @@ export type ReviewStatus =
   | "pending_mentor"
   | "pending_management"
   | "completed"
-  // Synthetic — only the All Reviews roster returns this, for active-cycle
-  // employees with no review row yet. Never persisted.
+  // Synthetic — returned by the All Reviews roster and the Management Review
+  // grid for active-cycle employees with no review row yet. Never persisted.
   | "not_started";
 
 // ── Response Types ──────────────────────────────────────────────────
