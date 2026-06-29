@@ -317,7 +317,7 @@ export function GoalMentorReviewModal({
                       className={TEXTAREA_CLS}
                       value={overall}
                       onChange={(e) => setOverall(e.target.value)}
-                      placeholder="Your assessment of the mentee's delivery this half — what was strong, where to grow, and how it ties into Firm Growth and Competency & Skills (see expectations above)."
+                      placeholder="Your assessment of the mentee's delivery this half — what was strong, where to grow, and how it ties into the role expectations above."
                     />
                   )}
                 </div>

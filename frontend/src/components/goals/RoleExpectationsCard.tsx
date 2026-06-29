@@ -6,15 +6,21 @@ import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
  *
  * Single source of truth for the card shown on the Annual Goals (My Goals)
  * page and inside the Goal Self-Review modal, so the two never drift. Shows
- * the Firm Growth + Competency & Skills expectation text for one role, with
- * the stored " | " separators rendered as bullet lines.
+ * all eight competency expectations for one role, with the stored " | "
+ * separators rendered as bullet lines.
  *
- * Accepts any object carrying the four fields below — both the profile
+ * Accepts any object carrying the fields below — both the profile
  * `UserRoleExpectation` and the project-review `RoleExpectation` satisfy it.
  */
 export interface RoleExpectationCardData {
   readonly department_name: string | null;
   readonly designation_name: string | null;
+  readonly exp_task_execution: string | null;
+  readonly exp_ownership: string | null;
+  readonly exp_project_management: string | null;
+  readonly exp_client_deliverables: string | null;
+  readonly exp_communication: string | null;
+  readonly exp_mentoring: string | null;
   readonly exp_firm_growth: string | null;
   readonly exp_competency_skills: string | null;
 }
@@ -23,6 +29,12 @@ const FIELDS: {
   readonly key: keyof RoleExpectationCardData;
   readonly label: string;
 }[] = [
+  { key: "exp_task_execution", label: "Task Execution" },
+  { key: "exp_ownership", label: "Ownership" },
+  { key: "exp_project_management", label: "Project Management" },
+  { key: "exp_client_deliverables", label: "Client Deliverables" },
+  { key: "exp_communication", label: "Communication" },
+  { key: "exp_mentoring", label: "Mentoring" },
   { key: "exp_firm_growth", label: "Firm Growth" },
   { key: "exp_competency_skills", label: "Competency & Skills" },
 ];

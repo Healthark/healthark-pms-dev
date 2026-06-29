@@ -3,10 +3,9 @@
  * a single half (H1 / H2) of an approved annual goal.
  *
  * Form shape mirrors the Annual Review self-review: one freeform
- * paragraph capturing the reflection. Above the textarea, two collapsible
- * panels surface the role expectations for **Firm Growth** and **Competency
- * & Skills** as a reference rubric — scoped to whichever role the *goal
- * owner* holds:
+ * paragraph capturing the reflection. Above the textarea, a collapsible card
+ * surfaces all of the role's competency expectations as a reference rubric —
+ * scoped to whichever role the *goal owner* holds:
  *   - readOnly=false (mentee filling their own self-review):
  *       fetch via /users/me/expectations.
  *   - readOnly=true  (mentor viewing the mentee's submission):
