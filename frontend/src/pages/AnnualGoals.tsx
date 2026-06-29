@@ -509,19 +509,7 @@ export function AnnualGoals() {
           {/* ── My Goals tab ── */}
           {activeTab === "my" && (
             <div className="space-y-4">
-              {/* Role expectations — read-only modal opened from a button. */}
-              {roleExpectation && (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowRoleExp(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-main hover:bg-surface-muted transition-colors"
-                  >
-                    <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
-                    View Role Expectations
-                  </button>
-                </div>
-              )}
+              {/* Role expectations — read-only modal opened from the toolbar button below. */}
               {showRoleExp && roleExpectation && (
                 <RoleExpectationsModal
                   expectation={roleExpectation}
@@ -569,6 +557,16 @@ export function AnnualGoals() {
                       className="ml-auto"
                     />
                     <ExportMyGoalsMenu />
+                    {roleExpectation && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRoleExp(true)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] font-medium text-text-main transition-colors hover:bg-surface-muted"
+                      >
+                        <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+                        View Role Expectations
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
