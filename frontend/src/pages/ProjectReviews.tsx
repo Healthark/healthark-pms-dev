@@ -192,7 +192,7 @@ export function ProjectReviews() {
       ? "Evaluate Team"
       : activeTab === "all-reviews"
         ? "All Project Reviews"
-        : "My Project Reviews";
+        : "Project Reviews";
   const headerSubtitle =
     activeTab === "evaluate"
       ? "Provide project feedback for your team members."
@@ -210,19 +210,22 @@ export function ProjectReviews() {
           </h1>
           <p className="mt-0.5 text-sm text-text-muted">{headerSubtitle}</p>
         </div>
-        <ExportExcelButton
-          label="Export Project Reviews"
-          onDownload={() =>
-            exportService.downloadProjectReviews(
-              {
-                fy: settings?.active_cycle_name
-                  ? extractFyToken(settings.active_cycle_name)
-                  : undefined,
-              },
-              "inline",
-            )
-          }
-        />
+        {/* Org-wide export — admins only, and only on the All Reviews tab. */}
+        {isAdmin && activeTab === "all-reviews" && (
+          <ExportExcelButton
+            label="Export Project Reviews"
+            onDownload={() =>
+              exportService.downloadProjectReviews(
+                {
+                  fy: settings?.active_cycle_name
+                    ? extractFyToken(settings.active_cycle_name)
+                    : undefined,
+                },
+                "inline",
+              )
+            }
+          />
+        )}
       </div>
 
       {/* ── Main Content Container ── */}
