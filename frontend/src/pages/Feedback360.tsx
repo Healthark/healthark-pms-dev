@@ -71,7 +71,7 @@ export function Feedback360() {
         </h1>
         <p className="mt-0.5 text-sm text-text-muted">
           Share peer feedback and view the aggregate of feedback received.
-          Reviews are anonymous — submit-once per employee, per fiscal year.
+          Reviews are anonymous - submit-once per employee, per fiscal year.
         </p>
       </div>
 
