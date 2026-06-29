@@ -117,6 +117,7 @@ export function GoalMentorReviewModal({
 
   const [overall, setOverall] = useState("");
   const [expectations, setExpectations] = useState<RoleExpectation[]>([]);
+  const [expectationsLoaded, setExpectationsLoaded] = useState(false);
 
   // Re-seed the textarea whenever the modal opens on a different (goal, half).
   // Gated on `detail` so the draft text fetched from /goals/{id} is available
@@ -146,7 +147,10 @@ export function GoalMentorReviewModal({
         if (!cancelled) setExpectations(rows);
       })
       .catch(() => {
-        // Non-fatal — panels just won't render.
+        // Non-fatal — the card falls back to a "not configured" note.
+      })
+      .finally(() => {
+        if (!cancelled) setExpectationsLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -162,6 +166,15 @@ export function GoalMentorReviewModal({
           (e) => e.department_name === dept && e.designation_name === desig,
         ) ?? null
       : null;
+
+  // Once the fetch has resolved with no match, surface a clear note instead of
+  // a silently-blank section so the reviewer understands why the mentee's
+  // expectations aren't shown (role not configured, or no dept/designation set).
+  const showExpectationNote = !ownerExpectation && expectationsLoaded;
+  const expectationEmptyMessage =
+    dept && desig
+      ? `No role expectations are configured for ${dept} · ${desig} yet.`
+      : "This mentee's department or designation isn't set, so role expectations can't be shown.";
 
   const allFilled = overall.trim().length > 0;
   // The mentor's submit is window-gated on the backend (is_review_window_open);
@@ -226,11 +239,14 @@ export function GoalMentorReviewModal({
 
         {/* ── Role-expectation reference card (above the split) — same card as
             the Annual Goals page, scoped to the mentee being reviewed. ── */}
-        {ownerExpectation && (
+        {(ownerExpectation || showExpectationNote) && (
           <div className="border-b border-border px-6 py-3 shrink-0">
             <RoleExpectationsCard
               expectation={ownerExpectation}
               title="Mentee Role Expectations"
+              emptyMessage={
+                showExpectationNote ? expectationEmptyMessage : undefined
+              }
             />
           </div>
         )}
