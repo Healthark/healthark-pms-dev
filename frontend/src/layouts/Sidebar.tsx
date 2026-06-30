@@ -15,8 +15,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useSidebar } from "../hooks/useSidebar";
+import { SupportModal } from "../components/layout/SupportModal";
 
 interface NavItemData {
   readonly id: string;
@@ -97,9 +99,10 @@ const MAIN_NAV: NavItemData[] = [
   { id: "admin", path: "/admin", label: "Admin Panel", icon: Settings, feature: "admin", requiredRole: ["Admin"] },
 ];
 
+// Support is intentionally NOT in this list — it opens a popup (SupportModal)
+// rather than navigating to a route, so it's rendered as its own button below.
 const BOTTOM_NAV: NavItemData[] = [
   { id: "profile", path: "/profile", label: "Profile", icon: User },
-  { id: "support", path: "/support", label: "Support", icon: HelpCircle },
 ];
 
 export function Sidebar() {
@@ -108,6 +111,7 @@ export function Sidebar() {
   const { collapsed: isCollapsed, setCollapsed } = useSidebar();
   const navigate = useNavigate();
   const { logout, hasFeature, user } = useAuth();
+  const [supportOpen, setSupportOpen] = useState(false);
 
   // Safely grab the org_id, default to 1 (Healthark) if something goes wrong
   const currentOrgId = user?.org_id || 1; 
@@ -200,6 +204,22 @@ export function Sidebar() {
           <NavItem key={item.id} item={item} isCollapsed={isCollapsed} />
         ))}
 
+        {/* Support — opens a popup with the help form instead of navigating. */}
+        <button
+          onClick={() => setSupportOpen(true)}
+          title={isCollapsed ? "Support" : undefined}
+          className={`w-full flex items-center rounded-lg transition-all duration-200 text-text-muted hover:bg-surface-muted hover:text-text-main font-medium border-l-2 border-transparent ${
+            isCollapsed ? "justify-center py-2.5 px-0" : "px-3 py-2 gap-2.5"
+          }`}
+        >
+          <HelpCircle className="w-4 h-4 shrink-0 text-text-muted" />
+          {!isCollapsed && (
+            <span className="text-sm whitespace-nowrap overflow-hidden">
+              Support
+            </span>
+          )}
+        </button>
+
         <button
           onClick={handleLogout}
           title={isCollapsed ? "Logout" : undefined}
@@ -213,6 +233,8 @@ export function Sidebar() {
           )}
         </button>
       </div>
+
+      {supportOpen && <SupportModal onClose={() => setSupportOpen(false)} />}
     </aside>
   );
 }
