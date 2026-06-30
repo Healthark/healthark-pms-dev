@@ -208,6 +208,53 @@ export interface CycleSetPayload {
   target_cycle: string;
 }
 
+// ── Goal access overrides (per-employee gate exceptions) ─────────────
+
+/** One active per-employee goal-access grant (overview row). Mirrors backend
+ *  GoalAccessGrantResponse. */
+export interface GoalAccessGrant {
+  user_id: number;
+  user_name: string;
+  employee_code: string;
+  period_label: string;
+  allow_create: boolean;
+  allow_edit: boolean;
+  note: string | null;
+  granted_by_name: string | null;
+  granted_at: string | null;
+}
+
+/** A goal row in the Goal Access detail view. Mirrors backend AdminGoalBrief.
+ *  `can_revert` is true only for an 'approved' goal (the sole revertible state). */
+export interface AdminGoalBrief {
+  id: number;
+  title: string;
+  approval_status: string;
+  cycle_name: string | null;
+  period_label: string | null;
+  can_revert: boolean;
+}
+
+/** GET /admin/goal-access/{user_id} payload — the employee's active grants plus
+ *  their active-FY annual goals. Mirrors backend GoalAccessDetailResponse. */
+export interface GoalAccessDetail {
+  user_id: number;
+  user_name: string;
+  employee_code: string;
+  active_period_label: string | null;
+  grants: GoalAccessGrant[];
+  goals: AdminGoalBrief[];
+}
+
+/** PATCH /admin/goal-access/{user_id} body — only the flags sent are written;
+ *  period_label defaults to the active half server-side. */
+export interface GoalAccessGrantUpdatePayload {
+  allow_create?: boolean;
+  allow_edit?: boolean;
+  note?: string | null;
+  period_label?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -355,6 +402,54 @@ export const adminService = {
 
   setCycle: async (payload: CycleSetPayload): Promise<CycleStatus> => {
     const res = await apiClient.post<CycleStatus>("/admin/cycle/set", payload);
+    return res.data;
+  },
+
+  // ── Goal access overrides (per-employee gate exceptions) ─────────
+  /** Every active per-employee goal-access grant (the overview list). */
+  getGoalAccessGrants: async (): Promise<GoalAccessGrant[]> => {
+    const res = await apiClient.get<GoalAccessGrant[]>("/admin/goal-access");
+    return res.data;
+  },
+
+  /** One employee's active grants + their active-FY annual goals. */
+  getGoalAccessForUser: async (userId: number): Promise<GoalAccessDetail> => {
+    const res = await apiClient.get<GoalAccessDetail>(
+      `/admin/goal-access/${userId}`,
+    );
+    return res.data;
+  },
+
+  /** Grant/adjust an employee's access (active half unless period_label set). */
+  setGoalAccess: async (
+    userId: number,
+    payload: GoalAccessGrantUpdatePayload,
+  ): Promise<GoalAccessDetail> => {
+    const res = await apiClient.patch<GoalAccessDetail>(
+      `/admin/goal-access/${userId}`,
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Revoke an employee's grant for a half (defaults to the active half). */
+  revokeGoalAccess: async (
+    userId: number,
+    periodLabel?: string,
+  ): Promise<GoalAccessDetail> => {
+    const res = await apiClient.post<GoalAccessDetail>(
+      `/admin/goal-access/${userId}/revoke`,
+      { period_label: periodLabel ?? null },
+    );
+    return res.data;
+  },
+
+  /** Throw an approved annual goal back to draft (auto-grants the owner edit
+   *  access for that goal's half). Returns the owner's refreshed detail. */
+  revertGoalToDraft: async (goalId: number): Promise<GoalAccessDetail> => {
+    const res = await apiClient.post<GoalAccessDetail>(
+      `/admin/goals/${goalId}/revert-to-draft`,
+    );
     return res.data;
   },
 };
