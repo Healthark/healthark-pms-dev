@@ -68,6 +68,15 @@ vi.mock("../../../hooks/useConfirm", () => ({
 vi.mock("../../../hooks/useDebounce", () => ({
   useDebounce: (fn: (v: string) => void) => [fn],
 }));
+// Department-scoped roles: the tab now reads reference data to narrow the
+// designation filter by the selected department. Stub it so these year-filter
+// tests don't need a QueryClient.
+vi.mock("../../../queries/adminReferenceData", () => ({
+  useDepartments: () => ({ data: [{ id: 1, name: "RWE" }] }),
+  useDesignations: () => ({
+    data: [{ id: 1, name: "Consultant", level: 1, department_id: 1 }],
+  }),
+}));
 
 import { ManagementReviewTab } from "../ManagementReviewTab";
 

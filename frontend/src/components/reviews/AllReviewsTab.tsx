@@ -78,13 +78,16 @@ export function AllReviewsTab() {
       ).sort(),
     [reviews],
   );
-  const designations = useMemo(
-    () =>
-      Array.from(
-        new Set(reviews.map((r) => r.designation).filter((n): n is string => !!n)),
-      ).sort(),
-    [reviews],
-  );
+  // Department-scoped roles: narrow the designation options to the selected
+  // department's roles so the two filters stay consistent.
+  const designations = useMemo(() => {
+    const pool = departmentFilter
+      ? reviews.filter((r) => r.department === departmentFilter)
+      : reviews;
+    return Array.from(
+      new Set(pool.map((r) => r.designation).filter((n): n is string => !!n)),
+    ).sort();
+  }, [reviews, departmentFilter]);
   const mentors = useMemo(
     () =>
       Array.from(
@@ -227,7 +230,10 @@ export function AllReviewsTab() {
               id="ar-dept"
               options={departments}
               value={departmentFilter}
-              onChange={setDepartmentFilter}
+              onChange={(v) => {
+                setDepartmentFilter(v);
+                setDesignationFilter("");
+              }}
               placeholder="All departments"
             />
           </div>

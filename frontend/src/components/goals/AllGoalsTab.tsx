@@ -102,15 +102,18 @@ export function AllGoalsTab() {
       ).sort(),
     [goals],
   );
-  const designations = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          goals.map((g) => g.owner_designation_name).filter((n): n is string => !!n),
-        ),
-      ).sort(),
-    [goals],
-  );
+  // Department-scoped roles: narrow the designation options to the selected
+  // department's roles so the two filters stay consistent.
+  const designations = useMemo(() => {
+    const pool = departmentFilter
+      ? goals.filter((g) => g.owner_department_name === departmentFilter)
+      : goals;
+    return Array.from(
+      new Set(
+        pool.map((g) => g.owner_designation_name).filter((n): n is string => !!n),
+      ),
+    ).sort();
+  }, [goals, departmentFilter]);
   const mentors = useMemo(
     () =>
       Array.from(
@@ -278,7 +281,10 @@ export function AllGoalsTab() {
               id="ag-dept"
               options={departments}
               value={departmentFilter}
-              onChange={setDepartmentFilter}
+              onChange={(v) => {
+                setDepartmentFilter(v);
+                setDesignationFilter("");
+              }}
               placeholder="All departments"
             />
           </div>
