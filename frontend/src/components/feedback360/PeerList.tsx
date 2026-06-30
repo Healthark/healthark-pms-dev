@@ -40,13 +40,25 @@ export function PeerList() {
   const [filter, setFilter] = useState<"all" | "worked" | "not_worked">(
     "all",
   );
+  const [deptFilter, setDeptFilter] = useState<string>("all");
 
-  const hasActiveFilters = !!search || filter !== "all";
+  const hasActiveFilters =
+    !!search || filter !== "all" || deptFilter !== "all";
 
   const clearFilters = () => {
     setSearch("");
     setFilter("all");
+    setDeptFilter("all");
   };
+
+  // Department options derived from the peers actually in the list, so the
+  // dropdown only offers departments that exist — dynamic, like the other
+  // data-driven filters in the app.
+  const departments = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of peers) if (p.department_name) set.add(p.department_name);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [peers]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -54,9 +66,10 @@ export function PeerList() {
       if (q && !p.full_name.toLowerCase().includes(q)) return false;
       if (filter === "worked" && !p.worked_with) return false;
       if (filter === "not_worked" && p.worked_with) return false;
+      if (deptFilter !== "all" && p.department_name !== deptFilter) return false;
       return true;
     });
-  }, [peers, search, filter]);
+  }, [peers, search, filter, deptFilter]);
 
   // Pair items so each virtual row owns up to 2 cards. This keeps the
   // existing desktop 2-col grid look while letting us virtualize a
@@ -118,6 +131,21 @@ export function PeerList() {
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {departments.length > 0 && (
+            <select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              aria-label="Filter by department"
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand cursor-pointer"
+            >
+              <option value="all">All departments</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          )}
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
             All ({peers.length})
           </FilterChip>
