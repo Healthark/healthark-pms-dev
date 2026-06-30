@@ -15,6 +15,21 @@ from app.models.goal_models import ApprovalStatus, GoalType
 from app.models.goal_self_review_models import SelfReviewCycleHalf
 
 
+class MyGoalAccessResponse(BaseModel):
+    """The caller's own active annual-goal access grants (per-employee gate
+    exceptions). Drives the My Goals Add/Edit affordances when the org-wide half
+    is otherwise closed — always self-scoped.
+
+    `allow_create` / `allow_edit` are for the active half; `edit_period_labels`
+    lists every half the caller currently holds an edit grant for, so a goal
+    thrown back in a non-active half still resolves as editable on the client.
+    """
+    active_period_label: Optional[str] = None
+    allow_create: bool = False
+    allow_edit: bool = False
+    edit_period_labels: list[str] = Field(default_factory=list)
+
+
 # =====================================================================
 # CRITERION SCHEMAS
 # =====================================================================
