@@ -187,6 +187,26 @@ def _final_rating_visible(
     return True
 
 
+def _mentor_rating_visible(
+    db: DbSession,
+    org_id: int,
+    review: AnnualReview,
+    active_fy_label: str,
+) -> bool:
+    """Per-FY visibility of the mentor's rating to the mentee.
+
+    Independent of the final/management gate: the current FY honours this FY's
+    `annual_review_mentor_rating_visible` toggle; past FYs always pass through.
+    The mentor rating is only populated once the mentor submits (the draft lives
+    in a separate column), so a non-null value here already means "submitted".
+    """
+    review_fy = _fy_label_of_review(review)
+    if review_fy == active_fy_label:
+        override = get_year_override(db, org_id, review_fy)
+        return bool(override and override.annual_review_mentor_rating_visible)
+    return True
+
+
 def _strip_private_ratings(
     db: DbSession,
     org_id: int,
@@ -196,25 +216,34 @@ def _strip_private_ratings(
     """
     Mutates `review` in-place to hide ratings an employee shouldn't see yet.
 
-    User-side display rule: final_performance_rating in the response is
-    synthesized as management_performance_rating ?? mentor_performance_rating
-    — the stored final_performance_rating column (HR's legacy override path)
-    is not surfaced. The fallback is gated by the per-row
-    final_rating_enabled AND the per-FY visibility decision (see
-    `_final_rating_visible`) so unfinalized / closed-year reviews never leak.
+    Two independent per-FY gates drive what the mentee sees:
 
-    Mentor draft text/rating are ALWAYS stripped — the mentee should not
-    see in-progress mentor work, regardless of FY.
+    - Mentor rating: shown once the mentor submits, gated by the per-FY
+      `annual_review_mentor_rating_visible` toggle (see `_mentor_rating_visible`).
+    - Management / final rating: the management rating is surfaced as
+      `final_performance_rating` (strict — it never falls back to the mentor
+      rating, which now has its own column), gated by the per-row
+      `final_rating_enabled` AND the per-FY `annual_review_final_rating_visible`
+      toggle (see `_final_rating_visible`).
+
+    Mentor draft text/rating and the raw management column are ALWAYS stripped —
+    the mentee never sees in-progress mentor work, regardless of FY or toggle.
     """
-    mgmt = review.management_performance_rating
     mentor = review.mentor_performance_rating
-    review.mentor_performance_rating = None
-    review.management_performance_rating = None
+    mgmt = review.management_performance_rating
     review.mentor_overall_review_draft = None
     review.mentor_performance_rating_draft = None
-    final_visible = _final_rating_visible(db, org_id, review, active_fy_label)
-    if review.final_rating_enabled and final_visible:
-        review.final_performance_rating = mgmt if mgmt is not None else mentor
+    review.management_performance_rating = None
+    # Mentor rating — visible once submitted, per the mentor-visibility gate.
+    review.mentor_performance_rating = (
+        mentor if _mentor_rating_visible(db, org_id, review, active_fy_label) else None
+    )
+    # Final (management) rating — strict management value, gated by the per-row
+    # publish flag AND the per-FY final-rating gate. No fallback to mentor.
+    if review.final_rating_enabled and _final_rating_visible(
+        db, org_id, review, active_fy_label
+    ):
+        review.final_performance_rating = mgmt
     else:
         review.final_performance_rating = None
 

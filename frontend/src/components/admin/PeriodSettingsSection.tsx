@@ -37,7 +37,8 @@ export interface PeriodToggle {
 /** Short labels for the diff confirmation modal. */
 const TOGGLE_LABELS: Record<ToggleKey, string> = {
   annual_reviews_enabled: "Annual Reviews",
-  annual_review_final_rating_visible: "Annual Review Rating Visibility",
+  annual_review_final_rating_visible: "Management Rating Visibility",
+  annual_review_mentor_rating_visible: "Mentor Rating Visibility",
   annual_goals_edit_enabled: "Annual Goal Edit Access",
   project_ratings_visible: "Project Rating Visibility",
   annual_goals_final_rating_visible: "Annual Goal Review Visibility",

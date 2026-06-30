@@ -185,6 +185,7 @@ class YearSettingsResponse(BaseModel):
     period_label: str
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
+    annual_review_mentor_rating_visible: bool
     annual_goals_edit_enabled: bool
     project_ratings_visible: bool
     annual_goals_final_rating_visible: bool
@@ -199,6 +200,7 @@ class YearSettingsUpdate(BaseModel):
     goal/project flags."""
     annual_reviews_enabled: Optional[bool] = None
     annual_review_final_rating_visible: Optional[bool] = None
+    annual_review_mentor_rating_visible: Optional[bool] = None
     annual_goals_edit_enabled: Optional[bool] = None
     project_ratings_visible: Optional[bool] = None
     annual_goals_final_rating_visible: Optional[bool] = None
@@ -217,6 +219,7 @@ class YearPreflightResponse(BaseModel):
     annual_reviews_enabled: YearPreflightEntry
     project_ratings_visible: YearPreflightEntry
     annual_review_final_rating_visible: YearPreflightEntry
+    annual_review_mentor_rating_visible: YearPreflightEntry
     annual_goals_final_rating_visible: YearPreflightEntry
     management_review_enabled: YearPreflightEntry
 
