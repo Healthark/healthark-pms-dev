@@ -294,14 +294,13 @@ def notify_audience(
     *,
     user_ids: Optional[Sequence[int]] = None,
     department_ids: Optional[Sequence[int]] = None,
-    designation_ids: Optional[Sequence[int]] = None,
 ) -> list[User]:
     """Active org users narrowed by the Admin Notify filters (AND-combined).
 
     No filter set → every active user. Each filter further narrows the set:
-    ``user_ids`` keeps only those specific users; ``department_ids`` /
-    ``designation_ids`` keep only users in those departments / designations.
-    Empty lists are treated as "no filter on that dimension".
+    ``user_ids`` keeps only those specific users; ``department_ids`` keeps only
+    users in those departments. Empty lists are treated as "no filter on that
+    dimension".
     """
     query = db.query(User).filter(
         User.org_id == org_id,
@@ -313,9 +312,6 @@ def notify_audience(
 
     if department_ids:
         query = query.filter(User.department_id.in_(department_ids))
-
-    if designation_ids:
-        query = query.filter(User.designation_id.in_(designation_ids))
 
     return query.all()
 

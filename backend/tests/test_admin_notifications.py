@@ -355,53 +355,6 @@ def test_admin_notify_filters_by_department(db):
     assert recipients == {admin.id, a1.id}
 
 
-def test_admin_notify_filters_by_designation_across_departments(db):
-    org = _org(db)
-    admin = _user(db, org.id, role="Admin", department_id=1, designation_id=10)
-    c2 = _user(db, org.id, role="Staff", department_id=2, designation_id=10)  # same desig, other dept
-    _user(db, org.id, role="Staff", department_id=1, designation_id=11)  # other desig
-    db.commit()
-
-    result = admin_notify(
-        AdminNotifyRequest(subject="Consultants", body="b", designation_ids=[10], channel="in_app"),
-        db,
-        admin,
-        BackgroundTasks(),
-    )
-
-    assert result.recipients == 2  # designation 10 regardless of department
-    recipients = {
-        r.recipient_id
-        for r in db.query(Notification).filter(Notification.type == "admin_broadcast")
-    }
-    assert recipients == {admin.id, c2.id}
-
-
-def test_admin_notify_department_and_designation_are_anded(db):
-    org = _org(db)
-    admin = _user(db, org.id, role="Admin", department_id=1, designation_id=10)
-    _user(db, org.id, role="Staff", department_id=1, designation_id=11)  # right dept, wrong desig
-    _user(db, org.id, role="Staff", department_id=2, designation_id=10)  # wrong dept, right desig
-    db.commit()
-
-    result = admin_notify(
-        AdminNotifyRequest(
-            subject="Dept1 Consultants",
-            body="b",
-            department_ids=[1],
-            designation_ids=[10],
-            channel="in_app",
-        ),
-        db,
-        admin,
-        BackgroundTasks(),
-    )
-
-    assert result.recipients == 1  # only the user in dept 1 AND designation 10
-    rows = db.query(Notification).filter(Notification.type == "admin_broadcast").all()
-    assert rows[0].recipient_id == admin.id
-
-
 def test_admin_notify_email_gated_by_smtp_config(db):
     org = _org(db)
     admin = _user(db, org.id, role="Admin")

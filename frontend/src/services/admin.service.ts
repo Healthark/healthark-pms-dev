@@ -165,8 +165,6 @@ export interface AdminNotifyPayload {
   user_ids: number[];
   /** Restrict to these departments (any of); empty = no department filter. */
   department_ids: number[];
-  /** Restrict to these designations (any of); empty = no designation filter. */
-  designation_ids: number[];
   /** "in_app" = bell only, "email" = email only, "both" = both. */
   channel: NotifyChannel;
 }
