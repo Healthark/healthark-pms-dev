@@ -125,6 +125,38 @@ def _require_admin(current_user: User) -> None:
         )
 
 
+def _validate_designation_in_department(
+    db: DbSession,
+    org_id: int,
+    department_id: Optional[int],
+    designation_id: Optional[int],
+) -> None:
+    """Roles are department-scoped — a chosen role must belong to the chosen
+    department. No-op when no role is set; legacy unscoped roles (department_id
+    NULL) are allowed through so existing assignments aren't blocked."""
+    if designation_id is None:
+        return
+    if department_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Select a department before choosing a role.",
+        )
+    desig = (
+        db.query(Designation)
+        .filter(Designation.id == designation_id, Designation.org_id == org_id)
+        .first()
+    )
+    if desig is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown role."
+        )
+    if desig.department_id is not None and desig.department_id != department_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That role does not belong to the selected department.",
+        )
+
+
 # =====================================================================
 # USER MANAGEMENT
 # =====================================================================
@@ -311,6 +343,11 @@ def create_user(
             detail=f"Employee code '{user_in.employee_code}' is already in use.",
         )
 
+    # Roles are department-scoped — the chosen role must belong to the dept.
+    _validate_designation_in_department(
+        db, current_user.org_id, user_in.department_id, user_in.designation_id
+    )
+
     new_user = User(
         org_id=current_user.org_id,  # Forced from JWT — never trusted from body
         employee_code=user_in.employee_code,
@@ -397,6 +434,14 @@ def update_user(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Employee code '{update_data['employee_code']}' is already in use.",
             )
+
+    # Roles are department-scoped — validate the resulting (department, role)
+    # combo after the patch (changing department alone can invalidate the role).
+    final_department_id = update_data.get("department_id", user.department_id)
+    final_designation_id = update_data.get("designation_id", user.designation_id)
+    _validate_designation_in_department(
+        db, current_user.org_id, final_department_id, final_designation_id
+    )
 
     for field, value in update_data.items():
         setattr(user, field, value)

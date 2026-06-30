@@ -398,6 +398,12 @@ def seed_production(skip_confirm: bool = False):
         _seed_role_expectations(db, org)
         db.commit()
 
+        # Roles are department-scoped — collapse the seeded global designations
+        # into per-department rows now that users + role-expectations exist.
+        from app.services.designation_scoping import scope_designations_for_org
+        scope_designations_for_org(db.connection(), org.id)
+        db.commit()
+
         # Hard guarantee the operator asked for: only these 3 users exist.
         user_count = db.query(User).count()
         org_count = db.query(Organization).count()
