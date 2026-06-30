@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
-  UserPlus, Users, Settings, FolderOpen, Plus, Download, Megaphone,
+  UserPlus, Users, Settings, FolderOpen, Plus, Download, Megaphone, KeyRound,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
@@ -23,6 +23,7 @@ const UserModal = lazy(() =>
 );
 import { ExportsTab } from "../components/admin/ExportsTab";
 import { NotifyTab } from "../components/admin/NotifyTab";
+import { GoalAccessTab } from "../components/admin/GoalAccessTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
 import { useAuth } from "../hooks/useAuth";
@@ -39,7 +40,8 @@ type ActiveTab =
   | "projects"
   | "notify"
   | "export"
-  | "settings";
+  | "settings"
+  | "goal-access";
 
 export default function AdminPanel() {
   // ── Reference data (shared cache via ['admin', 'departments|designations']) ─
@@ -84,7 +86,9 @@ export default function AdminPanel() {
           ? "export"
           : tabParam === "settings"
             ? "settings"
-            : "users";
+            : tabParam === "goal-access"
+              ? "goal-access"
+              : "users";
   const setActiveTab = (tab: ActiveTab) => {
     setSearchParams(
       (prev) => {
@@ -255,6 +259,14 @@ export default function AdminPanel() {
             <Settings className="h-4 w-4" aria-hidden="true" />
             System Settings
           </button>
+          <button
+            type="button"
+            className={tabCls("goal-access")}
+            onClick={() => setActiveTab("goal-access")}
+          >
+            <KeyRound className="h-4 w-4" aria-hidden="true" />
+            Goal Access
+          </button>
         </div>
 
         {activeTab === "users" && (
@@ -280,6 +292,8 @@ export default function AdminPanel() {
             fiscalStartMonth={fiscalStartMonth}
           />
         )}
+
+        {activeTab === "goal-access" && <GoalAccessTab />}
       </div>
 
       {/* Modals — rendered outside the card so they overlay the full page.
