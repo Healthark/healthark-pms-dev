@@ -11,6 +11,7 @@ import { SortableHeader } from "../SortableHeader";
 import { type SortState } from "../../utils/sort";
 import { TablePagination } from "../common/TablePagination";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { OptionCombobox } from "../common/OptionCombobox";
 import {
   useDeactivateUser,
   useReactivateUser,
@@ -155,8 +156,33 @@ export function UsersTab({
       (a, b) => a.level - b.level || a.name.localeCompare(b.name),
     );
   }, [designations, departmentFilter]);
-  const deptNameById = (id: number | null | undefined) =>
-    departments.find((d) => d.id === id)?.name ?? null;
+  // Searchable-combobox option lists. Designation labels carry the department's
+  // parenthetical abbreviation ("Information Data Technology (IDT)" → "IDT")
+  // when no department is picked, so role names that repeat across departments
+  // stay distinguishable; fall back to the full name when there's none.
+  const departmentOptions = useMemo(
+    () =>
+      [...departments]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((d) => ({ value: d.id, label: d.name })),
+    [departments],
+  );
+  const designationOptions = useMemo(() => {
+    const abbrev = (deptId: number | null) => {
+      const name = departments.find((d) => d.id === deptId)?.name;
+      if (!name) return "";
+      const m = name.match(/\(([^)]+)\)/);
+      return m ? m[1] : name;
+    };
+    return availableDesignations.map((d) => ({
+      value: d.id,
+      label:
+        d.name +
+        (departmentFilter === "all" && d.department_id != null
+          ? ` — ${abbrev(d.department_id)}`
+          : ""),
+    }));
+  }, [availableDesignations, departmentFilter, departments]);
 
   const handleDeactivate = async (user: UserResponse) => {
     const ok = await confirm({
@@ -223,43 +249,36 @@ export function UsersTab({
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="user-department-filter" className={FILTER_LABEL_CLS}>Department</label>
-          <select
+          <OptionCombobox
             id="user-department-filter"
-            value={departmentFilter}
-            onChange={(e) => {
-              setDepartmentFilter(
-                e.target.value === "all" ? "all" : Number(e.target.value),
-              );
+            options={departmentOptions}
+            value={departmentFilter === "all" ? null : departmentFilter}
+            onChange={(deptId) => {
+              setDepartmentFilter(deptId ?? "all");
               setDesignationFilter("all");
             }}
-            className={`${FILTER_SELECT_CLS} min-w-[160px]`}
-          >
-            <option value="all">All</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
+            placeholder="All departments"
+            minWidth="170px"
+          />
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="user-designation-filter" className={FILTER_LABEL_CLS}>Designation</label>
-          <select
+          <OptionCombobox
             id="user-designation-filter"
-            value={designationFilter}
-            onChange={(e) =>
-              setDesignationFilter(e.target.value === "all" ? "all" : Number(e.target.value))
-            }
-            className={`${FILTER_SELECT_CLS} min-w-[160px]`}
-          >
-            <option value="all">All</option>
-            {availableDesignations.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-                {departmentFilter === "all" && d.department_id != null
-                  ? ` — ${deptNameById(d.department_id)}`
-                  : ""}
-              </option>
-            ))}
-          </select>
+            options={designationOptions}
+            value={designationFilter === "all" ? null : designationFilter}
+            onChange={(desigId) => {
+              setDesignationFilter(desigId ?? "all");
+              // Picking a role auto-selects its department (role → department).
+              const deptId =
+                desigId != null
+                  ? designations.find((d) => d.id === desigId)?.department_id
+                  : null;
+              if (deptId != null) setDepartmentFilter(deptId);
+            }}
+            placeholder="All designations"
+            minWidth="210px"
+          />
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="user-status-filter" className={FILTER_LABEL_CLS}>Status</label>
