@@ -11,7 +11,14 @@
  * the goal gate honours the resulting grants (see backend goal_routes).
  */
 import { useState } from "react";
-import { KeyRound, RotateCcw, Trash2, Users2 } from "lucide-react";
+import {
+  AlertCircle,
+  KeyRound,
+  Loader2,
+  RotateCcw,
+  Trash2,
+  Users2,
+} from "lucide-react";
 import { UserCombobox } from "../common/UserCombobox";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
 import type { ApprovalStatus } from "../../services/goal.service";
@@ -35,8 +42,11 @@ export function GoalAccessTab() {
 
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
-  const { data: detail, isLoading: detailLoading } =
-    useGoalAccessForUser(selectedUserId);
+  const {
+    data: detail,
+    isLoading: detailLoading,
+    isError: detailError,
+  } = useGoalAccessForUser(selectedUserId);
   const { data: grants = [], isLoading: grantsLoading } = useGoalAccessGrants();
   const setAccess = useSetGoalAccess();
   const revokeAccess = useRevokeGoalAccess();
@@ -135,7 +145,20 @@ export function GoalAccessTab() {
         </div>
 
         {selectedUserId != null && detailLoading && (
-          <p className="text-sm text-text-muted">Loading…</p>
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading…
+          </div>
+        )}
+
+        {selectedUserId != null && detailError && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2.5 text-sm text-red-700 dark:text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Couldn't load this employee's goal access. If the backend was
+              just deployed, give it a moment and try again.
+            </span>
+          </div>
         )}
 
         {selectedUserId != null && detail && (

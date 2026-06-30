@@ -11,7 +11,7 @@
  * lets management set/override the management rating inline via a modal.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Eye, Loader2, Pencil, ShieldCheck, X } from "lucide-react";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { StringCombobox } from "../common/StringCombobox";
@@ -31,6 +31,7 @@ import { getErrorMessage } from "../../utils/errors";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
+import { useDepartments, useDesignations } from "../../queries/adminReferenceData";
 import { TablePagination } from "../common/TablePagination";
 import { SortableHeader } from "../SortableHeader";
 import { type SortState } from "../../utils/sort";
@@ -133,9 +134,24 @@ export function ManagementReviewTab() {
   // Filter dropdown options — fetched once, cached 5 min, independent of
   // the current page so dropdowns always list every available value.
   const { data: filterOptions } = useCalibrationFilterOptions();
+  const { data: refDepartments = [] } = useDepartments();
+  const { data: refDesignations = [] } = useDesignations();
   const availableEmployees = filterOptions?.employees ?? [];
   const availableDepts = filterOptions?.departments ?? [];
-  const availableDesignations = filterOptions?.designations ?? [];
+  // Department-scoped roles: when a department is picked, narrow the designation
+  // options to that department's configured roles (reference data); otherwise
+  // show every designation present across reviews.
+  const availableDesignations = useMemo(() => {
+    if (deptFilter === "all") return filterOptions?.designations ?? [];
+    const deptId = refDepartments.find((d) => d.name === deptFilter)?.id ?? null;
+    return Array.from(
+      new Set(
+        refDesignations
+          .filter((d) => d.department_id === deptId)
+          .map((d) => d.name),
+      ),
+    ).sort();
+  }, [deptFilter, filterOptions?.designations, refDepartments, refDesignations]);
   // Prepend the "(No mentor)" sentinel so HR can surface unmentored employees
   // (backend maps it to mentor_id IS NULL).
   const mentorOptions = [NO_MENTOR_OPTION, ...(filterOptions?.mentors ?? [])];
@@ -279,7 +295,10 @@ export function ManagementReviewTab() {
           <select
             id="mgmt-review-dept-filter"
             value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
+            onChange={(e) => {
+              setDeptFilter(e.target.value);
+              setDesignationFilter("all");
+            }}
             className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[140px] cursor-pointer"
           >
             <option value="all">All</option>
