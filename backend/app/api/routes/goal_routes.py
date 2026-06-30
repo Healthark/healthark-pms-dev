@@ -48,6 +48,7 @@ from app.schemas.goal_schemas import (
     GoalSelfReviewDraft,
     GoalMentorReviewSubmit,
     GoalMentorReviewDraft,
+    MyGoalAccessResponse,
     TeamGoalResponse,
     TeamGoalListResponse,
     TeamGoalsFilterOptions,
@@ -61,6 +62,12 @@ from app.core.cycle_utils import (
     _cycle_to_fy_label,
     _half_label_of_cycle_string,
     _half_label_of_goal,
+)
+from app.models.goal_access_override_models import GoalAccessOverride
+from app.services.goal_access import (
+    active_half_label,
+    get_active_override,
+    user_has_goal_grant,
 )
 
 router = APIRouter()
@@ -166,14 +173,28 @@ def _self_review_allowed_states(cycle_code: str) -> set[str]:
     return allowed
 
 
-def _assert_annual_gate_open(db: Session, org_id: int, half_label: Optional[str]) -> None:
-    """Raise 403 when the annual-goal edit window is closed for `half_label`.
+def _assert_annual_gate_open(
+    db: Session,
+    org_id: int,
+    half_label: Optional[str],
+    *,
+    user_id: int,
+    action: str,
+) -> None:
+    """Raise 403 when annual-goal editing is closed for `half_label` AND the
+    caller has no active per-employee grant covering `action`.
 
-    Per-HALF gate: annual-goal editing is opened/closed per half (H1/H2) on
-    the (org, half) override row.
+    Per-HALF gate: editing is opened/closed per half (H1/H2) on the (org, half)
+    override row. On top of that, an Admin can grant a single employee a per-half
+    exception (see GoalAccessOverride / the Goal Access admin tab); that grant is
+    the fallback checked here when the org-wide half is closed.
       - No resolvable half_label → 400 (we can't tell which half to gate).
-      - Missing override row OR annual_goals_edit_enabled False →
-        403 (default-deny: a half is closed until an Admin opens it).
+      - Org-wide annual_goals_edit_enabled True → open for everyone.
+      - Else an active grant for (user, half, action) → open for that employee.
+      - Else 403 (default-deny: a half is closed until an Admin opens it).
+
+    `action` is "create" (checks allow_create) or "edit" (checks allow_edit;
+    delete piggybacks on edit).
     """
     if not half_label:
         raise HTTPException(
@@ -181,14 +202,17 @@ def _assert_annual_gate_open(db: Session, org_id: int, half_label: Optional[str]
             detail="Cannot determine the half-cycle for this annual goal.",
         )
     override = get_year_override(db, org_id, half_label)
-    if override is None or not override.annual_goals_edit_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"Annual goal submissions for {half_label} are currently closed. "
-                "Please wait for the Admin to open the submission window."
-            ),
-        )
+    if override is not None and override.annual_goals_edit_enabled:
+        return  # org-wide window open
+    if user_has_goal_grant(db, org_id, user_id, half_label, action):
+        return  # per-employee exception granted by an Admin
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            f"Annual goal submissions for {half_label} are currently closed. "
+            "Please wait for the Admin to open the submission window."
+        ),
+    )
 
 
 def _goal_fy_year(goal: Goal) -> Optional[int]:
@@ -259,6 +283,40 @@ def list_goals(
     return out
 
 
+@router.get("/my-access", response_model=MyGoalAccessResponse)
+def get_my_goal_access(db: DbSession, current_user: CurrentUser):
+    """The caller's own active annual-goal access grants (per-employee gate
+    exceptions an Admin set on the Goal Access tab). Drives the My Goals
+    Add/Edit affordances when the org-wide half is otherwise closed.
+
+    Always self-scoped — there is no path to read another user's grants here.
+    Declared before GET /{goal_id} so "my-access" isn't captured as a goal id.
+    """
+    settings = _get_settings(db, current_user.org_id)
+    active_half = active_half_label(settings)
+    active_grant = get_active_override(
+        db, current_user.org_id, current_user.id, active_half
+    )
+    # Every half the caller currently has an edit grant for — lets the client
+    # treat a goal thrown back in a non-active half as editable too.
+    edit_rows = (
+        db.query(GoalAccessOverride.period_label)
+        .filter(
+            GoalAccessOverride.org_id == current_user.org_id,
+            GoalAccessOverride.user_id == current_user.id,
+            GoalAccessOverride.allow_edit == True,  # noqa: E712
+            GoalAccessOverride.revoked_at.is_(None),
+        )
+        .all()
+    )
+    return MyGoalAccessResponse(
+        active_period_label=active_half,
+        allow_create=bool(active_grant and active_grant.allow_create),
+        allow_edit=bool(active_grant and active_grant.allow_edit),
+        edit_period_labels=[r[0] for r in edit_rows],
+    )
+
+
 @router.post("/", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)
 def create_goal(
     goal_in: GoalCreate,
@@ -317,7 +375,11 @@ def create_goal(
         # Stamp BEFORE gating so the per-FY check keys off the goal's own FY.
         cycle_name = goal_cycle_name_for_active(settings.active_cycle_name)
         _assert_annual_gate_open(
-            db, current_user.org_id, _half_label_of_cycle_string(cycle_name)
+            db,
+            current_user.org_id,
+            _half_label_of_cycle_string(cycle_name),
+            user_id=current_user.id,
+            action="create",
         )
 
     # ── Build the Goal record ──────────────────────────────────────────
@@ -675,7 +737,13 @@ def update_goal(
 
     # Annual goal-setting window must be open.
     if goal.goal_type == GoalType.ANNUAL.value:
-        _assert_annual_gate_open(db, current_user.org_id, _half_label_of_goal(goal))
+        _assert_annual_gate_open(
+            db,
+            current_user.org_id,
+            _half_label_of_goal(goal),
+            user_id=current_user.id,
+            action="edit",
+        )
 
     update_data = goal_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -729,7 +797,13 @@ def delete_goal(
 
     # Gate check for annual goal deletion (same window as create/edit).
     if goal.goal_type == GoalType.ANNUAL.value:
-        _assert_annual_gate_open(db, current_user.org_id, _half_label_of_goal(goal))
+        _assert_annual_gate_open(
+            db,
+            current_user.org_id,
+            _half_label_of_goal(goal),
+            user_id=current_user.id,
+            action="edit",
+        )
 
     # Soft-delete — preserves criteria + review history.
     goal.is_deleted = True

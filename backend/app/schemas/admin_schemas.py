@@ -264,3 +264,60 @@ class CoverageGaps(BaseModel):
     Empty lists ⇒ no banner. Drives GET /admin/coverage-gaps."""
     orphaned_mentees: list[CoverageGapUser]
     pm_less_projects: list[CoverageGapProject]
+
+
+# ── Goal Access Overrides (per-employee gate exceptions) ─────────────
+
+class GoalAccessGrantUpdate(BaseModel):
+    """PATCH body for granting / adjusting one employee's annual-goal access for
+    a half (defaults to the active half). Only the flags sent are written."""
+    allow_create: Optional[bool] = None
+    allow_edit: Optional[bool] = None
+    note: Optional[str] = Field(default=None, max_length=500)
+    period_label: Optional[str] = None  # defaults to the active half
+
+
+class GoalAccessRevokeRequest(BaseModel):
+    """POST body for revoking an employee's grant (defaults to the active half)."""
+    period_label: Optional[str] = None
+
+
+class GoalAccessGrantResponse(BaseModel):
+    """One active grant row, enriched with employee + granter display names for
+    the admin overview / detail views."""
+    user_id: int
+    user_name: str
+    employee_code: str
+    period_label: str
+    allow_create: bool
+    allow_edit: bool
+    note: Optional[str] = None
+    granted_by_name: Optional[str] = None
+    granted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminGoalBrief(BaseModel):
+    """A goal row in the admin Goal Access view — enough to pick which approved
+    goal to throw back to draft."""
+    id: int
+    title: str
+    approval_status: str
+    cycle_name: Optional[str] = None
+    period_label: Optional[str] = None  # canonical half ("H1 FY26-27")
+    can_revert: bool  # True iff currently 'approved' (the only revertible state)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GoalAccessDetailResponse(BaseModel):
+    """GET /admin/goal-access/{user_id} — the employee's active grants plus their
+    active-FY annual goals, so the Admin can toggle access and throw specific
+    goals back from one screen."""
+    user_id: int
+    user_name: str
+    employee_code: str
+    active_period_label: Optional[str] = None
+    grants: list[GoalAccessGrantResponse]
+    goals: list[AdminGoalBrief]

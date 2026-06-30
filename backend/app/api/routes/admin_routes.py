@@ -48,7 +48,7 @@ from app.core.cycle_utils import (
 )
 from app.core.security import get_password_hash
 from app.models.annual_review_models import AnnualReview, ReviewStatus
-from app.models.goal_models import ApprovalStatus, Goal, GoalType
+from app.models.goal_models import ApprovalStatus, Goal, GoalType, POST_APPROVAL_STATES
 from app.models.notification_models import NotificationCategory
 from app.models.project_models import (
     PROJECT_STATUS_COMPLETED,
@@ -59,8 +59,14 @@ from app.models.reference_models import Department, Designation
 from app.models.cycle_rollout_log_models import CycleRolloutLog
 from app.models.system_settings_models import CycleType, SystemSettings
 from app.models.system_settings_year_override_models import SystemSettingsYearOverride
+from app.models.goal_access_override_models import GoalAccessOverride
 from app.models.user_models import User
 from app.schemas.admin_schemas import (
+    AdminGoalBrief,
+    GoalAccessDetailResponse,
+    GoalAccessGrantResponse,
+    GoalAccessGrantUpdate,
+    GoalAccessRevokeRequest,
     AdminNotifyRequest,
     AdminNotifyResult,
     AdminSettingsResponse,
@@ -84,6 +90,7 @@ from app.schemas.admin_schemas import (
     YearSettingsUpdate,
 )
 from app.schemas.pagination import Page, PaginationParams
+from app.services.goal_access import active_half_label
 from app.services.notifications import (
     active_org_users,
     broadcast_notification,
@@ -1548,3 +1555,379 @@ def _load_user_with_relations(db: DbSession, user_id: int) -> User:
         .filter(User.id == user_id)
         .first()
     )
+
+
+# =====================================================================
+# GOAL ACCESS OVERRIDES (per-employee gate exceptions)
+# =====================================================================
+#
+# The annual-goal edit window is opened/closed org-wide per half. These
+# endpoints let an Admin grant a single employee an exception — "allow new
+# goals" (allow_create, keyed to the active half) and "throw a goal back to
+# draft" (reverts an approved goal + grants allow_edit for that goal's half).
+# Grants are listed/revoked here; the goal gate consults them in goal_routes.
+
+
+def _settings_or_500(db: DbSession, org_id: int) -> SystemSettings:
+    """Org settings or a 500 — mirrors goal_routes._get_settings."""
+    s = db.query(SystemSettings).filter(SystemSettings.org_id == org_id).first()
+    if not s:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="System settings have not been initialized for this organization.",
+        )
+    return s
+
+
+def _grant_to_response(db: DbSession, ov: GoalAccessOverride) -> GoalAccessGrantResponse:
+    """Enrich a grant row with employee + granter display names."""
+    user = db.query(User).filter(User.id == ov.user_id).first()
+    granter = (
+        db.query(User).filter(User.id == ov.granted_by_id).first()
+        if ov.granted_by_id
+        else None
+    )
+    return GoalAccessGrantResponse(
+        user_id=ov.user_id,
+        user_name=user.full_name if user else "—",
+        employee_code=user.employee_code if user else "—",
+        period_label=ov.period_label,
+        allow_create=ov.allow_create,
+        allow_edit=ov.allow_edit,
+        note=ov.note,
+        granted_by_name=granter.full_name if granter else None,
+        granted_at=ov.granted_at,
+    )
+
+
+def _active_grants_for(
+    db: DbSession, org_id: int, *, user_id: Optional[int] = None
+) -> List[GoalAccessOverride]:
+    """Active (non-revoked, at-least-one-flag-on) grant rows for the org,
+    optionally narrowed to one employee."""
+    q = db.query(GoalAccessOverride).filter(
+        GoalAccessOverride.org_id == org_id,
+        GoalAccessOverride.revoked_at.is_(None),
+        or_(
+            GoalAccessOverride.allow_create == True,  # noqa: E712
+            GoalAccessOverride.allow_edit == True,  # noqa: E712
+        ),
+    )
+    if user_id is not None:
+        q = q.filter(GoalAccessOverride.user_id == user_id)
+    return q.order_by(GoalAccessOverride.granted_at.desc()).all()
+
+
+def _get_target_employee(db: DbSession, org_id: int, user_id: int) -> User:
+    """Active org member or 404 — the employee a grant/throw-back targets."""
+    user = (
+        db.query(User)
+        .filter(
+            User.id == user_id,
+            User.org_id == org_id,
+            User.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found."
+        )
+    return user
+
+
+def _goal_access_detail(
+    db: DbSession, org_id: int, user: User
+) -> GoalAccessDetailResponse:
+    """Per-employee detail payload: active grants + their active-FY annual goals
+    (so the Admin can throw specific approved goals back from one screen)."""
+    settings = _settings_or_500(db, org_id)
+    active_half = active_half_label(settings)
+    active_fy = _cycle_to_fy_label(settings.active_cycle_name)
+
+    goals_out: List[AdminGoalBrief] = []
+    goal_rows = (
+        db.query(Goal)
+        .filter(
+            Goal.org_id == org_id,
+            Goal.user_id == user.id,
+            Goal.goal_type == GoalType.ANNUAL.value,
+            Goal.is_deleted == False,  # noqa: E712
+        )
+        .order_by(Goal.created_at.desc())
+        .all()
+    )
+    for g in goal_rows:
+        if _cycle_to_fy_label(g.cycle_name) != active_fy:
+            continue  # only the active fiscal year's annual goals
+        goals_out.append(
+            AdminGoalBrief(
+                id=g.id,
+                title=g.title,
+                approval_status=g.approval_status,
+                cycle_name=g.cycle_name,
+                period_label=_half_label_of_cycle_string(g.cycle_name),
+                can_revert=g.approval_status == ApprovalStatus.APPROVED.value,
+            )
+        )
+
+    return GoalAccessDetailResponse(
+        user_id=user.id,
+        user_name=user.full_name,
+        employee_code=user.employee_code,
+        active_period_label=active_half,
+        grants=[
+            _grant_to_response(db, ov)
+            for ov in _active_grants_for(db, org_id, user_id=user.id)
+        ],
+        goals=goals_out,
+    )
+
+
+@router.get("/goal-access", response_model=List[GoalAccessGrantResponse])
+def list_goal_access_grants(db: DbSession, current_user: CurrentUser):
+    """Every active per-employee goal-access grant in the org (any half) — the
+    Goal Access overview the Admin uses to review and revoke exceptions."""
+    _require_admin(current_user)
+    return [
+        _grant_to_response(db, ov)
+        for ov in _active_grants_for(db, current_user.org_id)
+    ]
+
+
+@router.get("/goal-access/{user_id}", response_model=GoalAccessDetailResponse)
+def get_goal_access_for_user(
+    user_id: int, db: DbSession, current_user: CurrentUser
+):
+    """One employee's active grants + their active-FY annual goals."""
+    _require_admin(current_user)
+    user = _get_target_employee(db, current_user.org_id, user_id)
+    return _goal_access_detail(db, current_user.org_id, user)
+
+
+@router.patch("/goal-access/{user_id}", response_model=GoalAccessDetailResponse)
+def set_goal_access_for_user(
+    user_id: int,
+    payload: GoalAccessGrantUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Grant or adjust an employee's annual-goal access for a half (defaults to
+    the active half). Upserts the (org, user, half) row, clears any prior
+    revoke, and notifies the employee when access ends up on."""
+    _require_admin(current_user)
+    user = _get_target_employee(db, current_user.org_id, user_id)
+    settings = _settings_or_500(db, current_user.org_id)
+    period = canonical_period_label(payload.period_label) or active_half_label(settings)
+    if not period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not resolve the half-cycle to grant access for.",
+        )
+
+    ov = (
+        db.query(GoalAccessOverride)
+        .filter(
+            GoalAccessOverride.org_id == current_user.org_id,
+            GoalAccessOverride.user_id == user_id,
+            GoalAccessOverride.period_label == period,
+        )
+        .first()
+    )
+    if ov is None:
+        ov = GoalAccessOverride(
+            org_id=current_user.org_id, user_id=user_id, period_label=period
+        )
+        db.add(ov)
+
+    if payload.allow_create is not None:
+        ov.allow_create = payload.allow_create
+    if payload.allow_edit is not None:
+        ov.allow_edit = payload.allow_edit
+    if payload.note is not None:
+        ov.note = payload.note or None
+    ov.granted_by_id = current_user.id
+    ov.granted_at = func.now()
+    ov.revoked_at = None  # (re)granting clears any prior revoke
+    ov.revoked_by_id = None
+
+    if ov.allow_create or ov.allow_edit:
+        bits = []
+        if ov.allow_create:
+            bits.append("add new goals")
+        if ov.allow_edit:
+            bits.append("edit your goals")
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=user_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_access_granted",
+            title="Goal access granted",
+            body=f"An admin gave you temporary access to {' and '.join(bits)} for {period}.",
+            link="/annual-goals?tab=my",
+            actor_id=current_user.id,
+        )
+
+    db.commit()
+    return _goal_access_detail(db, current_user.org_id, user)
+
+
+@router.post("/goal-access/{user_id}/revoke", response_model=GoalAccessDetailResponse)
+def revoke_goal_access(
+    user_id: int,
+    payload: GoalAccessRevokeRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Revoke an employee's grant for a half (defaults to the active half):
+    stamp revoked_at + flip both flags off, preserving the row for audit."""
+    _require_admin(current_user)
+    user = _get_target_employee(db, current_user.org_id, user_id)
+    settings = _settings_or_500(db, current_user.org_id)
+    period = canonical_period_label(payload.period_label) or active_half_label(settings)
+    ov = (
+        db.query(GoalAccessOverride)
+        .filter(
+            GoalAccessOverride.org_id == current_user.org_id,
+            GoalAccessOverride.user_id == user_id,
+            GoalAccessOverride.period_label == period,
+            GoalAccessOverride.revoked_at.is_(None),
+        )
+        .first()
+    )
+    if ov is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active goal-access grant to revoke for this period.",
+        )
+    ov.allow_create = False
+    ov.allow_edit = False
+    ov.revoked_at = func.now()
+    ov.revoked_by_id = current_user.id
+    db.commit()
+    return _goal_access_detail(db, current_user.org_id, user)
+
+
+@router.post("/goals/{goal_id}/revert-to-draft", response_model=GoalAccessDetailResponse)
+def revert_goal_to_draft(
+    goal_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
+):
+    """Throw an APPROVED annual goal back to draft so the employee can revise it,
+    and auto-grant that employee edit access for the goal's half.
+
+    Approved-only: goals already in a review phase stay locked. Clears the
+    approval lock (approved_at), notifies the employee and (if any) their mentor,
+    and returns the employee's refreshed Goal Access detail."""
+    _require_admin(current_user)
+    goal = (
+        db.query(Goal)
+        .filter(
+            Goal.id == goal_id,
+            Goal.org_id == current_user.org_id,
+            Goal.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not goal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found."
+        )
+    if goal.goal_type != GoalType.ANNUAL.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only annual goals can be thrown back to draft.",
+        )
+    if goal.approval_status != ApprovalStatus.APPROVED.value:
+        # Distinguish "already in review" (locked) from "never approved".
+        if goal.approval_status in POST_APPROVAL_STATES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "This goal is already in its review phase and can no longer "
+                    "be thrown back to draft."
+                ),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only an approved goal can be thrown back to draft.",
+        )
+
+    half_label = _half_label_of_cycle_string(goal.cycle_name)
+    if not half_label:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot determine the half-cycle for this goal.",
+        )
+
+    owner = _get_target_employee(db, current_user.org_id, goal.user_id)
+
+    # Revert + clear the approval lock.
+    goal.approval_status = ApprovalStatus.DRAFT.value
+    goal.approved_at = None
+
+    # Auto-grant the owner edit access for this goal's half, so the now-draft
+    # goal is actually editable while the org-wide half stays closed.
+    ov = (
+        db.query(GoalAccessOverride)
+        .filter(
+            GoalAccessOverride.org_id == current_user.org_id,
+            GoalAccessOverride.user_id == goal.user_id,
+            GoalAccessOverride.period_label == half_label,
+        )
+        .first()
+    )
+    if ov is None:
+        ov = GoalAccessOverride(
+            org_id=current_user.org_id,
+            user_id=goal.user_id,
+            period_label=half_label,
+        )
+        db.add(ov)
+    ov.allow_edit = True
+    ov.granted_by_id = current_user.id
+    ov.granted_at = func.now()
+    ov.revoked_at = None
+    ov.revoked_by_id = None
+
+    # Notify the employee.
+    create_notification(
+        db,
+        org_id=current_user.org_id,
+        recipient_id=goal.user_id,
+        category=NotificationCategory.PERSONAL.value,
+        type="goal_reverted_to_draft",
+        title="Goal reopened for editing",
+        body=(
+            f'An admin reopened your goal "{goal.title}" for edits. Update it and '
+            "resubmit it for your mentor's approval."
+        ),
+        link="/annual-goals?tab=my",
+        entity_type="goal",
+        entity_id=goal.id,
+        actor_id=current_user.id,
+    )
+    # Notify the mentor (so a re-approval is expected), if set + not the admin.
+    if owner.mentor_id and owner.mentor_id != current_user.id:
+        create_notification(
+            db,
+            org_id=current_user.org_id,
+            recipient_id=owner.mentor_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="goal_reverted_to_draft_mentor",
+            title="Mentee goal reopened",
+            body=(
+                f'An admin reopened {owner.full_name}\'s goal "{goal.title}" for '
+                "edits — it will return for your approval once resubmitted."
+            ),
+            link="/annual-goals?tab=team",
+            entity_type="goal",
+            entity_id=goal.id,
+            actor_id=current_user.id,
+        )
+
+    db.commit()
+    return _goal_access_detail(db, current_user.org_id, owner)
