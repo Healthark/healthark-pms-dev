@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import type {
   UserResponse,
@@ -84,10 +84,62 @@ export function UserModal({
     }
   }, [editingUser]);
 
+  // Roles are department-scoped: the designation list narrows to the selected
+  // department's roles. With no department chosen yet, all roles are offered
+  // (labelled with their department) so the admin can pick role-first; the
+  // currently-selected role is always kept in the list so editing never drops
+  // it silently. (useMemo must precede the early return — rules of hooks.)
+  const selectedDeptId = form.department_id ? Number(form.department_id) : null;
+  const availableDesignations = useMemo(() => {
+    const currentId = form.designation_id ? Number(form.designation_id) : null;
+    const pool = designations.filter(
+      (d) =>
+        (selectedDeptId != null ? d.department_id === selectedDeptId : true) ||
+        d.id === currentId,
+    );
+    return [...pool].sort(
+      (a, b) => a.level - b.level || a.name.localeCompare(b.name),
+    );
+  }, [designations, selectedDeptId, form.designation_id]);
+
   if (!isOpen) return null;
 
   const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  const deptNameById = (id: number | null | undefined) =>
+    departments.find((d) => d.id === id)?.name ?? null;
+
+  // Changing the department drops a now-mismatched role (or any role when the
+  // department is cleared) so the saved (department, role) pair stays valid.
+  const onDepartmentChange = (value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, department_id: value };
+      if (prev.designation_id) {
+        const desig = designations.find(
+          (d) => d.id === Number(prev.designation_id),
+        );
+        if (!value || (desig && desig.department_id !== Number(value))) {
+          next.designation_id = "";
+        }
+      }
+      return next;
+    });
+  };
+
+  // Picking a role back-fills its department (role → department).
+  const onDesignationChange = (value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, designation_id: value };
+      if (value) {
+        const desig = designations.find((d) => d.id === Number(value));
+        if (desig?.department_id != null) {
+          next.department_id = String(desig.department_id);
+        }
+      }
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
     if (isEditing) {
@@ -231,7 +283,7 @@ export function UserModal({
                 id="dept"
                 className={INPUT_CLS}
                 value={form.department_id}
-                onChange={(e) => set("department_id", e.target.value)}
+                onChange={(e) => onDepartmentChange(e.target.value)}
               >
                 <option value="">— None —</option>
                 {departments.map((d) => (
@@ -249,12 +301,15 @@ export function UserModal({
                 id="desig"
                 className={INPUT_CLS}
                 value={form.designation_id}
-                onChange={(e) => set("designation_id", e.target.value)}
+                onChange={(e) => onDesignationChange(e.target.value)}
               >
                 <option value="">— None —</option>
-                {designations.map((d) => (
+                {availableDesignations.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
+                    {selectedDeptId == null && d.department_id != null
+                      ? ` — ${deptNameById(d.department_id)}`
+                      : ""}
                   </option>
                 ))}
               </select>

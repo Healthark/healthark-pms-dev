@@ -14,6 +14,10 @@ export interface DesignationBrief {
   id: number;
   name: string;
   level: number;
+  /** Home department — roles are department-scoped. Null only for legacy/
+   *  unscoped rows. Used to filter the role dropdown by the chosen department
+   *  and to infer the department from a chosen role. */
+  department_id: number | null;
 }
 
 export interface UserResponse {
