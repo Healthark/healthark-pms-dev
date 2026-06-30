@@ -248,7 +248,7 @@ export function UsersTab({
             onChange={(e) =>
               setDesignationFilter(e.target.value === "all" ? "all" : Number(e.target.value))
             }
-            className={`${FILTER_SELECT_CLS} min-w-[160px]`}
+            className={`${FILTER_SELECT_CLS} w-[180px] truncate`}
           >
             <option value="all">All</option>
             {availableDesignations.map((d) => (
