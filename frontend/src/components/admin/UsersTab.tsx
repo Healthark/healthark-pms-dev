@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Pencil, UserX, UserCheck } from "lucide-react";
 import type {
   UserResponse,
@@ -144,6 +144,20 @@ export function UsersTab({
     setPage(1);
   };
 
+  // Roles are department-scoped — narrow the designation filter to the selected
+  // department's roles (all roles, labelled by department, when none picked).
+  const availableDesignations = useMemo(() => {
+    const pool =
+      departmentFilter !== "all"
+        ? designations.filter((d) => d.department_id === departmentFilter)
+        : designations;
+    return [...pool].sort(
+      (a, b) => a.level - b.level || a.name.localeCompare(b.name),
+    );
+  }, [designations, departmentFilter]);
+  const deptNameById = (id: number | null | undefined) =>
+    departments.find((d) => d.id === id)?.name ?? null;
+
   const handleDeactivate = async (user: UserResponse) => {
     const ok = await confirm({
       title: "Deactivate user?",
@@ -212,9 +226,12 @@ export function UsersTab({
           <select
             id="user-department-filter"
             value={departmentFilter}
-            onChange={(e) =>
-              setDepartmentFilter(e.target.value === "all" ? "all" : Number(e.target.value))
-            }
+            onChange={(e) => {
+              setDepartmentFilter(
+                e.target.value === "all" ? "all" : Number(e.target.value),
+              );
+              setDesignationFilter("all");
+            }}
             className={`${FILTER_SELECT_CLS} min-w-[160px]`}
           >
             <option value="all">All</option>
@@ -234,8 +251,13 @@ export function UsersTab({
             className={`${FILTER_SELECT_CLS} min-w-[160px]`}
           >
             <option value="all">All</option>
-            {designations.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+            {availableDesignations.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {departmentFilter === "all" && d.department_id != null
+                  ? ` — ${deptNameById(d.department_id)}`
+                  : ""}
+              </option>
             ))}
           </select>
         </div>
