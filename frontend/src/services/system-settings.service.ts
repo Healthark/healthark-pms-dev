@@ -31,6 +31,9 @@ export interface SystemSettingsResponse {
   project_ratings_visible: boolean;
   annual_reviews_enabled: boolean;
   annual_review_final_rating_visible: boolean;
+  /** Per-FY visibility of the mentor's rating to the mentee — split out from
+   *  the final-rating gate; drives the My-Review "Mentor Rating" column. */
+  annual_review_mentor_rating_visible: boolean;
   /** Per-FY gate for the Management Review (calibration) stage — independent
    *  of annual_reviews_enabled. Drives the Management Reviews page's publish
    *  affordance and the "window closed" banner. */
@@ -64,6 +67,7 @@ export interface SystemSettingsUpdate {
   project_ratings_visible?: boolean;
   annual_reviews_enabled?: boolean;
   annual_review_final_rating_visible?: boolean;
+  annual_review_mentor_rating_visible?: boolean;
 }
 
 // ── Service Object ──────────────────────────────────────────────────

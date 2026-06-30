@@ -1102,6 +1102,7 @@ def _build_year_settings_response(
         period_label=row.period_label,
         annual_reviews_enabled=row.annual_reviews_enabled,
         annual_review_final_rating_visible=row.annual_review_final_rating_visible,
+        annual_review_mentor_rating_visible=row.annual_review_mentor_rating_visible,
         annual_goals_edit_enabled=row.annual_goals_edit_enabled,
         project_ratings_visible=row.project_ratings_visible,
         annual_goals_final_rating_visible=row.annual_goals_final_rating_visible,
@@ -1296,6 +1297,11 @@ _TOGGLE_ANNOUNCEMENTS: dict[str, dict] = {
         True: ("Final ratings visible", "Final annual-review ratings are now visible for {fy}."),
         False: ("Final ratings hidden", "Final annual-review ratings are now hidden for {fy}."),
     },
+    "annual_review_mentor_rating_visible": {
+        "link": "/annual-reviews",
+        True: ("Mentor ratings visible", "Mentor annual-review ratings are now visible for {fy}."),
+        False: ("Mentor ratings hidden", "Mentor annual-review ratings are now hidden for {fy}."),
+    },
     "project_ratings_visible": {
         "link": "/project-reviews",
         True: ("Project ratings visible", "Project ratings are now visible for {fy}."),
@@ -1448,8 +1454,9 @@ def year_settings_preflight(
     toggle flipped off, filtered to the requested FY.
 
     Visibility-only flags (project_ratings_visible,
-    annual_review_final_rating_visible) always return 0 — flipping them off
-    doesn't lock anyone out, it just hides numbers.
+    annual_review_final_rating_visible, annual_review_mentor_rating_visible)
+    always return 0 — flipping them off doesn't lock anyone out, it just hides
+    numbers.
     """
     _require_admin(current_user)
 
@@ -1571,6 +1578,7 @@ def year_settings_preflight(
         ),
         project_ratings_visible=YearPreflightEntry(in_flight_count=0, warning=None),
         annual_review_final_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
+        annual_review_mentor_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
         annual_goals_final_rating_visible=YearPreflightEntry(in_flight_count=0, warning=None),
         management_review_enabled=YearPreflightEntry(
             in_flight_count=pending_mgmt,

@@ -37,6 +37,10 @@ class SystemSettingsResponse(BaseModel):
     project_ratings_visible: bool
     annual_reviews_enabled: bool
     annual_review_final_rating_visible: bool
+    # Per-FY visibility of the mentor's rating to the mentee — split out from the
+    # final-rating gate. One of YEAR_OVERRIDE_FLAGS, so it MUST be a field here —
+    # get_system_settings overlays it via setattr from the active FY's row.
+    annual_review_mentor_rating_visible: bool
     # Per-FY goal mentor-review embargo. One of YEAR_OVERRIDE_FLAGS, so it MUST
     # be a field here — get_system_settings overlays each flag from the active
     # FY's override row via setattr, and a missing field raises at runtime.
@@ -103,3 +107,4 @@ class SystemSettingsUpdate(BaseModel):
     project_ratings_visible: Optional[bool] = None
     annual_reviews_enabled: Optional[bool] = None
     annual_review_final_rating_visible: Optional[bool] = None
+    annual_review_mentor_rating_visible: Optional[bool] = None

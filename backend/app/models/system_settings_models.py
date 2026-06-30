@@ -81,11 +81,14 @@ class SystemSettings(Base):
     # Admin gate to enable/disable the Annual Reviews module org-wide.
     # When False, the Annual Reviews page is hidden and submissions are blocked.
     annual_reviews_enabled = Column(Boolean, default=False, nullable=False)
-    # When False, the Ratings column is hidden in the Mentor's Mentee Review /
-    # Team Review tabs and the employee cannot see the final rating on past
-    # reviews. Mentors still see their own mentor_performance_rating while
-    # evaluating (that's required for the workflow).
+    # Per-FY visibility of the MANAGEMENT (final) rating to the mentee. When
+    # False, the employee sees "Hidden" in place of the final rating for the
+    # current FY (past FYs always show). Mentors/admins are unaffected.
     annual_review_final_rating_visible = Column(Boolean, default=False, nullable=False)
+    # Per-FY visibility of the MENTOR's rating to the mentee — independent of the
+    # final-rating gate above. When True, the mentee sees their mentor's rating
+    # as soon as the mentor submits (past FYs always show). Drafts never show.
+    annual_review_mentor_rating_visible = Column(Boolean, default=False, nullable=False)
     # Admin gate for the Management Review (calibration) stage. INDEPENDENT of
     # annual_reviews_enabled — calibration typically opens AFTER the employee /
     # mentor submission window closes, so the management-rating publish is gated

@@ -110,6 +110,8 @@ export function SelfReviewTab({
   const { settings } = useSystemSettings();
   const finalRatingVisible =
     settings?.annual_review_final_rating_visible ?? false;
+  const mentorRatingVisible =
+    settings?.annual_review_mentor_rating_visible ?? false;
 
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -274,6 +276,9 @@ export function SelfReviewTab({
                     />
                   </th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                    Mentor Rating
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                     Final Rating
                   </th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
@@ -300,6 +305,15 @@ export function SelfReviewTab({
                     </td>
                     <td className="px-4 py-3">
                       <PerformanceRatingBadge value={r.self_performance_rating} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {mentorRatingVisible ? (
+                        <PerformanceRatingBadge
+                          value={r.mentor_performance_rating}
+                        />
+                      ) : (
+                        <FinalRatingHiddenBadge />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {finalRatingVisible ? (

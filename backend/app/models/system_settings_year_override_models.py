@@ -6,12 +6,12 @@ toggles. A PERIOD is either a fiscal year ("FY26-27") or a half ("H1 FY26-27"):
 
     - Annual-review flags (reviewed once a year) are keyed per FISCAL YEAR:
       annual_reviews_enabled, annual_review_final_rating_visible,
-      management_review_enabled.
+      annual_review_mentor_rating_visible, management_review_enabled.
     - Goal + project-review flags (reviewed twice a year) are keyed per HALF:
       annual_goals_edit_enabled, annual_goals_final_rating_visible,
       project_ratings_visible.
 
-(Each row physically carries all six columns; only the flags relevant to its
+(Each row physically carries all seven columns; only the flags relevant to its
 period type are read — see FY_OVERRIDE_FLAGS / HALF_OVERRIDE_FLAGS in
 cycle_utils.)
 
@@ -47,9 +47,13 @@ class SystemSettingsYearOverride(Base):
     # Gate: state-changing annual review endpoints (submit self-review,
     # mentor eval, management rating) check this for the review's FY.
     annual_reviews_enabled = Column(Boolean, default=False, nullable=False)
-    # Visibility: final_performance_rating exposure to the employee.
+    # Visibility: the MANAGEMENT (final) rating exposure to the employee.
     # Past-FY reads ignore this and always show the rating.
     annual_review_final_rating_visible = Column(Boolean, default=False, nullable=False)
+    # Visibility: the MENTOR's rating exposure to the employee — independent of
+    # the final-rating gate. Visible once the mentor submits; drafts never show;
+    # past-FY reads always pass through.
+    annual_review_mentor_rating_visible = Column(Boolean, default=False, nullable=False)
     # Gate: annual goal create/edit endpoints check this for the goal's FY.
     annual_goals_edit_enabled = Column(Boolean, default=False, nullable=False)
     # Visibility: project_review.performance_group exposure to the rated

@@ -34,10 +34,16 @@ const FY_TOGGLES: readonly PeriodToggle[] = [
       "When on, employees can submit self-reviews for this fiscal year. Disabling pauses new submissions; existing reviews stay readable.",
   },
   {
-    key: "annual_review_final_rating_visible",
-    label: "Show Ratings on Annual Reviews",
+    key: "annual_review_mentor_rating_visible",
+    label: "Show Mentor Ratings on Annual Reviews",
     description:
-      "When on, the Ratings column is visible on Mentee/Team Review tabs and final ratings are revealed to employees once published — for this fiscal year.",
+      "When on, employees can see their mentor's rating on annual reviews as soon as the mentor submits — for this fiscal year.",
+  },
+  {
+    key: "annual_review_final_rating_visible",
+    label: "Show Management Rating on Annual Reviews",
+    description:
+      "When on, employees can see the final management rating once it's published — for this fiscal year. Appears in the My Review table's Final Rating column.",
   },
   {
     key: "management_review_enabled",

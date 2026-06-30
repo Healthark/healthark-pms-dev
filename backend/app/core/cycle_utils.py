@@ -210,6 +210,7 @@ def _format_fy_span(fiscal_year: int) -> str:
 FY_OVERRIDE_FLAGS: tuple[str, ...] = (
     "annual_reviews_enabled",
     "annual_review_final_rating_visible",
+    "annual_review_mentor_rating_visible",
     "management_review_enabled",
 )
 #: Annual-goal + project-review toggles — keyed per HALF (H1/H2), reviewed
