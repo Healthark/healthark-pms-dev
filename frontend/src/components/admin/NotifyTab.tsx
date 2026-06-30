@@ -3,15 +3,15 @@
  *
  * Sends a manual, targeted announcement (in-app + optional email) that lands in
  * the Announcements tab of each recipient's bell. Recipients are narrowed by
- * AND-combined filters — mentors-only, departments, and designations — with a
- * live recipient count; no filter set means everyone. Quick presets pre-fill
- * subject/body; both stay fully editable.
+ * AND-combined filters — specific users and departments — with a live recipient
+ * count; no filter set means everyone. Quick presets pre-fill subject/body; both
+ * stay fully editable.
  */
 import { useMemo, useState } from "react";
-import { Megaphone, Send, Building2, Briefcase, Users2, UserPlus, X } from "lucide-react";
+import { Megaphone, Send, Building2, Users2, UserPlus, X } from "lucide-react";
 import { useSendNotify } from "../../queries/adminSettings";
 import type { NotifyChannel } from "../../services/admin.service";
-import { useDepartments, useDesignations } from "../../queries/adminReferenceData";
+import { useDepartments } from "../../queries/adminReferenceData";
 import { useUsers } from "../../queries/users";
 import { UserCombobox } from "../common/UserCombobox";
 import { useToast } from "../../hooks/useToast";
@@ -74,14 +74,12 @@ export function NotifyTab() {
   const sendNotify = useSendNotify();
 
   const { data: departments = [] } = useDepartments();
-  const { data: designations = [] } = useDesignations();
   const { data: users = [], isLoading: usersLoading } = useUsers();
 
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [userIds, setUserIds] = useState<number[]>([]);
   const [departmentIds, setDepartmentIds] = useState<number[]>([]);
-  const [designationIds, setDesignationIds] = useState<number[]>([]);
   const [channel, setChannel] = useState<NotifyChannel>("both");
 
   const applyPreset = (key: string) => {
@@ -92,7 +90,7 @@ export function NotifyTab() {
   };
 
   // Live recipient preview — mirrors the backend notify_audience() filter
-  // (active users, AND-combined specific-users / department / designation).
+  // (active users, AND-combined specific-users / department).
   const recipientCount = useMemo(() => {
     const active = users.filter((u) => !u.is_deleted);
     return active.filter((u) => {
@@ -100,12 +98,9 @@ export function NotifyTab() {
       if (departmentIds.length > 0 && !(u.department_id != null && departmentIds.includes(u.department_id))) {
         return false;
       }
-      if (designationIds.length > 0 && !(u.designation_id != null && designationIds.includes(u.designation_id))) {
-        return false;
-      }
       return true;
     }).length;
-  }, [users, userIds, departmentIds, designationIds]);
+  }, [users, userIds, departmentIds]);
 
   // Selected-user objects (for the removable chips), in selection order.
   const selectedUsers = useMemo(
@@ -139,11 +134,8 @@ export function NotifyTab() {
     if (departmentIds.length > 0) {
       parts.push(`${departmentIds.length} dept${departmentIds.length === 1 ? "" : "s"}`);
     }
-    if (designationIds.length > 0) {
-      parts.push(`${designationIds.length} designation${designationIds.length === 1 ? "" : "s"}`);
-    }
     return parts.length > 0 ? parts.join(" · ") : "everyone";
-  }, [userIds, departmentIds, designationIds]);
+  }, [userIds, departmentIds]);
 
   const channelPhrase: Record<NotifyChannel, string> = {
     email: "email them",
@@ -168,7 +160,6 @@ export function NotifyTab() {
         body,
         user_ids: userIds,
         department_ids: departmentIds,
-        designation_ids: designationIds,
         channel,
       });
       toast.success(
@@ -342,27 +333,6 @@ export function NotifyTab() {
                     aria-pressed={departmentIds.includes(d.id)}
                     onClick={() => setDepartmentIds((prev) => toggleId(prev, d.id))}
                     className={chipCls(departmentIds.includes(d.id))}
-                  >
-                    {d.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Designations */}
-            <div>
-              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted">
-                <Briefcase className="h-3.5 w-3.5" aria-hidden="true" />
-                Designations
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {designations.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    aria-pressed={designationIds.includes(d.id)}
-                    onClick={() => setDesignationIds((prev) => toggleId(prev, d.id))}
-                    className={chipCls(designationIds.includes(d.id))}
                   >
                     {d.name}
                   </button>

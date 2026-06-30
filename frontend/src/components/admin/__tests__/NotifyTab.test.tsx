@@ -1,10 +1,10 @@
 /**
  * Tests for the Admin "Notify" tab with recipient targeting.
  *
- * The composer + recipients hooks (useSendNotify, departments, designations,
- * users) and the toast/snackbar/confirm hooks need providers / a query client,
- * so each is mocked — leaving the targeting → live count → dispatch flow to
- * assert in isolation.
+ * The composer + recipients hooks (useSendNotify, departments, users) and the
+ * toast/snackbar/confirm hooks need providers / a query client, so each is
+ * mocked — leaving the targeting → live count → dispatch flow to assert in
+ * isolation.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -20,10 +20,6 @@ const departments = [
   { id: 1, name: "IDT" },
   { id: 2, name: "RWE" },
 ];
-const designations = [
-  { id: 10, name: "Consultant", level: 1 },
-  { id: 11, name: "HR Executive", level: 1 },
-];
 const users = [
   { id: 1, full_name: "Alice Admin", email: "alice@x.com", role: "Admin", department_id: 1, designation_id: 10, mentor_id: null, is_deleted: false },
   { id: 2, full_name: "Bob Builder", email: "bob@x.com", role: "Employee", department_id: 1, designation_id: 11, mentor_id: 1, is_deleted: false },
@@ -35,7 +31,6 @@ vi.mock("../../../queries/adminSettings", () => ({
 }));
 vi.mock("../../../queries/adminReferenceData", () => ({
   useDepartments: () => ({ data: departments }),
-  useDesignations: () => ({ data: designations }),
 }));
 vi.mock("../../../queries/users", () => ({
   useUsers: () => ({ data: users, isLoading: false }),
@@ -90,7 +85,6 @@ describe("NotifyTab — recipient targeting", () => {
       body: expect.stringContaining("second half"),
       user_ids: [],
       department_ids: [],
-      designation_ids: [],
       channel: "both",
     });
   });
@@ -106,7 +100,7 @@ describe("NotifyTab — recipient targeting", () => {
     await user.click(screen.getByRole("button", { name: /send announcement/i }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     expect(mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ department_ids: [1], designation_ids: [] }),
+      expect.objectContaining({ department_ids: [1] }),
     );
   });
 

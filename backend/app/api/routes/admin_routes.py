@@ -1412,7 +1412,6 @@ def admin_notify(
         current_user.org_id,
         user_ids=payload.user_ids,
         department_ids=payload.department_ids,
-        designation_ids=payload.designation_ids,
     )
     wants_email = payload.channel in ("email", "both")
     count = broadcast_notification(

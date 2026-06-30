@@ -230,7 +230,6 @@ class AdminNotifyRequest(BaseModel):
     filters below. With no filter set, every active user is targeted:
         * `user_ids`         → restrict to these specific users (any of).
         * `department_ids`   → restrict to these departments (any of).
-        * `designation_ids`  → restrict to these designations/job titles (any of).
     `subject`/`body` are backend-authoritative (the UI presets only pre-fill).
 
     `channel` chooses the delivery mode:
@@ -241,7 +240,6 @@ class AdminNotifyRequest(BaseModel):
     body: str = Field(..., min_length=1, max_length=4000)
     user_ids: list[int] = Field(default_factory=list)
     department_ids: list[int] = Field(default_factory=list)
-    designation_ids: list[int] = Field(default_factory=list)
     channel: Literal["email", "in_app", "both"] = "both"
 
 
