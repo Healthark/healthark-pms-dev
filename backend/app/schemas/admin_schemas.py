@@ -23,10 +23,16 @@ class DepartmentBrief(BaseModel):
 
 
 class DesignationBrief(BaseModel):
-    """Lightweight designation payload for <select> dropdowns."""
+    """Lightweight designation payload for <select> dropdowns.
+
+    `department_id` is the role's home department — roles are department-scoped,
+    so the frontend filters the role dropdown by the selected department and
+    infers the department from a chosen role. Null only for legacy/unscoped
+    rows that predate scoping."""
     id: int
     name: str
     level: int
+    department_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

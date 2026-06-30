@@ -1702,6 +1702,15 @@ def seed_database():
         # ================================================================== #
 
         print("\n" + "=" * 60)
+        # Roles are department-scoped — collapse the seeded global designations
+        # into per-department rows now that all users + role-expectations exist.
+        from app.services.designation_scoping import scope_designations_for_org
+        db.commit()
+        for _org in db.query(Organization).all():
+            scope_designations_for_org(db.connection(), _org.id)
+        db.commit()
+        print("  [+] Scoped designations to departments")
+
         print("Database seeding completed successfully!")
         print("=" * 60)
         print("\n--- HEALTHARK Accounts (all passwords: password123) ---")
