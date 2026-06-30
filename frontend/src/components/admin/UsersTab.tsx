@@ -267,7 +267,15 @@ export function UsersTab({
             id="user-designation-filter"
             options={designationOptions}
             value={designationFilter === "all" ? null : designationFilter}
-            onChange={(desigId) => setDesignationFilter(desigId ?? "all")}
+            onChange={(desigId) => {
+              setDesignationFilter(desigId ?? "all");
+              // Picking a role auto-selects its department (role → department).
+              const deptId =
+                desigId != null
+                  ? designations.find((d) => d.id === desigId)?.department_id
+                  : null;
+              if (deptId != null) setDepartmentFilter(deptId);
+            }}
             placeholder="All designations"
             minWidth="210px"
           />
