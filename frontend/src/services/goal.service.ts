@@ -209,6 +209,23 @@ export interface BulkApproveResult {
   failures: BulkApproveFailure[];
 }
 
+/**
+ * The caller's own active annual-goal access grants — per-employee exceptions
+ * an Admin set on the Goal Access tab. Mirrors backend MyGoalAccessResponse.
+ * Drives the My Goals Add/Edit affordances when the org-wide half is closed.
+ */
+export interface MyGoalAccess {
+  /** Canonical active half ("H1 FY26-27"), or null when unparseable. */
+  active_period_label: string | null;
+  /** May add new annual goals despite the closed gate (active half). */
+  allow_create: boolean;
+  /** May edit goals despite the closed gate (active half). */
+  allow_edit: boolean;
+  /** Every half the caller currently holds an edit grant for — so a goal thrown
+   *  back in a non-active half still resolves as editable. */
+  edit_period_labels: string[];
+}
+
 // ── Service ─────────────────────────────────────────────────────────
 
 export const goalService = {
@@ -217,6 +234,13 @@ export const goalService = {
     const res = await apiClient.get<Goal[]>("/goals/", {
       params: goalType ? { goal_type: goalType } : undefined,
     });
+    return res.data;
+  },
+
+  /** The caller's own goal-access grants — drives the My Goals Add/Edit
+   *  affordances when the org-wide half is closed. Self-scoped server-side. */
+  getMyAccess: async (): Promise<MyGoalAccess> => {
+    const res = await apiClient.get<MyGoalAccess>("/goals/my-access");
     return res.data;
   },
 

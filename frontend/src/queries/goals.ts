@@ -21,6 +21,7 @@ import {
   type CriterionCreatePayload,
   type CriterionUpdatePayload,
   type BulkApproveResult,
+  type MyGoalAccess,
 } from "../services/goal.service";
 import type { Page } from "../services/pagination";
 import { dashboardSummaryQueryKey } from "./dashboard";
@@ -58,6 +59,18 @@ export function useMyGoals(goalType?: GoalType) {
   return useQuery<Goal[]>({
     queryKey: myGoalsQueryKey(goalType),
     queryFn: () => goalService.getMyGoals(goalType),
+  });
+}
+
+// The caller's own goal-access grants. Sub-key of ['goals'], so any goal
+// mutation's broadcast invalidation also refreshes it — cheap and keeps the
+// Add/Edit affordances honest right after the employee acts.
+export const myGoalAccessQueryKey = ["goals", "my-access"] as const;
+
+export function useMyGoalAccess() {
+  return useQuery<MyGoalAccess>({
+    queryKey: myGoalAccessQueryKey,
+    queryFn: () => goalService.getMyAccess(),
   });
 }
 

@@ -83,6 +83,31 @@ export function extractCyclePeriod(cycleName: string): string | null {
 }
 
 /**
+ * Convert a goal's stored cycle stamp ("H1 2026" / "H2 2026" — a half code plus
+ * a bare 4-digit fiscal start year) into the canonical HALF label the backend
+ * keys per-half settings and goal-access grants on ("H1 FY26-27"). Quarterly
+ * stamps fold into halves (Q1-2 → H1, Q3-4 → H2). Returns null when no half or
+ * year can be parsed (e.g. a regular goal's null cycle).
+ */
+export function goalCycleToHalfLabel(cycleName: string | null): string | null {
+  if (!cycleName) return null;
+  const period = extractCyclePeriod(cycleName);
+  if (!period) return null;
+  const half = period.startsWith("H")
+    ? period
+    : period === "Q1" || period === "Q2"
+      ? "H1"
+      : "H2";
+  // The year token is a bare 4-digit fiscal start year ("2026"), not an FY token.
+  const yearTok = cycleName.split(" ").find((t) => /^\d{4}$/.test(t));
+  if (!yearTok) return null;
+  const y = Number(yearTok);
+  const a = (y % 100).toString().padStart(2, "0");
+  const b = ((y + 1) % 100).toString().padStart(2, "0");
+  return `${half} FY${a}-${b}`;
+}
+
+/**
  * Order cycle labels newest-first (timeline descending): by fiscal start year
  * desc, then period desc (so H2/Q4 sort before H1/Q1 within the same FY).
  *   ["H1 FY25-26", "H1 FY26-27", "H2 FY25-26"]

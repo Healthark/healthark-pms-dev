@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Plus, Target, Lock, ChevronDown,
   Pencil, SendHorizonal, Link, MessageSquare,
-  UserCircle, BookOpen,
+  UserCircle, BookOpen, Unlock,
 } from "lucide-react";
 import {
   type Goal,
@@ -20,6 +20,7 @@ import {
   useSubmitGoal,
   useSubmitSelfReview,
   useSaveSelfReviewDraft,
+  useMyGoalAccess,
 } from "../queries/goals";
 import { useAuth } from "../hooks/useAuth";
 import { useSystemSettings } from "../hooks/useSystemSettings";
@@ -38,7 +39,7 @@ import { SortableHeader } from "../components/SortableHeader";
 import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
 import { TablePagination } from "../components/common/TablePagination";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
-import { formatFyYearSpan, fyTokenToStartYear, extractFyToken } from "../utils/fy";
+import { formatFyYearSpan, fyTokenToStartYear, extractFyToken, goalCycleToHalfLabel } from "../utils/fy";
 import { useMyExpectations } from "../queries/profile";
 import { RoleExpectationsModal } from "../components/goals/RoleExpectationsModal";
 import { isPostApproved } from "../utils/goalStatus";
@@ -220,6 +221,13 @@ export function AnnualGoals() {
 
   // Goals data + mutations (shared TanStack cache via ['goals'])
   const { data: goals = [], isLoading, error } = useMyGoals("annual");
+  // Per-employee goal-access grants — Admin exceptions to the closed half gate.
+  // Lets a specific user add/edit goals even while the org-wide half is closed.
+  const { data: goalAccess } = useMyGoalAccess();
+  const goalEditGrantHalves = goalAccess?.edit_period_labels ?? [];
+  const canAddGoalViaGrant = goalAccess?.allow_create ?? false;
+  const hasGoalAccessGrant =
+    canAddGoalViaGrant || goalEditGrantHalves.length > 0;
   const createGoalMutation = useCreateGoal();
   const updateGoalMutation = useUpdateGoal();
   const submitGoalMutation = useSubmitGoal();
@@ -456,7 +464,7 @@ export function AnnualGoals() {
                 <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 No mentor assigned — goal creation is disabled.
               </div>
-            ) : annualGoalsEditEnabled ? (
+            ) : annualGoalsEditEnabled || canAddGoalViaGrant ? (
               <button
                 type="button"
                 onClick={openAdd}
@@ -515,6 +523,24 @@ export function AnnualGoals() {
                   expectation={roleExpectation}
                   onClose={() => setShowRoleExp(false)}
                 />
+              )}
+
+              {/* Temporary access granted by an Admin while the org-wide goal
+                  window is otherwise closed — explains the Add/Edit affordances. */}
+              {!annualGoalsEditEnabled && hasGoalAccessGrant && (
+                <div className="flex items-start gap-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+                  <Unlock className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
+                  <span>
+                    An admin granted you temporary access to{" "}
+                    {[
+                      canAddGoalViaGrant ? "add new goals" : null,
+                      goalEditGrantHalves.length > 0 ? "edit your goals" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" and ")}{" "}
+                    while the goal window is otherwise closed.
+                  </span>
+                </div>
               )}
 
               {/* Toolbar */}
@@ -580,12 +606,12 @@ export function AnnualGoals() {
                 </div>
               ) : goals.length === 0 ? (
                 <EmptyState
-                  editGateOpen={annualGoalsEditEnabled}
+                  editGateOpen={annualGoalsEditEnabled || canAddGoalViaGrant}
                   hasFilter={false}
                 />
               ) : filteredGoals.length === 0 ? (
                 <EmptyState
-                  editGateOpen={annualGoalsEditEnabled}
+                  editGateOpen={annualGoalsEditEnabled || canAddGoalViaGrant}
                   hasFilter={true}
                 />
               ) : (
@@ -615,7 +641,12 @@ export function AnnualGoals() {
                         const isExpanded = expandedGoalId === goal.id;
                         const isDraft = goal.approval_status === "draft";
                         const isChangesRequired = goal.approval_status === "changes_requested";
-                        const canEdit = (isDraft || isChangesRequired) && annualGoalsEditEnabled;
+                        const canEdit =
+                          (isDraft || isChangesRequired) &&
+                          (annualGoalsEditEnabled ||
+                            goalEditGrantHalves.includes(
+                              goalCycleToHalfLabel(goal.cycle_name) ?? "",
+                            ));
                         const canSubmit = isDraft || isChangesRequired;
 
                         return (
