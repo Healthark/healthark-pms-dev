@@ -155,8 +155,15 @@ export function UsersTab({
       (a, b) => a.level - b.level || a.name.localeCompare(b.name),
     );
   }, [designations, departmentFilter]);
-  const deptNameById = (id: number | null | undefined) =>
-    departments.find((d) => d.id === id)?.name ?? null;
+  // Label designations with the department's parenthetical abbreviation
+  // ("Information Data Technology (IDT)" → "IDT") to keep them short; fall back
+  // to the full name when there's no abbreviation.
+  const deptAbbrevById = (id: number | null | undefined) => {
+    const name = departments.find((d) => d.id === id)?.name;
+    if (!name) return "";
+    const m = name.match(/\(([^)]+)\)/);
+    return m ? m[1] : name;
+  };
 
   const handleDeactivate = async (user: UserResponse) => {
     const ok = await confirm({
@@ -248,14 +255,14 @@ export function UsersTab({
             onChange={(e) =>
               setDesignationFilter(e.target.value === "all" ? "all" : Number(e.target.value))
             }
-            className={`${FILTER_SELECT_CLS} w-[180px] truncate`}
+            className={`${FILTER_SELECT_CLS} w-[210px] truncate`}
           >
             <option value="all">All</option>
             {availableDesignations.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
                 {departmentFilter === "all" && d.department_id != null
-                  ? ` — ${deptNameById(d.department_id)}`
+                  ? ` — ${deptAbbrevById(d.department_id)}`
                   : ""}
               </option>
             ))}
