@@ -38,6 +38,10 @@ export const secondaryQueueQueryKey = [
   "project-reviews",
   "secondary-queue",
 ] as const;
+export const reportsToQueueQueryKey = [
+  "project-reviews",
+  "reports-to-queue",
+] as const;
 export const roleExpectationsQueryKey = [
   "project-reviews",
   "role-expectations",
@@ -75,6 +79,13 @@ export function useSecondaryQueue() {
   return useQuery<ProjectReviewResponse[]>({
     queryKey: secondaryQueueQueryKey,
     queryFn: () => projectReviewService.getSecondaryQueue(),
+  });
+}
+
+export function useReportsToQueue() {
+  return useQuery<PMPendingReviewCard[]>({
+    queryKey: reportsToQueueQueryKey,
+    queryFn: () => projectReviewService.getReportsToQueue(),
   });
 }
 
@@ -188,6 +199,34 @@ export function useUpdateReview() {
       payload: PMEvaluationPayload;
     }) => projectReviewService.updateReview(reviewId, payload),
     onSuccess: () => invalidateProjectReviewsAndDashboard(qc),
+  });
+}
+
+export function useSubmitReportsToEvaluation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      payload,
+    }: {
+      projectId: number;
+      payload: PMEvaluationPayload;
+    }) => projectReviewService.submitReportsToEvaluation(projectId, payload),
+    onSuccess: () => invalidateProjectReviewsAndDashboard(qc),
+  });
+}
+
+export function useSaveReportsToDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      payload,
+    }: {
+      projectId: number;
+      payload: PMEvaluationDraftPayload;
+    }) => projectReviewService.saveReportsToDraft(projectId, payload),
+    onSuccess: () => invalidateProjectReviewDrafts(qc),
   });
 }
 

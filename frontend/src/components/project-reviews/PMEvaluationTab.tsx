@@ -23,10 +23,13 @@ import {
 import {
   usePMQueue,
   useSecondaryQueue,
+  useReportsToQueue,
   useRoleExpectations,
   useSubmitPMEvaluation,
   useSavePMDraft,
   useUpdateReview,
+  useSubmitReportsToEvaluation,
+  useSaveReportsToDraft,
   useSubmitSecondaryEval,
   useSaveSecondaryDraft,
   useUpdateSecondaryEval,
@@ -52,7 +55,7 @@ const ImpactModal = lazy(() =>
 
 // ── Constants ───────────────────────────────────────────────────────
 
-type EvalType = "primary" | "secondary";
+type EvalType = "primary" | "secondary" | "reports_to";
 
 // ── Sort column config ──────────────────────────────────────────────
 // Employee / Project / Type / Dept are alpha; project_code is alphanumeric;
@@ -116,23 +119,29 @@ export function PMEvaluationTab() {
   // — shared TanStack caches across PMEvaluationTab + ProjectReviews page.
   const { data: pmCards = [], isLoading: pmLoading } = usePMQueue();
   const { data: secReviews = [], isLoading: secLoading } = useSecondaryQueue();
+  const { data: reportsToCards = [], isLoading: reportsToLoading } = useReportsToQueue();
   const { data: expectations = [], isLoading: expLoading } = useRoleExpectations();
-  const isLoading = pmLoading || secLoading || expLoading;
+  const isLoading = pmLoading || secLoading || reportsToLoading || expLoading;
 
   // Mutation hooks — each invalidates ['project-reviews'] ± dashboard
   const submitPMMutation = useSubmitPMEvaluation();
   const savePMDraftMutation = useSavePMDraft();
   const updateReviewMutation = useUpdateReview();
+  const submitReportsToMutation = useSubmitReportsToEvaluation();
+  const saveReportsToDraftMutation = useSaveReportsToDraft();
   const submitSecMutation = useSubmitSecondaryEval();
   const saveSecDraftMutation = useSaveSecondaryDraft();
   const updateSecMutation = useUpdateSecondaryEval();
   const isSaving =
     submitPMMutation.isPending ||
     updateReviewMutation.isPending ||
+    submitReportsToMutation.isPending ||
     submitSecMutation.isPending ||
     updateSecMutation.isPending;
   const isDraftSaving =
-    savePMDraftMutation.isPending || saveSecDraftMutation.isPending;
+    savePMDraftMutation.isPending ||
+    saveReportsToDraftMutation.isPending ||
+    saveSecDraftMutation.isPending;
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -188,6 +197,29 @@ export function PMEvaluationTab() {
       // per cycle now that the queue spans all cycles.
       key: `pm-${c.project_id}-${c.user_id}-${c.cycle ?? "none"}`,
       type: "primary",
+      employee_name: c.employee_name,
+      project_id: c.project_id,
+      project_name: c.project_name,
+      project_code: c.project_code,
+      department_name: c.department_name,
+      designation_name: c.designation_name,
+      assignment_role: c.assignment_role,
+      review_status: c.review_status === "reviewed" ? "reviewed" : "pending",
+      review_id: c.review_id,
+      user_id: c.user_id,
+      cycle: c.cycle,
+      performance_group: c.performance_group ?? null,
+      has_draft_content: !!c.has_draft_content,
+    });
+  }
+
+  // Reports-to rows: the current user evaluates the PM of these projects.
+  // Same card shape + full 7-competency form as the PM flow; the reviewee
+  // (employee_name) is the PM.
+  for (const c of reportsToCards) {
+    unifiedRows.push({
+      key: `reports_to-${c.project_id}-${c.user_id}-${c.cycle ?? "none"}`,
+      type: "reports_to",
       employee_name: c.employee_name,
       project_id: c.project_id,
       project_name: c.project_name,
@@ -307,7 +339,7 @@ export function PMEvaluationTab() {
   // Actions
   const handleAction = (row: UnifiedEvalRow) => {
     setModalError("");
-    if (row.type === "primary") {
+    if (row.type === "primary" || row.type === "reports_to") {
       setIsEditMode(row.review_status === "reviewed");
       setEvalTarget(row);
     } else {
@@ -382,6 +414,48 @@ export function PMEvaluationTab() {
     setModalError("");
     try {
       await saveSecDraftMutation.mutateAsync({ reviewId, payload });
+      toast.success("Draft saved.");
+    } catch (err: unknown) {
+      setModalError(getErrorMessage(err));
+    }
+  };
+
+  // Reports-to → PM evaluation. Same 7-competency form as the PM flow; on
+  // submit it targets the project (the PM is resolved server-side). Editing an
+  // already-reviewed row reuses the shared update endpoint (the reports-to
+  // person is the review's author, so PUT authorizes them).
+  const handleReportsToSubmit = async (payload: PMEvaluationPayload) => {
+    if (!evalTarget) return;
+    setModalError("");
+    try {
+      if (isEditMode && evalTarget.review_id != null) {
+        await updateReviewMutation.mutateAsync({
+          reviewId: evalTarget.review_id,
+          payload,
+        });
+        closeModal();
+        toast.success("PM evaluation updated.");
+      } else {
+        await submitReportsToMutation.mutateAsync({
+          projectId: evalTarget.project_id,
+          payload,
+        });
+        closeModal();
+        toast.success("PM evaluation submitted.");
+      }
+    } catch (err: unknown) {
+      setModalError(getErrorMessage(err));
+    }
+  };
+
+  const handleReportsToSaveDraft = async (payload: PMEvaluationDraftPayload) => {
+    if (!evalTarget) return;
+    setModalError("");
+    try {
+      await saveReportsToDraftMutation.mutateAsync({
+        projectId: evalTarget.project_id,
+        payload,
+      });
       toast.success("Draft saved.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
@@ -470,6 +544,7 @@ export function PMEvaluationTab() {
               className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[110px] cursor-pointer">
               <option value="all">All</option>
               <option value="primary">Primary</option>
+              <option value="reports_to">PM (Reports-To)</option>
               <option value="secondary">Secondary</option>
             </select>
           </div>
@@ -525,7 +600,10 @@ export function PMEvaluationTab() {
             <tbody className="divide-y divide-border/50">
               {pageRows.map((r, i) => {
                 const isDone = r.review_status !== "pending";
-                const rowHasDraft = r.type === "primary" && !isDone && r.has_draft_content;
+                const rowHasDraft =
+                  (r.type === "primary" || r.type === "reports_to") &&
+                  !isDone &&
+                  r.has_draft_content;
                 return (
                   <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
                     <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
@@ -543,6 +621,11 @@ export function PMEvaluationTab() {
                         {r.type === "secondary" && (
                           <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-surface-hover text-text-muted">
                             Secondary
+                          </span>
+                        )}
+                        {r.type === "reports_to" && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-brand/10 text-brand">
+                            PM
                           </span>
                         )}
                       </div>
@@ -583,7 +666,7 @@ export function PMEvaluationTab() {
                       ) : (
                         <button type="button" onClick={() => handleAction(r)}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 transition-opacity">
-                          {r.type === "primary" ? "Evaluate" : "Write Impact"}
+                          {r.type === "secondary" ? "Write Impact" : "Evaluate"}
                         </button>
                       )}
                     </td>
@@ -606,10 +689,16 @@ export function PMEvaluationTab() {
       {/* Modals — lazy chunks (F3). Each Suspense boundary scopes its
           modal's loading state so they don't block each other. */}
       <Suspense fallback={null}>
-        {evalTarget?.type === "primary" && (
+        {(evalTarget?.type === "primary" || evalTarget?.type === "reports_to") && (
           <EvalModal card={evalTarget} expectation={getExpectation(evalTarget)} isEditMode={isEditMode}
-            onSubmit={handlePMSubmit}
-            onSaveDraft={isEditMode ? undefined : handlePMSaveDraft}
+            onSubmit={evalTarget.type === "reports_to" ? handleReportsToSubmit : handlePMSubmit}
+            onSaveDraft={
+              isEditMode
+                ? undefined
+                : evalTarget.type === "reports_to"
+                  ? handleReportsToSaveDraft
+                  : handlePMSaveDraft
+            }
             onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
         )}
       </Suspense>
