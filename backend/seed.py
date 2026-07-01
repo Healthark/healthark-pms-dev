@@ -403,8 +403,8 @@ def seed_database():
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=priya.id,  assignment_role=desig_senior_manager.name,    department_id=dept_strategy.id, evaluator_type="Primary",   assigned_date=date(2025, 1, 20)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=arjun.id,  assignment_role=desig_senior_consultant.name, department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 1, 20)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=neha.id,   assignment_role=desig_consultant.name,        department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 2, 3)))
-            # David is also a project member alongside being the Secondary evaluator.
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_specialty.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,      evaluator_type=None,        assigned_date=date(2025, 1, 25)))
+            # David is the project-level Secondary evaluator (an outside
+            # reviewer) — deliberately NOT also a team member.
             db.commit()
 
             proj_trial = Project(
@@ -420,8 +420,8 @@ def seed_database():
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=david.id,  assignment_role=desig_manager.name,           department_id=dept_idt.id,  evaluator_type="Primary",   assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=rahul.id,  assignment_role=desig_senior_consultant.name, department_id=dept_idt.id,  evaluator_type=None,        assigned_date=date(2025, 2, 3)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=meera.id,  assignment_role=desig_consultant.name,        department_id=dept_idt.id,  evaluator_type=None,        assigned_date=date(2025, 2, 17)))
-            # Vikram is the Secondary evaluator (project-level) but also a member here.
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_trial.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,  evaluator_type=None,        assigned_date=date(2025, 2, 10)))
+            # Vikram is the project-level Secondary evaluator (outside reviewer)
+            # — deliberately NOT also a team member.
             db.commit()
 
             proj_safety = Project(
@@ -454,8 +454,8 @@ def seed_database():
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=rahul.id,  assignment_role="Data Lead",                  department_id=dept_idt.id,      evaluator_type=None,        assigned_date=date(2025, 4, 7)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=ananya.id, assignment_role="RWE Lead",                   department_id=dept_rwe.id,      evaluator_type=None,        assigned_date=date(2025, 4, 7)))
             db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=neha.id,   assignment_role=desig_consultant.name,        department_id=dept_strategy.id, evaluator_type=None,        assigned_date=date(2025, 4, 20)))
-            # Vikram is the Secondary evaluator (project-level) but also a member here.
-            db.add(ProjectAssignment(org_id=org.id, project_id=proj_payer.id, user_id=vikram.id, assignment_role=desig_manager.name,           department_id=dept_rwe.id,      evaluator_type=None,        assigned_date=date(2025, 4, 10)))
+            # Vikram is the project-level Secondary evaluator (outside reviewer)
+            # — deliberately NOT also a team member.
             db.commit()
 
             print("  [+] Created Projects PRJ-101..PRJ-104")

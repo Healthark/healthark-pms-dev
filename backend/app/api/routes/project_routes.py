@@ -680,6 +680,21 @@ def update_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Secondary Evaluator must be a different user than PM Reports To.",
         )
+    # The Secondary evaluator must stay an outside reviewer — not a member of
+    # the team they evaluate. (secondary == PM is caught above with a clearer
+    # message; this covers any other active member.)
+    if final_secondary is not None:
+        secondary_is_member = db.query(ProjectAssignment.id).filter(
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.user_id == final_secondary,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        ).first() is not None
+        if secondary_is_member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Secondary Evaluator cannot also be a team member of the project.",
+            )
 
     for field, value in update_data.items():
         setattr(project, field, value)
@@ -779,6 +794,21 @@ def add_assignment(
             detail="A member's Joined Date cannot be earlier than the project Start Date.",
         )
 
+    # The project's Secondary evaluator is an OUTSIDE reviewer — they cannot
+    # also be a member of the team they evaluate. Applies to every member (PM
+    # or regular) and covers both a fresh add and a re-add of a removed row.
+    if (
+        project.secondary_evaluator_id is not None
+        and assignment_in.user_id == project.secondary_evaluator_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This user is the project's Secondary Evaluator and cannot also "
+                "be a team member. Change the Secondary Evaluator first."
+            ),
+        )
+
     if assignment_in.evaluator_type == "Primary":
         existing_primary = db.query(ProjectAssignment).filter(
             ProjectAssignment.project_id == project_id,
@@ -791,20 +821,13 @@ def add_assignment(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This project already has a Primary evaluator (Project Manager).",
             )
-        # The PM cannot also be the senior reviewing them or the project's
-        # secondary evaluator — same constraint enforced on project create.
+        # The PM cannot also be the senior reviewing them — same constraint
+        # enforced on project create. (PM == secondary is covered by the
+        # member check above.)
         if assignment_in.user_id == project.reports_to_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="The PM cannot be the same user as PM Reports To.",
-            )
-        if (
-            project.secondary_evaluator_id is not None
-            and assignment_in.user_id == project.secondary_evaluator_id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="The PM cannot be the same user as the Secondary Evaluator.",
             )
 
     # Auto-fill role and department from user profile
@@ -1058,6 +1081,21 @@ def restore_assignment(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot restore members on a completed project. Re-open it first.",
+        )
+
+    # Closes the remove → set-as-secondary → restore bypass: while the member
+    # was removed they may have been made the project's Secondary evaluator, so
+    # restoring them would recreate the reviewer-is-also-a-member conflict.
+    if (
+        project.secondary_evaluator_id is not None
+        and assignment.user_id == project.secondary_evaluator_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This user is the project's Secondary Evaluator and cannot also "
+                "be a team member. Change the Secondary Evaluator first."
+            ),
         )
 
     if assignment.is_deleted:
