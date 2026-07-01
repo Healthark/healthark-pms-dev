@@ -317,6 +317,10 @@ export function ProjectModal({
   const secondaryConflictWithPm = pmUserId !== null && secondaryEvaluatorId === pmUserId;
   const secondaryConflictWithReportsTo =
     secondaryEvaluatorId !== null && secondaryEvaluatorId === reportsToId;
+  // The secondary evaluator is an outside reviewer — they can't also be a
+  // member of the team they evaluate.
+  const secondaryConflictWithMember =
+    secondaryEvaluatorId !== null && assignedUserIds.has(secondaryEvaluatorId);
   const endBeforeStart = !!startDate && !!expectedEndDate && expectedEndDate < startDate;
   // A member's joined date cannot precede the project's start date.
   // Only enforce when both dates are set on the draft; the field stays
@@ -334,6 +338,8 @@ export function ProjectModal({
   const secondaryExclude: number[] = [];
   if (pmUserId !== null) secondaryExclude.push(pmUserId);
   if (reportsToId !== null) secondaryExclude.push(reportsToId);
+  // A team member can't be the secondary evaluator — keep them out of the picker.
+  secondaryExclude.push(...assignedUserIds);
 
   const validationError =
     !projectCode.trim()
@@ -356,7 +362,9 @@ export function ProjectModal({
                   ? "Secondary Evaluator must be a different user than the PM."
                   : secondaryConflictWithReportsTo
                     ? "Secondary Evaluator must be a different user than PM Reports To."
-                    : null;
+                    : secondaryConflictWithMember
+                      ? "Secondary Evaluator cannot also be a team member of the project."
+                      : null;
 
   // ── Submit ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -668,7 +676,14 @@ export function ProjectModal({
                         >
                           <option value="">Select…</option>
                           {users
-                            .filter((u) => !assignedUserIds.has(u.id) || String(u.id) === draft.user_id)
+                            .filter((u) => {
+                              const isSelf = String(u.id) === draft.user_id;
+                              // Hide already-assigned members and the project's
+                              // secondary evaluator (who must stay off the team).
+                              if (assignedUserIds.has(u.id) && !isSelf) return false;
+                              if (u.id === secondaryEvaluatorId && !isSelf) return false;
+                              return true;
+                            })
                             .map((u) => (
                               <option key={u.id} value={u.id}>{u.full_name}</option>
                             ))}

@@ -147,6 +147,17 @@ class ProjectCreate(BaseModel):
             raise ValueError(
                 "Secondary Evaluator must be a different user than PM Reports To."
             )
+        # The Secondary evaluator is an OUTSIDE reviewer — they cannot also be a
+        # member of the team they evaluate (that would make them both reviewer
+        # and reviewee on the project).
+        member_ids = {a.user_id for a in self.assignments}
+        if (
+            self.secondary_evaluator_id is not None
+            and self.secondary_evaluator_id in member_ids
+        ):
+            raise ValueError(
+                "Secondary Evaluator cannot also be a team member of the project."
+            )
         return self
 
     @model_validator(mode="after")
