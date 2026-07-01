@@ -63,6 +63,17 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Slide the idle-session window forward. Called on throttled user activity
+   * while authenticated; the backend re-mints the access cookie with a fresh
+   * 30-min expiry. If the cookie has already expired the call 401s and the
+   * axios interceptor logs the user out — same as any other expired request.
+   */
+  refresh: async (): Promise<SessionClaims> => {
+    const response = await apiClient.post<SessionClaims>("/auth/refresh");
+    return response.data;
+  },
+
   logout: async (): Promise<void> => {
     // Clears the HttpOnly access + csrf cookies on the server. Local
     // state (the cached `user` claims) is cleared by AuthProvider.logout().

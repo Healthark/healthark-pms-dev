@@ -262,6 +262,72 @@ def get_session(current_user: CurrentUser, db: DbSession):
     return _build_session(current_user, db)
 
 
+@router.post("/refresh", response_model=SessionResponse)
+def refresh_session(
+    current_user: CurrentUser,
+    db: DbSession,
+    request: Request,
+    response: Response,
+):
+    """
+    Slide the idle session window forward.
+
+    Called by the frontend on genuine user activity (mouse / keyboard /
+    scroll / touch, throttled) while a still-valid session exists. We re-mint
+    the access-token cookie with a fresh `ACCESS_TOKEN_EXPIRE_MINUTES` expiry
+    and bump the CSRF cookie's lifetime to match, so an *active* user is never
+    logged out.
+
+    A request whose cookie has ALREADY expired never reaches this handler — it
+    fails in `get_current_user` with a 401, which the frontend turns into the
+    automatic logout. So "no activity for the window → logged out" falls out
+    of the token simply not being refreshed; there is no server-side idle
+    bookkeeping to maintain.
+
+    Returns the same live claims as GET /auth/session so the caller can keep
+    its cached role / feature flags fresh on the same round-trip. Reuses the
+    existing CSRF cookie value (only its max-age changes); a brand-new value is
+    only minted in the unexpected case where the cookie is somehow absent.
+    """
+    session = _build_session(current_user, db)
+
+    token_payload = {
+        "sub": current_user.email,
+        "user_id": current_user.id,
+        "org_id": current_user.org_id,
+        "role": current_user.role,
+    }
+    access_token = create_access_token(
+        data=token_payload,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    cookie_kwargs = settings.cookie_kwargs()
+
+    response.set_cookie(
+        key=settings.ACCESS_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        max_age=max_age,
+        **cookie_kwargs,
+    )
+    # Keep the CSRF cookie alive for exactly as long as the access cookie so it
+    # can't expire out from under a still-valid session. Reuse the current
+    # value (the double-submit pair must stay matched) and only fall back to a
+    # fresh token if the cookie is somehow missing.
+    csrf_token_value = request.cookies.get(settings.CSRF_COOKIE_NAME) or secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=settings.CSRF_COOKIE_NAME,
+        value=csrf_token_value,
+        httponly=False,
+        max_age=max_age,
+        **cookie_kwargs,
+    )
+
+    return session
+
+
 @router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
 def reset_password(payload: ResetPasswordRequest, db: DbSession):
     """
