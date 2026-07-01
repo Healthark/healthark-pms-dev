@@ -13,6 +13,10 @@ Endpoints:
     GET   /project-reviews/role-expectations        → Reference data for evaluation
     POST  /project-reviews/{user_id}/evaluate       → Submit PM evaluation for a team member
 
+    ── Reports-To (the PM's evaluator) ──
+    GET   /project-reviews/reports-to-queue                  → PMs awaiting evaluation
+    POST  /project-reviews/reports-to/{project_id}/evaluate  → Submit the PM's evaluation
+
     ── Secondary Evaluator ──
     GET   /project-reviews/secondary-queue          → Reviews pending secondary feedback
     POST  /project-reviews/{review_id}/secondary    → Submit secondary impact statement
@@ -799,6 +803,340 @@ def save_pm_evaluation_draft(
 
 
 # =====================================================================
+# REPORTS-TO ENDPOINTS  (the senior who evaluates the PM)
+#
+# A project's PM (ProjectAssignment.evaluator_type == "Primary") evaluates the
+# team members. The PM in turn is evaluated by the project's `reports_to`
+# senior (Project.reports_to_id). These endpoints mirror the PM ones, but the
+# reviewee is always the PM: the ProjectReview is stored with user_id = the PM
+# and reviewer_id = the reports-to user, reusing the same competency payload.
+# =====================================================================
+
+def _project_primary_assignment(
+    db: DbSession, org_id: int, project_id: int
+) -> Optional[ProjectAssignment]:
+    """The active Primary (PM) assignment for a project, or None."""
+    return (
+        db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.org_id == org_id,
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+
+
+def _resolve_pm_for_reports_to(
+    db: DbSession, current_user: User, project_id: int
+) -> tuple[Project, int]:
+    """Shared auth + lookup for the reports-to write endpoints.
+
+    Returns (project, pm_user_id) when the caller is the project's reports-to
+    senior and the project has a PM; otherwise raises the matching HTTP error.
+    """
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.org_id == current_user.org_id,
+            Project.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    if project.reports_to_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not the reviewer of this project's Project Manager.",
+        )
+    pm_a = _project_primary_assignment(db, current_user.org_id, project_id)
+    if not pm_a:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This project has no Project Manager to evaluate.",
+        )
+    if pm_a.user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot evaluate yourself.",
+        )
+    return project, pm_a.user_id
+
+
+@router.get("/reports-to-queue", response_model=List[PMPendingReviewCard])
+def get_reports_to_evaluation_queue(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    PMs the current user must evaluate — one card per project where the current
+    user is the project's `reports_to` (the senior who reviews the PM). The
+    reviewee on each card is the project's Primary (PM). Mirrors the PM queue:
+    one card per existing review (any cycle) + an active-cycle placeholder.
+    """
+    active_cycle = _get_active_cycle(db, current_user.org_id)
+
+    projects = (
+        db.query(Project)
+        .filter(
+            Project.org_id == current_user.org_id,
+            Project.reports_to_id == current_user.id,
+            Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
+        )
+        .all()
+    )
+    if not projects:
+        return []
+    project_ids = [p.id for p in projects]
+
+    # The PM (Primary) per project.
+    pm_by_project = {
+        a.project_id: a
+        for a in db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.project_id.in_(project_ids),
+            ProjectAssignment.evaluator_type == "Primary",
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    }
+    if not pm_by_project:
+        return []
+
+    pm_user_ids = {a.user_id for a in pm_by_project.values()}
+    users_by_id = {
+        u.id: u for u in db.query(User).filter(User.id.in_(pm_user_ids)).all()
+    }
+    dept_ids = {a.department_id for a in pm_by_project.values() if a.department_id}
+    depts_by_id = (
+        {d.id: d for d in db.query(Department).filter(Department.id.in_(dept_ids)).all()}
+        if dept_ids
+        else {}
+    )
+    desig_ids = {u.designation_id for u in users_by_id.values() if u.designation_id}
+    desigs_by_id = (
+        {d.id: d for d in db.query(Designation).filter(Designation.id.in_(desig_ids)).all()}
+        if desig_ids
+        else {}
+    )
+
+    # PM reviews on these projects (all cycles), grouped by (project, pm).
+    reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
+    for rv in (
+        db.query(ProjectReview)
+        .filter(
+            ProjectReview.org_id == current_user.org_id,
+            ProjectReview.project_id.in_(project_ids),
+            ProjectReview.user_id.in_(pm_user_ids),
+            ProjectReview.is_deleted == False,  # noqa: E712
+        )
+        .order_by(ProjectReview.created_at.desc())
+        .all()
+    ):
+        reviews_by_pair.setdefault((rv.project_id, rv.user_id), []).append(rv)
+
+    cards: list[PMPendingReviewCard] = []
+    for project in projects:
+        pm_a = pm_by_project.get(project.id)
+        if not pm_a:
+            continue  # no PM assigned yet — nothing to evaluate
+        # Never ask someone to evaluate themselves (reports_to == the PM).
+        if pm_a.user_id == current_user.id:
+            continue
+        pm_user = users_by_id.get(pm_a.user_id)
+        if not pm_user or pm_user.is_deleted:
+            continue
+
+        dept = depts_by_id.get(pm_a.department_id) if pm_a.department_id else None
+        desig = desigs_by_id.get(pm_user.designation_id) if pm_user.designation_id else None
+
+        reviews = reviews_by_pair.get((project.id, pm_a.user_id), [])
+        cycles_with_review = {r.cycle for r in reviews}
+
+        for review in reviews:
+            cards.append(PMPendingReviewCard(
+                review_id=review.id,
+                project_id=project.id,
+                project_name=project.name,
+                project_code=project.project_code,
+                user_id=pm_a.user_id,
+                employee_name=pm_user.full_name,
+                assignment_role=pm_a.assignment_role,
+                department_name=dept.name if dept else None,
+                designation_name=desig.name if desig else None,
+                assigned_date=pm_a.assigned_date,
+                review_status=review.status,
+                performance_group=review.performance_group,
+                cycle=review.cycle,
+                has_draft_content=_pm_review_has_draft_content(review),
+            ))
+
+        if active_cycle not in cycles_with_review:
+            cards.append(PMPendingReviewCard(
+                review_id=None,
+                project_id=project.id,
+                project_name=project.name,
+                project_code=project.project_code,
+                user_id=pm_a.user_id,
+                employee_name=pm_user.full_name,
+                assignment_role=pm_a.assignment_role,
+                department_name=dept.name if dept else None,
+                designation_name=desig.name if desig else None,
+                assigned_date=pm_a.assigned_date,
+                review_status=None,
+                performance_group=None,
+                cycle=active_cycle,
+                has_draft_content=False,
+            ))
+
+    return cards
+
+
+@router.post(
+    "/reports-to/{project_id}/evaluate",
+    response_model=ProjectReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_reports_to_evaluation(
+    project_id: int,
+    payload: PMEvaluationSubmit,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    The project's reports-to senior submits the evaluation OF THE PM.
+
+    Mirrors submit_pm_evaluation, but the reviewee is always the project's
+    Primary (PM): the ProjectReview is stored with user_id = the PM and
+    reviewer_id = the reports-to user.
+    """
+    cycle = _get_active_cycle(db, current_user.org_id)
+    project, pm_user_id = _resolve_pm_for_reports_to(db, current_user, project_id)
+
+    review = db.query(ProjectReview).filter(
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.user_id == pm_user_id,
+        ProjectReview.project_id == project_id,
+        ProjectReview.cycle == cycle,
+    ).first()
+
+    if review and review.status == ProjectReviewStatus.REVIEWED.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This Project Manager has already been evaluated for this project this cycle.",
+        )
+
+    if review:
+        # Promote PENDING / DRAFT row to REVIEWED.
+        review.reviewer_id = current_user.id
+        review.status = ProjectReviewStatus.REVIEWED.value
+        review.comment_task_execution = payload.comment_task_execution
+        review.comment_ownership = payload.comment_ownership
+        review.comment_project_management = payload.comment_project_management
+        review.comment_client_deliverables = payload.comment_client_deliverables
+        review.comment_communication = payload.comment_communication
+        review.comment_mentoring = payload.comment_mentoring
+        review.comment_competency_skills = payload.comment_competency_skills
+        review.performance_group = payload.performance_group.value
+        review.impact_statement = payload.impact_statement
+    else:
+        if project.status == PROJECT_STATUS_COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot start a new review on a completed project. Re-open it first.",
+            )
+        review = ProjectReview(
+            org_id=current_user.org_id,
+            user_id=pm_user_id,
+            project_id=project_id,
+            reviewer_id=current_user.id,
+            cycle=cycle,
+            status=ProjectReviewStatus.REVIEWED.value,
+            comment_task_execution=payload.comment_task_execution,
+            comment_ownership=payload.comment_ownership,
+            comment_project_management=payload.comment_project_management,
+            comment_client_deliverables=payload.comment_client_deliverables,
+            comment_communication=payload.comment_communication,
+            comment_mentoring=payload.comment_mentoring,
+            comment_competency_skills=payload.comment_competency_skills,
+            performance_group=payload.performance_group.value,
+            impact_statement=payload.impact_statement,
+        )
+        db.add(review)
+
+    db.commit()
+    db.refresh(review)
+    return _build_review_response(review, db, viewer_user_id=current_user.id)
+
+
+@router.patch(
+    "/reports-to/{project_id}/evaluate/draft",
+    response_model=ProjectReviewResponse,
+)
+def save_reports_to_evaluation_draft(
+    project_id: int,
+    payload: PMEvaluationDraft,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Reports-to senior saves an in-progress evaluation of the PM as DRAFT."""
+    cycle = _get_active_cycle(db, current_user.org_id)
+    project, pm_user_id = _resolve_pm_for_reports_to(db, current_user, project_id)
+
+    review = db.query(ProjectReview).filter(
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.user_id == pm_user_id,
+        ProjectReview.project_id == project_id,
+        ProjectReview.cycle == cycle,
+    ).first()
+
+    if review and review.status == ProjectReviewStatus.REVIEWED.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This Project Manager has already been evaluated; drafts can no "
+                "longer be saved."
+            ),
+        )
+
+    if not review:
+        if project.status == PROJECT_STATUS_COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot start a new review on a completed project. Re-open it first.",
+            )
+        review = ProjectReview(
+            org_id=current_user.org_id,
+            user_id=pm_user_id,
+            project_id=project_id,
+            reviewer_id=current_user.id,
+            cycle=cycle,
+            status=ProjectReviewStatus.DRAFT.value,
+        )
+        db.add(review)
+    else:
+        review.reviewer_id = current_user.id
+        review.status = ProjectReviewStatus.DRAFT.value
+
+    # Apply only the fields the client included (partial save).
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        if field == "performance_group" and value is not None:
+            setattr(review, field, value.value if hasattr(value, "value") else value)
+        else:
+            setattr(review, field, value)
+
+    db.commit()
+    db.refresh(review)
+    return _build_review_response(review, db, viewer_user_id=current_user.id)
+
+
+# =====================================================================
 # SECONDARY EVALUATOR ENDPOINTS
 # =====================================================================
 
@@ -1217,10 +1555,11 @@ def get_management_overview(
     """
     Admin: per-project review completion overview for the active cycle.
 
-    Returns one AdminProjectSummary per project that has non-PM members,
-    each containing per-member review status. Uses eager loading to avoid
-    N+1 queries — all project/assignment/user/department data is fetched
-    in a single query, and a review_map dict provides O(1) lookups.
+    Returns one AdminProjectSummary per project that has non-PM members. Each
+    lists per-member review status PLUS the PM's own review (authored by the
+    project's reports-to senior), suffixed "(PM)". `total_members` and
+    `reviewed_count` therefore include the PM row when the project has a
+    Primary. Uses eager loading + a review_map dict for O(1) lookups.
     """
     if current_user.role != "Admin":
         raise HTTPException(
@@ -1263,6 +1602,7 @@ def get_management_overview(
         members: list[AdminMemberReviewRow] = []
         reviewed_count = 0
         pm_name: str | None = None
+        pm_assignment: ProjectAssignment | None = None
 
         for a in project.assignments:
             if not a.user or a.user.is_deleted:
@@ -1270,7 +1610,8 @@ def get_management_overview(
 
             if a.evaluator_type == "Primary":
                 pm_name = a.user.full_name
-                continue  # PM is excluded from the members list
+                pm_assignment = a  # the PM's own review is appended after the loop
+                continue
 
             review = review_map.get((project.id, a.user_id))
             review_status = review.status if review else "not_started"
@@ -1286,6 +1627,23 @@ def get_management_overview(
                 department_name=a.department.name if a.department else None,
                 review_status=review_status,
                 performance_group=review.performance_group if review else None,
+            ))
+
+        # The PM's OWN review (authored by the project's reports-to senior) is
+        # tracked alongside the team so admins can see it. Suffixed "(PM)".
+        if pm_assignment is not None:
+            pm_review = review_map.get((project.id, pm_assignment.user_id))
+            pm_status = pm_review.status if pm_review else "not_started"
+            if pm_status == ProjectReviewStatus.REVIEWED.value:
+                reviewed_count += 1
+            members.append(AdminMemberReviewRow(
+                review_id=pm_review.id if pm_review else None,
+                user_id=pm_assignment.user_id,
+                employee_name=f"{pm_assignment.user.full_name} (PM)",
+                assignment_role=pm_assignment.assignment_role,
+                department_name=pm_assignment.department.name if pm_assignment.department else None,
+                review_status=pm_status,
+                performance_group=pm_review.performance_group if pm_review else None,
             ))
 
         if members:
@@ -1314,11 +1672,13 @@ def update_review(
     current_user: CurrentUser,
 ):
     """
-    PM (or Admin) edits an already-submitted review.
+    Edit an already-submitted review.
 
-    Authorization: ONLY the PM who originally wrote the review
-    (review.reviewer_id == current_user.id) or an Admin may update it.
-    The employee who was reviewed cannot edit it.
+    Authorization: the review's AUTHOR (review.reviewer_id == current_user —
+    the PM for a team review, or the reports-to senior for a PM's own review),
+    the project's current Primary PM, or an Admin. The employee who was
+    reviewed can NEVER edit their own review — including a PM trying to rewrite
+    the evaluation their reports-to senior wrote about them.
     """
     review = db.query(ProjectReview).filter(
         ProjectReview.id == review_id,
@@ -1350,7 +1710,17 @@ def update_review(
             detail="Only the project's PM (or an Admin) may edit this review.",
         )
 
-    # Keep attribution truthful: the acting PM becomes the recorded reviewer.
+    # A reviewee can never edit their OWN review. This matters now that the PM
+    # is itself a reviewee (evaluated by the project's reports-to senior): the
+    # PM is also the project's Primary, so is_current_pm would otherwise let
+    # them rewrite their own evaluation.
+    if review.user_id == current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot edit your own review.",
+        )
+
+    # Keep attribution truthful: the acting editor becomes the recorded reviewer.
     if not is_admin:
         review.reviewer_id = current_user.id
 
@@ -1414,12 +1784,15 @@ def get_review(
         Project.org_id == current_user.org_id,
     ).first()
     is_secondary = bool(project and project.secondary_evaluator_id == current_user.id)
+    # Project's reports-to senior — evaluates the PM, so they may view reviews
+    # on their project (a project-level role, like the secondary evaluator).
+    is_reports_to = bool(project and project.reports_to_id == current_user.id)
 
     # Reviewee's live mentor (also drives rating visibility below).
     reviewee = db.query(User).filter(User.id == review.user_id).first()
     is_mentor = bool(reviewee and reviewee.mentor_id == current_user.id)
 
-    if not (is_owner or is_reviewer or is_pm or is_secondary or is_mentor or is_admin):
+    if not (is_owner or is_reviewer or is_pm or is_secondary or is_reports_to or is_mentor or is_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this review.",

@@ -32,6 +32,7 @@ import {
   useRoleExpectations,
   usePMQueue,
   useSecondaryQueue,
+  useReportsToQueue,
 } from "../queries/projectReviews";
 import { useSystemSettings } from "../hooks/useSystemSettings";
 import { useAuth } from "../hooks/useAuth";
@@ -104,8 +105,10 @@ export function ProjectReviews() {
   // Tolerate errors silently — non-PM users 403 on /pm-queue.
   const { data: pmQueue = [] } = usePMQueue();
   const { data: secQueue = [] } = useSecondaryQueue();
+  const { data: reportsToQueue = [] } = useReportsToQueue();
   const isLoading = cardsLoading || expectationsLoading;
-  const showEvaluateTab = pmQueue.length > 0 || secQueue.length > 0;
+  const showEvaluateTab =
+    pmQueue.length > 0 || secQueue.length > 0 || reportsToQueue.length > 0;
 
   // ── Derived filter sources + filtered/sorted cards (memoised) ──────
 

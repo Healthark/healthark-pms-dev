@@ -228,6 +228,42 @@ export const projectReviewService = {
     return res.data;
   },
 
+  // ── Reports-To (the PM's evaluator) ────────────────────────────
+  /** PMs the current user must evaluate — one per project where they are the
+   *  project's reports-to senior. Same card shape as the PM queue, but the
+   *  reviewee is the PM. */
+  getReportsToQueue: async (): Promise<PMPendingReviewCard[]> => {
+    const res = await apiClient.get<PMPendingReviewCard[]>(
+      "/project-reviews/reports-to-queue",
+    );
+    return res.data;
+  },
+
+  /** Reports-to senior submits the PM's evaluation for a project. The PM is
+   *  resolved server-side (the project's Primary), so only projectId is sent. */
+  submitReportsToEvaluation: async (
+    projectId: number,
+    payload: PMEvaluationPayload,
+  ): Promise<ProjectReviewResponse> => {
+    const res = await apiClient.post<ProjectReviewResponse>(
+      `/project-reviews/reports-to/${projectId}/evaluate`,
+      payload,
+    );
+    return res.data;
+  },
+
+  /** Reports-to senior saves an in-progress PM evaluation as a draft. */
+  saveReportsToDraft: async (
+    projectId: number,
+    payload: PMEvaluationDraftPayload,
+  ): Promise<ProjectReviewResponse> => {
+    const res = await apiClient.patch<ProjectReviewResponse>(
+      `/project-reviews/reports-to/${projectId}/evaluate/draft`,
+      payload,
+    );
+    return res.data;
+  },
+
   // ── Secondary Evaluator ────────────────────────────────────────
   /** List reviews pending secondary impact statement. */
   getSecondaryQueue: async (): Promise<ProjectReviewResponse[]> => {
