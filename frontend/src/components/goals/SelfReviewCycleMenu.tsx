@@ -174,24 +174,23 @@ export function SelfReviewCycleMenu({
           //   Mentee mode  — locked when not yet submitted AND the time
           //                  window for the half isn't open. (Prevents
           //                  filing reviews outside the FY window.)
-          //   Mentor mode  — locked when no self-review exists yet. The
-          //                  mentor-review surface needs the mentee's
-          //                  self-review on the left panel; no point
-          //                  opening it before there's anything to react to.
+          //   Mentor mode  — never locked here. The mentor can open the review
+          //                  to DRAFT even before the mentee submits their
+          //                  self-review; submitting is gated in the modal +
+          //                  backend instead.
           const windowOpen = isHalfWindowOpen(
             half,
             goal.fy_year,
             settings?.active_cycle_name,
           );
           const isMenteeLocked = mode === "mentee" && !submitted && !windowOpen;
-          const isMentorLocked = mode === "mentor" && !submitted;
-          const isLocked = isMenteeLocked || isMentorLocked;
+          // Mentor mode is never locked here (see rule above); only mentee mode
+          // can be locked (out-of-window before submission).
+          const isLocked = isMenteeLocked;
           const isFirstCycle = cycles.indexOf(half) === 0;
-          const lockReason = isMentorLocked
-            ? "Awaiting mentee self-review for this cycle"
-            : !isFirstCycle
-              ? `${halfDisplayLabel(half, cycleType)} window has not opened yet`
-              : "Review window for this fiscal year has closed";
+          const lockReason = !isFirstCycle
+            ? `${halfDisplayLabel(half, cycleType)} window has not opened yet`
+            : "Review window for this fiscal year has closed";
           return (
             <button
               key={half}

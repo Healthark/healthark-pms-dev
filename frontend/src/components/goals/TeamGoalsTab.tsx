@@ -585,9 +585,11 @@ export function TeamGoalsTab() {
                           )}
                           {isApproved && (
                             // Per-half mentor review entry. The modal handles
-                            // both editable (no mentor review yet) and read-
-                            // only (already submitted) modes; the menu itself
-                            // disables halves where no self-review exists yet.
+                            // both editable (no mentor review yet) and read-only
+                            // (already submitted) modes. The mentor can open it
+                            // to DRAFT even before the mentee submits their
+                            // self-review; the submit gate lives in the modal +
+                            // backend.
                             <SelfReviewCycleMenu
                               goal={goal}
                               mode="mentor"
