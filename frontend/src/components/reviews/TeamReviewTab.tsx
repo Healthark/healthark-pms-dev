@@ -20,7 +20,6 @@ import {
   type ReviewStatus,
 } from "../../services/annual-review.service";
 import { useMenteeAnnualReviews } from "../../queries/annualReviews";
-import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { RatingCell } from "./RatingCell";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
@@ -76,13 +75,6 @@ export function TeamReviewTab() {
   const navigate = useNavigate();
   // ['annual-reviews', 'mentees'] — shared TanStack cache
   const { data: reviews = [], isLoading, error } = useMenteeAnnualReviews();
-  // The management/final rating is nulled server-side when this per-FY toggle
-  // is off (get_mentee_reviews). Read it so a withheld rating renders as
-  // "Hidden" rather than the misleading "Not rated yet". The mentor's own
-  // rating is never withheld, so only the Management column is gated.
-  const { settings } = useSystemSettings();
-  const finalRatingVisible =
-    settings?.annual_review_final_rating_visible ?? false;
   const [yearFilter, setYearFilter] = useState("all");
   // "" = all (searchable combobox); Year/Status keep the "all" sentinel.
   const [employeeFilter, setEmployeeFilter] = useState("");
@@ -272,7 +264,7 @@ export function TeamReviewTab() {
                     Self Rating
                   </th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                    Your Rating
+                    Mentor Rating
                   </th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                     Management Rating
@@ -318,12 +310,7 @@ export function TeamReviewTab() {
                         <RatingCell value={r.mentor_performance_rating} />
                       </td>
                       <td className="px-4 py-3">
-                        {/* Management/final rating is withheld server-side when
-                            the toggle is off — show "Hidden", not "Not rated yet". */}
-                        <RatingCell
-                          value={r.management_performance_rating}
-                          hiddenWhenEmpty={!finalRatingVisible}
-                        />
+                        <RatingCell value={r.management_performance_rating} />
                       </td>
                       <td className="px-4 py-3">
                         {canEvaluate ? (

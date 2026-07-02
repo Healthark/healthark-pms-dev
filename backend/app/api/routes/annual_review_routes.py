@@ -532,9 +532,8 @@ def get_mentee_reviews(
     rows: list[MenteeAnnualReview] = []
     for r in reviews:
         base = AnnualReviewResponse.model_validate(r).model_dump()
-        if not _final_rating_visible(db, current_user.org_id, r, active_fy):
-            base["final_performance_rating"] = None
-            base["management_performance_rating"] = None
+        # Management rating is always visible to mentors for their mentees,
+        # regardless of the final_rating_visible toggle.
         u = users.get(r.user_id)
         rows.append(MenteeAnnualReview(
             **base,

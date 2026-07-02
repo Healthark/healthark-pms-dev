@@ -134,6 +134,22 @@ export function SelfReviewCycleMenu({
   const submittedCount = goal.self_reviews.filter((sr) => !sr.is_draft).length;
   const mentorReviewedCount = goal.mentor_reviews.filter((mr) => !mr.is_draft).length;
 
+  // A pending mentor review occurs when a self-review has been submitted for
+  // a half but the mentor hasn't submitted their review yet.  This covers the
+  // case where H1 mentor review is still pending, H2 reviews are complete,
+  // and the label shows "Reviews (1/2 reviewed)".
+  const hasPendingMentorReview =
+    mode === "mentor" &&
+    cycles.some((half) => {
+      const selfSubmitted = goal.self_reviews.some(
+        (sr) => sr.cycle_half === half && !sr.is_draft,
+      );
+      const mentorDone = goal.mentor_reviews.some(
+        (mr) => mr.cycle_half === half && !mr.is_draft,
+      );
+      return selfSubmitted && !mentorDone;
+    });
+
   const triggerLabel =
     mode === "mentor"
       ? mentorReviewedCount > 0
@@ -280,7 +296,11 @@ export function SelfReviewCycleMenu({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
+        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+          hasPendingMentorReview
+            ? "border border-red-500 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+            : "bg-brand/10 text-brand hover:bg-brand hover:text-white"
+        }`}
         aria-haspopup="menu"
         aria-expanded={open}
       >
