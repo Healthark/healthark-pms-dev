@@ -1,28 +1,58 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
+from app.api.routes import (
+    admin_routes,
+    annual_review_routes,
+    auth_routes,
+    dashboard_routes,
+    export_routes,
+    feedback_360_routes,
+    goal_routes,
+    mentee_routes,
+    notification_routes,
+    project_review_routes,
+    project_routes,
+    system_settings_routes,
+    user_routes,
+)
 from app.core.config import settings
 from app.core.csrf import CSRFMiddleware
-from app.api.routes import auth_routes
-from app.api.routes import goal_routes
-from app.api.routes import admin_routes
-from app.api.routes import dashboard_routes
-from app.api.routes import notification_routes
-from app.api.routes import user_routes
-from app.api.routes import system_settings_routes
-from app.api.routes import annual_review_routes
-from app.api.routes import project_routes
-from app.api.routes import project_review_routes
-from app.api.routes import mentee_routes
-from app.api.routes import feedback_360_routes
-from app.api.routes import export_routes
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
-    description="Multi-Tenant Performance Management API"
+    description="Multi-Tenant Performance Management API",
+    # Explicit: never let FastAPI/Starlette render a traceback into a response,
+    # even if an environment accidentally flips this on. Unhandled errors are
+    # sanitized by the handler below and the detail is logged server-side only.
+    debug=False,
 )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all for uncaught (non-HTTP) errors so a raw exception — which for
+    DB-layer failures embeds the connection string, SQL, and parameters — can
+    never reach the client. FastAPI still handles HTTPException/validation
+    errors with their own responses; this only covers 500s.
+
+    The full detail (with traceback) goes to the server log; the client gets a
+    generic message.
+    """
+    logger.exception(
+        "Unhandled error on %s %s", request.method, request.url.path
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 _default_origins = [
     "http://localhost",
