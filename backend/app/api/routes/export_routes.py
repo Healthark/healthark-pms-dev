@@ -18,6 +18,7 @@ additionally verifies the target user belongs to the same org.
 """
 
 import io
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -30,10 +31,13 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import CurrentUser, DbSession
 from app.api.routes.goal_routes import list_goals
 from app.core.cycle_utils import extract_fy_label, fy_start_year
+from app.core.errors import safe_error_summary
 from app.models.export_audit_log_models import ExportAuditLog
 from app.models.reference_models import Department
 from app.models.user_models import User
 from app.services import exporters
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -128,9 +132,16 @@ def _finish_audit_success(db: Session, audit: ExportAuditLog, row_count: int) ->
 
 
 def _finish_audit_failure(db: Session, audit: ExportAuditLog, err: Exception) -> None:
+    # Full detail — including any DB connection context (host/port/user), SQL,
+    # and bound parameters carried by SQLAlchemy/psycopg2 errors — goes to the
+    # access-controlled server log, correlated by audit id. Only a redacted,
+    # non-sensitive summary is persisted to the audit row (see app.core.errors).
+    logger.exception(
+        "Export failed (audit id=%s, type=%s)", audit.id, audit.export_type
+    )
     try:
         audit.status = "failed"
-        audit.error_message = str(err)[:500]
+        audit.error_message = safe_error_summary(err)
         audit.completed_at = datetime.now(timezone.utc)
         db.commit()
     except Exception:
