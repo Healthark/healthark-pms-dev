@@ -301,8 +301,8 @@ export function GoalMentorReviewModal({
 
               {!isLoadingDetail && selfReview === null && !isReadOnly && (
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-                  You can only submit a mentor review once the mentee has
-                  submitted their self-review.
+                  You can draft your review now, but you can only submit it once
+                  the mentee has submitted their self-review.
                 </div>
               )}
 
@@ -313,31 +313,29 @@ export function GoalMentorReviewModal({
                 </div>
               )}
 
-              {(selfReview !== null || isReadOnly) && (
-                <div>
-                  <label
-                    htmlFor="mentor-overall"
-                    className="block text-xs font-semibold text-text-main mb-1"
-                  >
-                    Your Review
-                    {!isReadOnly && " *"}
-                  </label>
-                  {isReadOnly ? (
-                    <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
-                      {overall || "—"}
-                    </div>
-                  ) : (
-                    <textarea
-                      id="mentor-overall"
-                      rows={12}
-                      className={TEXTAREA_CLS}
-                      value={overall}
-                      onChange={(e) => setOverall(e.target.value)}
-                      placeholder="Your assessment of the mentee's delivery this half — what was strong, where to grow, and how it ties into the role expectations above."
-                    />
-                  )}
-                </div>
-              )}
+              <div>
+                <label
+                  htmlFor="mentor-overall"
+                  className="block text-xs font-semibold text-text-main mb-1"
+                >
+                  Your Review
+                  {!isReadOnly && " *"}
+                </label>
+                {isReadOnly ? (
+                  <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                    {overall || "—"}
+                  </div>
+                ) : (
+                  <textarea
+                    id="mentor-overall"
+                    rows={12}
+                    className={TEXTAREA_CLS}
+                    value={overall}
+                    onChange={(e) => setOverall(e.target.value)}
+                    placeholder="Your assessment of the mentee's delivery this half — what was strong, where to grow, and how it ties into the role expectations above."
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -348,7 +346,7 @@ export function GoalMentorReviewModal({
             {isReadOnly
               ? "Mentor review is locked once submitted."
               : selfReview === null
-                ? "Waiting for mentee self-review."
+                ? "You can draft now; submitting unlocks once the mentee submits their self-review."
                 : isDraft
                   ? "Draft saved — keep editing or submit when ready."
                   : "Drafts can be saved and edited; submit when ready."}
@@ -361,7 +359,7 @@ export function GoalMentorReviewModal({
             >
               {isReadOnly ? "Close" : "Cancel"}
             </button>
-            {!isReadOnly && selfReview !== null && onSaveDraft && (
+            {!isReadOnly && onSaveDraft && (
               <button
                 type="button"
                 onClick={handleSaveDraft}
@@ -376,11 +374,12 @@ export function GoalMentorReviewModal({
                 {isDraftSaving ? "Saving…" : "Save Draft"}
               </button>
             )}
-            {!isReadOnly && selfReview !== null && (
+            {!isReadOnly && (
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSaving || isDraftSaving || !allFilled || !windowOpen}
+                disabled={isSaving || isDraftSaving || !allFilled || !windowOpen || selfReview === null}
+                title={selfReview === null ? "The mentee must submit their self-review before you can submit." : undefined}
                 className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {isSaving ? (

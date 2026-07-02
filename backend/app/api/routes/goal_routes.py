@@ -1517,10 +1517,15 @@ def save_goal_mentor_review_draft(
     current_user: CurrentUser,
 ):
     """
-    Mentor saves an in-progress mentor review without submitting. Same
-    auth + state + time-window gates as the submit endpoint, but the row
-    is written with ``is_draft=True`` and the goal's ``approval_status``
-    is NOT advanced.
+    Mentor saves an in-progress mentor review without submitting. The row is
+    written with ``is_draft=True`` and the goal's ``approval_status`` is NOT
+    advanced.
+
+    Unlike submit, drafting does NOT require the mentee to have submitted their
+    self-review — a mentor can start drafting as soon as the goal is approved
+    and this half is active. It still requires: the caller is the assigned
+    mentor, the half's review window is open, and no *submitted* mentor review
+    exists yet.
     """
     goal = _get_goal_with_relations(db, goal_id, current_user.org_id)
     goal_owner = db.query(User).filter(User.id == goal.user_id).first()
@@ -1532,14 +1537,18 @@ def save_goal_mentor_review_draft(
         )
 
     half = cycle_half.value
-    required_state = _self_reviewed_state(half)
-    if goal.approval_status != required_state:
+    # Drafting is allowed once the goal is APPROVED and this half is active —
+    # the mentee's self-review need NOT be submitted yet (that gates SUBMIT
+    # only). Draftable states = those from which the mentee could still be
+    # self-reviewing this half, plus the state after they have.
+    draftable_states = _self_review_allowed_states(half) | {_self_reviewed_state(half)}
+    if goal.approval_status not in draftable_states:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Mentor review for {half} cannot be drafted from the current "
-                f"state ({goal.approval_status}). The mentee must submit their "
-                f"{half} self-review first."
+                f"Mentor review for {half} can only be drafted once the goal is "
+                f"approved and this cycle is active (current state: "
+                f"{goal.approval_status})."
             ),
         )
 
@@ -1557,16 +1566,6 @@ def save_goal_mentor_review_draft(
                 f"The review window for {half} FY{fy_year % 100:02d}-"
                 f"{(fy_year + 1) % 100:02d} is not currently open."
             ),
-        )
-
-    mentee_review = next(
-        (sr for sr in goal.self_reviews if sr.cycle_half == half and not sr.is_draft),
-        None,
-    )
-    if mentee_review is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"The mentee has not yet submitted their self-review for {half}.",
         )
 
     existing = next(
