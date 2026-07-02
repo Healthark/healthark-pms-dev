@@ -38,6 +38,10 @@ class Project(Base):
     start_date = Column(Date, nullable=True)
     expected_end_date = Column(Date, nullable=True)
 
+    # Whether the project is billable to a client (from Keka `isBillable`).
+    # Informational for now; surfaced in the per-employee review-scope tab.
+    is_billable = Column(Boolean, nullable=False, default=False, server_default="false")
+
     # The senior person who reviews the PM's own performance on this project.
     # This is NOT the PM themselves — it's their reporting line for this project.
     reports_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
