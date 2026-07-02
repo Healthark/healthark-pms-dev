@@ -1178,12 +1178,19 @@ def set_management_rating(
     """
     Management-only "Publish Rating" action from the Management Review tab.
 
-    Sets (or updates) management_performance_rating, unlocks the per-row
-    final_rating_enabled flag so the user-side fallback
-    (management ?? mentor) becomes visible — still subject to the org-wide
-    annual_review_final_rating_visible gate — and transitions the row to
-    COMPLETED. Already-completed rows can be re-published to adjust the
-    rating; the status assignment is idempotent in that case.
+    Sets (or updates) management_performance_rating and unlocks the per-row
+    final_rating_enabled flag so the user-side final rating becomes visible —
+    still subject to the org-wide annual_review_final_rating_visible gate.
+
+    Management may rate any submitted review, INCLUDING one still awaiting the
+    mentor (PENDING_MENTOR) — it no longer waits for the mentor stage. But a
+    rating entered ahead of the mentor does NOT skip them: the row transitions
+    to COMPLETED only when the mentor stage is already done (PENDING_MANAGEMENT
+    / COMPLETED). A PENDING_MENTOR review keeps its status so the mentor can
+    still submit, and it completes later when management finalizes. A DRAFT
+    (self-review not yet submitted) can't be rated — there's no submitted
+    review to attach a rating to. Already-completed rows can be re-published to
+    adjust the rating.
     """
     _require_management(current_user)
 
@@ -1193,13 +1200,10 @@ def set_management_rating(
     ).first()
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
-    if review.status not in (
-        ReviewStatus.PENDING_MANAGEMENT.value,
-        ReviewStatus.COMPLETED.value,
-    ):
+    if review.status == ReviewStatus.DRAFT.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Management rating can only be set after mentor evaluation is submitted.",
+            detail="Management rating can't be set until the employee submits their self-review.",
         )
     _require_management_review_open(
         db, current_user.org_id, _fy_label_of_review(review)
@@ -1207,26 +1211,37 @@ def set_management_rating(
 
     review.management_performance_rating = payload.management_performance_rating
     review.final_rating_enabled = True
-    review.status = ReviewStatus.COMPLETED.value
+    # Finalize only when the mentor stage is already done. If the mentor review
+    # is still pending, record + publish the management rating but KEEP the
+    # review awaiting the mentor — management no longer waits for the mentor,
+    # yet its rating must not skip the mentor's evaluation. The row completes
+    # later, when the mentor submits and management finalizes.
+    finalized = review.status != ReviewStatus.PENDING_MENTOR.value
+    if finalized:
+        review.status = ReviewStatus.COMPLETED.value
 
-    # Notify the employee their review is finalized (in-app only). Fires on
-    # every publish — including a re-publish that adjusts the rating — so the
+    # Notify the employee their review is finalized (in-app only) — but ONLY on
+    # an actual finalization. Fires on every finalizing publish, including a
+    # re-publish that adjusts the rating on an already-COMPLETED row, so the
     # employee always learns of a change. The body carries NO rating value;
     # visibility of the number is governed by the per-FY
-    # annual_review_final_rating_visible gate.
-    create_notification(
-        db,
-        org_id=review.org_id,
-        recipient_id=review.user_id,
-        category=NotificationCategory.PERSONAL.value,
-        type="annual_management_published",
-        title="Annual review finalized",
-        body=f"Your {review.cycle_name} performance review has been finalized.",
-        link="/annual-reviews",
-        entity_type="annual_review",
-        entity_id=review.id,
-        actor_id=current_user.id,
-    )
+    # annual_review_final_rating_visible gate. A rating recorded ahead of the
+    # mentor isn't a finalization, so it sends nothing here — the employee is
+    # notified when the review is finalized later.
+    if finalized:
+        create_notification(
+            db,
+            org_id=review.org_id,
+            recipient_id=review.user_id,
+            category=NotificationCategory.PERSONAL.value,
+            type="annual_management_published",
+            title="Annual review finalized",
+            body=f"Your {review.cycle_name} performance review has been finalized.",
+            link="/annual-reviews",
+            entity_type="annual_review",
+            entity_id=review.id,
+            actor_id=current_user.id,
+        )
 
     db.commit()
     db.refresh(review)

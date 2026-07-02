@@ -491,22 +491,18 @@ export function ManagementReviewTab() {
                         </button>
                       )}
                       {(() => {
-                        // A management rating can only be published once the
-                        // mentor stage is done. Earlier rows (self-review not
-                        // submitted, or mentor evaluation pending) appear for
-                        // visibility but are read-only — surface WHY rather than
-                        // a rate button the backend would reject anyway.
-                        const mentorDone =
-                          r.status === "pending_management" ||
-                          r.status === "completed";
-                        if (!mentorDone) {
-                          const label =
-                            r.status === "pending_mentor"
-                              ? "Mentor review pending"
-                              : "Self-review pending";
+                        // Management can rate any submitted review — including
+                        // one still awaiting the mentor (pending_mentor). Only
+                        // rows where the employee hasn't submitted a self-review
+                        // yet (not_started — no review row to attach a rating
+                        // to) are read-only; surface WHY rather than a rate
+                        // button the backend would reject.
+                        const selfReviewSubmitted =
+                          r.review_id != null && r.status !== "not_started";
+                        if (!selfReviewSubmitted) {
                           return (
                             <span className="whitespace-nowrap text-xs italic text-text-muted">
-                              {label}
+                              Self-review pending
                             </span>
                           );
                         }
