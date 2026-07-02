@@ -135,7 +135,14 @@ def _visible_performance_group(
 ) -> Optional[str]:
     """Return `review.performance_group` if `viewer` may see it, else None.
 
-    Per-FY project-rating visibility (decision #6 — mentors always see):
+    Draft gate (the reported leak): a saved-but-unsubmitted rating
+    (status != reviewed) is private to the PM writing it (the author) and to
+    admins. It must NEVER surface to the rated employee or their mentor — not
+    even when `project_ratings_visible` is on — until the PM submits the
+    evaluation (status → reviewed).
+
+    Per-FY project-rating visibility (decision #6 — mentors always see), applied
+    only once the review is `reviewed`:
       - Past (or any non-active) FY → always pass through; closing the
         current year never retroactively hides a finalized prior year.
       - Admins, the rating's author (reviewer_id == viewer.id), and the
@@ -149,11 +156,23 @@ def _visible_performance_group(
     group = review.performance_group
     if not group:
         return group
+
+    is_admin = viewer.role == "Admin"
+    is_author = review.reviewer_id == viewer.id
+
+    # Until the PM submits, the rating is a private draft. Only the author (the
+    # PM drafting it) and admins may see it; the reviewed employee and their
+    # mentor see nothing, regardless of the visibility toggle. Without this
+    # gate, an admin who had enabled "View ratings" for the half would leak the
+    # PM's draft rating to the team member before Evaluate was completed.
+    if review.status != ProjectReviewStatus.REVIEWED.value:
+        return group if (is_admin or is_author) else None
+
     review_fy = _fy_label_of_project_review(review)
     active_fy = extract_fy_label(active_cycle_name)
     if review_fy != active_fy:
         return group
-    if viewer.role == "Admin" or review.reviewer_id == viewer.id or is_mentor:
+    if is_admin or is_author or is_mentor:
         return group
     # Within the active FY, project-rating visibility is controlled per half.
     override = get_year_override(db, org_id, _half_label_of_project_review(review))

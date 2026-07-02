@@ -19,7 +19,6 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
-  Lock,
   Search,
   ChevronDown,
 } from "lucide-react";
@@ -40,7 +39,7 @@ import { PMEvaluationTab } from "../components/project-reviews/PMEvaluationTab";
 import { AllReviewsTab } from "../components/project-reviews/AllReviewsTab";
 import { TableExpandedRow } from "../components/project-reviews/TableExpandedRow";
 import { MyReviewsToolbar } from "../components/project-reviews/MyReviewsToolbar";
-import { PerformanceRatingBadge } from "../components/reviews/PerformanceRatingBadge";
+import { MyReviewRatingCell } from "../components/project-reviews/MyReviewRatingCell";
 import { TableSkeleton } from "../components/project-reviews/MyReviewsSkeletons";
 import { SortableHeader } from "../components/SortableHeader";
 import { compareValues, type SortKind, type SortState } from "../utils/sort";
@@ -485,7 +484,12 @@ function renderMyReviewsBody(args: {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3">{renderRatingCell(card, projectRatingsVisible)}</td>
+                  <td className="px-4 py-3">
+                    <MyReviewRatingCell
+                      card={card}
+                      projectRatingsVisible={projectRatingsVisible}
+                    />
+                  </td>
                 </tr>
                 {isExpanded && (
                   <TableExpandedRow card={card} expectations={expectations} />
@@ -497,15 +501,4 @@ function renderMyReviewsBody(args: {
       </table>
     </div>
   );
-}
-
-function renderRatingCell(card: MyProjectCard, visible: boolean) {
-  if (!visible) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-text-muted/60">
-        <Lock className="h-3 w-3" /> Hidden
-      </span>
-    );
-  }
-  return <PerformanceRatingBadge value={card.performance_group} />;
 }
