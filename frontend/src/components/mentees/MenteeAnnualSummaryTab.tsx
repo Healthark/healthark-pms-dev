@@ -632,8 +632,13 @@ export function MenteeAnnualSummaryTab({
       {/* Reviews — mentee self + mentor evaluation. Mentor card only
           renders once the mentor has actually submitted (the field is null
           for active-FY rows still in `pending_mentor`, so it stays hidden
-          there but appears on past completed/calibration rows). */}
+          there but appears on past completed/calibration rows). The self
+          card is hidden while the mentee is still drafting (status ===
+          "draft") — the draft rating/text is private until they submit.
+          The backend already strips draft self-content for the mentor, so
+          this guard is belt-and-suspenders (and matches the Reviews tab). */}
       {selectedReview &&
+        selectedReview.status !== "draft" &&
         (selectedReview.self_overall_review ||
           selectedReview.self_performance_rating !== null) && (
           <ReviewParagraphCard

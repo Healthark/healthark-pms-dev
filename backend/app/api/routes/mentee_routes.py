@@ -585,10 +585,24 @@ def get_mentee_reviews(
 ):
     """Every annual review for the mentee across all cycles, newest
     first. Drives the Reviews tab + the Annual Summary tab's FY
-    picker / cycle map."""
+    picker / cycle map.
+
+    A still-in-`draft` self-review is private to the mentee. The row is
+    still returned — so the mentor sees the "is drafting" state and the FY
+    exists in the picker — but its self-review content (rating + text) is
+    stripped so a draft never reaches the mentor until the mentee submits
+    (status → pending_mentor). Mirrors the mentee-side `_strip_private_ratings`.
+    """
     _assert_mentee_access(db, current_user, mentee_id)
     reviews = _fetch_mentee_reviews(db, mentee_id, current_user.org_id)
-    return [AnnualReviewResponse.model_validate(r) for r in reviews]
+    out: list[AnnualReviewResponse] = []
+    for r in reviews:
+        resp = AnnualReviewResponse.model_validate(r)
+        if r.status == ReviewStatus.DRAFT.value:
+            resp.self_overall_review = None
+            resp.self_performance_rating = None
+        out.append(resp)
+    return out
 
 
 @router.get(
