@@ -20,6 +20,7 @@ import type {
   CriterionCreatePayload,
 } from "../../services/goal.service";
 import { isPostApproved } from "../../utils/goalStatus";
+import { isSafeHttpUrl } from "../../utils/url";
 
 interface GoalFormModalProps {
   readonly isOpen: boolean;
@@ -105,8 +106,15 @@ export function GoalFormModal({
   const set = (field: keyof FormState, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
+  // A non-empty attachment must be a safe http(s) link. Mirrors the backend
+  // allowlist (see utils/url + backend/app/core/url_safety.py) so the user
+  // gets immediate feedback instead of a raw 422.
+  const attachmentUrlInvalid =
+    form.attachment_url.trim().length > 0 && !isSafeHttpUrl(form.attachment_url);
+
   // ── Submit ────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (attachmentUrlInvalid) return;
     if (isEditing) {
       await onSave({
         title: form.title || undefined,
@@ -218,7 +226,13 @@ export function GoalFormModal({
               value={form.attachment_url}
               onChange={(e) => set("attachment_url", e.target.value)}
               placeholder="https://drive.google.com/drive/folders/..."
+              aria-invalid={attachmentUrlInvalid}
             />
+            {attachmentUrlInvalid && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                Enter a valid link starting with http:// or https://
+              </p>
+            )}
           </div>
 
           {/* Existing criteria preview (Edit mode) */}
@@ -292,7 +306,12 @@ export function GoalFormModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSaving || !form.title.trim() || !form.description.trim()}
+            disabled={
+              isSaving ||
+              !form.title.trim() ||
+              !form.description.trim() ||
+              attachmentUrlInvalid
+            }
             className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isSaving ? "Saving…" : isEditing ? "Save Changes" : "Add Goal"}

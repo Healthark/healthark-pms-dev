@@ -2,7 +2,7 @@ import { useState, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Plus, Target, Lock, ChevronDown,
-  Pencil, SendHorizonal, Link, MessageSquare,
+  Pencil, SendHorizonal, MessageSquare,
   UserCircle, BookOpen, Unlock,
 } from "lucide-react";
 import {
@@ -35,6 +35,7 @@ import { TeamGoalsTab } from "../components/goals/TeamGoalsTab";
 import { AllGoalsTab } from "../components/goals/AllGoalsTab";
 import { ApprovalStatusBadge } from "../components/goals/ApprovalStatusBadge";
 import { CriteriaChecklist } from "../components/goals/CriteriaChecklist";
+import AttachmentLink from "../components/goals/AttachmentLink";
 import { SortableHeader } from "../components/SortableHeader";
 import { ClearFiltersButton } from "../components/common/ClearFiltersButton";
 import { TablePagination } from "../components/common/TablePagination";
@@ -730,16 +731,7 @@ export function AnnualGoals() {
                                     {goal.description && (
                                       <p className="text-sm text-text-muted">{goal.description}</p>
                                     )}
-                                    {goal.attachment_url && (
-                                      <a
-                                        href={goal.attachment_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-1.5 text-xs text-brand hover:underline w-fit"
-                                      >
-                                        <Link className="h-3 w-3 shrink-0" /> Attachment
-                                      </a>
-                                    )}
+                                    <AttachmentLink url={goal.attachment_url} />
                                     {isChangesRequired && goal.manager_feedback && (
                                       <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2">
                                         <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-300 mt-0.5 shrink-0" />
