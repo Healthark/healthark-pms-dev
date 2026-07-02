@@ -10,13 +10,14 @@
  */
 
 import { useState } from "react";
-import { Eye, Loader2, Lock, UserCircle, ClipboardCheck, Pencil } from "lucide-react";
+import { Eye, Loader2, UserCircle, ClipboardCheck, Pencil } from "lucide-react";
 import type {
   AnnualReview,
   ReviewStatus,
 } from "../../services/annual-review.service";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
+import { RatingHiddenBadge } from "./RatingHiddenBadge";
 import { AnnualReviewDetailModal } from "./AnnualReviewDetailModal";
 import { SortableHeader } from "../SortableHeader";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
@@ -25,14 +26,6 @@ import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { extractFyToken, formatFyLabel } from "../../utils/fy";
 import { getErrorMessage } from "../../utils/errors";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-
-function FinalRatingHiddenBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-text-muted/60">
-      <Lock className="h-3 w-3" aria-hidden="true" /> Hidden
-    </span>
-  );
-}
 
 type SortKey = "cycle_name" | "status" | "self_performance_rating";
 type StatusFilter = "all" | ReviewStatus;
@@ -312,7 +305,7 @@ export function SelfReviewTab({
                           value={r.mentor_performance_rating}
                         />
                       ) : (
-                        <FinalRatingHiddenBadge />
+                        <RatingHiddenBadge />
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -321,7 +314,7 @@ export function SelfReviewTab({
                           value={r.final_performance_rating}
                         />
                       ) : (
-                        <FinalRatingHiddenBadge />
+                        <RatingHiddenBadge />
                       )}
                     </td>
                     <td className="px-4 py-3">
