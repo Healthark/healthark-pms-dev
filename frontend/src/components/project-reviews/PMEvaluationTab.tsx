@@ -41,6 +41,7 @@ import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { buildProjectCodeIndex } from "../../utils/projectCodeIndex";
 import { sortCyclesDesc } from "../../utils/fy";
+import { resolveSecondaryRowStatus } from "../../utils/secondaryReviewStatus";
 // EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
 // modal in the app at ~475 LOC; ImpactModal is paired (same parents)
 // so we split them together. Each opens on row-click only.
@@ -232,7 +233,9 @@ export function PMEvaluationTab() {
   }
 
   for (const r of secReviews) {
-    const myEval = r.secondary_evaluations?.find((ev) => ev.evaluator_id === currentUserId);
+    // A saved draft (status="draft") must NOT read as submitted — see
+    // resolveSecondaryRowStatus. Draft → "pending" + has_draft_content.
+    const sec = resolveSecondaryRowStatus(r.secondary_evaluations, currentUserId);
     unifiedRows.push({
       key: `sec-${r.id}`,
       type: "secondary",
@@ -243,14 +246,14 @@ export function PMEvaluationTab() {
       department_name: null,
       designation_name: null,
       assignment_role: null,
-      review_status: myEval ? "submitted" : "pending",
+      review_status: sec.review_status,
       review_id: r.id,
       user_id: r.user_id,
       cycle: r.cycle,
       performance_group: null,
-      has_draft_content: false, // draft-pill semantics are PM-specific for now
+      has_draft_content: sec.has_draft_content,
       secondaryReview: r,
-      existingImpact: myEval?.impact_statement ?? "",
+      existingImpact: sec.existing_impact,
     });
   }
 
@@ -574,10 +577,10 @@ export function PMEvaluationTab() {
             <tbody className="divide-y divide-border/50">
               {pageRows.map((r, i) => {
                 const isDone = r.review_status !== "pending";
-                const rowHasDraft =
-                  (r.type === "primary" || r.type === "reports_to") &&
-                  !isDone &&
-                  r.has_draft_content;
+                // Draft pill applies to any row with saved-but-unsubmitted
+                // content — PM, reports-to, AND secondary (a secondary draft is
+                // "pending" + has_draft_content, same as the PM flow).
+                const rowHasDraft = !isDone && r.has_draft_content;
                 return (
                   <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
                     <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
