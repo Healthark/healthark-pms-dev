@@ -328,3 +328,40 @@ class GoalAccessDetailResponse(BaseModel):
     active_period_label: Optional[str] = None
     grants: list[GoalAccessGrantResponse]
     goals: list[AdminGoalBrief]
+
+
+# ── Project Review Scope (per-employee, per-project) ─────────────────
+
+class ReviewScopeProject(BaseModel):
+    """One of an employee's active member projects with its current review-scope
+    state — a row in the review-scope tab's checkbox list. `is_billable` is
+    shown as context; `review_included` drives the checkbox."""
+    project_id: int
+    project_name: str
+    project_code: str
+    is_billable: bool
+    review_included: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmployeeReviewScopeResponse(BaseModel):
+    """GET /admin/review-scope/{user_id} — the employee plus their active member
+    projects (evaluator_type IS NULL, not removed, project active) and whether
+    each is currently in review scope."""
+    user_id: int
+    user_name: str
+    employee_code: str
+    projects: list[ReviewScopeProject]
+
+
+class ReviewScopeProjectUpdate(BaseModel):
+    """One project's desired review-scope state in the PATCH payload."""
+    project_id: int
+    review_included: bool
+
+
+class ReviewScopeUpdate(BaseModel):
+    """PATCH /admin/review-scope/{user_id} — desired scope for a set of the
+    employee's projects. Only the listed projects are changed."""
+    projects: list[ReviewScopeProjectUpdate]
