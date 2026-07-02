@@ -27,12 +27,22 @@ import { groupProjectReviews } from "../../utils/groupProjectReviews";
 import { formatFyYearSpan, fyTokenToStartYear } from "../../utils/fy";
 import { buildProjectCodeIndex } from "../../utils/projectCodeIndex";
 import { CycleReviewChip } from "../reviews/CycleReviewChip";
-import { ProjectReviewDetailModal } from "./ProjectReviewDetailModal";
+import {
+  ProjectReviewDetailModal,
+  type PendingReviewContext,
+} from "./ProjectReviewDetailModal";
 import { StringCombobox } from "../common/StringCombobox";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { TablePagination } from "../common/TablePagination";
 
 type ProgressFilter = "all" | "complete" | "in_progress" | "not_started";
+
+/** The detail modal shows EITHER a real review OR a read-only placeholder for a
+ *  pending cycle with no DB row yet. A single target makes "both open at once"
+ *  unrepresentable. */
+type ReviewModalTarget =
+  | { readonly kind: "review"; readonly review: ProjectReviewResponse }
+  | { readonly kind: "pending"; readonly context: PendingReviewContext };
 
 export function AllReviewsTab() {
   const { settings } = useSystemSettings();
@@ -43,7 +53,8 @@ export function AllReviewsTab() {
   const [progressFilter, setProgressFilter] = useState<ProgressFilter>("all");
   // "" = use the default (current FY); "all" = every year; else String(fy_year).
   const [yearFilter, setYearFilter] = useState<string>("");
-  const [viewTarget, setViewTarget] = useState<ProjectReviewResponse | null>(
+  // Real review, or a placeholder for a pending cycle with no DB row yet.
+  const [modalTarget, setModalTarget] = useState<ReviewModalTarget | null>(
     null,
   );
   const [page, setPage] = useState(1);
@@ -376,7 +387,30 @@ export function AllReviewsTab() {
                             key={slot.cycleName}
                             slot={slot}
                             onClick={(s) => {
-                              if (s.review) setViewTarget(s.review);
+                              if (s.review) {
+                                setModalTarget({
+                                  kind: "review",
+                                  review: s.review,
+                                });
+                              } else if (s.state === "pending") {
+                                // Arrived cycle, no DB row yet — open the
+                                // read-only "not yet evaluated" placeholder
+                                // built from this group's context. The reviewer
+                                // is per-cycle and unknown for a not-started
+                                // cycle (the group's reviewer belongs to a
+                                // cycle that WAS reviewed, not this one), so
+                                // it's left blank rather than shown wrongly.
+                                setModalTarget({
+                                  kind: "pending",
+                                  context: {
+                                    project_name: g.project_name,
+                                    project_code: g.project_code,
+                                    employee_name: g.employee_name,
+                                    cycle: s.cycleName,
+                                    reviewer_name: null,
+                                  },
+                                });
+                              }
                             }}
                           />
                         ))}
@@ -397,10 +431,13 @@ export function AllReviewsTab() {
         />
       </div>
 
-      {viewTarget && (
+      {modalTarget && (
         <ProjectReviewDetailModal
-          review={viewTarget}
-          onClose={() => setViewTarget(null)}
+          review={modalTarget.kind === "review" ? modalTarget.review : null}
+          pendingContext={
+            modalTarget.kind === "pending" ? modalTarget.context : undefined
+          }
+          onClose={() => setModalTarget(null)}
           projectRatingsVisible={true}
         />
       )}

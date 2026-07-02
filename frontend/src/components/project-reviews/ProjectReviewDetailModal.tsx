@@ -16,13 +16,28 @@
  */
 
 import { createPortal } from "react-dom";
-import { Briefcase, Lock, MessageSquare, UserCircle, X } from "lucide-react";
+import { Briefcase, Clock, Lock, MessageSquare, UserCircle, X } from "lucide-react";
 import type { ProjectReviewResponse } from "../../services/project-review.service";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 import { PROJECT_COMPETENCIES } from "./CompetencyBlock";
 
+/** Minimal header context for the read-only "not yet evaluated" placeholder,
+ *  used when `review` is null — a pending cycle on the All Reviews tab that
+ *  the PM hasn't started, so no DB row exists to render. */
+export interface PendingReviewContext {
+  readonly project_name: string;
+  readonly project_code: string;
+  readonly employee_name: string;
+  readonly cycle: string;
+  readonly reviewer_name: string | null;
+}
+
 interface ProjectReviewDetailModalProps {
-  readonly review: ProjectReviewResponse;
+  /** The review to render, or `null` to show the pending placeholder — in
+   *  which case `pendingContext` supplies the header. */
+  readonly review: ProjectReviewResponse | null;
+  /** Header context for the placeholder when `review` is null. */
+  readonly pendingContext?: PendingReviewContext;
   readonly onClose: () => void;
   /** Whether to render the performance rating. Admin passes `true`. */
   readonly projectRatingsVisible: boolean;
@@ -30,18 +45,29 @@ interface ProjectReviewDetailModalProps {
 
 export function ProjectReviewDetailModal({
   review,
+  pendingContext,
   onClose,
   projectRatingsVisible,
 }: ProjectReviewDetailModalProps) {
-  // Only show competency blocks the PM actually filled in.
-  const filledComps = PROJECT_COMPETENCIES.filter((c) => {
-    const v = review[c.commentKey];
-    return typeof v === "string" && v.trim().length > 0;
-  });
+  // Header comes from the real review, or the placeholder context when the
+  // cycle hasn't been evaluated yet. Exactly one of the two is present.
+  const header = review ?? pendingContext;
+  if (!header) return null;
+  const isPending = review === null;
 
-  const submittedEvals = (review.secondary_evaluations ?? []).filter(
-    (e) => e.status === "submitted",
-  );
+  // Only show competency blocks the PM actually filled in.
+  const filledComps = review
+    ? PROJECT_COMPETENCIES.filter((c) => {
+        const v = review[c.commentKey];
+        return typeof v === "string" && v.trim().length > 0;
+      })
+    : [];
+
+  const submittedEvals = review
+    ? (review.secondary_evaluations ?? []).filter(
+        (e) => e.status === "submitted",
+      )
+    : [];
 
   return createPortal(
     <div
@@ -70,17 +96,17 @@ export function ProjectReviewDetailModal({
                   id="proj-review-modal-title"
                   className="font-display text-base font-semibold text-text-main truncate"
                 >
-                  {review.project_name}
+                  {header.project_name}
                   <span className="ml-1.5 text-[11px] font-mono text-text-muted">
-                    {review.project_code}
+                    {header.project_code}
                   </span>
                 </h2>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {review.employee_name} · {review.cycle}
-                  {review.reviewer_name && (
+                  {header.employee_name} · {header.cycle}
+                  {header.reviewer_name && (
                     <>
                       {" · Reviewer: "}
-                      {review.reviewer_name}
+                      {header.reviewer_name}
                     </>
                   )}
                 </p>
@@ -99,6 +125,30 @@ export function ProjectReviewDetailModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {isPending ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-950/40">
+                <Clock
+                  className="h-6 w-6 text-amber-500 dark:text-amber-300"
+                  aria-hidden="true"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-text-main">
+                  Not yet evaluated
+                </p>
+                <p className="mt-1 max-w-sm text-[13px] text-text-muted">
+                  The PM hasn&rsquo;t started this review for{" "}
+                  <span className="font-medium text-text-main">
+                    {header.cycle}
+                  </span>{" "}
+                  yet. Ratings and feedback will appear here once it&rsquo;s
+                  submitted.
+                </p>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Project rating */}
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-medium text-text-main">
@@ -181,6 +231,8 @@ export function ProjectReviewDetailModal({
                 ))}
               </div>
             </section>
+          )}
+          </>
           )}
         </div>
 

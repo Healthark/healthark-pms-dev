@@ -22,7 +22,8 @@ import { extractCyclePeriod, fyTokenToStartYear } from "./fy";
  * - `reviewed` — DB row exists, status=reviewed. Click opens detail modal.
  * - `pending`  — PM still owes it: row exists with status=pending, OR no
  *                row exists yet for a past/active cycle in the current FY.
- *                Click opens the detail modal IF a row exists.
+ *                Always clickable — opens the started review when a row
+ *                exists, else a read-only "not yet evaluated" placeholder.
  * - `upcoming` — Cycle hasn't begun yet (future period this FY, or any
  *                period of a future FY). Not clickable.
  */
