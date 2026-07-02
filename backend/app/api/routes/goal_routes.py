@@ -173,6 +173,25 @@ def _self_review_allowed_states(cycle_code: str) -> set[str]:
     return allowed
 
 
+# Canonical linear order of the goal lifecycle (enum declaration order). Used to
+# keep approval_status MONOTONIC-FORWARD. After an admin rolls the active cycle
+# backward (e.g. H2 → H1), a mentor may back-fill an earlier half whose window
+# has reopened. Setting the scalar to that earlier half's *_reviewed state would
+# REGRESS it past a later half that is already reviewed, misleading any consumer
+# (badges, dashboards) that assumes the scalar only moves forward. The per-cycle
+# review ROWS remain the source of truth for which halves are reviewed; the
+# scalar just records the furthest milestone reached. In normal forward flow the
+# new state is always further along, so _max_status is a no-op there.
+_STATUS_ORDER: dict[str, int] = {s.value: i for i, s in enumerate(ApprovalStatus)}
+
+
+def _max_status(current: str, candidate: str) -> str:
+    """Return whichever lifecycle state is further along — never regress."""
+    if _STATUS_ORDER.get(candidate, -1) > _STATUS_ORDER.get(current, -1):
+        return candidate
+    return current
+
+
 def _assert_annual_gate_open(
     db: Session,
     org_id: int,
@@ -1244,7 +1263,7 @@ def submit_goal_self_review(
         )
         db.add(review)
     # Advance the goal's lifecycle state.
-    goal.approval_status = _self_reviewed_state(half)
+    goal.approval_status = _max_status(goal.approval_status, _self_reviewed_state(half))
 
     # Notify the owner's CURRENT mentor that a self-review is ready to review
     # (in-app). Skip when there's no live mentor (unassigned / soft-deleted).
@@ -1404,14 +1423,17 @@ def submit_goal_mentor_review(
         )
 
     half = cycle_half.value
-    required_state = _self_reviewed_state(half)
-    if goal.approval_status != required_state:
+    # The goal must be in the review phase (approved-or-later). WHICH half can be
+    # submitted is governed by the review window + the mentee's submitted
+    # self-review ROW (checked below), NOT by the linear scalar — so a mentor can
+    # still file an earlier half after an admin rolls the active cycle backward,
+    # where the scalar may already sit at a later cycle's state.
+    if goal.approval_status not in POST_APPROVAL_STATES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Mentor review for {half} cannot be submitted from the "
-                f"current state ({goal.approval_status}). The mentee must "
-                f"submit their {half} self-review first."
+                f"Mentor review for {half} cannot be submitted until the goal is "
+                f"approved (current state: {goal.approval_status})."
             ),
         )
 
@@ -1432,9 +1454,10 @@ def submit_goal_mentor_review(
             ),
         )
 
-    # Defensive checks — state machine should make these unreachable.
-    # The mentee's row must exist AND be submitted (not a draft) before
-    # the mentor can submit their review.
+    # The authoritative "mentee has self-reviewed first" gate: the mentee's row
+    # for this half must exist AND be submitted (not a draft) before the mentor
+    # can submit. Row-based (not scalar-based) so it holds even after an admin
+    # rolls the active cycle backward to a half the scalar has already passed.
     mentee_review = next(
         (sr for sr in goal.self_reviews if sr.cycle_half == half and not sr.is_draft),
         None,
@@ -1470,7 +1493,7 @@ def submit_goal_mentor_review(
         )
         db.add(mentor_review)
     # Advance the goal's lifecycle state.
-    goal.approval_status = _mentor_reviewed_state(half)
+    goal.approval_status = _max_status(goal.approval_status, _mentor_reviewed_state(half))
 
     # Notify the goal owner their mentor review is in (in-app + email).
     create_notification(
@@ -1537,18 +1560,17 @@ def save_goal_mentor_review_draft(
         )
 
     half = cycle_half.value
-    # Drafting is allowed once the goal is APPROVED and this half is active —
-    # the mentee's self-review need NOT be submitted yet (that gates SUBMIT
-    # only). Draftable states = those from which the mentee could still be
-    # self-reviewing this half, plus the state after they have.
-    draftable_states = _self_review_allowed_states(half) | {_self_reviewed_state(half)}
-    if goal.approval_status not in draftable_states:
+    # Drafting is allowed once the goal is in the review phase (approved-or-later);
+    # the mentee's self-review need NOT be submitted yet (that gates SUBMIT only).
+    # WHICH half is active is enforced by the review-window check below — so this
+    # stays correct after an admin rolls the active cycle backward to an earlier
+    # half whose mentor review was never filed (the scalar may sit at a later state).
+    if goal.approval_status not in POST_APPROVAL_STATES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Mentor review for {half} can only be drafted once the goal is "
-                f"approved and this cycle is active (current state: "
-                f"{goal.approval_status})."
+                f"approved (current state: {goal.approval_status})."
             ),
         )
 

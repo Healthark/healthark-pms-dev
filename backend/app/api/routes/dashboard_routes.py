@@ -49,19 +49,39 @@ from app.schemas.dashboard_schemas import DashboardSummary
 router = APIRouter()
 
 
-# Goal states that signal "mentor review of the cycle is owed."
-# A goal sits at *_SELF_REVIEWED until the mentor finishes that cycle — the
-# trigger for "mentor reviews pending." Covers both half-yearly (H1/H2)
-# and quarterly (Q1..Q4) cadences in one set so a single org with mixed
-# legacy data still rolls up correctly.
-_MENTOR_REVIEW_PENDING_STATES = (
-    ApprovalStatus.H1_SELF_REVIEWED.value,
-    ApprovalStatus.H2_SELF_REVIEWED.value,
-    ApprovalStatus.Q1_SELF_REVIEWED.value,
-    ApprovalStatus.Q2_SELF_REVIEWED.value,
-    ApprovalStatus.Q3_SELF_REVIEWED.value,
-    ApprovalStatus.Q4_SELF_REVIEWED.value,
-)
+def _count_mentor_goal_reviews_pending(
+    db: DbSession, org_id: int, mentee_ids: list[int]
+) -> int:
+    """Count a mentor's mentee goals that still owe a mentor review.
+
+    A goal owes a review when some half has a submitted self-review but no
+    submitted mentor review. Derived from the per-cycle review ROWS rather than
+    the linear approval_status, so an earlier half that must be back-filled after
+    an admin rolls the active cycle backward is still counted — the scalar may
+    have advanced past that half (see cycle roll-out).
+    """
+    pending = 0
+    for goal in (
+        db.query(Goal)
+        .filter(
+            Goal.org_id == org_id,
+            Goal.user_id.in_(mentee_ids),
+            Goal.goal_type == GoalType.ANNUAL.value,
+            Goal.is_deleted == False,  # noqa: E712
+            Goal.approval_status.in_(POST_APPROVAL_STATES),
+        )
+        .all()
+    ):
+        reviewed_halves = {
+            mr.cycle_half for mr in goal.mentor_reviews if not mr.is_draft
+        }
+        if any(
+            sr.cycle_half not in reviewed_halves
+            for sr in goal.self_reviews
+            if not sr.is_draft
+        ):
+            pending += 1
+    return pending
 
 
 @router.get("/summary", response_model=DashboardSummary)
@@ -216,18 +236,10 @@ def get_dashboard_summary(
             .scalar()
         ) or 0
 
-        # Mentee goals where the half-cycle self-review has landed but the
-        # mentor review hasn't — H1_SELF_REVIEWED or H2_SELF_REVIEWED.
-        mentor_goal_reviews_pending = (
-            db.query(func.count(Goal.id))
-            .filter(
-                Goal.org_id == current_user.org_id,
-                Goal.user_id.in_(mentee_ids),
-                Goal.goal_type == GoalType.ANNUAL.value,
-                Goal.approval_status.in_(_MENTOR_REVIEW_PENDING_STATES),
-            )
-            .scalar()
-        ) or 0
+        # Mentee goals still awaiting a mentor review (row-based; see helper).
+        mentor_goal_reviews_pending = _count_mentor_goal_reviews_pending(
+            db, current_user.org_id, mentee_ids
+        )
 
         # Mentee annual reviews in PENDING_MENTOR for the active FY. We trust
         # mentor_id on the row when it's set (the canonical link), and fall
