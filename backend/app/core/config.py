@@ -94,7 +94,13 @@ class Settings(BaseSettings):
     # collide on an empty secret.
     FEEDBACK_HASH_SECRET: str
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    # `extra="ignore"` so unrelated vars in the shared .env / shell environment
+    # don't crash the app. scripts/keka_export.py is documented to read its
+    # KEKA_* credentials from this same backend/.env; without this, those extra
+    # keys would fail Settings validation and take the whole app down with them.
+    model_config = SettingsConfigDict(
+        env_file=".env", case_sensitive=True, extra="ignore"
+    )
 
     FISCAL_START_MONTH: int = 4
 
