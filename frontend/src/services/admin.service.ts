@@ -260,6 +260,32 @@ export interface GoalAccessGrantUpdatePayload {
   period_label?: string;
 }
 
+// ── Project review scope (per-employee, per-project) ─────────────────
+
+/** One of an employee's active member projects with its review-scope state —
+ *  a checkbox row in the review-scope tab. Mirrors backend ReviewScopeProject. */
+export interface ReviewScopeProject {
+  project_id: number;
+  project_name: string;
+  project_code: string;
+  is_billable: boolean;
+  review_included: boolean;
+}
+
+/** GET /admin/review-scope/{user_id} payload. Mirrors backend
+ *  EmployeeReviewScopeResponse. */
+export interface EmployeeReviewScope {
+  user_id: number;
+  user_name: string;
+  employee_code: string;
+  projects: ReviewScopeProject[];
+}
+
+/** PATCH /admin/review-scope/{user_id} body — only the listed projects change. */
+export interface ReviewScopeUpdatePayload {
+  projects: { project_id: number; review_included: boolean }[];
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -454,6 +480,30 @@ export const adminService = {
   revertGoalToDraft: async (goalId: number): Promise<GoalAccessDetail> => {
     const res = await apiClient.post<GoalAccessDetail>(
       `/admin/goals/${goalId}/revert-to-draft`,
+    );
+    return res.data;
+  },
+
+  // Project review scope
+  /** One employee's active member projects + whether each is in review scope. */
+  getEmployeeReviewScope: async (
+    userId: number,
+  ): Promise<EmployeeReviewScope> => {
+    const res = await apiClient.get<EmployeeReviewScope>(
+      `/admin/review-scope/${userId}`,
+    );
+    return res.data;
+  },
+
+  /** Apply review scope for a set of the employee's projects. Only the listed
+   *  projects change; excluding soft-deletes open-cycle reviews server-side. */
+  updateEmployeeReviewScope: async (
+    userId: number,
+    payload: ReviewScopeUpdatePayload,
+  ): Promise<EmployeeReviewScope> => {
+    const res = await apiClient.patch<EmployeeReviewScope>(
+      `/admin/review-scope/${userId}`,
+      payload,
     );
     return res.data;
   },

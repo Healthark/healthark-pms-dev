@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
   UserPlus, Users, Settings, FolderOpen, Plus, Download, Megaphone, KeyRound,
+  ClipboardCheck,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
@@ -24,6 +25,7 @@ const UserModal = lazy(() =>
 import { ExportsTab } from "../components/admin/ExportsTab";
 import { NotifyTab } from "../components/admin/NotifyTab";
 import { GoalAccessTab } from "../components/admin/GoalAccessTab";
+import { ReviewScopeTab } from "../components/admin/ReviewScopeTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
 import { useAuth } from "../hooks/useAuth";
@@ -41,7 +43,8 @@ type ActiveTab =
   | "notify"
   | "export"
   | "settings"
-  | "goal-access";
+  | "goal-access"
+  | "review-scope";
 
 export default function AdminPanel() {
   // ── Reference data (shared cache via ['admin', 'departments|designations']) ─
@@ -88,7 +91,9 @@ export default function AdminPanel() {
             ? "settings"
             : tabParam === "goal-access"
               ? "goal-access"
-              : "users";
+              : tabParam === "review-scope"
+                ? "review-scope"
+                : "users";
   const setActiveTab = (tab: ActiveTab) => {
     setSearchParams(
       (prev) => {
@@ -267,6 +272,14 @@ export default function AdminPanel() {
             <KeyRound className="h-4 w-4" aria-hidden="true" />
             Goal Access
           </button>
+          <button
+            type="button"
+            className={tabCls("review-scope")}
+            onClick={() => setActiveTab("review-scope")}
+          >
+            <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+            Review Scope
+          </button>
         </div>
 
         {activeTab === "users" && (
@@ -294,6 +307,8 @@ export default function AdminPanel() {
         )}
 
         {activeTab === "goal-access" && <GoalAccessTab />}
+
+        {activeTab === "review-scope" && <ReviewScopeTab />}
       </div>
 
       {/* Modals — rendered outside the card so they overlay the full page.

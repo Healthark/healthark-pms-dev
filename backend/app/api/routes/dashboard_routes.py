@@ -176,10 +176,14 @@ def get_dashboard_summary(
     # opens, so DRAFT is the canonical "owed" state.
     project_reviews_pending_secondary: int = (
         db.query(func.count(ProjectReviewEvaluator.id))
+        # Join the parent review so an excluded (soft-deleted) pair's leftover
+        # draft impact statement doesn't keep counting as owed work.
+        .join(ProjectReview, ProjectReview.id == ProjectReviewEvaluator.project_review_id)
         .filter(
             ProjectReviewEvaluator.org_id == current_user.org_id,
             ProjectReviewEvaluator.evaluator_id == current_user.id,
             ProjectReviewEvaluator.status == EvaluatorStatus.DRAFT.value,
+            ProjectReview.is_deleted == False,  # noqa: E712
         )
         .scalar()
     ) or 0

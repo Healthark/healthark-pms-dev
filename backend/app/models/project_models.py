@@ -103,6 +103,15 @@ class ProjectAssignment(Base):
     # When this employee was assigned to the project
     assigned_date = Column(Date, nullable=True)
 
+    # Whether this employee is IN SCOPE for project review on this project.
+    # Opt-out: default true (every existing membership is reviewed). An admin
+    # unchecks it in the review-scope tab to exclude the (employee, project)
+    # pair from all review surfaces (PM queue, My Reviews, secondary queue,
+    # completion counts). Independent of is_deleted (which is team removal).
+    review_included = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Soft delete. Removing a member keeps the row (preserving the team-membership

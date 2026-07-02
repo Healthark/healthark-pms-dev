@@ -43,6 +43,7 @@ from app.core.cycle_utils import (
     ensure_year_override_row,
     extract_fy_label,
     get_year_override,
+    is_review_window_open,
     next_cycle,
     parse_cycle,
 )
@@ -55,6 +56,7 @@ from app.models.project_models import (
     Project,
     ProjectAssignment,
 )
+from app.models.project_review_models import ProjectReview
 from app.models.reference_models import Department, Designation
 from app.models.cycle_rollout_log_models import CycleRolloutLog
 from app.models.system_settings_models import CycleType, SystemSettings
@@ -79,6 +81,9 @@ from app.schemas.admin_schemas import (
     CycleStatusResponse,
     DepartmentBrief,
     DesignationBrief,
+    EmployeeReviewScopeResponse,
+    ReviewScopeProject,
+    ReviewScopeUpdate,
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -1983,3 +1988,151 @@ def revert_goal_to_draft(
 
     db.commit()
     return _goal_access_detail(db, current_user.org_id, owner)
+
+
+# ── Project Review Scope ─────────────────────────────────────────────
+# Per-(employee, project) opt-out control. review_included lives on the
+# member's ProjectAssignment (default true). Excluding a pair also soft-deletes
+# its open-cycle ProjectReview rows so an in-flight review disappears while past
+# closed-FY history is preserved; re-including restores those rows.
+
+def _employee_scope_projects(
+    db: DbSession, org_id: int, user_id: int
+) -> list[ReviewScopeProject]:
+    """The employee's ACTIVE MEMBER projects (evaluator_type IS NULL, not
+    removed, project active) with each project's is_billable + current
+    review_included — the review-scope tab's checkbox rows."""
+    rows = (
+        db.query(ProjectAssignment, Project)
+        .join(Project, ProjectAssignment.project_id == Project.id)
+        .filter(
+            ProjectAssignment.org_id == org_id,
+            ProjectAssignment.user_id == user_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+            ProjectAssignment.evaluator_type.is_(None),  # regular member, not PM
+            Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
+        )
+        .order_by(Project.name)
+        .all()
+    )
+    return [
+        ReviewScopeProject(
+            project_id=p.id,
+            project_name=p.name,
+            project_code=p.project_code,
+            is_billable=bool(p.is_billable),
+            review_included=bool(a.review_included),
+        )
+        for a, p in rows
+    ]
+
+
+def _toggle_open_cycle_reviews(
+    db: DbSession,
+    org_id: int,
+    project_id: int,
+    user_id: int,
+    active_cycle_name: Optional[str],
+    *,
+    exclude: bool,
+) -> None:
+    """Soft-delete (exclude) or restore (re-include) the pair's ProjectReview
+    rows whose review window is still OPEN — the active cycle plus any still-open
+    earlier half of the current FY. Closed past-FY reviews are left untouched so
+    history stays visible. Restore only touches the same open-cycle rows, so a
+    mistaken exclude is a clean undo."""
+    if not active_cycle_name:
+        return
+    try:
+        _, active_fy = parse_cycle(active_cycle_name)
+    except ValueError:
+        return
+    reviews = (
+        db.query(ProjectReview)
+        .filter(
+            ProjectReview.org_id == org_id,
+            ProjectReview.project_id == project_id,
+            ProjectReview.user_id == user_id,
+        )
+        .all()
+    )
+    for r in reviews:
+        try:
+            code, fy = parse_cycle(r.cycle)
+        except ValueError:
+            continue
+        # Annual-cadence rows carry no half/quarter code — open iff same FY.
+        open_now = (
+            fy == active_fy
+            if code is None
+            else is_review_window_open(code, fy, active_cycle_name)
+        )
+        if not open_now:
+            continue  # closed past cycle — preserve as history
+        r.is_deleted = exclude
+
+
+@router.get("/review-scope/{user_id}", response_model=EmployeeReviewScopeResponse)
+def get_employee_review_scope(
+    user_id: int, db: DbSession, current_user: CurrentUser
+):
+    """One employee's active member projects and whether each is in review
+    scope — the review-scope tab's checkbox list for that employee."""
+    _require_admin(current_user)
+    user = _get_target_employee(db, current_user.org_id, user_id)
+    return EmployeeReviewScopeResponse(
+        user_id=user.id,
+        user_name=user.full_name,
+        employee_code=user.employee_code,
+        projects=_employee_scope_projects(db, current_user.org_id, user_id),
+    )
+
+
+@router.patch("/review-scope/{user_id}", response_model=EmployeeReviewScopeResponse)
+def set_employee_review_scope(
+    user_id: int,
+    payload: ReviewScopeUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Apply the desired review scope for a set of the employee's projects. Only
+    the listed member projects are changed. Excluding a project also soft-deletes
+    its open-cycle reviews; re-including restores them. Unknown projects and the
+    employee's own PM assignments are ignored."""
+    _require_admin(current_user)
+    user = _get_target_employee(db, current_user.org_id, user_id)
+    active_cycle = _settings_or_500(db, current_user.org_id).active_cycle_name
+
+    assignments = {
+        a.project_id: a
+        for a in db.query(ProjectAssignment).filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.user_id == user_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+    }
+    for upd in payload.projects:
+        a = assignments.get(upd.project_id)
+        # Only real member assignments are scopable; never touch the PM role.
+        if a is None or a.evaluator_type == "Primary":
+            continue
+        if a.review_included == upd.review_included:
+            continue
+        a.review_included = upd.review_included
+        _toggle_open_cycle_reviews(
+            db,
+            current_user.org_id,
+            upd.project_id,
+            user_id,
+            active_cycle,
+            exclude=not upd.review_included,
+        )
+
+    db.commit()
+    return EmployeeReviewScopeResponse(
+        user_id=user.id,
+        user_name=user.full_name,
+        employee_code=user.employee_code,
+        projects=_employee_scope_projects(db, current_user.org_id, user_id),
+    )

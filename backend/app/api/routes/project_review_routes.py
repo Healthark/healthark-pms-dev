@@ -249,6 +249,7 @@ def get_my_projects(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
             ProjectAssignment.is_deleted == False,  # noqa: E712
+            ProjectAssignment.review_included == True,  # noqa: E712
             Project.is_deleted == False,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
         )
@@ -299,6 +300,7 @@ def get_my_projects(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.user_id == current_user.id,
             ProjectReview.project_id.in_(project_ids),
+            ProjectReview.is_deleted == False,  # noqa: E712
         )
         .all()
     ):
@@ -422,7 +424,8 @@ def get_pm_evaluation_queue(
         return []
     visible_project_ids = list(projects_by_id.keys())
 
-    # All active team members across those projects (excluding the PM).
+    # All active, in-scope team members across those projects (excluding the
+    # PM). review_included == False members are excluded from the PM's queue.
     team_assignments = (
         db.query(ProjectAssignment)
         .filter(
@@ -430,6 +433,7 @@ def get_pm_evaluation_queue(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id != current_user.id,
             ProjectAssignment.is_deleted == False,  # noqa: E712
+            ProjectAssignment.review_included == True,  # noqa: E712
         )
         .all()
     )
@@ -622,6 +626,13 @@ def submit_pm_evaluation(
             detail="This employee is not assigned to this project.",
         )
 
+    # Excluded from review scope on this project — no review may be filed.
+    if not target_assignment.review_included:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This employee is excluded from project reviews on this project.",
+        )
+
     # Can't evaluate yourself
     if user_id == current_user.id:
         raise HTTPException(
@@ -744,6 +755,11 @@ def save_pm_evaluation_draft(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This employee is not assigned to this project.",
+        )
+    if not target_assignment.review_included:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This employee is excluded from project reviews on this project.",
         )
     if user_id == current_user.id:
         raise HTTPException(
@@ -1185,6 +1201,25 @@ def get_secondary_evaluation_queue(
         .all()
     )
 
+    # Drop (project, employee) pairs the admin excluded from review scope. Their
+    # open-cycle reviews are already soft-deleted (filtered above); this also
+    # hides any closed-cycle reviewed rows so an excluded pair never appears.
+    excluded_pairs = {
+        (pid, uid)
+        for (pid, uid) in db.query(
+            ProjectAssignment.project_id, ProjectAssignment.user_id
+        ).filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.project_id.in_(project_ids),
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+            ProjectAssignment.review_included == False,  # noqa: E712
+        )
+    }
+    if excluded_pairs:
+        reviews = [
+            r for r in reviews if (r.project_id, r.user_id) not in excluded_pairs
+        ]
+
     # Redact the PM's rating per the per-FY visibility rule — same gate as
     # get_review, so the secondary queue can't bypass `project_ratings_visible`.
     active_cycle = _get_active_cycle(db, current_user.org_id)
@@ -1212,6 +1247,7 @@ def submit_secondary_evaluation(
         ProjectReview.id == review_id,
         ProjectReview.org_id == current_user.org_id,
         ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
+        ProjectReview.is_deleted == False,  # noqa: E712
     ).first()
 
     if not review:
@@ -1303,6 +1339,7 @@ def save_secondary_draft(
         ProjectReview.id == review_id,
         ProjectReview.org_id == current_user.org_id,
         ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
+        ProjectReview.is_deleted == False,  # noqa: E712
     ).first()
     if not review:
         raise HTTPException(
@@ -1387,6 +1424,7 @@ def update_secondary_evaluation(
         ProjectReview.id == review_id,
         ProjectReview.org_id == current_user.org_id,
         ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
+        ProjectReview.is_deleted == False,  # noqa: E712
     ).first()
 
     if not review:
@@ -1589,6 +1627,7 @@ def get_management_overview(
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.cycle == resolved_cycle,
+            ProjectReview.is_deleted == False,  # noqa: E712
         )
         .all()
     )
@@ -1611,6 +1650,11 @@ def get_management_overview(
             if a.evaluator_type == "Primary":
                 pm_name = a.user.full_name
                 pm_assignment = a  # the PM's own review is appended after the loop
+                continue
+
+            # Excluded (review_included == False) members drop out of the
+            # completion counts entirely — not shown, not counted.
+            if not a.review_included:
                 continue
 
             review = review_map.get((project.id, a.user_id))
