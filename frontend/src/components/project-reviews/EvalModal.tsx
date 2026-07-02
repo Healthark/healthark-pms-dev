@@ -60,7 +60,7 @@ interface EvalModalProps {
   /** When true, all inputs are disabled and the submit button is hidden. */
   readonly readOnly?: boolean;
   readonly onSubmit: (payload: PMEvaluationPayload) => Promise<void>;
-  readonly onSaveDraft?: (payload: PMEvaluationDraftPayload) => Promise<void>;
+  readonly onSaveDraft?: (payload: PMEvaluationDraftPayload, silent?: boolean) => Promise<void>;
   readonly onClose: () => void;
   readonly isSaving: boolean;
   readonly isDraftSaving?: boolean;
@@ -162,12 +162,16 @@ export function EvalModal({
   };
 
   const saveDraftMutation = useMutation({
-    mutationFn: async (payload: PMEvaluationDraftPayload) => {
-      // Read the latest onSaveDraft via ref so we always invoke the
-      // current callback, regardless of parent re-render timing.
+    mutationFn: async (
+      { payload, silent }: { payload: PMEvaluationDraftPayload; silent: boolean },
+    ) => {
+      // Read the latest onSaveDraft via ref so we always invoke the current
+      // callback, regardless of parent re-render timing. `silent` tells the
+      // parent this was the debounced autosave (no toast) vs an explicit
+      // Save Draft click (toast).
       const fn = onSaveDraftRef.current;
       if (!fn) return payload;
-      await fn(payload);
+      await fn(payload, silent);
       return payload;
     },
     onSuccess: (saved) => {
@@ -180,7 +184,8 @@ export function EvalModal({
 
   const [debouncedAutosave, cancelAutosave] = useDebounce(
     (payload: PMEvaluationDraftPayload) => {
-      saveDraftMutation.mutate(payload);
+      // Autosave is silent — no toast on every keystroke.
+      saveDraftMutation.mutate({ payload, silent: true });
     },
     AUTOSAVE_DEBOUNCE_MS,
   );
@@ -238,7 +243,8 @@ export function EvalModal({
 
   const handleManualSaveDraft = () => {
     cancelAutosave();
-    saveDraftMutation.mutate(buildDraftPayload());
+    // Explicit click — not silent, so the parent shows the "Draft saved" toast.
+    saveDraftMutation.mutate({ payload: buildDraftPayload(), silent: false });
   };
 
   const handleClose = () => {

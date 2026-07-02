@@ -7,7 +7,7 @@
 
 import { lazy, Suspense, useState } from "react";
 import {
-  UserCircle, ClipboardList, Pencil,
+  UserCircle, ClipboardList, Pencil, Eye,
   Search, CheckCircle2, Clock,
 } from "lucide-react";
 import { StringCombobox } from "../common/StringCombobox";
@@ -27,12 +27,10 @@ import {
   useRoleExpectations,
   useSubmitPMEvaluation,
   useSavePMDraft,
-  useUpdateReview,
   useSubmitReportsToEvaluation,
   useSaveReportsToDraft,
   useSubmitSecondaryEval,
   useSaveSecondaryDraft,
-  useUpdateSecondaryEval,
 } from "../../queries/projectReviews";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
@@ -126,18 +124,14 @@ export function PMEvaluationTab() {
   // Mutation hooks — each invalidates ['project-reviews'] ± dashboard
   const submitPMMutation = useSubmitPMEvaluation();
   const savePMDraftMutation = useSavePMDraft();
-  const updateReviewMutation = useUpdateReview();
   const submitReportsToMutation = useSubmitReportsToEvaluation();
   const saveReportsToDraftMutation = useSaveReportsToDraft();
   const submitSecMutation = useSubmitSecondaryEval();
   const saveSecDraftMutation = useSaveSecondaryDraft();
-  const updateSecMutation = useUpdateSecondaryEval();
   const isSaving =
     submitPMMutation.isPending ||
-    updateReviewMutation.isPending ||
     submitReportsToMutation.isPending ||
-    submitSecMutation.isPending ||
-    updateSecMutation.isPending;
+    submitSecMutation.isPending;
   const isDraftSaving =
     savePMDraftMutation.isPending ||
     saveReportsToDraftMutation.isPending ||
@@ -183,9 +177,10 @@ export function PMEvaluationTab() {
     setCycleFilter("");
   };
 
-  // Modal state
+  // Modal state. Submitted reviews are locked — opened read-only (view); only
+  // pending/draft rows open editable.
   const [evalTarget, setEvalTarget] = useState<UnifiedEvalRow | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [viewOnly, setViewOnly] = useState(false);
   const [modalError, setModalError] = useState("");
 
   // Build unified rows
@@ -336,39 +331,27 @@ export function PMEvaluationTab() {
     return expectations.find((e) => e.department_name === row.department_name && e.designation_name === row.designation_name) ?? null;
   };
 
-  // Actions
+  // Actions. A submitted review (primary/reports-to "reviewed", secondary
+  // "submitted") is locked → opens read-only. Pending/draft rows open editable.
   const handleAction = (row: UnifiedEvalRow) => {
     setModalError("");
-    if (row.type === "primary" || row.type === "reports_to") {
-      setIsEditMode(row.review_status === "reviewed");
-      setEvalTarget(row);
-    } else {
-      setEvalTarget(row);
-    }
+    setViewOnly(row.review_status === "reviewed" || row.review_status === "submitted");
+    setEvalTarget(row);
   };
 
-  const closeModal = () => { setEvalTarget(null); setIsEditMode(false); setModalError(""); };
+  const closeModal = () => { setEvalTarget(null); setViewOnly(false); setModalError(""); };
 
   const handlePMSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
     setModalError("");
     try {
-      if (isEditMode && evalTarget.review_id != null) {
-        await updateReviewMutation.mutateAsync({
-          reviewId: evalTarget.review_id,
-          payload,
-        });
-        closeModal();
-        toast.success("Evaluation updated.");
-      } else {
-        await submitPMMutation.mutateAsync({
-          projectId: evalTarget.project_id,
-          userId: evalTarget.user_id!,
-          payload,
-        });
-        closeModal();
-        toast.success("Evaluation submitted.");
-      }
+      await submitPMMutation.mutateAsync({
+        projectId: evalTarget.project_id,
+        userId: evalTarget.user_id!,
+        payload,
+      });
+      closeModal();
+      toast.success("Evaluation submitted.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     }
@@ -377,11 +360,7 @@ export function PMEvaluationTab() {
   const handleSecSubmit = async (reviewId: number, payload: SecondaryEvalPayload) => {
     setModalError("");
     try {
-      if (evalTarget?.review_status === "submitted") {
-        await updateSecMutation.mutateAsync({ reviewId, payload });
-      } else {
-        await submitSecMutation.mutateAsync({ reviewId, payload });
-      }
+      await submitSecMutation.mutateAsync({ reviewId, payload });
       closeModal();
       toast.success("Impact statement saved.");
     } catch (err: unknown) {
@@ -389,7 +368,10 @@ export function PMEvaluationTab() {
     }
   };
 
-  const handlePMSaveDraft = async (payload: PMEvaluationDraftPayload) => {
+  const handlePMSaveDraft = async (
+    payload: PMEvaluationDraftPayload,
+    silent = false,
+  ) => {
     if (!evalTarget) return;
     setModalError("");
     try {
@@ -398,10 +380,9 @@ export function PMEvaluationTab() {
         userId: evalTarget.user_id!,
         payload,
       });
-      // Invalidation refreshes the queue so the card picks up the
-      // newly-created review_id; the modal can then preload draft fields
-      // on next open AND the row button flips to "Continue Evaluation".
-      toast.success("Draft saved.");
+      // Only toast on an explicit Save Draft click — the debounced autosave
+      // passes silent=true so it doesn't pop a toast on every keystroke.
+      if (!silent) toast.success("Draft saved.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     }
@@ -421,34 +402,27 @@ export function PMEvaluationTab() {
   };
 
   // Reports-to → PM evaluation. Same 7-competency form as the PM flow; on
-  // submit it targets the project (the PM is resolved server-side). Editing an
-  // already-reviewed row reuses the shared update endpoint (the reports-to
-  // person is the review's author, so PUT authorizes them).
+  // submit it targets the project (the PM is resolved server-side). Once
+  // submitted the review is locked (view-only) like any other.
   const handleReportsToSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
     setModalError("");
     try {
-      if (isEditMode && evalTarget.review_id != null) {
-        await updateReviewMutation.mutateAsync({
-          reviewId: evalTarget.review_id,
-          payload,
-        });
-        closeModal();
-        toast.success("PM evaluation updated.");
-      } else {
-        await submitReportsToMutation.mutateAsync({
-          projectId: evalTarget.project_id,
-          payload,
-        });
-        closeModal();
-        toast.success("PM evaluation submitted.");
-      }
+      await submitReportsToMutation.mutateAsync({
+        projectId: evalTarget.project_id,
+        payload,
+      });
+      closeModal();
+      toast.success("PM evaluation submitted.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     }
   };
 
-  const handleReportsToSaveDraft = async (payload: PMEvaluationDraftPayload) => {
+  const handleReportsToSaveDraft = async (
+    payload: PMEvaluationDraftPayload,
+    silent = false,
+  ) => {
     if (!evalTarget) return;
     setModalError("");
     try {
@@ -456,7 +430,7 @@ export function PMEvaluationTab() {
         projectId: evalTarget.project_id,
         payload,
       });
-      toast.success("Draft saved.");
+      if (!silent) toast.success("Draft saved.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     }
@@ -660,8 +634,8 @@ export function PMEvaluationTab() {
                     <td className="px-4 py-3 text-right">
                       {isDone ? (
                         <button type="button" onClick={() => handleAction(r)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 px-3 py-1.5 text-[12px] font-medium text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
-                          <Pencil className="h-3 w-3" /> Edit
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-text-muted hover:bg-surface-muted transition-colors">
+                          <Eye className="h-3 w-3" /> View
                         </button>
                       ) : (
                         <button type="button" onClick={() => handleAction(r)}
@@ -690,10 +664,10 @@ export function PMEvaluationTab() {
           modal's loading state so they don't block each other. */}
       <Suspense fallback={null}>
         {(evalTarget?.type === "primary" || evalTarget?.type === "reports_to") && (
-          <EvalModal card={evalTarget} expectation={getExpectation(evalTarget)} isEditMode={isEditMode}
+          <EvalModal card={evalTarget} expectation={getExpectation(evalTarget)} isEditMode={false} readOnly={viewOnly}
             onSubmit={evalTarget.type === "reports_to" ? handleReportsToSubmit : handlePMSubmit}
             onSaveDraft={
-              isEditMode
+              viewOnly
                 ? undefined
                 : evalTarget.type === "reports_to"
                   ? handleReportsToSaveDraft
@@ -704,9 +678,9 @@ export function PMEvaluationTab() {
       </Suspense>
       <Suspense fallback={null}>
         {evalTarget?.type === "secondary" && (
-          <ImpactModal row={evalTarget}
+          <ImpactModal row={evalTarget} readOnly={viewOnly}
             onSubmit={handleSecSubmit}
-            onSaveDraft={evalTarget.review_status === "submitted" ? undefined : handleSecSaveDraft}
+            onSaveDraft={viewOnly ? undefined : handleSecSaveDraft}
             onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
         )}
       </Suspense>
