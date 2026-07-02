@@ -8,9 +8,10 @@ Changes from previous version:
     - TeamGoalResponse inherits the new criteria fields automatically
 """
 
-from pydantic import BaseModel, Field, ConfigDict, computed_field
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
 from typing import Optional
 from datetime import datetime
+from app.core.url_safety import validate_optional_http_url
 from app.models.goal_models import ApprovalStatus, GoalType
 from app.models.goal_self_review_models import SelfReviewCycleHalf
 
@@ -93,6 +94,13 @@ class GoalCreate(GoalBase):
     # transactionally with the parent goal in a single commit.
     criteria: list[CriterionCreate] = []
 
+    @field_validator("attachment_url")
+    @classmethod
+    def _check_attachment_url(cls, v: Optional[str]) -> Optional[str]:
+        # http(s)-only reference link; blocks javascript:/data: XSS at the
+        # API boundary. See app.core.url_safety.
+        return validate_optional_http_url(v)
+
 
 class GoalUpdate(BaseModel):
     title: Optional[str] = None
@@ -101,6 +109,13 @@ class GoalUpdate(BaseModel):
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     progress_notes: Optional[str] = None
+
+    @field_validator("attachment_url")
+    @classmethod
+    def _check_attachment_url(cls, v: Optional[str]) -> Optional[str]:
+        # http(s)-only reference link; blocks javascript:/data: XSS at the
+        # API boundary. See app.core.url_safety.
+        return validate_optional_http_url(v)
 
 
 class GoalApprovalUpdate(BaseModel):

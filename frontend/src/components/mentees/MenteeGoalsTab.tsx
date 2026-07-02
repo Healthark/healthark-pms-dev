@@ -3,7 +3,6 @@ import {
   ChevronDown,
   Check,
   RotateCcw,
-  Link as LinkIcon,
   MessageSquare,
   Target,
 } from "lucide-react";
@@ -27,6 +26,7 @@ import { useSnackbar } from "../../hooks/useSnackbar";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { ApprovalStatusBadge } from "../goals/ApprovalStatusBadge";
+import AttachmentLink from "../goals/AttachmentLink";
 import { CriteriaChecklist } from "../goals/CriteriaChecklist";
 import { GoalMentorReviewModal } from "../goals/GoalMentorReviewModal";
 import { SelfReviewCycleMenu } from "../goals/SelfReviewCycleMenu";
@@ -502,17 +502,7 @@ export function MenteeGoalsTab({ menteeId, menteeName }: MenteeGoalsTabProps) {
                                 {goal.description}
                               </p>
                             )}
-                            {goal.attachment_url && (
-                              <a
-                                href={goal.attachment_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-xs text-brand hover:underline w-fit"
-                              >
-                                <LinkIcon className="h-3 w-3 shrink-0" />
-                                Attachment
-                              </a>
-                            )}
+                            <AttachmentLink url={goal.attachment_url} />
                             {isChangesRequested && goal.manager_feedback && (
                               <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2">
                                 <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-300 mt-0.5 shrink-0" />
