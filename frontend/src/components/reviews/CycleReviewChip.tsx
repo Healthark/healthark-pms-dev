@@ -7,9 +7,10 @@
  * chip encodes the cycle's state at a glance:
  *
  *   • Reviewed — green pill. Click opens the review's detail modal.
- *   • Pending  — amber pill. Row exists but PM hasn't submitted yet
- *                (or no row exists for an already-arrived cycle). Click
- *                opens the detail modal only when a DB row backs it.
+ *   • Pending  — amber pill. Either a started row (draft) or no row yet
+ *                for an already-arrived cycle. Click ALWAYS opens the
+ *                detail modal — showing the started review, or a read-only
+ *                "not yet evaluated" placeholder when no DB row backs it.
  *   • Upcoming — slate dashed outline, faded. Cycle hasn't begun yet.
  *                Non-clickable.
  *
@@ -23,8 +24,8 @@ interface CycleReviewChipProps {
   readonly slot: CycleSlot;
   /** When true, render at reduced opacity (de-emphasis for context). */
   readonly dimmed?: boolean;
-  /** Click handler. Called only for clickable states (reviewed + pending
-   *  with a backing DB row). Upcoming slots ignore clicks. */
+  /** Click handler. Called for clickable states (reviewed + any pending,
+   *  with or without a backing DB row). Upcoming slots ignore clicks. */
   readonly onClick?: (slot: CycleSlot) => void;
 }
 
@@ -70,11 +71,11 @@ export function CycleReviewChip({
   dimmed = false,
   onClick,
 }: CycleReviewChipProps) {
-  // Clickable iff a real DB row backs the slot AND the state has a
-  // meaningful detail view.
-  const clickable =
-    (slot.state === "reviewed" || slot.state === "pending") &&
-    slot.review !== null;
+  // Clickable for any arrived cycle. `reviewed` always has a backing row;
+  // `pending` opens regardless of whether a row exists — the parent shows
+  // the started review, or a read-only "not yet evaluated" placeholder when
+  // it doesn't. Only `upcoming` (future cycle) stays inert.
+  const clickable = slot.state === "reviewed" || slot.state === "pending";
   const interactiveClasses = clickable ? HOVER_CLASSES[slot.state] : "";
   const classes = `${CHIP_BASE} ${STATE_CLASSES[slot.state]} ${interactiveClasses} ${
     dimmed ? "opacity-40" : ""
