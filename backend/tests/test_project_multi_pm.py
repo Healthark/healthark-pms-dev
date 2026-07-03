@@ -201,6 +201,42 @@ def test_create_multi_pm_persists_hierarchy(db):
     assert project.secondary_evaluator_id is None
 
 
+def test_create_multi_pm_allows_multiple_top_pms(db):
+    # Same-level PMs: several members with no manager are all top-level PMs,
+    # each reviewed by "PM Reports To". There is no "exactly one top PM" rule —
+    # the create route flags every root Primary and persists them all.
+    org, admin, users = _org_with_users(db, 3)
+    pm1, pm2, member = users  # pm1 & pm2 are peers (roots); member → pm1
+    reports_to = _user(db, org.id)
+    db.commit()
+
+    payload = ProjectCreate(
+        project_code="MP-2",
+        name="Flat",
+        reports_to_id=reports_to.id,
+        multi_pm_enabled=True,
+        assignments=[
+            AssignmentCreate(user_id=pm1.id),                 # root / top PM
+            AssignmentCreate(user_id=pm2.id),                 # also root / top PM
+            AssignmentCreate(user_id=member.id, manager_id=pm1.id),
+        ],
+    )
+    detail = create_project(payload, db, admin, BackgroundTasks())
+    assert detail.multi_pm_enabled is True
+    # Headline PM resolves to one of the two roots (display back-compat).
+    assert detail.pm_id in (pm1.id, pm2.id)
+
+    rows = _rows_by_user(db, detail.id)
+    # BOTH roots are flagged Primary and have no manager.
+    assert rows[pm1.id].evaluator_type == "Primary"
+    assert rows[pm1.id].manager_id is None
+    assert rows[pm2.id].evaluator_type == "Primary"
+    assert rows[pm2.id].manager_id is None
+    # The managed member links to their chosen PM.
+    assert rows[member.id].evaluator_type is None
+    assert rows[member.id].manager_id == pm1.id
+
+
 # ── Single-PM regression — manager_id backfilled to the Primary ──────
 
 def test_create_single_pm_links_members_to_primary(db):

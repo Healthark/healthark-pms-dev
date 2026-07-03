@@ -382,24 +382,26 @@ export function ProjectModal({
   const draftMembersWithUser = draftAssignments.filter((d) => d.user_id);
   const multiPmError: string | null = (() => {
     if (!multiPmEnabled) return null;
-    if (memberOptions.length === 0) return "Add at least one team member (the top PM).";
+    if (memberOptions.length === 0) return "Add at least one team member.";
     if (
       draftMembersWithUser.some(
         (d) => d.manager_user_id && Number(d.manager_user_id) === Number(d.user_id),
       )
     )
       return "A member cannot be their own Project Manager.";
-    // On create every member is a draft, so require exactly one top PM (a
-    // member with no Project Manager). On edit the existing rows already encode
-    // the hierarchy, so the whole-graph check is deferred to the backend.
-    if (!isEditing) {
-      const topPms = draftMembersWithUser.filter((d) => !d.manager_user_id);
-      if (topPms.length !== 1)
-        return "Assign a Project Manager to every member except exactly one top PM.";
-    }
+    // Multiple same-level PMs are supported: any number of members may have no
+    // Project Manager — they're top-level PMs, each reviewed by "PM Reports To".
+    // There is deliberately no "exactly one top PM" rule (the backend hierarchy
+    // validator explicitly allows zero, one, or many roots). Cycle detection
+    // stays on the backend, which is the source of truth on create.
     return null;
   })();
 
+  // validationError drives the Create/Save button's disabled state. Multi-PM's
+  // structural requirements (multiPmError) are intentionally NOT folded in here:
+  // they used to grey out the button with no visible reason. Instead they're
+  // shown inline (see the Team Members section) and re-checked at submit time,
+  // so the button stays clickable and the admin gets actionable feedback.
   const validationError =
     !projectCode.trim()
       ? "Project Code is required."
@@ -412,7 +414,7 @@ export function ProjectModal({
             : !isEditing && reportsToId === null
               ? "PM Reports To is required."
               : multiPmEnabled
-                ? multiPmError
+                ? null
                 : tooManyPms
                   ? "A Project cannot have more than 1 PM."
                   : !hasPrimary
@@ -433,12 +435,19 @@ export function ProjectModal({
       setError(validationError);
       return;
     }
+    // Multi-PM structural checks don't disable the button (so it stays
+    // clickable with inline guidance), but they still gate an actual submit
+    // — the backend runs the authoritative graph/cycle checks on create.
+    if (multiPmEnabled && multiPmError) {
+      setError(multiPmError);
+      return;
+    }
     setIsSaving(true);
     setError("");
 
     try {
-      // Multi-PM: the member's PM comes from manager_user_id; the top PM (no
-      // manager) is flagged Primary so display resolvers keep working. In
+      // Multi-PM: the member's PM comes from manager_user_id; each top-level PM
+      // (no manager) is flagged Primary so display resolvers keep working. In
       // single-PM mode the per-member fields are omitted and the PM checkbox
       // drives evaluator_type as before.
       const draftToPayload = (d: DraftAssignment) =>
@@ -684,6 +693,14 @@ export function ProjectModal({
                   </p>
                 )}
 
+                {/* Multi-PM guidance — surfaced inline so the admin can see what
+                    still needs fixing instead of a silently-disabled button. */}
+                {multiPmEnabled && multiPmError && (
+                  <p className="rounded-lg bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    {multiPmError}
+                  </p>
+                )}
+
                 {/* Existing Assignments — read-only rows, rendered BELOW the
                     draft cards (order-2) so a freshly added card sits on top.
                     Clicking the pencil promotes the row into draftAssignments
@@ -878,7 +895,7 @@ export function ProjectModal({
                               updateDraft(draft.tempId, "manager_user_id", e.target.value)
                             }
                           >
-                            <option value="">— Top PM —</option>
+                            <option value="">— None (top-level PM) —</option>
                             {users
                               .filter((u) => u.id !== Number(draft.user_id))
                               .map((u) => (
