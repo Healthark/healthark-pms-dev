@@ -636,7 +636,12 @@ def _orphaned_mentees(db: DbSession, org_id: int) -> list[User]:
 def _pm_less_projects(db: DbSession, org_id: int) -> list[Project]:
     """Active, non-completed projects with no active Primary assignment whose
     user is also active — covers a PM deactivated or demoted without a
-    replacement."""
+    replacement.
+
+    Multi-PM projects (``multi_pm_enabled``) are excluded: they deliberately may
+    have zero top-level Primaries (every member reports to a per-member PM), so a
+    missing single PM is not a coverage gap for them.
+    """
     covered_ids = [
         pid
         for (pid,) in db.query(ProjectAssignment.project_id)
@@ -655,6 +660,7 @@ def _pm_less_projects(db: DbSession, org_id: int) -> list[Project]:
         .filter(
             Project.org_id == org_id,
             Project.is_deleted == False,  # noqa: E712
+            Project.multi_pm_enabled == False,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
             Project.id.notin_(covered_ids),
         )

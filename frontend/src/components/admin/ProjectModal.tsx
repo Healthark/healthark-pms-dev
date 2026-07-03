@@ -71,6 +71,12 @@ function tempId(): string {
   return `tmp_${nextTemp}`;
 }
 
+/** Member pickers must offer active users only, matching the non-deleted
+ *  `users` prop the modal is handed. UserCombobox pulls the full org list
+ *  (incl. deactivated) from useUsers(), so this narrows it back. Module-scope
+ *  keeps the reference stable so the combobox's memo doesn't thrash. */
+const notDeleted = (u: UserResponse): boolean => !u.is_deleted;
+
 function toDateInput(val: string | null | undefined): string {
   if (!val) return "";
   return val.slice(0, 10);
@@ -300,6 +306,19 @@ export function ProjectModal({
   );
   // Soft-removed rows render greyed at the very bottom with a Re-add action.
   const removedAssignments = existingAssignments.filter((a) => a.is_deleted);
+
+  // Members who serve as a PM — drives the read-only "PM" badge. In single-PM
+  // mode that's the one Primary; in multi-PM every top-level PM (Primary) plus
+  // anyone who is another member's manager gets the badge, so the project's
+  // multiple PMs are all visible at a glance.
+  const managerUserIds = new Set(
+    existingAssignments
+      .filter((a) => !a.is_deleted && a.manager_id != null)
+      .map((a) => a.manager_id as number),
+  );
+  const isPmMember = (a: AssignmentResponse): boolean =>
+    a.evaluator_type === "Primary" ||
+    (multiPmEnabled && managerUserIds.has(a.user_id));
 
   const assignedUserIds = new Set([
     ...visibleExistingAssignments.map((a) => a.user_id),
@@ -711,12 +730,11 @@ export function ProjectModal({
                   <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-text-main">{a.user_name}</span>
-                      {a.assignment_role && <span className="ml-2 text-xs text-text-muted">({a.assignment_role})</span>}
                     </div>
                     {a.department_name && (
                       <span className="text-xs text-text-muted shrink-0">{a.department_name}</span>
                     )}
-                    {a.evaluator_type === "Primary" && (
+                    {isPmMember(a) && (
                       <span className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand shrink-0">PM</span>
                     )}
                     {a.assigned_date && (
@@ -790,29 +808,15 @@ export function ProjectModal({
                     <div className="grid grid-cols-12 gap-2 items-end">
                       {/* Practitioner — 4 cols (locked when editing an existing row) */}
                       <div className="col-span-4">
-                        <label className={LABEL_CLS}>Practitioner</label>
-                        <select
-                          className={INPUT_CLS}
-                          aria-label="Practitioner"
-                          value={draft.user_id}
+                        <UserCombobox
+                          value={draft.user_id ? Number(draft.user_id) : null}
+                          onChange={(userId) => handleUserSelect(draft.tempId, userId !== null ? String(userId) : "")}
+                          label="Practitioner"
+                          placeholder="Search practitioner…"
                           disabled={isEditDraft}
-                          onChange={(e) => handleUserSelect(draft.tempId, e.target.value)}
-                          title={isEditDraft ? "Change the practitioner by removing this member and adding the new one." : undefined}
-                        >
-                          <option value="">Select…</option>
-                          {users
-                            .filter((u) => {
-                              const isSelf = String(u.id) === draft.user_id;
-                              // Hide already-assigned members and the project's
-                              // secondary evaluator (who must stay off the team).
-                              if (assignedUserIds.has(u.id) && !isSelf) return false;
-                              if (u.id === secondaryEvaluatorId && !isSelf) return false;
-                              return true;
-                            })
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>{u.full_name}</option>
-                            ))}
-                        </select>
+                          excludeIds={[...assignedUserIds, ...(secondaryEvaluatorId !== null ? [secondaryEvaluatorId] : [])]}
+                          filter={notDeleted}
+                        />
                       </div>
 
                       {/* Role (auto-filled from designation) */}
@@ -886,46 +890,26 @@ export function ProjectModal({
                     <div className="grid grid-cols-12 gap-2">
                       {multiPmEnabled && (
                         <div className="col-span-4">
-                          <label className={LABEL_CLS}>Project Manager</label>
-                          <select
-                            className={INPUT_CLS}
-                            aria-label="Project Manager"
-                            value={draft.manager_user_id}
-                            onChange={(e) =>
-                              updateDraft(draft.tempId, "manager_user_id", e.target.value)
-                            }
-                          >
-                            <option value="">— None (top-level PM) —</option>
-                            {users
-                              .filter((u) => u.id !== Number(draft.user_id))
-                              .map((u) => (
-                                <option key={u.id} value={u.id}>
-                                  {u.full_name}
-                                </option>
-                              ))}
-                          </select>
+                          <UserCombobox
+                            value={draft.manager_user_id ? Number(draft.manager_user_id) : null}
+                            onChange={(id) => updateDraft(draft.tempId, "manager_user_id", id !== null ? String(id) : "")}
+                            label="Project Manager"
+                            placeholder="Search project manager…"
+                            excludeIds={draft.user_id ? [Number(draft.user_id)] : []}
+                            filter={notDeleted}
+                          />
                         </div>
                       )}
                       {multiPmEnabled && (
                         <div className="col-span-4">
-                          <label className={LABEL_CLS}>Secondary Evaluator</label>
-                          <select
-                            className={INPUT_CLS}
-                            aria-label="Secondary Evaluator"
-                            value={draft.secondary_evaluator_id}
-                            onChange={(e) =>
-                              updateDraft(draft.tempId, "secondary_evaluator_id", e.target.value)
-                            }
-                          >
-                            <option value="">— None —</option>
-                            {users
-                              .filter((u) => u.id !== Number(draft.user_id))
-                              .map((u) => (
-                                <option key={u.id} value={u.id}>
-                                  {u.full_name}
-                                </option>
-                              ))}
-                          </select>
+                          <UserCombobox
+                            value={draft.secondary_evaluator_id ? Number(draft.secondary_evaluator_id) : null}
+                            onChange={(id) => updateDraft(draft.tempId, "secondary_evaluator_id", id !== null ? String(id) : "")}
+                            label="Secondary Evaluator"
+                            placeholder="Search evaluator…"
+                            excludeIds={draft.user_id ? [Number(draft.user_id)] : []}
+                            filter={notDeleted}
+                          />
                         </div>
                       )}
                       <div className={multiPmEnabled ? "col-span-4" : "col-span-3"}>
