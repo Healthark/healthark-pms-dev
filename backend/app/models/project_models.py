@@ -39,8 +39,17 @@ class Project(Base):
     expected_end_date = Column(Date, nullable=True)
 
     # Whether the project is billable to a client (from Keka `isBillable`).
-    # Informational for now; surfaced in the per-employee review-scope tab.
+    # Informational; shown as context in the Review Eligibility tab.
     is_billable = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    # Whether this project is eligible for review. Opt-out: default true. HR
+    # unchecks it in the Review Eligibility tab to remove the WHOLE project —
+    # every member AND the PM — from every review surface (PM queue, My Reviews,
+    # secondary queue, management/All Reviews, reports-to, dashboard counts).
+    # A pure filter: nothing is deleted, so re-checking restores it instantly.
+    review_eligible = Column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
     # The senior person who reviews the PM's own performance on this project.
     # This is NOT the PM themselves — it's their reporting line for this project.
@@ -125,15 +134,6 @@ class ProjectAssignment(Base):
 
     # When this employee was assigned to the project
     assigned_date = Column(Date, nullable=True)
-
-    # Whether this employee is IN SCOPE for project review on this project.
-    # Opt-out: default true (every existing membership is reviewed). An admin
-    # unchecks it in the review-scope tab to exclude the (employee, project)
-    # pair from all review surfaces (PM queue, My Reviews, secondary queue,
-    # completion counts). Independent of is_deleted (which is team removal).
-    review_included = Column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

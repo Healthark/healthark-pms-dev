@@ -297,6 +297,8 @@ def _build_mentee_project_assignments(
         )
         .all()
     )
+    # Ineligible projects are hidden from the mentor's review views too.
+    assignments = [a for a in assignments if a.project and a.project.review_eligible]
     # Mentor's own evaluator role on each of the mentee's projects.
     mentee_project_ids = [a.project_id for a in assignments] if assignments else []
     mentor_assignments = (
@@ -329,10 +331,12 @@ def _build_mentee_project_assignments(
 
     project_reviews = (
         db.query(ProjectReview)
+        .join(Project, Project.id == ProjectReview.project_id)
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.user_id == mentee_id,
             ProjectReview.is_deleted == False,  # noqa: E712
+            Project.review_eligible == True,  # noqa: E712
         )
         .order_by(
             ProjectReview.updated_at.desc().nullslast(),
@@ -477,10 +481,12 @@ def list_mentee_summaries(
 
     assignments_all = (
         db.query(ProjectAssignment)
+        .join(Project, Project.id == ProjectAssignment.project_id)
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id.in_(mentee_ids),
             ProjectAssignment.is_deleted == False,  # noqa: E712
+            Project.review_eligible == True,  # noqa: E712
         )
         .all()
     )
@@ -490,10 +496,12 @@ def list_mentee_summaries(
 
     reviews_all = (
         db.query(ProjectReview)
+        .join(Project, Project.id == ProjectReview.project_id)
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.user_id.in_(mentee_ids),
             ProjectReview.is_deleted == False,  # noqa: E712
+            Project.review_eligible == True,  # noqa: E712
         )
         .all()
     )

@@ -37,6 +37,7 @@ from app.models.goal_models import Goal, GoalType, ApprovalStatus, POST_APPROVAL
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.user_models import User
 from app.models.annual_review_models import AnnualReview, ReviewStatus
+from app.models.project_models import Project
 from app.models.project_review_models import (
     ProjectReview,
     ProjectReviewEvaluator,
@@ -180,10 +181,12 @@ def get_dashboard_summary(
     # opened) or DRAFT (PM saved partial work) until they submit → REVIEWED.
     project_reviews_pending_primary: int = (
         db.query(func.count(ProjectReview.id))
+        .join(Project, Project.id == ProjectReview.project_id)
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.reviewer_id == current_user.id,
             ProjectReview.is_deleted == False,  # noqa: E712
+            Project.review_eligible == True,  # noqa: E712
             ProjectReview.status.in_(
                 [ProjectReviewStatus.PENDING.value, ProjectReviewStatus.DRAFT.value]
             ),
@@ -196,14 +199,16 @@ def get_dashboard_summary(
     # opens, so DRAFT is the canonical "owed" state.
     project_reviews_pending_secondary: int = (
         db.query(func.count(ProjectReviewEvaluator.id))
-        # Join the parent review so an excluded (soft-deleted) pair's leftover
-        # draft impact statement doesn't keep counting as owed work.
+        # Join through to the project so a draft on an ineligible project (or a
+        # soft-deleted review) doesn't keep counting as owed work.
         .join(ProjectReview, ProjectReview.id == ProjectReviewEvaluator.project_review_id)
+        .join(Project, Project.id == ProjectReview.project_id)
         .filter(
             ProjectReviewEvaluator.org_id == current_user.org_id,
             ProjectReviewEvaluator.evaluator_id == current_user.id,
             ProjectReviewEvaluator.status == EvaluatorStatus.DRAFT.value,
             ProjectReview.is_deleted == False,  # noqa: E712
+            Project.review_eligible == True,  # noqa: E712
         )
         .scalar()
     ) or 0
