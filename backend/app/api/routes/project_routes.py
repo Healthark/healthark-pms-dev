@@ -91,6 +91,10 @@ def _build_assignment_response(assignment: ProjectAssignment, db: DbSession) -> 
         department_name=dept.name if dept else None,
         evaluator_type=assignment.evaluator_type,
         assigned_date=assignment.assigned_date,
+        manager_id=assignment.manager_id,
+        manager_name=_resolve_user_name(db, assignment.manager_id),
+        secondary_evaluator_id=assignment.secondary_evaluator_id,
+        secondary_evaluator_name=_resolve_user_name(db, assignment.secondary_evaluator_id),
         created_at=assignment.created_at,
         is_deleted=bool(assignment.is_deleted),
         removed_at=assignment.removed_at,
@@ -455,6 +459,11 @@ def create_project(
     )
     for _member in project_in.assignments:
         _validate_org_user(db, current_user.org_id, _member.user_id, "Assigned member")
+        if project_in.multi_pm_enabled:
+            _validate_org_user(db, current_user.org_id, _member.manager_id, "Project Manager")
+            _validate_org_user(
+                db, current_user.org_id, _member.secondary_evaluator_id, "Secondary Evaluator"
+            )
 
     new_project = Project(
         org_id=current_user.org_id,
@@ -464,21 +473,54 @@ def create_project(
         start_date=project_in.start_date,
         expected_end_date=project_in.expected_end_date,
         reports_to_id=project_in.reports_to_id,
-        secondary_evaluator_id=project_in.secondary_evaluator_id,
+        # In multi-PM mode the Secondary is captured per member, so the
+        # project-level field is left unset.
+        secondary_evaluator_id=(
+            None if project_in.multi_pm_enabled else project_in.secondary_evaluator_id
+        ),
+        multi_pm_enabled=project_in.multi_pm_enabled,
     )
     db.add(new_project)
     db.flush()
 
+    # Single-PM: the one Primary's user_id, used to populate every other
+    # member's manager_id so the per-member evaluation link exists in BOTH
+    # modes (multi-PM supplies it directly via the hierarchy).
+    single_pm_user_id = (
+        None
+        if project_in.multi_pm_enabled
+        else next(
+            (a.user_id for a in project_in.assignments if a.evaluator_type == "Primary"),
+            None,
+        )
+    )
+
     for assignment_in in project_in.assignments:
         assignment_in = _auto_fill_assignment(assignment_in, db)
+        if project_in.multi_pm_enabled:
+            # Root (no manager) is the headline Primary; every other member is
+            # a regular member whose manager_id drives who evaluates them.
+            evaluator_type = "Primary" if assignment_in.manager_id is None else None
+            manager_id = assignment_in.manager_id
+            secondary_evaluator_id = assignment_in.secondary_evaluator_id
+        else:
+            evaluator_type = assignment_in.evaluator_type
+            manager_id = (
+                None
+                if assignment_in.user_id == single_pm_user_id
+                else single_pm_user_id
+            )
+            secondary_evaluator_id = None
         db.add(ProjectAssignment(
             org_id=current_user.org_id,
             project_id=new_project.id,
             user_id=assignment_in.user_id,
             assignment_role=assignment_in.assignment_role,
             department_id=assignment_in.department_id,
-            evaluator_type=assignment_in.evaluator_type,
+            evaluator_type=evaluator_type,
             assigned_date=assignment_in.assigned_date,
+            manager_id=manager_id,
+            secondary_evaluator_id=secondary_evaluator_id,
         ))
 
     # Notify each initial team member they've been added (in-app + email).
@@ -530,6 +572,7 @@ def create_project(
         is_deleted=new_project.is_deleted,
         created_at=new_project.created_at,
         updated_at=new_project.updated_at,
+        multi_pm_enabled=new_project.multi_pm_enabled,
         member_count=len(assignment_responses),
         assignments=assignment_responses,
     )
@@ -583,6 +626,7 @@ def get_project_detail(
         is_deleted=project.is_deleted,
         created_at=project.created_at,
         updated_at=project.updated_at,
+        multi_pm_enabled=project.multi_pm_enabled,
         member_count=len(assignment_responses),
         assignments=assignment_responses,
     )
@@ -767,6 +811,30 @@ def add_assignment(
     # The member must be a real, active user in this org (guards dangling
     # FK / cross-org assignment).
     _validate_org_user(db, current_user.org_id, assignment_in.user_id, "Assigned member")
+    # Multi-PM references (the member's PM + per-member Secondary) must be valid
+    # users too. The PM must be an existing member of this project.
+    if project.multi_pm_enabled:
+        _validate_org_user(db, current_user.org_id, assignment_in.manager_id, "Project Manager")
+        _validate_org_user(
+            db, current_user.org_id, assignment_in.secondary_evaluator_id, "Secondary Evaluator"
+        )
+        if assignment_in.manager_id is not None:
+            if assignment_in.manager_id == assignment_in.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A member cannot be their own Project Manager.",
+                )
+            manager_is_member = db.query(ProjectAssignment.id).filter(
+                ProjectAssignment.project_id == project_id,
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.user_id == assignment_in.manager_id,
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            ).first()
+            if manager_is_member is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="The member's Project Manager must already be a member of the project.",
+                )
 
     # One row per (project, user) — unique index. A soft-deleted row is
     # RESTORED below (re-add) rather than inserted again; an active row 409s.
@@ -833,6 +901,19 @@ def add_assignment(
     # Auto-fill role and department from user profile
     assignment_in = _auto_fill_assignment(assignment_in, db)
 
+    # Resolve the per-member evaluation link. Multi-PM takes it from the
+    # payload; single-PM links the member to the project's Primary (kept in
+    # sync so the per-member link is populated in both modes).
+    if project.multi_pm_enabled:
+        resolved_manager_id = assignment_in.manager_id
+        resolved_secondary_id = assignment_in.secondary_evaluator_id
+    else:
+        pm_id, _ = _resolve_project_pm(db, project.id, current_user.org_id)
+        resolved_manager_id = (
+            None if assignment_in.evaluator_type == "Primary" else pm_id
+        )
+        resolved_secondary_id = None
+
     if existing:
         # Re-add: restore the soft-deleted row in place (preserves history,
         # honours the unique (project, user) index) with the new field values.
@@ -840,6 +921,8 @@ def add_assignment(
         existing.department_id = assignment_in.department_id
         existing.evaluator_type = assignment_in.evaluator_type
         existing.assigned_date = assignment_in.assigned_date
+        existing.manager_id = resolved_manager_id
+        existing.secondary_evaluator_id = resolved_secondary_id
         existing.is_deleted = False
         existing.removed_at = None
         existing.removed_by_id = None
@@ -853,6 +936,8 @@ def add_assignment(
             department_id=assignment_in.department_id,
             evaluator_type=assignment_in.evaluator_type,
             assigned_date=assignment_in.assigned_date,
+            manager_id=resolved_manager_id,
+            secondary_evaluator_id=resolved_secondary_id,
         )
         db.add(new_assignment)
 
@@ -925,6 +1010,21 @@ def update_assignment(
         )
 
     update_data = assignment_in.model_dump(exclude_unset=True)
+
+    # Multi-PM references (the member's PM + per-member Secondary) must point at
+    # valid users, and a member can't manage themselves. The setattr loop below
+    # persists them once validated.
+    if update_data.get("manager_id") is not None:
+        _validate_org_user(db, current_user.org_id, update_data["manager_id"], "Project Manager")
+        if update_data["manager_id"] == assignment.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member cannot be their own Project Manager.",
+            )
+    if update_data.get("secondary_evaluator_id") is not None:
+        _validate_org_user(
+            db, current_user.org_id, update_data["secondary_evaluator_id"], "Secondary Evaluator"
+        )
 
     # Joined Date guard — when the client is setting/changing the assigned
     # date, the new value must not precede the project's start date.

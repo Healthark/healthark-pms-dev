@@ -49,7 +49,18 @@ class Project(Base):
     # The single Secondary evaluator for this project. Provides an impact
     # statement after the PM completes their review. May or may not be a
     # project member (no ProjectAssignment row required).
+    # In multi-PM mode this project-level field is unused — the Secondary is
+    # captured per member on ProjectAssignment.secondary_evaluator_id instead.
     secondary_evaluator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # When True the project uses a PM hierarchy: each member is evaluated by
+    # their own ProjectAssignment.manager_id (rather than one Primary evaluating
+    # everyone). The top PM (manager_id NULL) is still marked evaluator_type
+    # "Primary" and is evaluated by reports_to_id. Default False = classic
+    # single-PM behaviour.
+    multi_pm_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Lifecycle. "active" by default. Admin flips to "completed" via the
     # dedicated /complete endpoint, which only changes these three fields;
@@ -100,6 +111,18 @@ class ProjectAssignment(Base):
     # (Project.secondary_evaluator_id), not a row here.
     evaluator_type = Column(String, nullable=True)
 
+    # ── Multi-PM hierarchy (Project.multi_pm_enabled) ────────────────
+    # The PM who evaluates THIS member within the project. NULL for the top
+    # PM (evaluated by the project's reports_to_id) and for single-PM
+    # projects that predate the backfill. In a hierarchy A→(B,C), B→(X,Y,Z):
+    # X/Y/Z.manager_id = B, B/C.manager_id = A, A.manager_id = NULL.
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Per-member Secondary evaluator (multi-PM mode). Writes an impact
+    # statement after this member's PM evaluates them. NULL falls back to the
+    # project-level Project.secondary_evaluator_id (single-PM mode).
+    secondary_evaluator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     # When this employee was assigned to the project
     assigned_date = Column(Date, nullable=True)
 
@@ -130,4 +153,6 @@ class ProjectAssignment(Base):
     project = relationship("Project", back_populates="assignments")
     user = relationship("User", foreign_keys=[user_id])
     removed_by = relationship("User", foreign_keys=[removed_by_id])
+    manager = relationship("User", foreign_keys=[manager_id])
+    secondary_evaluator = relationship("User", foreign_keys=[secondary_evaluator_id])
     department = relationship("Department")

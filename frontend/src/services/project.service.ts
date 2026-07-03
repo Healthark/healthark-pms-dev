@@ -27,6 +27,12 @@ export interface AssignmentResponse {
   department_name: string | null;
   evaluator_type: string | null; // "Primary" | "Secondary" | null
   assigned_date: string | null;
+  /** Multi-PM hierarchy: the member's PM + per-member Secondary, with names
+   *  resolved for display. Null on single-PM projects. */
+  manager_id: number | null;
+  manager_name: string | null;
+  secondary_evaluator_id: number | null;
+  secondary_evaluator_name: string | null;
   created_at: string;
   /** Soft-delete audit. is_deleted members render greyed at the bottom of the
    *  team list; removed_by_name/removed_at power the "… was removed by … on …"
@@ -42,6 +48,9 @@ export interface AssignmentCreatePayload {
   department_id?: number | null;
   evaluator_type?: "Primary" | null;
   assigned_date?: string | null;
+  /** Multi-PM: the PM who evaluates this member (null = top PM). */
+  manager_id?: number | null;
+  secondary_evaluator_id?: number | null;
 }
 
 export interface AssignmentUpdatePayload {
@@ -49,6 +58,8 @@ export interface AssignmentUpdatePayload {
   department_id?: number | null;
   evaluator_type?: "Primary" | null;
   assigned_date?: string | null;
+  manager_id?: number | null;
+  secondary_evaluator_id?: number | null;
 }
 
 export interface ProjectResponse {
@@ -72,6 +83,8 @@ export interface ProjectResponse {
   created_at: string;
   updated_at: string | null;
   member_count: number;
+  /** When true the team uses a PM hierarchy (per-member manager + secondary). */
+  multi_pm_enabled: boolean;
 }
 
 export interface ProjectDetail extends ProjectResponse {
@@ -100,8 +113,11 @@ export interface ProjectCreatePayload {
   // Required by the backend Pydantic validator.
   reports_to_id: number;
   secondary_evaluator_id?: number | null;
-  // Must contain exactly one entry with evaluator_type === "Primary".
+  // Single-PM: exactly one entry with evaluator_type === "Primary".
+  // Multi-PM: exactly one member with manager_id null (the top PM).
   assignments: AssignmentCreatePayload[];
+  /** Multi-PM mode: members carry per-member manager_id + secondary_evaluator_id. */
+  multi_pm_enabled?: boolean;
 }
 
 export interface ProjectUpdatePayload {
@@ -112,6 +128,7 @@ export interface ProjectUpdatePayload {
   expected_end_date?: string | null;
   reports_to_id?: number | null;
   secondary_evaluator_id?: number | null;
+  multi_pm_enabled?: boolean;
 }
 
 // ── Service ─────────────────────────────────────────────────────────

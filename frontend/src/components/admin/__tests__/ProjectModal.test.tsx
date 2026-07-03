@@ -94,6 +94,33 @@ describe("ProjectModal — team members", () => {
   });
 });
 
+describe("ProjectModal — multiple PM support", () => {
+  it("swaps the member form to per-member PM + Secondary when enabled", async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(
+      screen.getByRole("switch", { name: /enable multiple pm support/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+
+    // The per-row "is PM" checkbox is gone; per-member PM + Secondary pickers
+    // take its place.
+    expect(screen.queryByLabelText(/is PM/i)).toBeNull();
+    expect(screen.getByLabelText("Project Manager")).toBeInTheDocument();
+    expect(screen.getByLabelText("Secondary Evaluator")).toBeInTheDocument();
+  });
+
+  it("keeps the is-PM checkbox in single-PM (default) mode", async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+    expect(screen.getByLabelText(/is PM/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Project Manager")).toBeNull();
+  });
+});
+
 describe("ProjectModal — removed members (edit flow)", () => {
   const assignment = (over: Record<string, unknown>) => ({
     id: 0,

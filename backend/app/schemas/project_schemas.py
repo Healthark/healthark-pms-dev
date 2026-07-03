@@ -36,6 +36,10 @@ class AssignmentCreate(BaseModel):
         description="'Primary' marks the PM. Secondary lives on the project, not the assignment.",
     )
     assigned_date: Optional[date] = None
+    # Multi-PM hierarchy (project.multi_pm_enabled). The PM who evaluates this
+    # member; None for the top PM. Per-member Secondary evaluator.
+    manager_id: Optional[int] = None
+    secondary_evaluator_id: Optional[int] = None
 
 
 class AssignmentUpdate(BaseModel):
@@ -46,6 +50,8 @@ class AssignmentUpdate(BaseModel):
         default=None, pattern=r"^Primary$"
     )
     assigned_date: Optional[date] = None
+    manager_id: Optional[int] = None
+    secondary_evaluator_id: Optional[int] = None
 
 
 class AssignmentResponse(BaseModel):
@@ -59,6 +65,12 @@ class AssignmentResponse(BaseModel):
     department_name: Optional[str] = None
     evaluator_type: Optional[str] = None
     assigned_date: Optional[date] = None
+    # Multi-PM hierarchy — the member's PM + per-member Secondary, with names
+    # resolved for display. Null on single-PM projects.
+    manager_id: Optional[int] = None
+    manager_name: Optional[str] = None
+    secondary_evaluator_id: Optional[int] = None
+    secondary_evaluator_name: Optional[str] = None
     created_at: datetime
     # Soft-delete audit. is_deleted=True members render greyed at the bottom of
     # the team list; removed_by_name/removed_at power the "… was removed by …
@@ -93,9 +105,17 @@ class ProjectCreate(BaseModel):
         description="Single Secondary evaluator for the project; optional, editable later.",
     )
     assignments: list[AssignmentCreate] = Field(default_factory=list)
+    multi_pm_enabled: bool = Field(
+        default=False,
+        description="When True the team uses a PM hierarchy (per-member manager_id + secondary) instead of one Primary evaluating everyone.",
+    )
 
     @model_validator(mode="after")
     def _require_one_primary(self) -> "ProjectCreate":
+        # Multi-PM projects validate their hierarchy in _validate_hierarchy
+        # instead of the single-Primary rule.
+        if self.multi_pm_enabled:
+            return self
         primaries = [a for a in self.assignments if a.evaluator_type == "Primary"]
         if len(primaries) != 1:
             raise ValueError(
@@ -119,12 +139,67 @@ class ProjectCreate(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _validate_hierarchy(self) -> "ProjectCreate":
+        """Multi-PM only: validate the per-member PM graph.
+
+        - exactly one top PM (a member with no manager_id),
+        - every manager_id references another project member (no outsiders),
+        - no member manages themselves,
+        - the manager graph has no cycles,
+        - a member isn't their own Secondary,
+        - PM Reports To isn't the top PM (reviewer != reviewee).
+        """
+        if not self.multi_pm_enabled:
+            return self
+        assignments = self.assignments
+        if not assignments:
+            raise ValueError(
+                "A multi-PM project needs at least one member (the top PM)."
+            )
+        member_ids = {a.user_id for a in assignments}
+        roots = [a for a in assignments if a.manager_id is None]
+        if len(roots) != 1:
+            raise ValueError(
+                "A multi-PM project needs exactly one top PM "
+                "(a member with no Project Manager assigned)."
+            )
+        for a in assignments:
+            if a.manager_id is not None:
+                if a.manager_id == a.user_id:
+                    raise ValueError("A member cannot be their own Project Manager.")
+                if a.manager_id not in member_ids:
+                    raise ValueError(
+                        "Each member's Project Manager must also be a member of the project."
+                    )
+            if (
+                a.secondary_evaluator_id is not None
+                and a.secondary_evaluator_id == a.user_id
+            ):
+                raise ValueError("A member cannot be their own Secondary Evaluator.")
+        # Cycle detection — walk each member up the manager chain to the root.
+        manager_of = {a.user_id: a.manager_id for a in assignments}
+        for a in assignments:
+            seen: set[int] = set()
+            cur: Optional[int] = a.user_id
+            while cur is not None:
+                if cur in seen:
+                    raise ValueError("The PM hierarchy contains a cycle.")
+                seen.add(cur)
+                cur = manager_of.get(cur)
+        if self.reports_to_id is not None and self.reports_to_id == roots[0].user_id:
+            raise ValueError("PM Reports To must be a different user than the top PM.")
+        return self
+
+    @model_validator(mode="after")
     def _no_reviewer_role_overlap(self) -> "ProjectCreate":
         """The PM, the senior who reviews them ("Reports To"), and the
         Secondary evaluator must be three distinct people. Allowing any
         two of these to be the same user would let one person review
         themselves or hold both reviewer roles, breaking the chain.
         """
+        # Single-PM only — multi-PM distinctness is handled in _validate_hierarchy.
+        if self.multi_pm_enabled:
+            return self
         primaries = [a for a in self.assignments if a.evaluator_type == "Primary"]
         pm_user_id = primaries[0].user_id if primaries else None
 
@@ -182,6 +257,7 @@ class ProjectUpdate(BaseModel):
     expected_end_date: Optional[date] = None
     reports_to_id: Optional[int] = None
     secondary_evaluator_id: Optional[int] = None
+    multi_pm_enabled: Optional[bool] = None
 
 
 class ProjectResponse(BaseModel):
@@ -199,6 +275,7 @@ class ProjectResponse(BaseModel):
     pm_name: Optional[str] = None
     secondary_evaluator_id: Optional[int] = None
     secondary_evaluator_name: Optional[str] = None
+    multi_pm_enabled: bool = False
     status: str = "active"
     completed_at: Optional[datetime] = None
     completed_by_name: Optional[str] = None
