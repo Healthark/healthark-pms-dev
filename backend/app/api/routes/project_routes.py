@@ -148,7 +148,14 @@ def _warn_if_project_pm_less(
     db: DbSession, org_id: int, actor_id: int, project_id: int
 ) -> None:
     """If the project now has no active Primary (PM), broadcast an in-app
-    coverage-gap warning to all admins. Called after a PM demotion."""
+    coverage-gap warning to all admins. Called after a PM demotion.
+
+    Multi-PM projects are exempt: they may legitimately have no single top-level
+    PM (each member reports to a per-member PM), so this is not a gap for them.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project is not None and project.multi_pm_enabled:
+        return
     remaining_primary = db.query(ProjectAssignment.id).filter(
         ProjectAssignment.project_id == project_id,
         ProjectAssignment.org_id == org_id,
@@ -157,7 +164,6 @@ def _warn_if_project_pm_less(
     ).first()
     if remaining_primary is not None:
         return
-    project = db.query(Project).filter(Project.id == project_id).first()
     warn_admins_coverage_gap(
         db,
         org_id=org_id,

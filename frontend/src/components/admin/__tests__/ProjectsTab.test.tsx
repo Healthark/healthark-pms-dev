@@ -15,6 +15,9 @@ import userEvent from "@testing-library/user-event";
 import type { ProjectQuery } from "../../../services/project.service";
 
 const useAdminProjectsMock = vi.fn();
+// Mutable page state so individual tests can swap in their own project rows
+// (reset to PAGE in beforeEach).
+const projectsState = vi.hoisted(() => ({ data: null as unknown }));
 
 function makeProject(overrides: Record<string, unknown> = {}) {
   return {
@@ -35,6 +38,7 @@ function makeProject(overrides: Record<string, unknown> = {}) {
     completed_at: null,
     completed_by_name: null,
     is_deleted: false,
+    multi_pm_enabled: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: null,
     member_count: 3,
@@ -56,7 +60,7 @@ vi.mock("../../../queries/adminProjects", () => ({
   adminProjectsQueryKey: ["admin", "projects"],
   useAdminProjects: (q: ProjectQuery) => {
     useAdminProjectsMock(q);
-    return { data: PAGE, isLoading: false, isFetching: false };
+    return { data: projectsState.data, isLoading: false, isFetching: false };
   },
   useProjectsFilterOptions: () => ({
     data: { years: [2026, 2025], pms: ["Alice", "Bob"] },
@@ -106,6 +110,7 @@ void React;
 beforeEach(() => {
   vi.clearAllMocks();
   coverageState.data = { orphaned_mentees: [], pm_less_projects: [] };
+  projectsState.data = PAGE;
 });
 
 describe("ProjectsTab — server-side pagination", () => {
@@ -172,5 +177,34 @@ describe("ProjectsTab — server-side pagination", () => {
     const apolloRow = screen.getByText("Apollo").closest("tr");
     expect(apolloRow?.getAttribute("title")).toBeFalsy();
     expect(apolloRow?.className).not.toMatch(/bg-red/);
+  });
+
+  it("shows an italic '(Multiple PM)' note in the PM column for multi-PM projects", () => {
+    projectsState.data = {
+      items: [
+        makeProject({ id: 1, name: "Apollo", pm_name: "Alice" }),
+        makeProject({
+          id: 2,
+          name: "Borealis",
+          multi_pm_enabled: true,
+          pm_name: "Ignored", // a single pm_name is meaningless in multi-PM
+        }),
+      ],
+      total: 2,
+      page: 1,
+      per_page: 25,
+    };
+    render(<ProjectsTab />);
+
+    // Single-PM project shows the resolved PM name in its row… ("Alice" also
+    // appears as a PM-filter option, so scope the assertion to the row).
+    const apolloRow = screen.getByText("Apollo").closest("tr") as HTMLElement;
+    expect(within(apolloRow).getByText("Alice")).toBeInTheDocument();
+    // …the multi-PM project shows the note instead of its (meaningless) pm_name.
+    const borealisRow = screen.getByText("Borealis").closest("tr") as HTMLElement;
+    const note = within(borealisRow).getByText("(Multiple PM)");
+    expect(note).toBeInTheDocument();
+    expect(note.className).toMatch(/italic/);
+    expect(within(borealisRow).queryByText("Ignored")).not.toBeInTheDocument();
   });
 });
