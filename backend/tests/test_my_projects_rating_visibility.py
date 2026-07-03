@@ -96,11 +96,11 @@ def _scenario(db):
 
     db.add(ProjectAssignment(
         org_id=org.id, project_id=project.id, user_id=pm.id,
-        evaluator_type="Primary", is_deleted=False, review_included=True,
+        evaluator_type="Primary", is_deleted=False,
     ))
     db.add(ProjectAssignment(
         org_id=org.id, project_id=project.id, user_id=member.id,
-        is_deleted=False, review_included=True,
+        is_deleted=False,
     ))
     db.commit()
     return org, pm, member, project

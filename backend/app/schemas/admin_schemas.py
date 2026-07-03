@@ -330,38 +330,34 @@ class GoalAccessDetailResponse(BaseModel):
     goals: list[AdminGoalBrief]
 
 
-# ── Project Review Scope (per-employee, per-project) ─────────────────
+# ── Project Review Eligibility (per-project, org-wide) ───────────────
 
-class ReviewScopeProject(BaseModel):
-    """One of an employee's active member projects with its current review-scope
-    state — a row in the review-scope tab's checkbox list. `is_billable` is
-    shown as context; `review_included` drives the checkbox."""
+class ReviewEligibilityProject(BaseModel):
+    """One active project with its current review-eligibility — a row in the
+    Review Eligibility tab's checkbox list. `is_billable` is context;
+    `review_eligible` drives the checkbox."""
     project_id: int
     project_name: str
     project_code: str
     is_billable: bool
-    review_included: bool
+    review_eligible: bool
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class EmployeeReviewScopeResponse(BaseModel):
-    """GET /admin/review-scope/{user_id} — the employee plus their active member
-    projects (evaluator_type IS NULL, not removed, project active) and whether
-    each is currently in review scope."""
-    user_id: int
-    user_name: str
-    employee_code: str
-    projects: list[ReviewScopeProject]
+class ReviewEligibilityResponse(BaseModel):
+    """GET /admin/review-eligibility — every active project and whether it is
+    currently eligible for review."""
+    projects: list[ReviewEligibilityProject]
 
 
-class ReviewScopeProjectUpdate(BaseModel):
-    """One project's desired review-scope state in the PATCH payload."""
+class ReviewEligibilityProjectUpdate(BaseModel):
+    """One project's desired eligibility in the PATCH payload."""
     project_id: int
-    review_included: bool
+    review_eligible: bool
 
 
-class ReviewScopeUpdate(BaseModel):
-    """PATCH /admin/review-scope/{user_id} — desired scope for a set of the
-    employee's projects. Only the listed projects are changed."""
-    projects: list[ReviewScopeProjectUpdate]
+class ReviewEligibilityUpdate(BaseModel):
+    """PATCH /admin/review-eligibility — desired eligibility for a set of
+    projects. Only the listed projects are changed."""
+    projects: list[ReviewEligibilityProjectUpdate]

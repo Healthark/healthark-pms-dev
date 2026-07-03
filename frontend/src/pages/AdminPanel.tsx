@@ -25,7 +25,7 @@ const UserModal = lazy(() =>
 import { ExportsTab } from "../components/admin/ExportsTab";
 import { NotifyTab } from "../components/admin/NotifyTab";
 import { GoalAccessTab } from "../components/admin/GoalAccessTab";
-import { ReviewScopeTab } from "../components/admin/ReviewScopeTab";
+import { ReviewEligibilityTab } from "../components/admin/ReviewEligibilityTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
 import { useAuth } from "../hooks/useAuth";
@@ -44,7 +44,7 @@ type ActiveTab =
   | "export"
   | "settings"
   | "goal-access"
-  | "review-scope";
+  | "review-eligibility";
 
 export default function AdminPanel() {
   // ── Reference data (shared cache via ['admin', 'departments|designations']) ─
@@ -91,8 +91,8 @@ export default function AdminPanel() {
             ? "settings"
             : tabParam === "goal-access"
               ? "goal-access"
-              : tabParam === "review-scope"
-                ? "review-scope"
+              : tabParam === "review-eligibility"
+                ? "review-eligibility"
                 : "users";
   const setActiveTab = (tab: ActiveTab) => {
     setSearchParams(
@@ -274,11 +274,11 @@ export default function AdminPanel() {
           </button>
           <button
             type="button"
-            className={tabCls("review-scope")}
-            onClick={() => setActiveTab("review-scope")}
+            className={tabCls("review-eligibility")}
+            onClick={() => setActiveTab("review-eligibility")}
           >
             <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
-            Review Scope
+            Review Eligibility
           </button>
         </div>
 
@@ -308,7 +308,7 @@ export default function AdminPanel() {
 
         {activeTab === "goal-access" && <GoalAccessTab />}
 
-        {activeTab === "review-scope" && <ReviewScopeTab />}
+        {activeTab === "review-eligibility" && <ReviewEligibilityTab />}
       </div>
 
       {/* Modals — rendered outside the card so they overlay the full page.
