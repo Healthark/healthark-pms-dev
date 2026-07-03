@@ -260,30 +260,33 @@ export interface GoalAccessGrantUpdatePayload {
   period_label?: string;
 }
 
-// ── Project review scope (per-employee, per-project) ─────────────────
+// ── Project review eligibility (per-project, org-wide) ───────────────
 
-/** One of an employee's active member projects with its review-scope state —
- *  a checkbox row in the review-scope tab. Mirrors backend ReviewScopeProject. */
-export interface ReviewScopeProject {
+/** One active project with its review-eligibility — a checkbox row in the
+ *  Review Eligibility tab. Mirrors backend ReviewEligibilityProject. */
+export interface ReviewEligibilityProject {
   project_id: number;
   project_name: string;
   project_code: string;
   is_billable: boolean;
-  review_included: boolean;
+  review_eligible: boolean;
 }
 
-/** GET /admin/review-scope/{user_id} payload. Mirrors backend
- *  EmployeeReviewScopeResponse. */
-export interface EmployeeReviewScope {
-  user_id: number;
-  user_name: string;
-  employee_code: string;
-  projects: ReviewScopeProject[];
+/** GET /admin/review-eligibility query — page/per_page + name/code search. */
+export interface ReviewEligibilityQuery {
+  page: number;
+  per_page: number;
+  search?: string;
 }
 
-/** PATCH /admin/review-scope/{user_id} body — only the listed projects change. */
-export interface ReviewScopeUpdatePayload {
-  projects: { project_id: number; review_included: boolean }[];
+/** PATCH /admin/review-eligibility body — only the listed projects change. */
+export interface ReviewEligibilityUpdatePayload {
+  projects: { project_id: number; review_eligible: boolean }[];
+}
+
+/** PATCH /admin/review-eligibility response — how many projects changed. */
+export interface ReviewEligibilityUpdateResult {
+  updated: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -484,25 +487,26 @@ export const adminService = {
     return res.data;
   },
 
-  // Project review scope
-  /** One employee's active member projects + whether each is in review scope. */
-  getEmployeeReviewScope: async (
-    userId: number,
-  ): Promise<EmployeeReviewScope> => {
-    const res = await apiClient.get<EmployeeReviewScope>(
-      `/admin/review-scope/${userId}`,
+  // Project review eligibility
+  /** One page of active projects + whether each is eligible for review.
+   *  Server-side search (name/code) + offset pagination. */
+  getReviewEligibility: async (
+    params: ReviewEligibilityQuery,
+  ): Promise<Page<ReviewEligibilityProject>> => {
+    const res = await apiClient.get<Page<ReviewEligibilityProject>>(
+      "/admin/review-eligibility",
+      { params },
     );
     return res.data;
   },
 
-  /** Apply review scope for a set of the employee's projects. Only the listed
-   *  projects change; excluding soft-deletes open-cycle reviews server-side. */
-  updateEmployeeReviewScope: async (
-    userId: number,
-    payload: ReviewScopeUpdatePayload,
-  ): Promise<EmployeeReviewScope> => {
-    const res = await apiClient.patch<EmployeeReviewScope>(
-      `/admin/review-scope/${userId}`,
+  /** Set eligibility for a set of projects. Only the listed projects change;
+   *  ineligible projects drop out of every review surface server-side. */
+  updateReviewEligibility: async (
+    payload: ReviewEligibilityUpdatePayload,
+  ): Promise<ReviewEligibilityUpdateResult> => {
+    const res = await apiClient.patch<ReviewEligibilityUpdateResult>(
+      "/admin/review-eligibility",
       payload,
     );
     return res.data;

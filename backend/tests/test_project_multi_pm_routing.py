@@ -119,7 +119,6 @@ def _assign(db, org, project, user, *, manager=None, primary=False, secondary=No
         evaluator_type="Primary" if primary else None,
         manager_id=manager.id if manager else None,
         secondary_evaluator_id=secondary.id if secondary else None,
-        review_included=True,
         is_deleted=False,
     )
     db.add(a)
