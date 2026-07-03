@@ -447,7 +447,11 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
                     {formatDate(project.expected_end_date)}
                   </td>
                   <td className="px-5 py-3.5 text-text-muted">
-                    {project.pm_name ?? "—"}
+                    {project.multi_pm_enabled ? (
+                      <span className="italic text-text-muted">(Multiple PM)</span>
+                    ) : (
+                      project.pm_name ?? "—"
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-text-muted">
                     {project.reports_to_name ?? "—"}

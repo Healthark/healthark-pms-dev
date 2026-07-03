@@ -142,52 +142,48 @@ class ProjectCreate(BaseModel):
     def _validate_hierarchy(self) -> "ProjectCreate":
         """Multi-PM only: validate the per-member PM graph.
 
-        - exactly one top PM (a member with no manager_id),
-        - every manager_id references another project member (no outsiders),
-        - no member manages themselves,
-        - the manager graph has no cycles,
-        - a member isn't their own Secondary,
-        - PM Reports To isn't the top PM (reviewer != reviewee).
+        The hierarchy is a forest of members: each member's manager_id is the
+        PM who evaluates them, or None when they're a top-level member reviewed
+        by "PM Reports To". Rules (PR2 — routing is now hierarchy-aware):
+
+        - a member cannot be their own Project Manager or their own Secondary,
+        - the manager graph (member -> member edges) has no cycles.
+
+        Deliberately NOT constrained (per the multi-PM design decisions):
+        - the number of roots is open — zero, one, or many top-level members
+          are allowed; "PM Reports To" reviews every root,
+        - a member's Project Manager may be ANY org user, not only a project
+          member (a non-member PM just has no review of their own here); org
+          membership is validated at the route layer,
+        - "PM Reports To" may itself be one of the project's Project Managers.
+          No one ever reviews themselves — the routing layer skips self-pairs.
         """
         if not self.multi_pm_enabled:
             return self
         assignments = self.assignments
         if not assignments:
-            raise ValueError(
-                "A multi-PM project needs at least one member (the top PM)."
-            )
-        member_ids = {a.user_id for a in assignments}
-        roots = [a for a in assignments if a.manager_id is None]
-        if len(roots) != 1:
-            raise ValueError(
-                "A multi-PM project needs exactly one top PM "
-                "(a member with no Project Manager assigned)."
-            )
+            raise ValueError("A multi-PM project needs at least one member.")
         for a in assignments:
-            if a.manager_id is not None:
-                if a.manager_id == a.user_id:
-                    raise ValueError("A member cannot be their own Project Manager.")
-                if a.manager_id not in member_ids:
-                    raise ValueError(
-                        "Each member's Project Manager must also be a member of the project."
-                    )
+            if a.manager_id is not None and a.manager_id == a.user_id:
+                raise ValueError("A member cannot be their own Project Manager.")
             if (
                 a.secondary_evaluator_id is not None
                 and a.secondary_evaluator_id == a.user_id
             ):
                 raise ValueError("A member cannot be their own Secondary Evaluator.")
-        # Cycle detection — walk each member up the manager chain to the root.
+        # Cycle detection — follow member -> member manager edges only. A
+        # manager who isn't a project member ends the walk (they can't loop
+        # back in), so only cycles among members are rejected.
         manager_of = {a.user_id: a.manager_id for a in assignments}
+        member_ids = set(manager_of)
         for a in assignments:
             seen: set[int] = set()
             cur: Optional[int] = a.user_id
-            while cur is not None:
+            while cur is not None and cur in member_ids:
                 if cur in seen:
                     raise ValueError("The PM hierarchy contains a cycle.")
                 seen.add(cur)
                 cur = manager_of.get(cur)
-        if self.reports_to_id is not None and self.reports_to_id == roots[0].user_id:
-            raise ValueError("PM Reports To must be a different user than the top PM.")
         return self
 
     @model_validator(mode="after")

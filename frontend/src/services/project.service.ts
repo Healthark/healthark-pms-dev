@@ -114,7 +114,7 @@ export interface ProjectCreatePayload {
   reports_to_id: number;
   secondary_evaluator_id?: number | null;
   // Single-PM: exactly one entry with evaluator_type === "Primary".
-  // Multi-PM: exactly one member with manager_id null (the top PM).
+  // Multi-PM: any number of members with manager_id null (top-level PMs).
   assignments: AssignmentCreatePayload[];
   /** Multi-PM mode: members carry per-member manager_id + secondary_evaluator_id. */
   multi_pm_enabled?: boolean;

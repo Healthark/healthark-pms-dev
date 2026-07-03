@@ -303,6 +303,46 @@ def test_coverage_endpoint_empty_then_populated(db):
     assert [p.id for p in after.pm_less_projects] == [project.id]
 
 
+def test_multi_pm_project_not_flagged_as_pm_less(db):
+    """Multi-PM projects legitimately may have no single top-level Primary (each
+    member reports to a per-member PM), so they must never surface as a coverage
+    gap — while a single-PM project with no PM still does."""
+    org = _org_with_settings(db)
+    admin = _user(db, org.id, role="Admin")
+    member = _user(db, org.id)
+    pm = _user(db, org.id)
+
+    # Multi-PM project with zero top-level Primaries: the member reports to a
+    # per-member PM. This is a valid state, not a gap.
+    multi = Project(
+        org_id=org.id, project_code="MP1", name="MultiProj",
+        status=PROJECT_STATUS_ACTIVE, multi_pm_enabled=True,
+    )
+    db.add(multi)
+    db.flush()
+    db.add(ProjectAssignment(
+        org_id=org.id, project_id=multi.id, user_id=member.id,
+        evaluator_type=None, manager_id=pm.id, is_deleted=False,
+    ))
+
+    # Single-PM project with no active Primary → the genuine gap, for contrast.
+    single = Project(
+        org_id=org.id, project_code="SP1", name="SingleProj",
+        status=PROJECT_STATUS_ACTIVE, multi_pm_enabled=False,
+    )
+    db.add(single)
+    db.flush()
+    db.add(ProjectAssignment(
+        org_id=org.id, project_id=single.id, user_id=member.id,
+        evaluator_type=None, is_deleted=False,
+    ))
+    db.commit()
+
+    flagged = {p.id for p in get_coverage_gaps(db, admin).pm_less_projects}
+    assert multi.id not in flagged   # multi-PM exempt
+    assert single.id in flagged      # single-PM with no PM still flagged
+
+
 def test_deactivation_warns_all_admins(db):
     org, admin1, admin2, sam, _project = _make_gap_scenario(db)
     deactivate_user(sam.id, db, admin1)

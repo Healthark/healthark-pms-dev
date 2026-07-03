@@ -1,10 +1,12 @@
 """
-Reports-to -> PM project evaluation flow.
+Reports-to -> PM project evaluation flow (single-PM projects).
 
 A project's PM (ProjectAssignment.evaluator_type == "Primary") evaluates the
 team members; the PM in turn is evaluated by the project's `reports_to` senior
-(Project.reports_to_id). These endpoints are plain functions, so we call them
-directly against an in-memory SQLite session with fabricated rows.
+(Project.reports_to_id). Post-PR2 the reports-to endpoints take the reviewee's
+user_id explicitly (a "root" — the single Primary here); multi-PM routing is
+covered in test_project_multi_pm_routing.py. These endpoints are plain
+functions, so we call them directly against an in-memory SQLite session.
 """
 from __future__ import annotations
 
@@ -125,7 +127,7 @@ def test_queue_lists_the_pm_for_the_reports_to_senior(db):
     _org, pm, senior, project, _m = _scenario(db)
     cards = get_reports_to_evaluation_queue(db, senior)
     assert len(cards) == 1
-    assert cards[0].user_id == pm.id  # the reviewee is the PM
+    assert cards[0].user_id == pm.id  # the reviewee is the PM (the single root)
     assert cards[0].project_id == project.id
     assert cards[0].review_id is None  # placeholder — no review yet
     assert cards[0].cycle == ACTIVE_CYCLE
@@ -139,7 +141,7 @@ def test_queue_empty_for_non_reports_to_and_for_the_pm(db):
 
 def test_submit_creates_pm_review_authored_by_reports_to(db):
     _org, pm, senior, project, _m = _scenario(db)
-    resp = submit_reports_to_evaluation(project.id, _payload(), db, senior)
+    resp = submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
 
     assert resp.user_id == pm.id  # PM is the reviewee
     assert resp.reviewer_id == senior.id  # reports-to is the author
@@ -155,20 +157,28 @@ def test_submit_creates_pm_review_authored_by_reports_to(db):
 
 
 def test_submit_forbidden_for_non_reports_to(db):
-    _org, _pm, _senior, project, members = _scenario(db)
+    _org, pm, _senior, project, members = _scenario(db)
     with pytest.raises(HTTPException) as ei:
-        submit_reports_to_evaluation(project.id, _payload(), db, members[0])
+        submit_reports_to_evaluation(project.id, pm.id, _payload(), db, members[0])
     assert ei.value.status_code == 403
 
 
 def test_submit_404_when_project_has_no_pm(db):
-    _org, _pm, senior, project, _m = _scenario(db)
+    _org, pm, senior, project, _m = _scenario(db)
     db.query(ProjectAssignment).filter_by(
         project_id=project.id, evaluator_type="Primary"
     ).delete()
     db.commit()
     with pytest.raises(HTTPException) as ei:
-        submit_reports_to_evaluation(project.id, _payload(), db, senior)
+        submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
+    assert ei.value.status_code == 404
+
+
+def test_submit_404_when_reviewee_is_not_a_root(db):
+    """A team member (not a root) can't be evaluated via the reports-to flow."""
+    _org, _pm, senior, project, members = _scenario(db)
+    with pytest.raises(HTTPException) as ei:
+        submit_reports_to_evaluation(project.id, members[0].id, _payload(), db, senior)
     assert ei.value.status_code == 404
 
 
@@ -190,7 +200,7 @@ def test_reports_to_can_view_pm_review_even_if_not_the_author(db):
 
 def test_pm_sees_own_review_once_reviewed(db):
     _org, pm, senior, project, _m = _scenario(db)
-    resp = submit_reports_to_evaluation(project.id, _payload(), db, senior)
+    resp = submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
     got = get_review(resp.id, db, pm)  # is_owner
     assert got.user_id == pm.id
     assert got.status == ProjectReviewStatus.REVIEWED
@@ -199,7 +209,7 @@ def test_pm_sees_own_review_once_reviewed(db):
 def test_draft_saves_without_reviewing(db):
     _org, pm, senior, project, _m = _scenario(db)
     draft = save_reports_to_evaluation_draft(
-        project.id, PMEvaluationDraft(impact_statement="WIP"), db, senior
+        project.id, pm.id, PMEvaluationDraft(impact_statement="WIP"), db, senior
     )
     assert draft.status == ProjectReviewStatus.DRAFT
     row = db.query(ProjectReview).filter_by(project_id=project.id, user_id=pm.id).one()
@@ -210,7 +220,7 @@ def test_draft_saves_without_reviewing(db):
 
 def test_management_overview_includes_the_pm_row(db):
     org, pm, senior, project, _members = _scenario(db, with_team=1)
-    submit_reports_to_evaluation(project.id, _payload(), db, senior)
+    submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
     admin = _user(db, org.id, role="Admin")
 
     summaries = get_management_overview(db, admin, None)
@@ -226,19 +236,19 @@ def test_management_overview_includes_the_pm_row(db):
 
 
 def test_submitting_the_pm_twice_returns_409(db):
-    _org, _pm, senior, project, _m = _scenario(db)
-    submit_reports_to_evaluation(project.id, _payload(), db, senior)
+    _org, pm, senior, project, _m = _scenario(db)
+    submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
     with pytest.raises(HTTPException) as ei:
-        submit_reports_to_evaluation(project.id, _payload(), db, senior)
+        submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
     assert ei.value.status_code == 409
 
 
 def test_pm_cannot_submit_the_reports_to_evaluation(db):
-    """The PM is not their project's reports-to (schema enforces PM != reports-to),
-    so they can't author their own PM evaluation via the reports-to endpoint."""
+    """The PM is not their project's reports-to, so they can't author their own
+    PM evaluation via the reports-to endpoint."""
     _org, pm, _senior, project, _m = _scenario(db)
     with pytest.raises(HTTPException) as ei:
-        submit_reports_to_evaluation(project.id, _payload(), db, pm)
+        submit_reports_to_evaluation(project.id, pm.id, _payload(), db, pm)
     assert ei.value.status_code == 403
 
 
@@ -247,15 +257,15 @@ def test_pm_cannot_edit_their_own_pm_review(db):
     is_current_pm branch would otherwise let them rewrite the evaluation their
     reports-to senior wrote about them."""
     _org, pm, senior, project, _m = _scenario(db)
-    resp = submit_reports_to_evaluation(project.id, _payload(), db, senior)
+    resp = submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
     with pytest.raises(HTTPException) as ei:
         update_review(resp.id, _payload(), db, pm)
     assert ei.value.status_code == 403
 
 
 def test_reports_to_can_edit_the_pm_review_they_authored(db):
-    _org, _pm, senior, project, _m = _scenario(db)
-    resp = submit_reports_to_evaluation(project.id, _payload(), db, senior)
+    _org, pm, senior, project, _m = _scenario(db)
+    resp = submit_reports_to_evaluation(project.id, pm.id, _payload(), db, senior)
     edited = _payload()
     edited.impact_statement = "Revised assessment of the PM."
     out = update_review(resp.id, edited, db, senior)
