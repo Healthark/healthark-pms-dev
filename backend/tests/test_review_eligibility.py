@@ -36,6 +36,11 @@ from app.schemas.admin_schemas import (
     ReviewEligibilityProjectUpdate,
     ReviewEligibilityUpdate,
 )
+from app.schemas.pagination import PaginationParams
+
+
+def _pg(page=1, per_page=25):
+    return PaginationParams(page=page, per_page=per_page)
 
 _ACTIVE_CYCLE = "H2 FY26-27"
 
@@ -115,11 +120,44 @@ def _set_eligible(db, admin, project, eligible):
 
 def test_get_eligibility_lists_active_projects(db):
     _org, admin, _pm, _member, proj = _scenario(db)
-    resp = get_review_eligibility(db, admin)
-    assert [p.project_id for p in resp.projects] == [proj.id]
-    row = resp.projects[0]
+    resp = get_review_eligibility(db, admin, _pg(), search=None)
+    assert resp.total == 1
+    assert [p.project_id for p in resp.items] == [proj.id]
+    row = resp.items[0]
     assert row.review_eligible is True   # opt-out default
     assert row.is_billable is True
+
+
+def test_search_filters_by_name_or_code(db):
+    _org, admin, _pm, _member, proj = _scenario(db)  # code P1 / name "Project P1"
+    other = Project(
+        org_id=proj.org_id, project_code="ZZZ-9", name="Zzz Other",
+        status=PROJECT_STATUS_ACTIVE,
+    )
+    db.add(other)
+    db.commit()
+
+    by_code = get_review_eligibility(db, admin, _pg(), search="ZZZ")
+    assert [p.project_id for p in by_code.items] == [other.id]
+
+    by_name = get_review_eligibility(db, admin, _pg(), search="project p1")
+    assert [p.project_id for p in by_name.items] == [proj.id]
+
+
+def test_pagination_slices_results(db):
+    _org, admin, _pm, _member, _proj = _scenario(db)  # 1 project so far
+    for i in range(4):
+        db.add(Project(
+            org_id=_org.id, project_code=f"X-{i}", name=f"Extra {i}",
+            status=PROJECT_STATUS_ACTIVE,
+        ))
+    db.commit()  # 5 active projects total
+
+    page1 = get_review_eligibility(db, admin, _pg(page=1, per_page=2), search=None)
+    assert page1.total == 5
+    assert len(page1.items) == 2
+    page3 = get_review_eligibility(db, admin, _pg(page=3, per_page=2), search=None)
+    assert len(page3.items) == 1  # 5 → pages of 2,2,1
 
 
 def test_ineligible_project_hidden_from_pm_queue(db):
@@ -152,5 +190,5 @@ def test_reeligible_restores_project(db):
 def test_non_admin_cannot_view_eligibility(db):
     _org, _admin, _pm, member, _proj = _scenario(db)
     with pytest.raises(HTTPException) as ei:
-        get_review_eligibility(db, member)  # member is not an Admin
+        get_review_eligibility(db, member, _pg())  # member is not an Admin
     assert ei.value.status_code == 403

@@ -345,12 +345,6 @@ class ReviewEligibilityProject(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ReviewEligibilityResponse(BaseModel):
-    """GET /admin/review-eligibility — every active project and whether it is
-    currently eligible for review."""
-    projects: list[ReviewEligibilityProject]
-
-
 class ReviewEligibilityProjectUpdate(BaseModel):
     """One project's desired eligibility in the PATCH payload."""
     project_id: int
@@ -361,3 +355,8 @@ class ReviewEligibilityUpdate(BaseModel):
     """PATCH /admin/review-eligibility — desired eligibility for a set of
     projects. Only the listed projects are changed."""
     projects: list[ReviewEligibilityProjectUpdate]
+
+
+class ReviewEligibilityUpdateResult(BaseModel):
+    """PATCH /admin/review-eligibility response — how many projects changed."""
+    updated: int

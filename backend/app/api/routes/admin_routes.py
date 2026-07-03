@@ -80,8 +80,8 @@ from app.schemas.admin_schemas import (
     DepartmentBrief,
     DesignationBrief,
     ReviewEligibilityProject,
-    ReviewEligibilityResponse,
     ReviewEligibilityUpdate,
+    ReviewEligibilityUpdateResult,
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -1993,22 +1993,39 @@ def revert_goal_to_draft(
 # an ineligible project — every member AND the PM — from every review surface.
 # A pure filter: nothing is deleted, so re-checking restores it instantly.
 
-def _eligibility_projects(
-    db: DbSession, org_id: int
-) -> list[ReviewEligibilityProject]:
-    """Every ACTIVE project (not completed/deleted) with its is_billable +
-    current review_eligible — the Review Eligibility tab's checkbox rows."""
-    projects = (
-        db.query(Project)
-        .filter(
-            Project.org_id == org_id,
-            Project.is_deleted == False,  # noqa: E712
-            Project.status != PROJECT_STATUS_COMPLETED,
+@router.get("/review-eligibility", response_model=Page[ReviewEligibilityProject])
+def get_review_eligibility(
+    db: DbSession,
+    current_user: CurrentUser,
+    pg: PaginationParams = Depends(),
+    search: Optional[str] = Query(
+        None, description="Matches project name or code"
+    ),
+):
+    """Paginated list of ACTIVE projects (not completed/deleted) + whether each
+    is eligible for review — the Review Eligibility tab. Server-side search
+    (name/code) + offset pagination so the FE never holds every project at once.
+    The checkbox edits accumulate client-side across pages; Save (PATCH) sends
+    only the changed ones."""
+    _require_admin(current_user)
+    query = db.query(Project).filter(
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+        Project.status != PROJECT_STATUS_COMPLETED,
+    )
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(Project.name.ilike(term), Project.project_code.ilike(term))
         )
-        .order_by(Project.name)
+    total = query.with_entities(func.count(Project.id)).order_by(None).scalar() or 0
+    rows = (
+        query.order_by(Project.name, Project.id.asc())  # stable across pages
+        .offset(pg.offset)
+        .limit(pg.limit)
         .all()
     )
-    return [
+    items = [
         ReviewEligibilityProject(
             project_id=p.id,
             project_name=p.name,
@@ -2016,21 +2033,16 @@ def _eligibility_projects(
             is_billable=bool(p.is_billable),
             review_eligible=bool(p.review_eligible),
         )
-        for p in projects
+        for p in rows
     ]
-
-
-@router.get("/review-eligibility", response_model=ReviewEligibilityResponse)
-def get_review_eligibility(db: DbSession, current_user: CurrentUser):
-    """Every active project and whether it is eligible for review — the Review
-    Eligibility tab's checkbox list."""
-    _require_admin(current_user)
-    return ReviewEligibilityResponse(
-        projects=_eligibility_projects(db, current_user.org_id),
+    return Page[ReviewEligibilityProject](
+        items=items, total=total, page=pg.page, per_page=pg.per_page
     )
 
 
-@router.patch("/review-eligibility", response_model=ReviewEligibilityResponse)
+@router.patch(
+    "/review-eligibility", response_model=ReviewEligibilityUpdateResult
+)
 def set_review_eligibility(
     payload: ReviewEligibilityUpdate,
     db: DbSession,
@@ -2038,7 +2050,8 @@ def set_review_eligibility(
 ):
     """Set review eligibility for a set of projects. Only the listed projects are
     changed. Marking a project ineligible removes it (all members + the PM) from
-    every review surface; re-marking restores it. Unknown projects are ignored."""
+    every review surface; re-marking restores it. Unknown projects are ignored.
+    Returns how many rows actually changed."""
     _require_admin(current_user)
     projects = {
         p.id: p
@@ -2047,12 +2060,12 @@ def set_review_eligibility(
             Project.is_deleted == False,  # noqa: E712
         )
     }
+    updated = 0
     for upd in payload.projects:
         p = projects.get(upd.project_id)
-        if p is None:
+        if p is None or p.review_eligible == upd.review_eligible:
             continue
         p.review_eligible = upd.review_eligible
+        updated += 1
     db.commit()
-    return ReviewEligibilityResponse(
-        projects=_eligibility_projects(db, current_user.org_id),
-    )
+    return ReviewEligibilityUpdateResult(updated=updated)

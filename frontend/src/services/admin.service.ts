@@ -272,15 +272,21 @@ export interface ReviewEligibilityProject {
   review_eligible: boolean;
 }
 
-/** GET /admin/review-eligibility payload. Mirrors backend
- *  ReviewEligibilityResponse. */
-export interface ReviewEligibility {
-  projects: ReviewEligibilityProject[];
+/** GET /admin/review-eligibility query — page/per_page + name/code search. */
+export interface ReviewEligibilityQuery {
+  page: number;
+  per_page: number;
+  search?: string;
 }
 
 /** PATCH /admin/review-eligibility body — only the listed projects change. */
 export interface ReviewEligibilityUpdatePayload {
   projects: { project_id: number; review_eligible: boolean }[];
+}
+
+/** PATCH /admin/review-eligibility response — how many projects changed. */
+export interface ReviewEligibilityUpdateResult {
+  updated: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,10 +488,14 @@ export const adminService = {
   },
 
   // Project review eligibility
-  /** Every active project and whether it is eligible for review. */
-  getReviewEligibility: async (): Promise<ReviewEligibility> => {
-    const res = await apiClient.get<ReviewEligibility>(
+  /** One page of active projects + whether each is eligible for review.
+   *  Server-side search (name/code) + offset pagination. */
+  getReviewEligibility: async (
+    params: ReviewEligibilityQuery,
+  ): Promise<Page<ReviewEligibilityProject>> => {
+    const res = await apiClient.get<Page<ReviewEligibilityProject>>(
       "/admin/review-eligibility",
+      { params },
     );
     return res.data;
   },
@@ -494,8 +504,8 @@ export const adminService = {
    *  ineligible projects drop out of every review surface server-side. */
   updateReviewEligibility: async (
     payload: ReviewEligibilityUpdatePayload,
-  ): Promise<ReviewEligibility> => {
-    const res = await apiClient.patch<ReviewEligibility>(
+  ): Promise<ReviewEligibilityUpdateResult> => {
+    const res = await apiClient.patch<ReviewEligibilityUpdateResult>(
       "/admin/review-eligibility",
       payload,
     );
