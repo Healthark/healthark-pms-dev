@@ -349,6 +349,16 @@ def _project_root_assignments(
 # EMPLOYEE ENDPOINTS
 # =====================================================================
 
+def _resolve_secondary_evaluator_id(
+    project: Project, assignment: ProjectAssignment
+) -> Optional[int]:
+    """The secondary evaluator's user_id for a (project, reviewee): the member's
+    per-assignment secondary in multi-PM mode, else the project-level secondary."""
+    if project.multi_pm_enabled and assignment.secondary_evaluator_id:
+        return assignment.secondary_evaluator_id
+    return project.secondary_evaluator_id
+
+
 @router.get("/mine", response_model=List[MyProjectCard])
 def get_my_projects(
     db: DbSession,
@@ -420,6 +430,23 @@ def get_my_projects(
         else {}
     )
 
+    # Secondary evaluator per project for THIS user: per-member override in
+    # multi-PM mode, else the project-level secondary. Batch the name lookup.
+    sec_id_by_project: dict[int, Optional[int]] = {}
+    for a in assignments:
+        proj = projects_by_id.get(a.project_id)
+        if proj:
+            sec_id_by_project[a.project_id] = _resolve_secondary_evaluator_id(proj, a)
+    _sec_ids = {sid for sid in sec_id_by_project.values() if sid}
+    sec_name_by_user_id = (
+        {
+            u.id: u.full_name
+            for u in db.query(User).filter(User.id.in_(_sec_ids)).all()
+        }
+        if _sec_ids
+        else {}
+    )
+
     # This user's reviews across these projects, grouped by project_id.
     reviews_by_project: dict[int, list[ProjectReview]] = {}
     for rv in (
@@ -476,6 +503,9 @@ def get_my_projects(
                     review, current_user, db, current_user.org_id, current_cycle
                 ),
                 pm_name=pm_name,
+                secondary_evaluator_name=sec_name_by_user_id.get(
+                    sec_id_by_project.get(a.project_id)
+                ),
                 cycle=review.cycle,
             ))
 
@@ -494,6 +524,9 @@ def get_my_projects(
                 department_name=dept.name if dept else None,
                 review_status="pending",
                 pm_name=pm_name,
+                secondary_evaluator_name=sec_name_by_user_id.get(
+                    sec_id_by_project.get(a.project_id)
+                ),
                 cycle=current_cycle,
             ))
 
@@ -620,6 +653,22 @@ def get_pm_evaluation_queue(
         else {}
     )
 
+    # Secondary evaluator per (project, member): per-member override in multi-PM
+    # mode, else the project-level secondary. Batch the name lookup.
+    sec_id_by_pair: dict[tuple[int, int], Optional[int]] = {}
+    for ta in team_assignments:
+        proj = projects_by_id.get(ta.project_id)
+        if proj:
+            sec_id_by_pair[(ta.project_id, ta.user_id)] = (
+                _resolve_secondary_evaluator_id(proj, ta)
+            )
+    _sec_ids = {sid for sid in sec_id_by_pair.values() if sid}
+    sec_name_by_user_id = (
+        {u.id: u.full_name for u in db.query(User).filter(User.id.in_(_sec_ids)).all()}
+        if _sec_ids
+        else {}
+    )
+
     # All non-deleted reviews for these (project, member) pairs, grouped.
     reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
     for rv in (
@@ -664,6 +713,9 @@ def get_pm_evaluation_queue(
                     project_code=project.project_code,
                     user_id=ta.user_id,
                     employee_name=user.full_name,
+                    secondary_evaluator_name=sec_name_by_user_id.get(
+                        sec_id_by_pair.get((ta.project_id, ta.user_id))
+                    ),
                     assignment_role=ta.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
@@ -683,6 +735,9 @@ def get_pm_evaluation_queue(
                     project_code=project.project_code,
                     user_id=ta.user_id,
                     employee_name=user.full_name,
+                    secondary_evaluator_name=sec_name_by_user_id.get(
+                        sec_id_by_pair.get((ta.project_id, ta.user_id))
+                    ),
                     assignment_role=ta.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
@@ -1107,6 +1162,25 @@ def get_reports_to_evaluation_queue(
     )
 
     project_ids = list(projects_by_id.keys())
+
+    # Secondary evaluator per (project, root PM): per-member override in multi-PM
+    # mode, else the project-level secondary. Batch the name lookup.
+    sec_id_by_pair: dict[tuple[int, int], Optional[int]] = {}
+    for _pid, _roots in roots_by_project.items():
+        _proj = projects_by_id.get(_pid)
+        if not _proj:
+            continue
+        for _root_a in _roots:
+            sec_id_by_pair[(_pid, _root_a.user_id)] = (
+                _resolve_secondary_evaluator_id(_proj, _root_a)
+            )
+    _sec_ids = {sid for sid in sec_id_by_pair.values() if sid}
+    sec_name_by_user_id = (
+        {u.id: u.full_name for u in db.query(User).filter(User.id.in_(_sec_ids)).all()}
+        if _sec_ids
+        else {}
+    )
+
     # Root reviews on these projects (all cycles), grouped by (project, root).
     reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
     for rv in (
@@ -1146,6 +1220,9 @@ def get_reports_to_evaluation_queue(
                     project_code=project.project_code,
                     user_id=root_a.user_id,
                     employee_name=root_user.full_name,
+                    secondary_evaluator_name=sec_name_by_user_id.get(
+                        sec_id_by_pair.get((project.id, root_a.user_id))
+                    ),
                     assignment_role=root_a.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
@@ -1164,6 +1241,9 @@ def get_reports_to_evaluation_queue(
                     project_code=project.project_code,
                     user_id=root_a.user_id,
                     employee_name=root_user.full_name,
+                    secondary_evaluator_name=sec_name_by_user_id.get(
+                        sec_id_by_pair.get((project.id, root_a.user_id))
+                    ),
                     assignment_role=root_a.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
