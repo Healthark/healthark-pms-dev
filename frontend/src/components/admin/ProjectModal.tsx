@@ -798,8 +798,8 @@ export function ProjectModal({
                         </select>
                       </div>
 
-                      {/* Role (auto-filled from designation) — 3 cols */}
-                      <div className="col-span-3">
+                      {/* Role (auto-filled from designation) */}
+                      <div className={multiPmEnabled ? "col-span-4" : "col-span-3"}>
                         <label className={LABEL_CLS}>Role (Designation)</label>
                         <select
                           className={INPUT_CLS}
@@ -813,8 +813,8 @@ export function ProjectModal({
                         </select>
                       </div>
 
-                      {/* Department — 2 cols */}
-                      <div className="col-span-2">
+                      {/* Department */}
+                      <div className={multiPmEnabled ? "col-span-3" : "col-span-2"}>
                         <label className={LABEL_CLS}>Department</label>
                         <select
                           className={INPUT_CLS}
@@ -828,31 +828,10 @@ export function ProjectModal({
                         </select>
                       </div>
 
-                      {/* PM: single-PM mode shows the "is PM" checkbox;
-                          multi-PM mode shows the member's Project Manager
-                          picker (their evaluator within the project). */}
-                      {multiPmEnabled ? (
-                        <div className="col-span-2">
-                          <label className={LABEL_CLS}>Project Manager</label>
-                          <select
-                            className={INPUT_CLS}
-                            aria-label="Project Manager"
-                            value={draft.manager_user_id}
-                            onChange={(e) =>
-                              updateDraft(draft.tempId, "manager_user_id", e.target.value)
-                            }
-                          >
-                            <option value="">— Top PM —</option>
-                            {memberOptions
-                              .filter((m) => m.id !== Number(draft.user_id))
-                              .map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.name}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      ) : (
+                      {/* PM: single-PM mode shows the "is PM" checkbox here.
+                          In multi-PM mode the member's Project Manager picker
+                          lives in the bottom row, left of Secondary Evaluator. */}
+                      {!multiPmEnabled && (
                         <div className="col-span-2">
                           <label className={LABEL_CLS}>PM</label>
                           <label
@@ -885,8 +864,31 @@ export function ProjectModal({
                       </div>
                     </div>
 
-                    {/* Second row — per-member Secondary (multi-PM) + Joined Date */}
+                    {/* Second row (multi-PM) — Project Manager, then Secondary
+                        Evaluator, then Joined Date. */}
                     <div className="grid grid-cols-12 gap-2">
+                      {multiPmEnabled && (
+                        <div className="col-span-4">
+                          <label className={LABEL_CLS}>Project Manager</label>
+                          <select
+                            className={INPUT_CLS}
+                            aria-label="Project Manager"
+                            value={draft.manager_user_id}
+                            onChange={(e) =>
+                              updateDraft(draft.tempId, "manager_user_id", e.target.value)
+                            }
+                          >
+                            <option value="">— Top PM —</option>
+                            {memberOptions
+                              .filter((m) => m.id !== Number(draft.user_id))
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
                       {multiPmEnabled && (
                         <div className="col-span-4">
                           <label className={LABEL_CLS}>Secondary Evaluator</label>
@@ -909,7 +911,7 @@ export function ProjectModal({
                           </select>
                         </div>
                       )}
-                      <div className="col-span-3">
+                      <div className={multiPmEnabled ? "col-span-4" : "col-span-3"}>
                         <label className={LABEL_CLS}>Joined Date</label>
                         <input
                           type="date"
