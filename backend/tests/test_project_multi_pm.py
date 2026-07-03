@@ -102,12 +102,14 @@ def test_schema_rejects_self_manage():
         ])
 
 
-def test_schema_rejects_non_member_manager():
-    with pytest.raises(ValidationError, match="member of the project"):
-        _multi(999, [
-            AssignmentCreate(user_id=1),
-            AssignmentCreate(user_id=2, manager_id=77),
-        ])
+def test_schema_allows_non_member_manager():
+    # PR2: a member's PM may be any org user, not just an existing project
+    # member (org membership is validated at the route layer instead).
+    p = _multi(999, [
+        AssignmentCreate(user_id=1),
+        AssignmentCreate(user_id=2, manager_id=77),
+    ])
+    assert p.multi_pm_enabled is True
 
 
 def test_schema_rejects_cycle():
@@ -121,20 +123,25 @@ def test_schema_rejects_cycle():
         ])
 
 
-def test_schema_rejects_zero_or_multiple_roots():
-    with pytest.raises(ValidationError, match="exactly one top PM"):
-        _multi(999, [
-            AssignmentCreate(user_id=1),  # root
-            AssignmentCreate(user_id=2),  # also root
-        ])
+def test_schema_allows_multiple_roots():
+    # PR2: several top-level members (each with no PM) are valid — "PM Reports
+    # To" reviews every root, e.g. a flat team with no central PM above it.
+    p = _multi(999, [
+        AssignmentCreate(user_id=1),  # root
+        AssignmentCreate(user_id=2),  # also root
+    ])
+    assert p.multi_pm_enabled is True
 
 
-def test_schema_rejects_reports_to_equals_top_pm():
-    with pytest.raises(ValidationError, match="different user than the top PM"):
-        _multi(1, [  # reports_to == the root (user 1)
-            AssignmentCreate(user_id=1),
-            AssignmentCreate(user_id=2, manager_id=1),
-        ])
+def test_schema_allows_reports_to_equals_a_pm():
+    # PR2: "PM Reports To" may also be one of the project's PMs (used to chain a
+    # member-PM up to a top reviewer). Self-pairs are skipped at routing time,
+    # not rejected here.
+    p = _multi(1, [  # reports_to == the root (user 1)
+        AssignmentCreate(user_id=1),
+        AssignmentCreate(user_id=2, manager_id=1),
+    ])
+    assert p.multi_pm_enabled is True
 
 
 def test_schema_rejects_own_secondary():

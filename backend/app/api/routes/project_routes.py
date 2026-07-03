@@ -812,29 +812,21 @@ def add_assignment(
     # FK / cross-org assignment).
     _validate_org_user(db, current_user.org_id, assignment_in.user_id, "Assigned member")
     # Multi-PM references (the member's PM + per-member Secondary) must be valid
-    # users too. The PM must be an existing member of this project.
+    # org users. The PM may be ANY org user — not necessarily a project member
+    # (a non-member PM simply has no review of their own on this project).
     if project.multi_pm_enabled:
         _validate_org_user(db, current_user.org_id, assignment_in.manager_id, "Project Manager")
         _validate_org_user(
             db, current_user.org_id, assignment_in.secondary_evaluator_id, "Secondary Evaluator"
         )
-        if assignment_in.manager_id is not None:
-            if assignment_in.manager_id == assignment_in.user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="A member cannot be their own Project Manager.",
-                )
-            manager_is_member = db.query(ProjectAssignment.id).filter(
-                ProjectAssignment.project_id == project_id,
-                ProjectAssignment.org_id == current_user.org_id,
-                ProjectAssignment.user_id == assignment_in.manager_id,
-                ProjectAssignment.is_deleted == False,  # noqa: E712
-            ).first()
-            if manager_is_member is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="The member's Project Manager must already be a member of the project.",
-                )
+        if (
+            assignment_in.manager_id is not None
+            and assignment_in.manager_id == assignment_in.user_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A member cannot be their own Project Manager.",
+            )
 
     # One row per (project, user) — unique index. A soft-deleted row is
     # RESTORED below (re-add) rather than inserted again; an active row 409s.
