@@ -57,15 +57,15 @@ describe("ProjectModal — team members", () => {
 
     await user.click(screen.getByRole("button", { name: /add member/i }));
     // Fill the first card with User A.
-    await user.selectOptions(screen.getByLabelText("Employee"), "1");
+    await user.selectOptions(screen.getByLabelText("Practitioner"), "1");
 
     // Add a second card — it should be prepended (empty, on top).
     await user.click(screen.getByRole("button", { name: /add member/i }));
 
-    const employeeSelects = screen.getAllByLabelText("Employee") as HTMLSelectElement[];
-    expect(employeeSelects).toHaveLength(2);
-    expect(employeeSelects[0].value).toBe(""); // new empty card on top
-    expect(employeeSelects[1].value).toBe("1"); // previously filled card below
+    const practitionerSelects = screen.getAllByLabelText("Practitioner") as HTMLSelectElement[];
+    expect(practitionerSelects).toHaveLength(2);
+    expect(practitionerSelects[0].value).toBe(""); // new empty card on top
+    expect(practitionerSelects[1].value).toBe("1"); // previously filled card below
   });
 
   it("allows ticking two PMs but blocks save with an inline error", async () => {
@@ -74,13 +74,13 @@ describe("ProjectModal — team members", () => {
 
     // Card 1 → User A as PM.
     await user.click(screen.getByRole("button", { name: /add member/i }));
-    await user.selectOptions(screen.getByLabelText("Employee"), "1");
+    await user.selectOptions(screen.getByLabelText("Practitioner"), "1");
     await user.click(screen.getByLabelText(/is PM/i));
 
     // Card 2 (prepended) → User B as PM.
     await user.click(screen.getByRole("button", { name: /add member/i }));
-    const employeeSelects = screen.getAllByLabelText("Employee") as HTMLSelectElement[];
-    await user.selectOptions(employeeSelects[0], "2");
+    const practitionerSelects = screen.getAllByLabelText("Practitioner") as HTMLSelectElement[];
+    await user.selectOptions(practitionerSelects[0], "2");
     const pmChecks = screen.getAllByLabelText(/is PM/i);
     await user.click(pmChecks[0]);
 
@@ -109,6 +109,25 @@ describe("ProjectModal — multiple PM support", () => {
     expect(screen.queryByLabelText(/is PM/i)).toBeNull();
     expect(screen.getByLabelText("Project Manager")).toBeInTheDocument();
     expect(screen.getByLabelText("Secondary Evaluator")).toBeInTheDocument();
+  });
+
+  it("offers every user (except the picked practitioner) as the Project Manager", async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(
+      screen.getByRole("switch", { name: /enable multiple pm support/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+    await user.selectOptions(screen.getByLabelText("Practitioner"), "1");
+
+    // Top PM dropdown lists all users, not just project members — User B is
+    // offered even though they aren't on the team, while the practitioner
+    // themselves (User A) is excluded.
+    const pmSelect = screen.getByLabelText("Project Manager") as HTMLSelectElement;
+    const optionValues = Array.from(pmSelect.options).map((o) => o.value);
+    expect(optionValues).toContain("2");
+    expect(optionValues).not.toContain("1");
   });
 
   it("keeps the is-PM checkbox in single-PM (default) mode", async () => {
@@ -206,7 +225,7 @@ describe("ProjectModal — removed members (edit flow)", () => {
     await screen.findByText("Removed members");
 
     await user.click(screen.getByRole("button", { name: /add member/i }));
-    const select = screen.getByLabelText("Employee") as HTMLSelectElement;
+    const select = screen.getByLabelText("Practitioner") as HTMLSelectElement;
     const optionValues = Array.from(select.options).map((o) => o.value);
     // User B (removed) is re-addable; User A (active) is not offered.
     expect(optionValues).toContain("2");

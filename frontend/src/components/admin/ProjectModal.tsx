@@ -357,7 +357,7 @@ export function ProjectModal({
   secondaryExclude.push(...assignedUserIds);
 
   // Members selectable as a "Project Manager" in multi-PM mode: existing
-  // (non-edited) rows + drafts that have an employee chosen, deduped by id.
+  // (non-edited) rows + drafts that have a practitioner chosen, deduped by id.
   const memberOptions = (() => {
     const seen = new Set<number>();
     const out: { id: number; name: string }[] = [];
@@ -642,7 +642,7 @@ export function ProjectModal({
                   </p>
                   <p className="mt-0.5 text-xs text-text-muted">
                     Each member gets their own Project Manager &amp; Secondary
-                    Evaluator (a PM hierarchy) instead of one PM evaluating everyone.
+                    Evaluator
                   </p>
                 </div>
                 <button
@@ -729,17 +729,17 @@ export function ProjectModal({
                 {/* Draft Assignments — rendered ABOVE the existing rows
                     (order-1) so the newest (prepended) card is on top. Also
                     hosts edit-in-place rows (draft.existingId set); for those
-                    the Employee select is locked (user_id isn't editable on the
+                    the Practitioner select is locked (user_id isn't editable on the
                     AssignmentUpdate API). Cards are drag-reorderable. */}
                 <div className="order-1 flex flex-col gap-3">
                 {draftAssignments.map((draft, draftIndex) => {
                   const isEditDraft = draft.existingId !== undefined;
-                  // Only gate on having picked an employee. Multiple members
+                  // Only gate on having picked a practitioner. Multiple members
                   // may be ticked PM here; the "more than one PM" rule is an
                   // inline submit-time error, not a per-checkbox block.
                   const pmDisabled = !draft.is_pm && !draft.user_id;
                   const pmDisabledReason =
-                    pmDisabled ? "Pick an employee first." : null;
+                    pmDisabled ? "Pick a practitioner first." : null;
                   const joinedBeforeStart =
                     !!startDate && !!draft.assigned_date && draft.assigned_date < startDate;
                   return (
@@ -771,16 +771,16 @@ export function ProjectModal({
                       )}
                     </div>
                     <div className="grid grid-cols-12 gap-2 items-end">
-                      {/* Employee — 4 cols (locked when editing an existing row) */}
+                      {/* Practitioner — 4 cols (locked when editing an existing row) */}
                       <div className="col-span-4">
-                        <label className={LABEL_CLS}>Employee</label>
+                        <label className={LABEL_CLS}>Practitioner</label>
                         <select
                           className={INPUT_CLS}
-                          aria-label="Employee"
+                          aria-label="Practitioner"
                           value={draft.user_id}
                           disabled={isEditDraft}
                           onChange={(e) => handleUserSelect(draft.tempId, e.target.value)}
-                          title={isEditDraft ? "Change the employee by removing this member and adding the new one." : undefined}
+                          title={isEditDraft ? "Change the practitioner by removing this member and adding the new one." : undefined}
                         >
                           <option value="">Select…</option>
                           {users
@@ -879,11 +879,11 @@ export function ProjectModal({
                             }
                           >
                             <option value="">— Top PM —</option>
-                            {memberOptions
-                              .filter((m) => m.id !== Number(draft.user_id))
-                              .map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.name}
+                            {users
+                              .filter((u) => u.id !== Number(draft.user_id))
+                              .map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.full_name}
                                 </option>
                               ))}
                           </select>
