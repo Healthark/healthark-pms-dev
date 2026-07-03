@@ -404,15 +404,17 @@ export function PMEvaluationTab() {
     }
   };
 
-  // Reports-to → PM evaluation. Same 7-competency form as the PM flow; on
-  // submit it targets the project (the PM is resolved server-side). Once
-  // submitted the review is locked (view-only) like any other.
+  // Reports-to → root PM evaluation. Same 7-competency form as the PM flow; on
+  // submit it targets the specific reviewee (card.user_id) — the single Primary
+  // (single-PM) or one top-level member (multi-PM). Once submitted the review
+  // is locked (view-only) like any other.
   const handleReportsToSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
     setModalError("");
     try {
       await submitReportsToMutation.mutateAsync({
         projectId: evalTarget.project_id,
+        userId: evalTarget.user_id!,
         payload,
       });
       closeModal();
@@ -431,6 +433,7 @@ export function PMEvaluationTab() {
     try {
       await saveReportsToDraftMutation.mutateAsync({
         projectId: evalTarget.project_id,
+        userId: evalTarget.user_id!,
         payload,
       });
       if (!silent) toast.success("Draft saved.");

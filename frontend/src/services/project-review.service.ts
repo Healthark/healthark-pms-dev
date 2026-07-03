@@ -239,26 +239,28 @@ export const projectReviewService = {
     return res.data;
   },
 
-  /** Reports-to senior submits the PM's evaluation for a project. The PM is
-   *  resolved server-side (the project's Primary), so only projectId is sent. */
+  /** Reports-to senior submits a root PM's evaluation. `userId` is the reviewee
+   *  — the single Primary (single-PM) or one top-level member (multi-PM). */
   submitReportsToEvaluation: async (
     projectId: number,
+    userId: number,
     payload: PMEvaluationPayload,
   ): Promise<ProjectReviewResponse> => {
     const res = await apiClient.post<ProjectReviewResponse>(
-      `/project-reviews/reports-to/${projectId}/evaluate`,
+      `/project-reviews/reports-to/${projectId}/evaluate/${userId}`,
       payload,
     );
     return res.data;
   },
 
-  /** Reports-to senior saves an in-progress PM evaluation as a draft. */
+  /** Reports-to senior saves an in-progress root PM evaluation as a draft. */
   saveReportsToDraft: async (
     projectId: number,
+    userId: number,
     payload: PMEvaluationDraftPayload,
   ): Promise<ProjectReviewResponse> => {
     const res = await apiClient.patch<ProjectReviewResponse>(
-      `/project-reviews/reports-to/${projectId}/evaluate/draft`,
+      `/project-reviews/reports-to/${projectId}/evaluate/${userId}/draft`,
       payload,
     );
     return res.data;

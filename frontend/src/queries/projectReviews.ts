@@ -207,11 +207,13 @@ export function useSubmitReportsToEvaluation() {
   return useMutation({
     mutationFn: ({
       projectId,
+      userId,
       payload,
     }: {
       projectId: number;
+      userId: number;
       payload: PMEvaluationPayload;
-    }) => projectReviewService.submitReportsToEvaluation(projectId, payload),
+    }) => projectReviewService.submitReportsToEvaluation(projectId, userId, payload),
     onSuccess: () => invalidateProjectReviewsAndDashboard(qc),
   });
 }
@@ -221,11 +223,13 @@ export function useSaveReportsToDraft() {
   return useMutation({
     mutationFn: ({
       projectId,
+      userId,
       payload,
     }: {
       projectId: number;
+      userId: number;
       payload: PMEvaluationDraftPayload;
-    }) => projectReviewService.saveReportsToDraft(projectId, payload),
+    }) => projectReviewService.saveReportsToDraft(projectId, userId, payload),
     onSuccess: () => invalidateProjectReviewDrafts(qc),
   });
 }

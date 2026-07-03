@@ -245,6 +245,107 @@ def _build_review_response(
 
 
 # =====================================================================
+# MULTI-PM HIERARCHY ROUTING
+#
+# A project routes evaluations one of two ways, decided by
+# Project.multi_pm_enabled:
+#
+#   single-PM  — the one member flagged evaluator_type == "Primary" evaluates
+#                every other member; that Primary is in turn evaluated by the
+#                project's reports_to senior.
+#   multi-PM   — each member is evaluated by their own manager_id (their DIRECT
+#                PM). A PM sees only their direct reports (manager_id == them),
+#                never the whole subtree, so in a chain A -> B -> C, A reviews B
+#                and B reviews C — A never reviews C. Members with no manager_id
+#                are "roots", evaluated by the project's reports_to senior
+#                (there may be several roots, e.g. a flat team with no central
+#                PM). A member's PM / secondary may be any org user.
+#
+# The single-PM path is preserved exactly, so existing projects are unaffected.
+# =====================================================================
+
+
+def _member_assignment(
+    db: DbSession, org_id: int, project_id: int, user_id: int
+) -> Optional[ProjectAssignment]:
+    """The active assignment row for (project, user), or None."""
+    return (
+        db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.org_id == org_id,
+            ProjectAssignment.project_id == project_id,
+            ProjectAssignment.user_id == user_id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+
+
+def _is_member_pm(
+    db: DbSession, viewer: User, project: Project, review_user_id: int
+) -> bool:
+    """True if `viewer` is the PM who evaluates `review_user_id` on `project`.
+
+    Multi-PM: the member's direct manager (manager_id). Single-PM: any current
+    Primary of the project (covers a reassigned PM who didn't author the row).
+    """
+    if project.multi_pm_enabled:
+        target = _member_assignment(db, viewer.org_id, project.id, review_user_id)
+        return bool(target and target.manager_id == viewer.id)
+    pm = _project_primary_assignment(db, viewer.org_id, project.id)
+    return bool(pm and pm.user_id == viewer.id)
+
+
+def _is_member_secondary(
+    db: DbSession, viewer: User, project: Project, review_user_id: int
+) -> bool:
+    """True if `viewer` is the Secondary evaluator for `review_user_id`.
+
+    Multi-PM: the member's per-member secondary_evaluator_id. Single-PM: the
+    project-level secondary_evaluator_id.
+    """
+    if project.multi_pm_enabled:
+        target = _member_assignment(db, viewer.org_id, project.id, review_user_id)
+        return bool(target and target.secondary_evaluator_id == viewer.id)
+    return project.secondary_evaluator_id == viewer.id
+
+
+def _authorize_member_evaluation(
+    db: DbSession, current_user: User, project: Project, target: ProjectAssignment
+) -> None:
+    """Raise 403 unless `current_user` is the PM who evaluates `target`."""
+    if _is_member_pm(db, current_user, project, target.user_id):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "You are not this team member's Project Manager."
+            if project.multi_pm_enabled
+            else "You are not the Project Manager for this project."
+        ),
+    )
+
+
+def _project_root_assignments(
+    db: DbSession, org_id: int, project: Project
+) -> List[ProjectAssignment]:
+    """The members reviewed by the project's reports_to senior.
+
+    Multi-PM: every member with no manager_id (the roots). Single-PM: the
+    project's Primary. The reports_to senior evaluates each of these; the
+    routing layer skips any self-pair (a root who is also the reports_to).
+    """
+    q = db.query(ProjectAssignment).filter(
+        ProjectAssignment.org_id == org_id,
+        ProjectAssignment.project_id == project.id,
+        ProjectAssignment.is_deleted == False,  # noqa: E712
+    )
+    if project.multi_pm_enabled:
+        return q.filter(ProjectAssignment.manager_id.is_(None)).all()
+    return q.filter(ProjectAssignment.evaluator_type == "Primary").all()
+
+
+# =====================================================================
 # EMPLOYEE ENDPOINTS
 # =====================================================================
 
@@ -290,7 +391,9 @@ def get_my_projects(
         else {}
     )
 
-    # Active Primary (PM) per project, then PM names — two queries, not 2×N.
+    # Resolve each card's "PM" = who reviews the current user on that project.
+    # Multi-PM: their direct manager (manager_id), or the project's reports_to
+    # senior when they're a root. Single-PM: the project's Primary.
     pm_user_id_by_project = dict(
         db.query(ProjectAssignment.project_id, ProjectAssignment.user_id)
         .filter(
@@ -300,14 +403,20 @@ def get_my_projects(
         )
         .all()
     )
+
+    def _reviewer_uid_for(a: ProjectAssignment) -> Optional[int]:
+        project = projects_by_id.get(a.project_id)
+        if project and project.multi_pm_enabled:
+            return a.manager_id if a.manager_id is not None else project.reports_to_id
+        return pm_user_id_by_project.get(a.project_id)
+
+    reviewer_uids = {uid for uid in (_reviewer_uid_for(a) for a in assignments) if uid}
     pm_name_by_user_id = (
         {
             u.id: u.full_name
-            for u in db.query(User)
-            .filter(User.id.in_(set(pm_user_id_by_project.values())))
-            .all()
+            for u in db.query(User).filter(User.id.in_(reviewer_uids)).all()
         }
-        if pm_user_id_by_project
+        if reviewer_uids
         else {}
     )
 
@@ -343,7 +452,7 @@ def get_my_projects(
             continue
 
         dept = depts_by_id.get(a.department_id) if a.department_id else None
-        pm_name = pm_name_by_user_id.get(pm_user_id_by_project.get(a.project_id))
+        pm_name = pm_name_by_user_id.get(_reviewer_uid_for(a))
 
         # All reviews for this user on this project (across all cycles)
         reviews = reviews_by_project.get(a.project_id, [])
@@ -412,9 +521,12 @@ def get_pm_evaluation_queue(
     """
     active_cycle = _get_active_cycle(db, current_user.org_id)
 
-    # Find projects where current user is Primary
-    pm_assignments = (
-        db.query(ProjectAssignment)
+    # Projects I evaluate members on, drawn from both modes:
+    #  - single-PM: projects where I'm the Primary (I review everyone),
+    #  - multi-PM:  projects where I'm someone's direct manager (manager_id).
+    primary_project_ids = [
+        pid
+        for (pid,) in db.query(ProjectAssignment.project_id)
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
             ProjectAssignment.user_id == current_user.id,
@@ -422,18 +534,28 @@ def get_pm_evaluation_queue(
             ProjectAssignment.is_deleted == False,  # noqa: E712
         )
         .all()
+    ]
+    managed_assignments = (
+        db.query(ProjectAssignment)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.manager_id == current_user.id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+        )
+        .all()
     )
-
-    if not pm_assignments:
+    candidate_project_ids = set(primary_project_ids) | {
+        a.project_id for a in managed_assignments
+    }
+    if not candidate_project_ids:
         return []
 
     # ── Batch lookups (replaces the per-member / per-project N+1) ────
-    pm_project_ids = [pm.project_id for pm in pm_assignments]
     projects_by_id = {
         p.id: p
         for p in db.query(Project)
         .filter(
-            Project.id.in_(pm_project_ids),
+            Project.id.in_(candidate_project_ids),
             Project.is_deleted == False,  # noqa: E712
             Project.review_eligible == True,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
@@ -444,23 +566,42 @@ def get_pm_evaluation_queue(
         return []
     visible_project_ids = list(projects_by_id.keys())
 
-    # All active team members across those projects (excluding the PM).
-    # Ineligible projects are already dropped from visible_project_ids above.
-    team_assignments = (
-        db.query(ProjectAssignment)
-        .filter(
-            ProjectAssignment.project_id.in_(visible_project_ids),
-            ProjectAssignment.org_id == current_user.org_id,
-            ProjectAssignment.user_id != current_user.id,
-            ProjectAssignment.is_deleted == False,  # noqa: E712
-        )
-        .all()
-    )
-    if not team_assignments:
-        return []
+    # The members I must evaluate, per project + mode. Project-level eligibility
+    # (review_eligible) is already applied above via visible_project_ids, so
+    # there's no per-member filter — per-member review scope (review_included)
+    # was removed in favour of the project-level flag.
     team_by_project: dict[int, list[ProjectAssignment]] = {}
-    for ta in team_assignments:
-        team_by_project.setdefault(ta.project_id, []).append(ta)
+    #  multi-PM — my DIRECT reports (manager_id == me) on visible multi-PM projects
+    for a in managed_assignments:
+        project = projects_by_id.get(a.project_id)
+        if (
+            project
+            and project.multi_pm_enabled
+            and a.user_id != current_user.id
+        ):
+            team_by_project.setdefault(a.project_id, []).append(a)
+    #  single-PM — every other in-scope member on projects where I'm the Primary
+    single_pm_project_ids = [
+        pid
+        for pid in primary_project_ids
+        if pid in projects_by_id and not projects_by_id[pid].multi_pm_enabled
+    ]
+    if single_pm_project_ids:
+        for a in (
+            db.query(ProjectAssignment)
+            .filter(
+                ProjectAssignment.project_id.in_(single_pm_project_ids),
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.user_id != current_user.id,
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            )
+            .all()
+        ):
+            team_by_project.setdefault(a.project_id, []).append(a)
+
+    if not team_by_project:
+        return []
+    team_assignments = [a for members in team_by_project.values() for a in members]
 
     member_ids = {ta.user_id for ta in team_assignments}
     users_by_id = {
@@ -496,13 +637,13 @@ def get_pm_evaluation_queue(
 
     cards: list[PMPendingReviewCard] = []
 
-    # Iterate PM-project order, then members — preserves the original card order.
-    for pm_a in pm_assignments:
-        project = projects_by_id.get(pm_a.project_id)
+    # Iterate project order, then members — one card block per project.
+    for project_id, members in team_by_project.items():
+        project = projects_by_id.get(project_id)
         if not project:
             continue
 
-        for ta in team_by_project.get(pm_a.project_id, []):
+        for ta in members:
             user = users_by_id.get(ta.user_id)
             if not user or user.is_deleted:
                 continue
@@ -608,21 +749,6 @@ def submit_pm_evaluation(
     """
     cycle = _get_active_cycle(db, current_user.org_id)
 
-    # Verify caller is PM for this project
-    pm_assignment = db.query(ProjectAssignment).filter(
-        ProjectAssignment.org_id == current_user.org_id,
-        ProjectAssignment.project_id == project_id,
-        ProjectAssignment.user_id == current_user.id,
-        ProjectAssignment.evaluator_type == "Primary",
-        ProjectAssignment.is_deleted == False,  # noqa: E712
-    ).first()
-
-    if not pm_assignment:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Project Manager for this project.",
-        )
-
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.org_id == current_user.org_id,
@@ -644,6 +770,10 @@ def submit_pm_evaluation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This employee is not assigned to this project.",
         )
+
+    # Verify caller is the PM who evaluates THIS member (mode-aware): the
+    # member's direct manager in multi-PM, or the project's Primary otherwise.
+    _authorize_member_evaluation(db, current_user, project, target_assignment)
 
     # Ineligible project — no review may be filed for it.
     if not project.review_eligible:
@@ -742,20 +872,6 @@ def save_pm_evaluation_draft(
     """
     cycle = _get_active_cycle(db, current_user.org_id)
 
-    # Same role gate as submit.
-    pm_assignment = db.query(ProjectAssignment).filter(
-        ProjectAssignment.org_id == current_user.org_id,
-        ProjectAssignment.project_id == project_id,
-        ProjectAssignment.user_id == current_user.id,
-        ProjectAssignment.evaluator_type == "Primary",
-        ProjectAssignment.is_deleted == False,  # noqa: E712
-    ).first()
-    if not pm_assignment:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Project Manager for this project.",
-        )
-
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.org_id == current_user.org_id,
@@ -775,6 +891,10 @@ def save_pm_evaluation_draft(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This employee is not assigned to this project.",
         )
+
+    # Same mode-aware role gate as submit.
+    _authorize_member_evaluation(db, current_user, project, target_assignment)
+
     if not project.review_eligible:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -863,13 +983,15 @@ def _project_primary_assignment(
     )
 
 
-def _resolve_pm_for_reports_to(
-    db: DbSession, current_user: User, project_id: int
-) -> tuple[Project, int]:
-    """Shared auth + lookup for the reports-to write endpoints.
+def _resolve_reports_to_target(
+    db: DbSession, current_user: User, project_id: int, user_id: int
+) -> Project:
+    """Auth + validation for a reports-to senior evaluating one reviewee.
 
-    Returns (project, pm_user_id) when the caller is the project's reports-to
-    senior and the project has a PM; otherwise raises the matching HTTP error.
+    The caller must be the project's reports_to senior, and `user_id` must be a
+    valid reviewee for that role: a root member (multi-PM — any member with no
+    manager_id) or the Primary (single-PM). No one evaluates themselves. Returns
+    the project; raises the matching HTTP error otherwise.
     """
     project = (
         db.query(Project)
@@ -887,18 +1009,18 @@ def _resolve_pm_for_reports_to(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not the reviewer of this project's Project Manager.",
         )
-    pm_a = _project_primary_assignment(db, current_user.org_id, project_id)
-    if not pm_a:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="This project has no Project Manager to evaluate.",
-        )
-    if pm_a.user_id == current_user.id:
+    if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot evaluate yourself.",
         )
-    return project, pm_a.user_id
+    root_ids = {a.user_id for a in _project_root_assignments(db, current_user.org_id, project)}
+    if user_id not in root_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This person is not a Project Manager you evaluate on this project.",
+        )
+    return project
 
 
 @router.get("/reports-to-queue", response_model=List[PMPendingReviewCard])
@@ -907,10 +1029,13 @@ def get_reports_to_evaluation_queue(
     current_user: CurrentUser,
 ):
     """
-    PMs the current user must evaluate — one card per project where the current
-    user is the project's `reports_to` (the senior who reviews the PM). The
-    reviewee on each card is the project's Primary (PM). Mirrors the PM queue:
-    one card per existing review (any cycle) + an active-cycle placeholder.
+    PMs the current user must evaluate — the "roots" on every project where the
+    current user is the `reports_to` senior. In single-PM projects that's the
+    one Primary; in multi-PM projects it's every top-level member (no manager_id
+    of their own), so a flat team with several top-level members yields several
+    cards. Mirrors the PM queue: one card per existing review (any cycle) + an
+    active-cycle placeholder. Self-pairs (reports_to who is also a root) are
+    skipped — no one reviews themselves.
     """
     active_cycle = _get_active_cycle(db, current_user.org_id)
 
@@ -927,28 +1052,48 @@ def get_reports_to_evaluation_queue(
     )
     if not projects:
         return []
-    project_ids = [p.id for p in projects]
+    projects_by_id = {p.id: p for p in projects}
 
-    # The PM (Primary) per project.
-    pm_by_project = {
-        a.project_id: a
-        for a in db.query(ProjectAssignment)
-        .filter(
-            ProjectAssignment.org_id == current_user.org_id,
-            ProjectAssignment.project_id.in_(project_ids),
-            ProjectAssignment.evaluator_type == "Primary",
-            ProjectAssignment.is_deleted == False,  # noqa: E712
+    # The reviewees (roots) per project, mode-aware and batched by mode.
+    multi_ids = [p.id for p in projects if p.multi_pm_enabled]
+    single_ids = [p.id for p in projects if not p.multi_pm_enabled]
+    roots_by_project: dict[int, list[ProjectAssignment]] = {}
+    root_query_parts: list[ProjectAssignment] = []
+    if multi_ids:
+        root_query_parts += (
+            db.query(ProjectAssignment)
+            .filter(
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.project_id.in_(multi_ids),
+                ProjectAssignment.manager_id.is_(None),
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            )
+            .all()
         )
-        .all()
-    }
-    if not pm_by_project:
+    if single_ids:
+        root_query_parts += (
+            db.query(ProjectAssignment)
+            .filter(
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.project_id.in_(single_ids),
+                ProjectAssignment.evaluator_type == "Primary",
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            )
+            .all()
+        )
+    for a in root_query_parts:
+        # Never ask someone to evaluate themselves (reports_to == a root).
+        if a.user_id == current_user.id:
+            continue
+        roots_by_project.setdefault(a.project_id, []).append(a)
+    if not roots_by_project:
         return []
 
-    pm_user_ids = {a.user_id for a in pm_by_project.values()}
+    root_user_ids = {a.user_id for a in root_query_parts}
     users_by_id = {
-        u.id: u for u in db.query(User).filter(User.id.in_(pm_user_ids)).all()
+        u.id: u for u in db.query(User).filter(User.id.in_(root_user_ids)).all()
     }
-    dept_ids = {a.department_id for a in pm_by_project.values() if a.department_id}
+    dept_ids = {a.department_id for a in root_query_parts if a.department_id}
     depts_by_id = (
         {d.id: d for d in db.query(Department).filter(Department.id.in_(dept_ids)).all()}
         if dept_ids
@@ -961,14 +1106,15 @@ def get_reports_to_evaluation_queue(
         else {}
     )
 
-    # PM reviews on these projects (all cycles), grouped by (project, pm).
+    project_ids = list(projects_by_id.keys())
+    # Root reviews on these projects (all cycles), grouped by (project, root).
     reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
     for rv in (
         db.query(ProjectReview)
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.project_id.in_(project_ids),
-            ProjectReview.user_id.in_(pm_user_ids),
+            ProjectReview.user_id.in_(root_user_ids),
             ProjectReview.is_deleted == False,  # noqa: E712
         )
         .order_by(ProjectReview.created_at.desc())
@@ -977,82 +1123,83 @@ def get_reports_to_evaluation_queue(
         reviews_by_pair.setdefault((rv.project_id, rv.user_id), []).append(rv)
 
     cards: list[PMPendingReviewCard] = []
-    for project in projects:
-        pm_a = pm_by_project.get(project.id)
-        if not pm_a:
-            continue  # no PM assigned yet — nothing to evaluate
-        # Never ask someone to evaluate themselves (reports_to == the PM).
-        if pm_a.user_id == current_user.id:
+    for project_id, roots in roots_by_project.items():
+        project = projects_by_id.get(project_id)
+        if not project:
             continue
-        pm_user = users_by_id.get(pm_a.user_id)
-        if not pm_user or pm_user.is_deleted:
-            continue
+        for root_a in roots:
+            root_user = users_by_id.get(root_a.user_id)
+            if not root_user or root_user.is_deleted:
+                continue
 
-        dept = depts_by_id.get(pm_a.department_id) if pm_a.department_id else None
-        desig = desigs_by_id.get(pm_user.designation_id) if pm_user.designation_id else None
+            dept = depts_by_id.get(root_a.department_id) if root_a.department_id else None
+            desig = desigs_by_id.get(root_user.designation_id) if root_user.designation_id else None
 
-        reviews = reviews_by_pair.get((project.id, pm_a.user_id), [])
-        cycles_with_review = {r.cycle for r in reviews}
+            reviews = reviews_by_pair.get((project.id, root_a.user_id), [])
+            cycles_with_review = {r.cycle for r in reviews}
 
-        for review in reviews:
-            cards.append(PMPendingReviewCard(
-                review_id=review.id,
-                project_id=project.id,
-                project_name=project.name,
-                project_code=project.project_code,
-                user_id=pm_a.user_id,
-                employee_name=pm_user.full_name,
-                assignment_role=pm_a.assignment_role,
-                department_name=dept.name if dept else None,
-                designation_name=desig.name if desig else None,
-                assigned_date=pm_a.assigned_date,
-                review_status=review.status,
-                performance_group=review.performance_group,
-                cycle=review.cycle,
-                has_draft_content=_pm_review_has_draft_content(review),
-            ))
+            for review in reviews:
+                cards.append(PMPendingReviewCard(
+                    review_id=review.id,
+                    project_id=project.id,
+                    project_name=project.name,
+                    project_code=project.project_code,
+                    user_id=root_a.user_id,
+                    employee_name=root_user.full_name,
+                    assignment_role=root_a.assignment_role,
+                    department_name=dept.name if dept else None,
+                    designation_name=desig.name if desig else None,
+                    assigned_date=root_a.assigned_date,
+                    review_status=review.status,
+                    performance_group=review.performance_group,
+                    cycle=review.cycle,
+                    has_draft_content=_pm_review_has_draft_content(review),
+                ))
 
-        if active_cycle not in cycles_with_review:
-            cards.append(PMPendingReviewCard(
-                review_id=None,
-                project_id=project.id,
-                project_name=project.name,
-                project_code=project.project_code,
-                user_id=pm_a.user_id,
-                employee_name=pm_user.full_name,
-                assignment_role=pm_a.assignment_role,
-                department_name=dept.name if dept else None,
-                designation_name=desig.name if desig else None,
-                assigned_date=pm_a.assigned_date,
-                review_status=None,
-                performance_group=None,
-                cycle=active_cycle,
-                has_draft_content=False,
-            ))
+            if active_cycle not in cycles_with_review:
+                cards.append(PMPendingReviewCard(
+                    review_id=None,
+                    project_id=project.id,
+                    project_name=project.name,
+                    project_code=project.project_code,
+                    user_id=root_a.user_id,
+                    employee_name=root_user.full_name,
+                    assignment_role=root_a.assignment_role,
+                    department_name=dept.name if dept else None,
+                    designation_name=desig.name if desig else None,
+                    assigned_date=root_a.assigned_date,
+                    review_status=None,
+                    performance_group=None,
+                    cycle=active_cycle,
+                    has_draft_content=False,
+                ))
 
     return cards
 
 
 @router.post(
-    "/reports-to/{project_id}/evaluate",
+    "/reports-to/{project_id}/evaluate/{user_id}",
     response_model=ProjectReviewResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def submit_reports_to_evaluation(
     project_id: int,
+    user_id: int,
     payload: PMEvaluationSubmit,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """
-    The project's reports-to senior submits the evaluation OF THE PM.
+    The project's reports-to senior submits the evaluation of a root PM.
 
-    Mirrors submit_pm_evaluation, but the reviewee is always the project's
-    Primary (PM): the ProjectReview is stored with user_id = the PM and
-    reviewer_id = the reports-to user.
+    Mirrors submit_pm_evaluation, but the reviewee is a "root" — the project's
+    single Primary (single-PM) or one of its top-level members (multi-PM). The
+    ProjectReview is stored with user_id = that root and reviewer_id = the
+    reports-to senior.
     """
     cycle = _get_active_cycle(db, current_user.org_id)
-    project, pm_user_id = _resolve_pm_for_reports_to(db, current_user, project_id)
+    project = _resolve_reports_to_target(db, current_user, project_id, user_id)
+    pm_user_id = user_id
 
     if not project.review_eligible:
         raise HTTPException(
@@ -1117,18 +1264,20 @@ def submit_reports_to_evaluation(
 
 
 @router.patch(
-    "/reports-to/{project_id}/evaluate/draft",
+    "/reports-to/{project_id}/evaluate/{user_id}/draft",
     response_model=ProjectReviewResponse,
 )
 def save_reports_to_evaluation_draft(
     project_id: int,
+    user_id: int,
     payload: PMEvaluationDraft,
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Reports-to senior saves an in-progress evaluation of the PM as DRAFT."""
+    """Reports-to senior saves an in-progress evaluation of a root PM as DRAFT."""
     cycle = _get_active_cycle(db, current_user.org_id)
-    project, pm_user_id = _resolve_pm_for_reports_to(db, current_user, project_id)
+    project = _resolve_reports_to_target(db, current_user, project_id, user_id)
+    pm_user_id = user_id
 
     if not project.review_eligible:
         raise HTTPException(
@@ -1202,24 +1351,48 @@ def get_secondary_evaluation_queue(
     Only `status == reviewed` rows are returned — secondaries write
     impact AFTER the PM has evaluated.
     """
-    # Secondary evaluator is now a project-level field (Project.secondary_evaluator_id),
-    # not a per-member ProjectAssignment row.
-    secondary_projects = (
-        db.query(Project.id)
+    # Two secondary bindings, by mode:
+    #  - single-PM: the project-level Project.secondary_evaluator_id → I review
+    #    every member on that project,
+    #  - multi-PM: the per-member ProjectAssignment.secondary_evaluator_id → I
+    #    review only the specific members who name me.
+    single_secondary_project_ids = [
+        pid
+        for (pid,) in db.query(Project.id)
         .filter(
             Project.org_id == current_user.org_id,
             Project.secondary_evaluator_id == current_user.id,
+            Project.multi_pm_enabled == False,  # noqa: E712
             Project.is_deleted == False,  # noqa: E712
             Project.review_eligible == True,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
         )
         .all()
-    )
+    ]
+    multi_secondary_pairs = {
+        (pid, uid)
+        for (pid, uid) in db.query(
+            ProjectAssignment.project_id, ProjectAssignment.user_id
+        )
+        .join(Project, Project.id == ProjectAssignment.project_id)
+        .filter(
+            ProjectAssignment.org_id == current_user.org_id,
+            ProjectAssignment.secondary_evaluator_id == current_user.id,
+            ProjectAssignment.is_deleted == False,  # noqa: E712
+            Project.multi_pm_enabled == True,  # noqa: E712
+            Project.is_deleted == False,  # noqa: E712
+            Project.status != PROJECT_STATUS_COMPLETED,
+        )
+        .all()
+    }
 
-    if not secondary_projects:
+    if not single_secondary_project_ids and not multi_secondary_pairs:
         return []
 
-    project_ids = [pid for (pid,) in secondary_projects]
+    single_secondary_set = set(single_secondary_project_ids)
+    project_ids = list(
+        single_secondary_set | {pid for (pid, _uid) in multi_secondary_pairs}
+    )
 
     reviews = (
         db.query(ProjectReview)
@@ -1233,6 +1406,14 @@ def get_secondary_evaluation_queue(
         .order_by(ProjectReview.created_at.desc())
         .all()
     )
+    # Keep only reviews I'm the secondary for: a single-PM project I own, or the
+    # exact multi-PM (project, member) pair that named me.
+    reviews = [
+        r
+        for r in reviews
+        if r.project_id in single_secondary_set
+        or (r.project_id, r.user_id) in multi_secondary_pairs
+    ]
 
     # Redact the PM's rating per the per-FY visibility rule — same gate as
     # get_review, so the secondary queue can't bypass `project_ratings_visible`.
@@ -1282,10 +1463,10 @@ def submit_secondary_evaluation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This project is not eligible for review.",
         )
-    if not project or project.secondary_evaluator_id != current_user.id:
+    if not project or not _is_member_secondary(db, current_user, project, review.user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Secondary evaluator for this project.",
+            detail="You are not the Secondary evaluator for this team member.",
         )
 
     if review.user_id == current_user.id:
@@ -1376,10 +1557,10 @@ def save_secondary_draft(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This project is not eligible for review.",
         )
-    if not project or project.secondary_evaluator_id != current_user.id:
+    if not project or not _is_member_secondary(db, current_user, project, review.user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Secondary evaluator for this project.",
+            detail="You are not the Secondary evaluator for this team member.",
         )
     if review.user_id == current_user.id:
         raise HTTPException(
@@ -1470,10 +1651,10 @@ def update_secondary_evaluation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This project is not eligible for review.",
         )
-    if not project or project.secondary_evaluator_id != current_user.id:
+    if not project or not _is_member_secondary(db, current_user, project, review.user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Secondary evaluator for this project.",
+            detail="You are not the Secondary evaluator for this team member.",
         )
 
     existing = db.query(ProjectReviewEvaluator).filter(
@@ -1673,15 +1854,18 @@ def get_management_overview(
         members: list[AdminMemberReviewRow] = []
         reviewed_count = 0
         pm_name: str | None = None
-        pm_assignment: ProjectAssignment | None = None
+        # In multi-PM a project can have several roots (Primaries); each is
+        # shown as a "(PM)" row. Single-PM keeps its lone Primary.
+        pm_assignments: list[ProjectAssignment] = []
 
         for a in project.assignments:
             if not a.user or a.user.is_deleted:
                 continue
 
             if a.evaluator_type == "Primary":
-                pm_name = a.user.full_name
-                pm_assignment = a  # the PM's own review is appended after the loop
+                if pm_name is None:
+                    pm_name = a.user.full_name
+                pm_assignments.append(a)  # PM rows are appended after the loop
                 continue
 
             review = review_map.get((project.id, a.user_id))
@@ -1700,9 +1884,9 @@ def get_management_overview(
                 performance_group=review.performance_group if review else None,
             ))
 
-        # The PM's OWN review (authored by the project's reports-to senior) is
+        # Each root's OWN review (authored by the project's reports-to senior) is
         # tracked alongside the team so admins can see it. Suffixed "(PM)".
-        if pm_assignment is not None:
+        for pm_assignment in pm_assignments:
             pm_review = review_map.get((project.id, pm_assignment.user_id))
             pm_status = pm_review.status if pm_review else "not_started"
             if pm_status == ProjectReviewStatus.REVIEWED.value:
@@ -1775,16 +1959,15 @@ def update_review(
 
     is_admin = current_user.role == "Admin"
     is_reviewer = review.reviewer_id == current_user.id
-    # A newly-assigned PM inherits edit rights on the project's reviews — the
-    # current active Primary, not just whoever first authored the row. This
-    # lets a reassigned PM continue/own in-flight evaluations like a regular PM.
-    is_current_pm = db.query(ProjectAssignment.id).filter(
-        ProjectAssignment.project_id == review.project_id,
-        ProjectAssignment.org_id == current_user.org_id,
-        ProjectAssignment.user_id == current_user.id,
-        ProjectAssignment.evaluator_type == "Primary",
-        ProjectAssignment.is_deleted == False,  # noqa: E712
-    ).first() is not None
+    # The PM who evaluates THIS review's member may edit it (mode-aware): the
+    # member's direct manager in multi-PM, or a current Primary in single-PM.
+    # This lets a reassigned PM continue/own in-flight evaluations, but never
+    # lets a sub-PM edit a review outside their own direct reports.
+    project = db.query(Project).filter(
+        Project.id == review.project_id,
+        Project.org_id == current_user.org_id,
+    ).first()
+    is_current_pm = bool(project) and _is_member_pm(db, current_user, project, review.user_id)
 
     if not (is_reviewer or is_current_pm or is_admin):
         raise HTTPException(
@@ -1850,22 +2033,20 @@ def get_review(
     is_owner = review.user_id == current_user.id
     is_reviewer = review.reviewer_id == current_user.id  # the PM who authored it
 
-    # Current Primary PM of the project — covers a reassigned PM who didn't
-    # author the row. NOT "any active member": that leaked peers' reviews.
-    is_pm = db.query(ProjectAssignment).filter(
-        ProjectAssignment.project_id == review.project_id,
-        ProjectAssignment.user_id == current_user.id,
-        ProjectAssignment.org_id == current_user.org_id,
-        ProjectAssignment.evaluator_type == "Primary",
-        ProjectAssignment.is_deleted == False,  # noqa: E712
-    ).first() is not None
-
-    # Secondary evaluator is a project-level field.
+    # The project — needed for the mode-aware PM / secondary / reports-to checks.
     project = db.query(Project).filter(
         Project.id == review.project_id,
         Project.org_id == current_user.org_id,
     ).first()
-    is_secondary = bool(project and project.secondary_evaluator_id == current_user.id)
+
+    # The PM who evaluates THIS review's member may view it (mode-aware): the
+    # member's direct manager in multi-PM, or a current Primary in single-PM.
+    # NOT "any active member" — that would leak peers' reviews.
+    is_pm = bool(project) and _is_member_pm(db, current_user, project, review.user_id)
+
+    # The member's Secondary evaluator — per-member in multi-PM, project-level
+    # in single-PM.
+    is_secondary = bool(project) and _is_member_secondary(db, current_user, project, review.user_id)
     # Project's reports-to senior — evaluates the PM, so they may view reviews
     # on their project (a project-level role, like the secondary evaluator).
     is_reports_to = bool(project and project.reports_to_id == current_user.id)

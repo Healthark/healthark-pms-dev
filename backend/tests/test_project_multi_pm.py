@@ -102,12 +102,14 @@ def test_schema_rejects_self_manage():
         ])
 
 
-def test_schema_rejects_non_member_manager():
-    with pytest.raises(ValidationError, match="member of the project"):
-        _multi(999, [
-            AssignmentCreate(user_id=1),
-            AssignmentCreate(user_id=2, manager_id=77),
-        ])
+def test_schema_allows_non_member_manager():
+    # PR2: a member's PM may be any org user, not just an existing project
+    # member (org membership is validated at the route layer instead).
+    p = _multi(999, [
+        AssignmentCreate(user_id=1),
+        AssignmentCreate(user_id=2, manager_id=77),
+    ])
+    assert p.multi_pm_enabled is True
 
 
 def test_schema_rejects_cycle():
@@ -121,20 +123,25 @@ def test_schema_rejects_cycle():
         ])
 
 
-def test_schema_rejects_zero_or_multiple_roots():
-    with pytest.raises(ValidationError, match="exactly one top PM"):
-        _multi(999, [
-            AssignmentCreate(user_id=1),  # root
-            AssignmentCreate(user_id=2),  # also root
-        ])
+def test_schema_allows_multiple_roots():
+    # PR2: several top-level members (each with no PM) are valid — "PM Reports
+    # To" reviews every root, e.g. a flat team with no central PM above it.
+    p = _multi(999, [
+        AssignmentCreate(user_id=1),  # root
+        AssignmentCreate(user_id=2),  # also root
+    ])
+    assert p.multi_pm_enabled is True
 
 
-def test_schema_rejects_reports_to_equals_top_pm():
-    with pytest.raises(ValidationError, match="different user than the top PM"):
-        _multi(1, [  # reports_to == the root (user 1)
-            AssignmentCreate(user_id=1),
-            AssignmentCreate(user_id=2, manager_id=1),
-        ])
+def test_schema_allows_reports_to_equals_a_pm():
+    # PR2: "PM Reports To" may also be one of the project's PMs (used to chain a
+    # member-PM up to a top reviewer). Self-pairs are skipped at routing time,
+    # not rejected here.
+    p = _multi(1, [  # reports_to == the root (user 1)
+        AssignmentCreate(user_id=1),
+        AssignmentCreate(user_id=2, manager_id=1),
+    ])
+    assert p.multi_pm_enabled is True
 
 
 def test_schema_rejects_own_secondary():
@@ -192,6 +199,42 @@ def test_create_multi_pm_persists_hierarchy(db):
     # Project-level secondary is unused in multi-PM mode.
     project = detail
     assert project.secondary_evaluator_id is None
+
+
+def test_create_multi_pm_allows_multiple_top_pms(db):
+    # Same-level PMs: several members with no manager are all top-level PMs,
+    # each reviewed by "PM Reports To". There is no "exactly one top PM" rule —
+    # the create route flags every root Primary and persists them all.
+    org, admin, users = _org_with_users(db, 3)
+    pm1, pm2, member = users  # pm1 & pm2 are peers (roots); member → pm1
+    reports_to = _user(db, org.id)
+    db.commit()
+
+    payload = ProjectCreate(
+        project_code="MP-2",
+        name="Flat",
+        reports_to_id=reports_to.id,
+        multi_pm_enabled=True,
+        assignments=[
+            AssignmentCreate(user_id=pm1.id),                 # root / top PM
+            AssignmentCreate(user_id=pm2.id),                 # also root / top PM
+            AssignmentCreate(user_id=member.id, manager_id=pm1.id),
+        ],
+    )
+    detail = create_project(payload, db, admin, BackgroundTasks())
+    assert detail.multi_pm_enabled is True
+    # Headline PM resolves to one of the two roots (display back-compat).
+    assert detail.pm_id in (pm1.id, pm2.id)
+
+    rows = _rows_by_user(db, detail.id)
+    # BOTH roots are flagged Primary and have no manager.
+    assert rows[pm1.id].evaluator_type == "Primary"
+    assert rows[pm1.id].manager_id is None
+    assert rows[pm2.id].evaluator_type == "Primary"
+    assert rows[pm2.id].manager_id is None
+    # The managed member links to their chosen PM.
+    assert rows[member.id].evaluator_type is None
+    assert rows[member.id].manager_id == pm1.id
 
 
 # ── Single-PM regression — manager_id backfilled to the Primary ──────
