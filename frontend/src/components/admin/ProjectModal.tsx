@@ -633,24 +633,35 @@ export function ProjectModal({
               </div>
 
               {/* Multiple-PM toggle — swaps the team form to a per-member PM +
-                  Secondary hierarchy. */}
-              <label className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted/50 px-3 py-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-brand shrink-0"
-                  checked={multiPmEnabled}
-                  onChange={(e) => setMultiPmEnabled(e.target.checked)}
-                />
-                <span className="text-sm">
-                  <span className="font-medium text-text-main">
+                  Secondary hierarchy. Switch style matches the settings toggles
+                  (PeriodSettingsSection). */}
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface-muted/50 px-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-main">
                     Enable Multiple PM support
-                  </span>
-                  <span className="ml-2 text-xs text-text-muted">
+                  </p>
+                  <p className="mt-0.5 text-xs text-text-muted">
                     Each member gets their own Project Manager &amp; Secondary
                     Evaluator (a PM hierarchy) instead of one PM evaluating everyone.
-                  </span>
-                </span>
-              </label>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={multiPmEnabled}
+                  aria-label="Enable Multiple PM support"
+                  onClick={() => setMultiPmEnabled((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 ${
+                    multiPmEnabled ? "bg-brand" : "bg-slate-200 dark:bg-slate-700"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface shadow transition duration-200 ${
+                      multiPmEnabled ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
 
               {/* ── Team Members ───────────────────────────────── */}
               {/* flex-col + order-* so draft cards render ABOVE the existing

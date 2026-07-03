@@ -100,7 +100,7 @@ describe("ProjectModal — multiple PM support", () => {
     renderModal();
 
     await user.click(
-      screen.getByRole("checkbox", { name: /enable multiple pm support/i }),
+      screen.getByRole("switch", { name: /enable multiple pm support/i }),
     );
     await user.click(screen.getByRole("button", { name: /add member/i }));
 
