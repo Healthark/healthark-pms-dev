@@ -54,6 +54,11 @@ interface DraftAssignment {
   department_id: string;
   is_pm: boolean;
   assigned_date: string;
+  /** Multi-PM mode only. manager_user_id = the member's PM within the project
+   *  ("" = top PM); secondary_evaluator_id = per-member Secondary ("" = none).
+   *  Both stringified user ids (from <select>). Ignored in single-PM mode. */
+  manager_user_id: string;
+  secondary_evaluator_id: string;
   /** When set, this draft is an in-place edit of the existing assignment
    *  with this id. Save will PATCH instead of POST; X will restore the
    *  original read-only row by simply dropping the draft. */
@@ -96,6 +101,9 @@ export function ProjectModal({
   const [expectedEndDate, setExpectedEndDate] = useState("");
   const [reportsToId, setReportsToId] = useState<number | null>(null);
   const [secondaryEvaluatorId, setSecondaryEvaluatorId] = useState<number | null>(null);
+  // Multi-PM hierarchy: each member gets their own PM + Secondary instead of
+  // one Primary evaluating everyone. Toggling this swaps the member form.
+  const [multiPmEnabled, setMultiPmEnabled] = useState(false);
 
   // ── Reference Data (shared cache via ['admin', 'departments|designations']) ─
   const { data: departments = [] } = useDepartments();
@@ -127,6 +135,7 @@ export function ProjectModal({
         setExpectedEndDate(toDateInput(detail.expected_end_date));
         setReportsToId(detail.reports_to_id ?? null);
         setSecondaryEvaluatorId(detail.secondary_evaluator_id ?? null);
+        setMultiPmEnabled(detail.multi_pm_enabled);
         setExistingAssignments(detail.assignments);
       })
       .catch((err: unknown) => setError(getErrorMessage(err)))
@@ -145,6 +154,8 @@ export function ProjectModal({
         department_id: "",
         is_pm: false,
         assigned_date: "",
+        manager_user_id: "",
+        secondary_evaluator_id: "",
       },
       ...prev,
     ]);
@@ -263,6 +274,10 @@ export function ProjectModal({
         department_id: a.department_id ? String(a.department_id) : "",
         is_pm: a.evaluator_type === "Primary",
         assigned_date: a.assigned_date ?? "",
+        manager_user_id: a.manager_id ? String(a.manager_id) : "",
+        secondary_evaluator_id: a.secondary_evaluator_id
+          ? String(a.secondary_evaluator_id)
+          : "",
       },
     ]);
   };
@@ -341,6 +356,50 @@ export function ProjectModal({
   // A team member can't be the secondary evaluator — keep them out of the picker.
   secondaryExclude.push(...assignedUserIds);
 
+  // Members selectable as a "Project Manager" in multi-PM mode: existing
+  // (non-edited) rows + drafts that have an employee chosen, deduped by id.
+  const memberOptions = (() => {
+    const seen = new Set<number>();
+    const out: { id: number; name: string }[] = [];
+    for (const a of visibleExistingAssignments) {
+      if (!seen.has(a.user_id)) {
+        seen.add(a.user_id);
+        out.push({ id: a.user_id, name: a.user_name });
+      }
+    }
+    for (const d of draftAssignments) {
+      if (!d.user_id) continue;
+      const id = Number(d.user_id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name: users.find((u) => u.id === id)?.full_name ?? `#${id}` });
+    }
+    return out;
+  })();
+
+  // Multi-PM validation. The backend is the source of truth (it runs the full
+  // graph + cycle checks on create); the frontend just guards common mistakes.
+  const draftMembersWithUser = draftAssignments.filter((d) => d.user_id);
+  const multiPmError: string | null = (() => {
+    if (!multiPmEnabled) return null;
+    if (memberOptions.length === 0) return "Add at least one team member (the top PM).";
+    if (
+      draftMembersWithUser.some(
+        (d) => d.manager_user_id && Number(d.manager_user_id) === Number(d.user_id),
+      )
+    )
+      return "A member cannot be their own Project Manager.";
+    // On create every member is a draft, so require exactly one top PM (a
+    // member with no Project Manager). On edit the existing rows already encode
+    // the hierarchy, so the whole-graph check is deferred to the backend.
+    if (!isEditing) {
+      const topPms = draftMembersWithUser.filter((d) => !d.manager_user_id);
+      if (topPms.length !== 1)
+        return "Assign a Project Manager to every member except exactly one top PM.";
+    }
+    return null;
+  })();
+
   const validationError =
     !projectCode.trim()
       ? "Project Code is required."
@@ -350,21 +409,23 @@ export function ProjectModal({
           ? "End Date cannot be before Start Date."
           : draftJoinedBeforeStart
             ? "A member's Joined Date cannot be earlier than the project Start Date."
-            : tooManyPms
-            ? "A Project cannot have more than 1 PM."
-            : !hasPrimary
-            ? "Project must have at least one PM."
             : !isEditing && reportsToId === null
               ? "PM Reports To is required."
-              : reportsToConflict
-                ? "PM Reports To must be a different user than the PM."
-                : secondaryConflictWithPm
-                  ? "Secondary Evaluator must be a different user than the PM."
-                  : secondaryConflictWithReportsTo
-                    ? "Secondary Evaluator must be a different user than PM Reports To."
-                    : secondaryConflictWithMember
-                      ? "Secondary Evaluator cannot also be a team member of the project."
-                      : null;
+              : multiPmEnabled
+                ? multiPmError
+                : tooManyPms
+                  ? "A Project cannot have more than 1 PM."
+                  : !hasPrimary
+                    ? "Project must have at least one PM."
+                    : reportsToConflict
+                      ? "PM Reports To must be a different user than the PM."
+                      : secondaryConflictWithPm
+                        ? "Secondary Evaluator must be a different user than the PM."
+                        : secondaryConflictWithReportsTo
+                          ? "Secondary Evaluator must be a different user than PM Reports To."
+                          : secondaryConflictWithMember
+                            ? "Secondary Evaluator cannot also be a team member of the project."
+                            : null;
 
   // ── Submit ──────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -376,6 +437,29 @@ export function ProjectModal({
     setError("");
 
     try {
+      // Multi-PM: the member's PM comes from manager_user_id; the top PM (no
+      // manager) is flagged Primary so display resolvers keep working. In
+      // single-PM mode the per-member fields are omitted and the PM checkbox
+      // drives evaluator_type as before.
+      const draftToPayload = (d: DraftAssignment) =>
+        multiPmEnabled
+          ? {
+              assignment_role: d.assignment_role || null,
+              department_id: d.department_id ? Number(d.department_id) : null,
+              evaluator_type: (d.manager_user_id ? null : "Primary") as "Primary" | null,
+              assigned_date: d.assigned_date || null,
+              manager_id: d.manager_user_id ? Number(d.manager_user_id) : null,
+              secondary_evaluator_id: d.secondary_evaluator_id
+                ? Number(d.secondary_evaluator_id)
+                : null,
+            }
+          : {
+              assignment_role: d.assignment_role || null,
+              department_id: d.department_id ? Number(d.department_id) : null,
+              evaluator_type: (d.is_pm ? "Primary" : null) as "Primary" | null,
+              assigned_date: d.assigned_date || null,
+            };
+
       if (isEditing) {
         await projectService.updateProject(projectId, {
           project_code: projectCode,
@@ -384,20 +468,22 @@ export function ProjectModal({
           start_date: startDate || null,
           expected_end_date: expectedEndDate || null,
           reports_to_id: reportsToId,
-          secondary_evaluator_id: secondaryEvaluatorId,
+          secondary_evaluator_id: multiPmEnabled ? null : secondaryEvaluatorId,
+          multi_pm_enabled: multiPmEnabled,
         });
 
-        // Order matters: PATCH demotions first (any edit-in-place draft
-        // that was the existing PM but is_pm is now false) so the Primary
-        // slot is free before another PATCH/POST tries to claim it. Then
-        // run the remaining PATCHes for in-place edits, then POST any
-        // brand-new draft assignments.
         const editDrafts = draftAssignments.filter((d) => d.user_id && d.existingId !== undefined);
         const newDrafts = draftAssignments.filter((d) => d.user_id && d.existingId === undefined);
-        const demotions = editDrafts.filter((d) => {
-          const orig = existingAssignments.find((a) => a.id === d.existingId);
-          return orig?.evaluator_type === "Primary" && !d.is_pm;
-        });
+
+        // Single-PM: PATCH any PM demotion first (frees the one Primary slot
+        // before another row claims it). Multi-PM has no single-Primary
+        // constraint, so edits run in any order.
+        const demotions = multiPmEnabled
+          ? []
+          : editDrafts.filter((d) => {
+              const orig = existingAssignments.find((a) => a.id === d.existingId);
+              return orig?.evaluator_type === "Primary" && !d.is_pm;
+            });
         const otherEdits = editDrafts.filter((d) => !demotions.includes(d));
 
         for (const d of demotions) {
@@ -409,32 +495,18 @@ export function ProjectModal({
           });
         }
         for (const d of otherEdits) {
-          await projectService.updateAssignment(d.existingId as number, {
-            assignment_role: d.assignment_role || null,
-            department_id: d.department_id ? Number(d.department_id) : null,
-            evaluator_type: d.is_pm ? "Primary" : null,
-            assigned_date: d.assigned_date || null,
-          });
+          await projectService.updateAssignment(d.existingId as number, draftToPayload(d));
         }
         for (const d of newDrafts) {
           await projectService.addAssignment(projectId, {
             user_id: Number(d.user_id),
-            assignment_role: d.assignment_role || null,
-            department_id: d.department_id ? Number(d.department_id) : null,
-            evaluator_type: d.is_pm ? "Primary" : null,
-            assigned_date: d.assigned_date || null,
+            ...draftToPayload(d),
           });
         }
       } else {
         const assignments: AssignmentCreatePayload[] = draftAssignments
           .filter((a) => a.user_id)
-          .map((a) => ({
-            user_id: Number(a.user_id),
-            assignment_role: a.assignment_role || null,
-            department_id: a.department_id ? Number(a.department_id) : null,
-            evaluator_type: a.is_pm ? "Primary" : null,
-            assigned_date: a.assigned_date || null,
-          }));
+          .map((a) => ({ user_id: Number(a.user_id), ...draftToPayload(a) }));
 
         // reports_to_id is required by backend; validation above guarantees non-null here.
         await projectService.createProject({
@@ -444,8 +516,9 @@ export function ProjectModal({
           start_date: startDate || null,
           expected_end_date: expectedEndDate || null,
           reports_to_id: reportsToId as number,
-          secondary_evaluator_id: secondaryEvaluatorId,
+          secondary_evaluator_id: multiPmEnabled ? null : secondaryEvaluatorId,
           assignments,
+          multi_pm_enabled: multiPmEnabled,
         });
       }
 
@@ -546,14 +619,38 @@ export function ProjectModal({
                   required
                   excludeIds={reportsToExclude}
                 />
-                <UserCombobox
-                  value={secondaryEvaluatorId}
-                  onChange={setSecondaryEvaluatorId}
-                  label="Secondary Evaluator"
-                  placeholder="Optional — can be added later"
-                  excludeIds={secondaryExclude}
-                />
+                {/* In multi-PM mode the Secondary is per member, so the single
+                    project-level picker is hidden. */}
+                {!multiPmEnabled && (
+                  <UserCombobox
+                    value={secondaryEvaluatorId}
+                    onChange={setSecondaryEvaluatorId}
+                    label="Secondary Evaluator"
+                    placeholder="Optional — can be added later"
+                    excludeIds={secondaryExclude}
+                  />
+                )}
               </div>
+
+              {/* Multiple-PM toggle — swaps the team form to a per-member PM +
+                  Secondary hierarchy. */}
+              <label className="flex items-center gap-3 rounded-lg border border-border bg-surface-muted/50 px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand shrink-0"
+                  checked={multiPmEnabled}
+                  onChange={(e) => setMultiPmEnabled(e.target.checked)}
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-text-main">
+                    Enable Multiple PM support
+                  </span>
+                  <span className="ml-2 text-xs text-text-muted">
+                    Each member gets their own Project Manager &amp; Secondary
+                    Evaluator (a PM hierarchy) instead of one PM evaluating everyone.
+                  </span>
+                </span>
+              </label>
 
               {/* ── Team Members ───────────────────────────────── */}
               {/* flex-col + order-* so draft cards render ABOVE the existing
@@ -720,29 +817,54 @@ export function ProjectModal({
                         </select>
                       </div>
 
-                      {/* PM checkbox — 2 cols. Exactly one member can be PM. */}
-                      <div className="col-span-2">
-                        <label className={LABEL_CLS}>PM</label>
-                        <label
-                          className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-sm ${
-                            pmDisabled
-                              ? "border-border bg-surface-muted text-text-muted cursor-not-allowed"
-                              : draft.is_pm
-                                ? "border-brand bg-brand-light text-brand cursor-pointer"
-                                : "border-border bg-surface text-text-main cursor-pointer hover:bg-surface-muted"
-                          }`}
-                          title={pmDisabledReason ?? undefined}
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-brand"
-                            checked={draft.is_pm}
-                            disabled={pmDisabled}
-                            onChange={() => toggleDraftPm(draft.tempId)}
-                          />
-                          <span>is PM</span>
-                        </label>
-                      </div>
+                      {/* PM: single-PM mode shows the "is PM" checkbox;
+                          multi-PM mode shows the member's Project Manager
+                          picker (their evaluator within the project). */}
+                      {multiPmEnabled ? (
+                        <div className="col-span-2">
+                          <label className={LABEL_CLS}>Project Manager</label>
+                          <select
+                            className={INPUT_CLS}
+                            aria-label="Project Manager"
+                            value={draft.manager_user_id}
+                            onChange={(e) =>
+                              updateDraft(draft.tempId, "manager_user_id", e.target.value)
+                            }
+                          >
+                            <option value="">— Top PM —</option>
+                            {memberOptions
+                              .filter((m) => m.id !== Number(draft.user_id))
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="col-span-2">
+                          <label className={LABEL_CLS}>PM</label>
+                          <label
+                            className={`flex h-9 items-center gap-2 rounded-lg border px-2.5 text-sm ${
+                              pmDisabled
+                                ? "border-border bg-surface-muted text-text-muted cursor-not-allowed"
+                                : draft.is_pm
+                                  ? "border-brand bg-brand-light text-brand cursor-pointer"
+                                  : "border-border bg-surface text-text-main cursor-pointer hover:bg-surface-muted"
+                            }`}
+                            title={pmDisabledReason ?? undefined}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-brand"
+                              checked={draft.is_pm}
+                              disabled={pmDisabled}
+                              onChange={() => toggleDraftPm(draft.tempId)}
+                            />
+                            <span>is PM</span>
+                          </label>
+                        </div>
+                      )}
 
                       {/* Remove — 1 col */}
                       <div className="col-span-1 flex justify-center pb-1">
@@ -752,8 +874,30 @@ export function ProjectModal({
                       </div>
                     </div>
 
-                    {/* Assigned Date — below the row */}
+                    {/* Second row — per-member Secondary (multi-PM) + Joined Date */}
                     <div className="grid grid-cols-12 gap-2">
+                      {multiPmEnabled && (
+                        <div className="col-span-4">
+                          <label className={LABEL_CLS}>Secondary Evaluator</label>
+                          <select
+                            className={INPUT_CLS}
+                            aria-label="Secondary Evaluator"
+                            value={draft.secondary_evaluator_id}
+                            onChange={(e) =>
+                              updateDraft(draft.tempId, "secondary_evaluator_id", e.target.value)
+                            }
+                          >
+                            <option value="">— None —</option>
+                            {users
+                              .filter((u) => u.id !== Number(draft.user_id))
+                              .map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.full_name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
                       <div className="col-span-3">
                         <label className={LABEL_CLS}>Joined Date</label>
                         <input
