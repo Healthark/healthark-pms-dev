@@ -24,8 +24,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# 4. OVERRIDE: Tell Alembic to use our dynamic DATABASE_URL
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# 4. OVERRIDE: Tell Alembic to use our dynamic DATABASE_URL.
+#    Alembic stores this in a ConfigParser, which treats "%" as interpolation
+#    syntax — so a URL with percent-encoded chars (e.g. a Supabase URL like
+#    "...?options=-c%20search_path%3Dpublic") crashes with "invalid
+#    interpolation syntax". Escape "%" as "%%"; ConfigParser un-escapes it back
+#    to the real URL when the value is read (both offline get_main_option and
+#    online engine_from_config paths).
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # 5. Tell Alembic to look at our SQLAlchemy classes
 target_metadata = Base.metadata
