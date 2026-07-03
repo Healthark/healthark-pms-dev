@@ -59,6 +59,7 @@ type MyReviewsSortKey =
   | "project_code"
   | "department_name"
   | "pm_name"
+  | "secondary_evaluator_name"
   | "cycle"
   | "review_status"
   | "performance_group";
@@ -71,6 +72,7 @@ const MY_REVIEWS_SORT_CONFIG: Record<
   project_code:      { kind: "natural", get: (c) => c.project_code },
   department_name:   { kind: "alpha",   get: (c) => c.department_name },
   pm_name:           { kind: "alpha",   get: (c) => c.pm_name },
+  secondary_evaluator_name: { kind: "alpha", get: (c) => c.secondary_evaluator_name },
   cycle:             { kind: "cycle",   get: (c) => c.cycle },
   review_status:     { kind: "alpha",   get: (c) => c.review_status },
   performance_group: { kind: "numeric", get: (c) => c.performance_group },
@@ -406,6 +408,14 @@ function renderMyReviewsBody(args: {
                 onSort={onSort}
               />
             </th>
+            <th className="hidden sm:table-cell text-left px-4 py-2.5">
+              <SortableHeader
+                label="Secondary Evaluator"
+                columnKey="secondary_evaluator_name"
+                sort={sort}
+                onSort={onSort}
+              />
+            </th>
             <th className="text-left px-4 py-2.5">
               <SortableHeader
                 label="Cycle"
@@ -467,6 +477,9 @@ function renderMyReviewsBody(args: {
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-text-muted">
                     {card.pm_name ?? "—"}
+                  </td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-text-muted">
+                    {card.secondary_evaluator_name ?? "—"}
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-[12px] font-semibold text-text-muted bg-surface-hover px-1.5 py-0.5 rounded">

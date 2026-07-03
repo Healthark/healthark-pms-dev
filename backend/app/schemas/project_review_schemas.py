@@ -152,6 +152,9 @@ class MyProjectCard(BaseModel):
     review_status: Optional[str] = None  # null = no review yet, "pending", "reviewed"
     performance_group: Optional[str] = None
     pm_name: Optional[str] = None
+    # The secondary evaluator who writes the impact statement (per-member in
+    # multi-PM mode, else the project-level secondary). Null when none is set.
+    secondary_evaluator_name: Optional[str] = None
     cycle: Optional[str] = None
 
 
@@ -172,6 +175,9 @@ class PMPendingReviewCard(BaseModel):
     assigned_date: Optional[date] = None
     review_status: Optional[str] = None
     performance_group: Optional[str] = None
+    # The secondary evaluator who writes the impact statement for this reviewee
+    # (per-member in multi-PM mode, else the project-level secondary).
+    secondary_evaluator_name: Optional[str] = None
     cycle: Optional[str] = None
     # True iff the row is pending AND the PM has typed any content into
     # it (rating, impact statement, or any per-competency comment). Pre-

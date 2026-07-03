@@ -65,6 +65,7 @@ type EvalSortKey =
   | "cycle"
   | "department_name"
   | "review_status"
+  | "secondary_evaluator_name"
   | "performance_group";
 
 // Declared below the UnifiedEvalRow definition via an inline `Record` in the
@@ -88,6 +89,7 @@ interface UnifiedEvalRow {
   user_id: number | null;
   cycle: string | null;
   performance_group: string | null;
+  secondary_evaluator_name: string | null;
   /** True iff a real draft has been saved (not just a pre-seeded
    *  placeholder pending row). Drives the Draft pill + filter. */
   has_draft_content: boolean;
@@ -102,6 +104,7 @@ const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEv
   cycle:             { kind: "cycle",   get: (r) => r.cycle },
   department_name:   { kind: "alpha",   get: (r) => r.department_name },
   review_status:     { kind: "alpha",   get: (r) => r.review_status },
+  secondary_evaluator_name: { kind: "alpha", get: (r) => r.secondary_evaluator_name },
   performance_group: { kind: "numeric", get: (r) => r.performance_group },
 };
 
@@ -205,6 +208,7 @@ export function PMEvaluationTab() {
       user_id: c.user_id,
       cycle: c.cycle,
       performance_group: c.performance_group ?? null,
+      secondary_evaluator_name: c.secondary_evaluator_name,
       has_draft_content: !!c.has_draft_content,
     });
   }
@@ -228,6 +232,7 @@ export function PMEvaluationTab() {
       user_id: c.user_id,
       cycle: c.cycle,
       performance_group: c.performance_group ?? null,
+      secondary_evaluator_name: c.secondary_evaluator_name,
       has_draft_content: !!c.has_draft_content,
     });
   }
@@ -251,6 +256,8 @@ export function PMEvaluationTab() {
       user_id: r.user_id,
       cycle: r.cycle,
       performance_group: null,
+      // On a secondary row the current user IS the secondary evaluator.
+      secondary_evaluator_name: user?.full_name ?? null,
       has_draft_content: sec.has_draft_content,
       secondaryReview: r,
       existingImpact: sec.existing_impact,
@@ -569,6 +576,9 @@ export function PMEvaluationTab() {
                   <SortableHeader label="Status" columnKey="review_status" sort={sort} onSort={setSort} />
                 </th>
                 <th className="hidden md:table-cell text-left px-4 py-2.5">
+                  <SortableHeader label="Secondary Evaluator" columnKey="secondary_evaluator_name" sort={sort} onSort={setSort} />
+                </th>
+                <th className="hidden md:table-cell text-left px-4 py-2.5">
                   <SortableHeader label="Rating" columnKey="performance_group" sort={sort} onSort={setSort} />
                 </th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">Action</th>
@@ -626,6 +636,9 @@ export function PMEvaluationTab() {
                           <Clock className="h-3 w-3" /> Pending
                         </span>
                       )}
+                    </td>
+                    <td className="hidden md:table-cell px-4 py-3 text-text-muted">
+                      {r.secondary_evaluator_name ?? "—"}
                     </td>
                     <td className="hidden md:table-cell px-4 py-3">
                       {r.performance_group ? (

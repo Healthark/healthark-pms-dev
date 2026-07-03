@@ -8,8 +8,10 @@ import {
   type PMEvaluationDraftPayload,
   type PerformanceGroup,
   type RoleExpectation,
+  type SecondaryEvalResponse,
 } from "../../services/project-review.service";
 import { ExpectationPanel } from "./ExpectationPanel";
+import { SecondaryFeedback } from "./ImpactBlock";
 import { useDebounce } from "../../hooks/useDebounce";
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
@@ -91,6 +93,9 @@ export function EvalModal({
   const [comments, setComments] = useState<Record<CompKey, string>>(EMPTY_COMMENTS);
   const [performanceGroup, setPerformanceGroup] = useState<PerformanceGroup | "">("");
   const [impactStatement, setImpactStatement] = useState("");
+  // Submitted secondary-evaluator impact statements — shown to the PM in the
+  // read-only view so they can see the secondary's feedback on the review.
+  const [secondaryEvals, setSecondaryEvals] = useState<SecondaryEvalResponse[]>([]);
 
   // Field-change autosave guard: skip while preload is in flight (would
   // race with the GET) and skip until the user has actually edited a field.
@@ -134,6 +139,7 @@ export function EvalModal({
         });
         setPerformanceGroup((review.performance_group ?? "") as PerformanceGroup | "");
         setImpactStatement(review.impact_statement ?? "");
+        setSecondaryEvals(review.secondary_evaluations ?? []);
         skipNextAutosaveRef.current = true;
       })
       .catch(() => setFetchError("Failed to load evaluation data."))
@@ -422,6 +428,9 @@ export function EvalModal({
                 disabled={readOnly}
               />
             </div>
+            {readOnly && (
+              <SecondaryFeedback evaluations={secondaryEvals} compact />
+            )}
           </div>
         )}
 

@@ -76,6 +76,7 @@ export interface MyProjectCard {
   review_status: string | null; // "pending" | "reviewed" | null
   performance_group: string | null;
   pm_name: string | null;
+  secondary_evaluator_name: string | null;
   cycle: string | null;
 }
 
@@ -92,6 +93,7 @@ export interface PMPendingReviewCard {
   assigned_date: string | null;
   review_status: string | null;
   performance_group: string | null;
+  secondary_evaluator_name: string | null;
   cycle: string | null;
   /** True iff the row is pending AND the PM has typed any content into
    *  it. Backend distinguishes this from empty placeholder rows so the
