@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeProvider";
 import { SystemSettingsProvider } from "./contexts/SystemSettingsProvider";
 import { ToastProvider } from "./contexts/ToastProvider";
 import { SnackbarProvider } from "./contexts/SnackbarProvider";
+import { NotificationToastProvider } from "./contexts/NotificationToastProvider";
 import { ConfirmProvider } from "./contexts/ConfirmProvider";
 import App from "./App";
 import "./index.css";
@@ -34,9 +35,11 @@ createRoot(root).render(
           <SystemSettingsProvider>
             <ToastProvider>
               <SnackbarProvider>
-                <ConfirmProvider>
-                  <App />
-                </ConfirmProvider>
+                <NotificationToastProvider>
+                  <ConfirmProvider>
+                    <App />
+                  </ConfirmProvider>
+                </NotificationToastProvider>
               </SnackbarProvider>
             </ToastProvider>
           </SystemSettingsProvider>
