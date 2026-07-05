@@ -532,6 +532,15 @@ def get_mentee_reviews(
     rows: list[MenteeAnnualReview] = []
     for r in reviews:
         base = AnnualReviewResponse.model_validate(r).model_dump()
+        # A still-in-`draft` self-review is private to the mentee. Keep the row
+        # (so the mentor sees the "awaiting self-review" state and the FY exists
+        # in filters) but strip its self content until the mentee submits
+        # (status → pending_mentor). Mirrors /mentees/{id}/reviews and the
+        # mentee-side _strip_private_ratings — without this the mentor's Team
+        # Review tab leaked the mentee's unsubmitted draft self-rating.
+        if r.status == ReviewStatus.DRAFT.value:
+            base["self_overall_review"] = None
+            base["self_performance_rating"] = None
         # Management rating is always visible to mentors for their mentees,
         # regardless of the final_rating_visible toggle.
         u = users.get(r.user_id)

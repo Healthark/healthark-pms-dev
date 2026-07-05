@@ -304,7 +304,17 @@ export function TeamReviewTab() {
                         <ReviewStatusBadge status={r.status} />
                       </td>
                       <td className="px-4 py-3">
-                        <RatingCell value={r.self_performance_rating} />
+                        {/* A mentee's self rating is private until they submit
+                            — never surface a still-`draft` self-rating to the
+                            mentor. The backend strips it too; this guard is
+                            belt-and-suspenders (matches the Annual Summary tab). */}
+                        <RatingCell
+                          value={
+                            r.status === "draft"
+                              ? null
+                              : r.self_performance_rating
+                          }
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <RatingCell value={r.mentor_performance_rating} />
