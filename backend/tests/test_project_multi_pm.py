@@ -14,19 +14,27 @@ against in-memory SQLite (mirrors test_project_secondary_evaluator.py).
 from __future__ import annotations
 
 import pytest
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — registers every table on Base.metadata
-from app.api.routes.project_routes import create_project
+from app.api.routes.project_routes import (
+    add_assignment,
+    create_project,
+    update_assignment,
+)
 from app.core.database import Base
 from app.models.organization_models import Organization
 from app.models.project_models import ProjectAssignment
 from app.models.user_models import User
-from app.schemas.project_schemas import AssignmentCreate, ProjectCreate
+from app.schemas.project_schemas import (
+    AssignmentCreate,
+    AssignmentUpdate,
+    ProjectCreate,
+)
 
 
 @pytest.fixture()
@@ -263,3 +271,140 @@ def test_create_single_pm_links_members_to_primary(db):
     # The member is linked to the single PM so the per-member link exists in
     # both modes (keeps the future unified queue simple).
     assert rows[member.id].manager_id == pm.id
+
+
+# ── Add / Update routes — multi-PM allows many Primaries ─────────────
+# Regression for: "assigning a Secondary Evaluator fails with 'This project
+# already has a Primary evaluator.'" The single-Primary guard on the add /
+# update assignment routes must NOT fire in multi-PM mode, where every
+# top-level PM is legitimately flagged Primary.
+
+def _make_multi_pm_project(db, org, admin, assignments, *, code="MP-X"):
+    reports_to = _user(db, org.id)
+    db.commit()
+    return create_project(
+        ProjectCreate(
+            project_code=code,
+            name="Multi",
+            reports_to_id=reports_to.id,
+            multi_pm_enabled=True,
+            assignments=assignments,
+        ),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+
+def test_update_top_pm_secondary_in_multi_pm_allowed(db):
+    # Repro of the reported bug: a multi-PM project with two top PMs. Editing
+    # one top PM to add a per-member Secondary Evaluator re-sends
+    # evaluator_type="Primary" (that's what the modal does for every top-PM
+    # edit). This must succeed despite the OTHER top PM also being Primary.
+    org, admin, users = _org_with_users(db, 3)
+    pm1, pm2, member = users
+    sec = _user(db, org.id)
+    detail = _make_multi_pm_project(
+        db, org, admin,
+        [
+            AssignmentCreate(user_id=pm1.id),                    # top PM
+            AssignmentCreate(user_id=pm2.id),                    # another top PM
+            AssignmentCreate(user_id=member.id, manager_id=pm1.id),
+        ],
+        code="MP-SEC",
+    )
+
+    pm1_row = _rows_by_user(db, detail.id)[pm1.id]
+    update_assignment(
+        pm1_row.id,
+        AssignmentUpdate(evaluator_type="Primary", secondary_evaluator_id=sec.id),
+        db,
+        admin,
+    )
+
+    rows = _rows_by_user(db, detail.id)
+    assert rows[pm1.id].secondary_evaluator_id == sec.id
+    assert rows[pm1.id].evaluator_type == "Primary"
+    # The other top PM is untouched and still Primary.
+    assert rows[pm2.id].evaluator_type == "Primary"
+
+
+def test_add_second_top_pm_in_multi_pm_allowed(db):
+    # A multi-PM project may gain additional top-level PMs after creation.
+    org, admin, users = _org_with_users(db, 2)
+    pm1, member = users
+    new_pm = _user(db, org.id)
+    detail = _make_multi_pm_project(
+        db, org, admin,
+        [
+            AssignmentCreate(user_id=pm1.id),
+            AssignmentCreate(user_id=member.id, manager_id=pm1.id),
+        ],
+        code="MP-ADD",
+    )
+
+    add_assignment(
+        detail.id,
+        AssignmentCreate(user_id=new_pm.id, evaluator_type="Primary"),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+    rows = _rows_by_user(db, detail.id)
+    assert rows[new_pm.id].evaluator_type == "Primary"
+    assert rows[new_pm.id].manager_id is None
+
+
+# ── Single-PM regression — the single-Primary guard still holds ──────
+
+def _make_single_pm_project(db, org, admin, pm, member, *, code="SP-X"):
+    reports_to = _user(db, org.id)
+    db.commit()
+    return create_project(
+        ProjectCreate(
+            project_code=code,
+            name="Single",
+            reports_to_id=reports_to.id,
+            assignments=[
+                AssignmentCreate(user_id=pm.id, evaluator_type="Primary"),
+                AssignmentCreate(user_id=member.id),
+            ],
+        ),
+        db,
+        admin,
+        BackgroundTasks(),
+    )
+
+
+def test_add_second_primary_blocked_in_single_pm(db):
+    org, admin, users = _org_with_users(db, 2)
+    pm, member = users
+    extra = _user(db, org.id)
+    detail = _make_single_pm_project(db, org, admin, pm, member, code="SP-ADD")
+
+    with pytest.raises(HTTPException) as exc:
+        add_assignment(
+            detail.id,
+            AssignmentCreate(user_id=extra.id, evaluator_type="Primary"),
+            db,
+            admin,
+            BackgroundTasks(),
+        )
+    assert "already has a Primary evaluator" in exc.value.detail
+
+
+def test_promote_second_primary_blocked_in_single_pm(db):
+    org, admin, users = _org_with_users(db, 2)
+    pm, member = users
+    detail = _make_single_pm_project(db, org, admin, pm, member, code="SP-UP")
+
+    member_row = _rows_by_user(db, detail.id)[member.id]
+    with pytest.raises(HTTPException) as exc:
+        update_assignment(
+            member_row.id,
+            AssignmentUpdate(evaluator_type="Primary"),
+            db,
+            admin,
+        )
+    assert "already has a Primary evaluator" in exc.value.detail

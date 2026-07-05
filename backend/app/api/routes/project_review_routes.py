@@ -18,8 +18,8 @@ Endpoints:
     POST  /project-reviews/reports-to/{project_id}/evaluate  → Submit the PM's evaluation
 
     ── Secondary Evaluator ──
-    GET   /project-reviews/secondary-queue          → Reviews pending secondary feedback
-    POST  /project-reviews/{review_id}/secondary    → Submit secondary impact statement
+    GET   /project-reviews/secondary-queue                    → Members awaiting secondary feedback (incl. before PM)
+    POST  /project-reviews/{project_id}/secondary/{user_id}   → Submit secondary impact statement
 
     ── Admin ──
     GET   /project-reviews/management               → Per-project completion overview for active cycle
@@ -62,6 +62,7 @@ from app.schemas.project_review_schemas import (
     PMPendingReviewCard,
     ProjectReviewResponse,
     RoleExpectationResponse,
+    SecondaryEvalCard,
     SecondaryEvalDraft,
     SecondaryEvalResponse,
     SecondaryEvalSubmit,
@@ -196,16 +197,21 @@ def _build_review_response(
     reviewer = db.query(User).filter(User.id == review.reviewer_id).first() if review.reviewer_id else None
     project = db.query(Project).filter(Project.id == review.project_id).first()
 
+    # A Secondary can now write an impact statement BEFORE the PM finalises the
+    # review (status still pending). That early impact must stay private until
+    # the PM completes their evaluation, so it can't pre-empt or bias the PM /
+    # mentee / mentor. Visibility rule:
+    #   - the author always sees their own row (draft or submitted), so
+    #     reopening the modal prefills;
+    #   - everyone else sees a SUBMITTED impact only once the review is REVIEWED.
+    # In the classic flow (secondary writes after the PM) the review is already
+    # REVIEWED, so this is a no-op there.
+    review_finalized = review.status == ProjectReviewStatus.REVIEWED.value
     secondary_responses: list[SecondaryEvalResponse] = []
     for ev in review.secondary_evaluations:
-        # Always include submitted; include drafts only for their author.
-        if (
-            ev.status == EvaluatorStatus.SUBMITTED.value
-            or (
-                ev.status == EvaluatorStatus.DRAFT.value
-                and viewer_user_id is not None
-                and ev.evaluator_id == viewer_user_id
-            )
+        is_author = viewer_user_id is not None and ev.evaluator_id == viewer_user_id
+        if is_author or (
+            ev.status == EvaluatorStatus.SUBMITTED.value and review_finalized
         ):
             ev_user = db.query(User).filter(User.id == ev.evaluator_id).first()
             secondary_responses.append(SecondaryEvalResponse(
@@ -1417,28 +1423,109 @@ def save_reports_to_evaluation_draft(
 # SECONDARY EVALUATOR ENDPOINTS
 # =====================================================================
 
-@router.get("/secondary-queue", response_model=List[ProjectReviewResponse])
+def _authorize_secondary_write(
+    db: DbSession, current_user: User, project_id: int, user_id: int
+) -> Project:
+    """Shared guard for the secondary write routes.
+
+    Returns the Project when the caller may write a Secondary impact statement
+    for `user_id` on `project_id`; raises the appropriate HTTPException
+    otherwise. Ordering mirrors the PM-evaluate guards.
+    """
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.org_id == current_user.org_id,
+        Project.is_deleted == False,  # noqa: E712
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
+    if not project.review_eligible:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This project is not eligible for review.",
+        )
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot evaluate yourself.",
+        )
+    if not _is_member_secondary(db, current_user, project, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not the Secondary evaluator for this team member.",
+        )
+    # The reviewee must actually be on the team (single-PM's _is_member_secondary
+    # is project-level, so it passes for any user_id — this catches non-members).
+    if _member_assignment(db, current_user.org_id, project.id, user_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This user is not assigned to this project.",
+        )
+    return project
+
+
+def _get_or_create_secondary_review(
+    db: DbSession, current_user: User, project: Project, user_id: int
+) -> ProjectReview:
+    """Return the active-cycle ProjectReview for (project, member), lazily
+    creating a reviewer-less PENDING placeholder when the PM hasn't started —
+    so a Secondary can write their impact BEFORE the PM evaluates. The PM's
+    later evaluate finds this same row (by project+user+cycle) and promotes it
+    to REVIEWED, preserving the impact. Raises 409 when a new row would have to
+    be created on a completed project."""
+    cycle = _get_active_cycle(db, current_user.org_id)
+    review = db.query(ProjectReview).filter(
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.user_id == user_id,
+        ProjectReview.project_id == project.id,
+        ProjectReview.cycle == cycle,
+        ProjectReview.is_deleted == False,  # noqa: E712
+    ).first()
+    if review:
+        return review
+    if project.status == PROJECT_STATUS_COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot start a new review on a completed project. Re-open it first.",
+        )
+    review = ProjectReview(
+        org_id=current_user.org_id,
+        user_id=user_id,
+        project_id=project.id,
+        reviewer_id=None,
+        cycle=cycle,
+        status=ProjectReviewStatus.PENDING.value,
+    )
+    db.add(review)
+    db.flush()  # assign review.id for the evaluator row + response
+    return review
+
+
+@router.get("/secondary-queue", response_model=List[SecondaryEvalCard])
 def get_secondary_evaluation_queue(
     db: DbSession,
     current_user: CurrentUser,
 ):
     """
-    List PM-reviewed reviews on projects where the current user is a
-    Secondary evaluator, across ALL cycles. The frontend defaults its
-    Cycle filter to the active cycle, so default UX is unchanged; the
-    filter exposes historical entries the secondary may want to edit.
+    List every team member the current user is a Secondary evaluator for,
+    across ALL cycles — one card per existing review plus an active-cycle
+    placeholder when none exists yet. A Secondary can write BEFORE the PM
+    evaluates, so members surface here immediately (the old gate that required
+    the PM's review to be `reviewed` first is gone). Each card reflects the
+    SECONDARY's own progress (pending / draft / submitted), not the PM's.
 
-    Only `status == reviewed` rows are returned — secondaries write
-    impact AFTER the PM has evaluated.
+    The frontend defaults its Cycle filter to the active cycle, so the default
+    view shows the current half; switching exposes historical entries.
     """
+    active_cycle = _get_active_cycle(db, current_user.org_id)
+
     # Two secondary bindings, by mode:
     #  - single-PM: the project-level Project.secondary_evaluator_id → I review
     #    every member on that project,
     #  - multi-PM: the per-member ProjectAssignment.secondary_evaluator_id → I
     #    review only the specific members who name me.
-    single_secondary_project_ids = [
-        pid
-        for (pid,) in db.query(Project.id)
+    single_projects = (
+        db.query(Project)
         .filter(
             Project.org_id == current_user.org_id,
             Project.secondary_evaluator_id == current_user.id,
@@ -1448,12 +1535,9 @@ def get_secondary_evaluation_queue(
             Project.status != PROJECT_STATUS_COMPLETED,
         )
         .all()
-    ]
-    multi_secondary_pairs = {
-        (pid, uid)
-        for (pid, uid) in db.query(
-            ProjectAssignment.project_id, ProjectAssignment.user_id
-        )
+    )
+    multi_assignments = (
+        db.query(ProjectAssignment)
         .join(Project, Project.id == ProjectAssignment.project_id)
         .filter(
             ProjectAssignment.org_id == current_user.org_id,
@@ -1461,99 +1545,163 @@ def get_secondary_evaluation_queue(
             ProjectAssignment.is_deleted == False,  # noqa: E712
             Project.multi_pm_enabled == True,  # noqa: E712
             Project.is_deleted == False,  # noqa: E712
+            Project.review_eligible == True,  # noqa: E712
             Project.status != PROJECT_STATUS_COMPLETED,
         )
         .all()
-    }
-
-    if not single_secondary_project_ids and not multi_secondary_pairs:
-        return []
-
-    single_secondary_set = set(single_secondary_project_ids)
-    project_ids = list(
-        single_secondary_set | {pid for (pid, _uid) in multi_secondary_pairs}
     )
 
-    reviews = (
+    # The (project, member) pairs I'm the secondary for, de-duplicated but order
+    # preserved (single-PM projects first, then multi-PM members).
+    projects_by_id: dict[int, Project] = {p.id: p for p in single_projects}
+    seen: set[tuple[int, int]] = set()
+    ordered_pairs: list[tuple[Project, int]] = []
+
+    for p in single_projects:
+        members = (
+            db.query(ProjectAssignment)
+            .filter(
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.project_id == p.id,
+                ProjectAssignment.user_id != current_user.id,
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            )
+            .all()
+        )
+        for m in members:
+            if (p.id, m.user_id) not in seen:
+                seen.add((p.id, m.user_id))
+                ordered_pairs.append((p, m.user_id))
+
+    for a in multi_assignments:
+        proj = projects_by_id.get(a.project_id)
+        if proj is None:
+            proj = db.query(Project).filter(
+                Project.id == a.project_id,
+                Project.org_id == current_user.org_id,
+            ).first()
+            if proj is not None:
+                projects_by_id[proj.id] = proj
+        if proj is not None and a.user_id != current_user.id and (proj.id, a.user_id) not in seen:
+            seen.add((proj.id, a.user_id))
+            ordered_pairs.append((proj, a.user_id))
+
+    if not ordered_pairs:
+        return []
+
+    # ── Batch lookups (members, reviews, my evaluator rows) ──────────
+    member_ids = {uid for (_p, uid) in ordered_pairs}
+    project_ids = {p.id for (p, _uid) in ordered_pairs}
+    users_by_id = {
+        u.id: u for u in db.query(User).filter(User.id.in_(member_ids)).all()
+    }
+
+    reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
+    review_ids: list[int] = []
+    for rv in (
         db.query(ProjectReview)
         .filter(
             ProjectReview.org_id == current_user.org_id,
             ProjectReview.project_id.in_(project_ids),
-            ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
-            ProjectReview.user_id != current_user.id,
+            ProjectReview.user_id.in_(member_ids),
             ProjectReview.is_deleted == False,  # noqa: E712
         )
         .order_by(ProjectReview.created_at.desc())
         .all()
-    )
-    # Keep only reviews I'm the secondary for: a single-PM project I own, or the
-    # exact multi-PM (project, member) pair that named me.
-    reviews = [
-        r
-        for r in reviews
-        if r.project_id in single_secondary_set
-        or (r.project_id, r.user_id) in multi_secondary_pairs
-    ]
+    ):
+        if (rv.project_id, rv.user_id) in seen:
+            reviews_by_pair.setdefault((rv.project_id, rv.user_id), []).append(rv)
+            review_ids.append(rv.id)
 
-    # Redact the PM's rating per the per-FY visibility rule — same gate as
-    # get_review, so the secondary queue can't bypass `project_ratings_visible`.
-    active_cycle = _get_active_cycle(db, current_user.org_id)
-    responses = []
-    for r in reviews:
-        resp = _build_review_response(r, db, viewer_user_id=current_user.id)
-        reviewee = db.query(User).filter(User.id == r.user_id).first()
-        is_mentor = bool(reviewee and reviewee.mentor_id == current_user.id)
-        resp.performance_group = _visible_performance_group(
-            r, current_user, db, current_user.org_id, active_cycle, is_mentor=is_mentor,
+    # My (the secondary's) own evaluator row per review — carries draft/submitted
+    # state + the impact text to prefill the modal.
+    my_eval_by_review: dict[int, ProjectReviewEvaluator] = {}
+    if review_ids:
+        for ev in (
+            db.query(ProjectReviewEvaluator)
+            .filter(
+                ProjectReviewEvaluator.project_review_id.in_(review_ids),
+                ProjectReviewEvaluator.evaluator_id == current_user.id,
+            )
+            .all()
+        ):
+            my_eval_by_review[ev.project_review_id] = ev
+
+    def _card(project: Project, user: User, review: Optional[ProjectReview]) -> SecondaryEvalCard:
+        mine = my_eval_by_review.get(review.id) if review else None
+        submitted = bool(mine and mine.status == EvaluatorStatus.SUBMITTED.value)
+        has_draft = bool(
+            mine
+            and mine.status == EvaluatorStatus.DRAFT.value
+            and (mine.impact_statement or "").strip()
         )
-        responses.append(resp)
-    return responses
+        # Only expose the PM's rating once the PM has finalised, then apply the
+        # per-FY visibility rule (same gate as get_review).
+        rating = None
+        if review is not None:
+            rating = _visible_performance_group(
+                review, current_user, db, current_user.org_id, active_cycle,
+                is_mentor=bool(user.mentor_id == current_user.id),
+            )
+        return SecondaryEvalCard(
+            project_id=project.id,
+            project_name=project.name,
+            project_code=project.project_code,
+            user_id=user.id,
+            employee_name=user.full_name,
+            cycle=review.cycle if review else active_cycle,
+            review_id=review.id if review else None,
+            review_status="submitted" if submitted else "pending",
+            has_draft_content=has_draft,
+            existing_impact=(mine.impact_statement if mine else None),
+            performance_group=rating,
+        )
+
+    cards: list[SecondaryEvalCard] = []
+    for project, member_id in ordered_pairs:
+        user = users_by_id.get(member_id)
+        if not user or user.is_deleted:
+            continue
+        reviews = reviews_by_pair.get((project.id, member_id), [])
+        cycles_with_review = {r.cycle for r in reviews}
+        for rv in reviews:
+            cards.append(_card(project, user, rv))
+        # Active-cycle placeholder when no review row exists for it yet.
+        if active_cycle not in cycles_with_review:
+            cards.append(_card(project, user, None))
+    return cards
 
 
-@router.post("/{review_id}/secondary", response_model=SecondaryEvalResponse, status_code=status.HTTP_201_CREATED)
+def _secondary_eval_response(
+    db: DbSession, evaluator: ProjectReviewEvaluator
+) -> SecondaryEvalResponse:
+    ev_user = db.query(User).filter(User.id == evaluator.evaluator_id).first()
+    return SecondaryEvalResponse(
+        id=evaluator.id,
+        evaluator_id=evaluator.evaluator_id,
+        evaluator_name=ev_user.full_name if ev_user else "Unknown",
+        impact_statement=evaluator.impact_statement,
+        status=evaluator.status,
+        created_at=evaluator.created_at,
+    )
+
+
+@router.post("/{project_id}/secondary/{user_id}", response_model=SecondaryEvalResponse, status_code=status.HTTP_201_CREATED)
 def submit_secondary_evaluation(
-    review_id: int,
+    project_id: int,
+    user_id: int,
     payload: SecondaryEvalSubmit,
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Secondary evaluator submits impact statement."""
-    review = db.query(ProjectReview).filter(
-        ProjectReview.id == review_id,
-        ProjectReview.org_id == current_user.org_id,
-        ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
-        ProjectReview.is_deleted == False,  # noqa: E712
-    ).first()
+    """Secondary evaluator submits an impact statement for a team member.
 
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reviewed project review not found.",
-        )
-
-    # Verify caller is the project's Secondary evaluator (project-level field).
-    project = db.query(Project).filter(
-        Project.id == review.project_id,
-        Project.org_id == current_user.org_id,
-        Project.is_deleted == False,  # noqa: E712
-    ).first()
-
-    if project and not project.review_eligible:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This project is not eligible for review.",
-        )
-    if not project or not _is_member_secondary(db, current_user, project, review.user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Secondary evaluator for this team member.",
-        )
-
-    if review.user_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot evaluate yourself.",
-        )
+    Keyed on (project, member) rather than a review id so the Secondary can
+    write BEFORE the PM starts — the parent PENDING review is created lazily
+    when needed and promoted to REVIEWED once the PM evaluates.
+    """
+    project = _authorize_secondary_write(db, current_user, project_id, user_id)
+    review = _get_or_create_secondary_review(db, current_user, project, user_id)
 
     existing = db.query(ProjectReviewEvaluator).filter(
         ProjectReviewEvaluator.project_review_id == review.id,
@@ -1572,14 +1720,6 @@ def submit_secondary_evaluation(
         existing.impact_statement = payload.impact_statement
         evaluator = existing
     else:
-        # Block only the creation of a NEW impact statement on a completed
-        # project; an in-flight draft can still be finished — matching the PM
-        # flow and PUT /{review_id}/secondary.
-        if project.status == PROJECT_STATUS_COMPLETED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot start a new review on a completed project. Re-open it first.",
-            )
         evaluator = ProjectReviewEvaluator(
             org_id=current_user.org_id,
             project_review_id=review.id,
@@ -1591,21 +1731,13 @@ def submit_secondary_evaluation(
         db.add(evaluator)
     db.commit()
     db.refresh(evaluator)
-
-    ev_user = db.query(User).filter(User.id == evaluator.evaluator_id).first()
-    return SecondaryEvalResponse(
-        id=evaluator.id,
-        evaluator_id=evaluator.evaluator_id,
-        evaluator_name=ev_user.full_name if ev_user else "Unknown",
-        impact_statement=evaluator.impact_statement,
-        status=evaluator.status,
-        created_at=evaluator.created_at,
-    )
+    return _secondary_eval_response(db, evaluator)
 
 
-@router.patch("/{review_id}/secondary/draft", response_model=SecondaryEvalResponse)
+@router.patch("/{project_id}/secondary/{user_id}/draft", response_model=SecondaryEvalResponse)
 def save_secondary_draft(
-    review_id: int,
+    project_id: int,
+    user_id: int,
     payload: SecondaryEvalDraft,
     db: DbSession,
     current_user: CurrentUser,
@@ -1613,40 +1745,11 @@ def save_secondary_draft(
     """
     Secondary evaluator saves an in-progress impact statement as DRAFT.
     The row uses ``EvaluatorStatus.DRAFT`` so the PM, mentor, and mentee
-    don't see it until the evaluator submits via POST /secondary.
+    don't see it until the evaluator submits. Like submit, this may run
+    before the PM starts and lazily creates the parent PENDING review.
     """
-    review = db.query(ProjectReview).filter(
-        ProjectReview.id == review_id,
-        ProjectReview.org_id == current_user.org_id,
-        ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
-        ProjectReview.is_deleted == False,  # noqa: E712
-    ).first()
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reviewed project review not found.",
-        )
-
-    project = db.query(Project).filter(
-        Project.id == review.project_id,
-        Project.org_id == current_user.org_id,
-        Project.is_deleted == False,  # noqa: E712
-    ).first()
-    if project and not project.review_eligible:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This project is not eligible for review.",
-        )
-    if not project or not _is_member_secondary(db, current_user, project, review.user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Secondary evaluator for this team member.",
-        )
-    if review.user_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot evaluate yourself.",
-        )
+    project = _authorize_secondary_write(db, current_user, project_id, user_id)
+    review = _get_or_create_secondary_review(db, current_user, project, user_id)
 
     existing = db.query(ProjectReviewEvaluator).filter(
         ProjectReviewEvaluator.project_review_id == review.id,
@@ -1667,13 +1770,6 @@ def save_secondary_draft(
         existing.status = EvaluatorStatus.DRAFT.value
         evaluator = existing
     else:
-        # Block only NEW impact statements on a completed project; an existing
-        # draft stays editable (matches the PM flow).
-        if project.status == PROJECT_STATUS_COMPLETED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot start a new review on a completed project. Re-open it first.",
-            )
         evaluator = ProjectReviewEvaluator(
             org_id=current_user.org_id,
             project_review_id=review.id,
@@ -1685,62 +1781,37 @@ def save_secondary_draft(
         db.add(evaluator)
     db.commit()
     db.refresh(evaluator)
-
-    ev_user = db.query(User).filter(User.id == evaluator.evaluator_id).first()
-    return SecondaryEvalResponse(
-        id=evaluator.id,
-        evaluator_id=evaluator.evaluator_id,
-        evaluator_name=ev_user.full_name if ev_user else "Unknown",
-        impact_statement=evaluator.impact_statement,
-        status=evaluator.status,
-        created_at=evaluator.created_at,
-    )
+    return _secondary_eval_response(db, evaluator)
 
 
-@router.put("/{review_id}/secondary", response_model=SecondaryEvalResponse)
+@router.put("/{project_id}/secondary/{user_id}", response_model=SecondaryEvalResponse)
 def update_secondary_evaluation(
-    review_id: int,
+    project_id: int,
+    user_id: int,
     payload: SecondaryEvalSubmit,
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Secondary evaluator updates their previously submitted impact statement."""
+    """Secondary evaluator updates their existing impact statement (active
+    cycle). Requires a row to already exist — use POST to create."""
+    project = _authorize_secondary_write(db, current_user, project_id, user_id)
+
+    cycle = _get_active_cycle(db, current_user.org_id)
     review = db.query(ProjectReview).filter(
-        ProjectReview.id == review_id,
         ProjectReview.org_id == current_user.org_id,
-        ProjectReview.status == ProjectReviewStatus.REVIEWED.value,
+        ProjectReview.user_id == user_id,
+        ProjectReview.project_id == project.id,
+        ProjectReview.cycle == cycle,
         ProjectReview.is_deleted == False,  # noqa: E712
     ).first()
-
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reviewed project review not found.",
-        )
-
-    # Caller must still be the project's Secondary evaluator — matches the
-    # POST/draft guards so a replaced secondary can't keep editing their old
-    # impact statement (and blocks edits on a soft-deleted project).
-    project = db.query(Project).filter(
-        Project.id == review.project_id,
-        Project.org_id == current_user.org_id,
-        Project.is_deleted == False,  # noqa: E712
-    ).first()
-    if project and not project.review_eligible:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This project is not eligible for review.",
-        )
-    if not project or not _is_member_secondary(db, current_user, project, review.user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not the Secondary evaluator for this team member.",
-        )
-
-    existing = db.query(ProjectReviewEvaluator).filter(
-        ProjectReviewEvaluator.project_review_id == review.id,
-        ProjectReviewEvaluator.evaluator_id == current_user.id,
-    ).first()
+    existing = (
+        db.query(ProjectReviewEvaluator).filter(
+            ProjectReviewEvaluator.project_review_id == review.id,
+            ProjectReviewEvaluator.evaluator_id == current_user.id,
+        ).first()
+        if review
+        else None
+    )
 
     if not existing:
         raise HTTPException(
@@ -1751,16 +1822,7 @@ def update_secondary_evaluation(
     existing.impact_statement = payload.impact_statement
     db.commit()
     db.refresh(existing)
-
-    ev_user = db.query(User).filter(User.id == existing.evaluator_id).first()
-    return SecondaryEvalResponse(
-        id=existing.id,
-        evaluator_id=existing.evaluator_id,
-        evaluator_name=ev_user.full_name if ev_user else "Unknown",
-        impact_statement=existing.impact_statement,
-        status=existing.status,
-        created_at=existing.created_at,
-    )
+    return _secondary_eval_response(db, existing)
 
 
 # =====================================================================
