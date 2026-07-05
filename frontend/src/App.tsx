@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { NotificationToaster } from "./components/NotificationToaster";
 import { Sidebar } from "./layouts/Sidebar";
 import { Topbar } from "./layouts/Topbar";
 import { PageTitleProvider } from "./contexts/PageTitleProvider";
@@ -102,6 +103,9 @@ function AppShell() {
   return (
     <SidebarProvider>
       <PageTitleProvider>
+        {/* Headless: watches the polled summary and pops new-notification
+            toasts. Lives here so it only runs for authenticated users. */}
+        <NotificationToaster />
         <div className="flex h-screen overflow-hidden flex-col">
           <div className="flex flex-1 overflow-hidden">
             <Sidebar />

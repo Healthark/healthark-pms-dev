@@ -8,22 +8,27 @@ import {
 /**
  * Strict, shared query key for the topbar notification summary read
  * (`GET /notifications/summary`). Consumed by the Topbar bell + count
- * dot. The `markAllRead` mutation invalidates this key so the unread
- * count refreshes after the round-trip.
- *
- * Note: this hook does NOT currently set `refetchInterval`. The legacy
- * code didn't poll either — adding polling would be a UX change, not
- * a migration. Toggle on in a follow-up if the team wants live updates.
+ * dot and the new-notification toast watcher. The `markAllRead` mutation
+ * invalidates this key so the unread count refreshes after the round-trip.
  */
 export const notificationsSummaryQueryKey = [
   "notifications",
   "summary",
 ] as const;
 
+// Poll cadence for live notifications. There's no push channel (websocket/SSE),
+// so a genuinely-new notification surfaces on the next poll — worst-case this
+// many ms after it's created. `refetchIntervalInBackground` is left at its
+// default (false), so we don't poll a hidden tab; `refetchOnWindowFocus` below
+// catches the user up the moment they return.
+export const NOTIFICATIONS_POLL_MS = 30_000;
+
 export function useNotificationsSummary() {
   return useQuery<TopbarSummary>({
     queryKey: notificationsSummaryQueryKey,
     queryFn: () => notificationService.getSummary(),
+    refetchInterval: NOTIFICATIONS_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 }
 
