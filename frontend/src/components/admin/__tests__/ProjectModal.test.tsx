@@ -300,6 +300,29 @@ describe("ProjectModal — multiple PM support", () => {
       expect(mockProjectService.createProject).toHaveBeenCalledTimes(1),
     );
   });
+
+  it("removes the 'more than 1 PM' warning once Multiple PM support is enabled", async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    // Tick two PMs in single-PM mode → the warning appears.
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+    await user.selectOptions(screen.getByLabelText("Practitioner"), "1");
+    await user.click(screen.getByLabelText(/is PM/i));
+
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+    await user.selectOptions(screen.getAllByLabelText("Practitioner")[0], "2");
+    await user.click(screen.getAllByLabelText(/is PM/i)[0]);
+
+    expect(screen.getByText(/more than 1 PM/i)).toBeInTheDocument();
+
+    // Enable Multiple PM support → more than one PM is now expected, so the
+    // warning is suppressed (submit validation already skips this rule too).
+    await user.click(
+      screen.getByRole("switch", { name: /enable multiple pm support/i }),
+    );
+    expect(screen.queryByText(/more than 1 PM/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("ProjectModal — removed members (edit flow)", () => {
