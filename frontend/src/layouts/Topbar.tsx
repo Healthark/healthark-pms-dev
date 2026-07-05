@@ -93,7 +93,7 @@ export function Topbar() {
             Loading...
           </span>
         ) : settings?.active_cycle_name ? (
-          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand">
+          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-brand-light px-2.5 py-0.5 text-xs font-medium text-brand dark:text-white">
             <CalendarDays className="h-3 w-3 text-accent" aria-hidden="true" />
             {settings.active_cycle_name}
           </span>
