@@ -876,17 +876,21 @@ def add_assignment(
         )
 
     if assignment_in.evaluator_type == "Primary":
-        existing_primary = db.query(ProjectAssignment).filter(
-            ProjectAssignment.project_id == project_id,
-            ProjectAssignment.org_id == current_user.org_id,
-            ProjectAssignment.evaluator_type == "Primary",
-            ProjectAssignment.is_deleted == False,  # noqa: E712
-        ).first()
-        if existing_primary:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This project already has a Primary evaluator (Project Manager).",
-            )
+        # Multi-PM projects legitimately have MANY top-level PMs, each flagged
+        # Primary (see ProjectAssignment model). The "one Primary per project"
+        # constraint only applies to classic single-PM mode.
+        if not project.multi_pm_enabled:
+            existing_primary = db.query(ProjectAssignment).filter(
+                ProjectAssignment.project_id == project_id,
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.evaluator_type == "Primary",
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            ).first()
+            if existing_primary:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This project already has a Primary evaluator (Project Manager).",
+                )
         # The PM cannot also be the senior reviewing them — same constraint
         # enforced on project create. (PM == secondary is covered by the
         # member check above.)
@@ -1042,25 +1046,33 @@ def update_assignment(
             )
 
     if update_data.get("evaluator_type") == "Primary":
-        existing_primary = db.query(ProjectAssignment).filter(
-            ProjectAssignment.project_id == assignment.project_id,
-            ProjectAssignment.org_id == current_user.org_id,
-            ProjectAssignment.evaluator_type == "Primary",
-            ProjectAssignment.id != assignment_id,
-            ProjectAssignment.is_deleted == False,  # noqa: E712
-        ).first()
-        if existing_primary:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This project already has a Primary evaluator.",
-            )
-        # The promoted PM cannot also be the senior who reviews them or
-        # the project's secondary evaluator. Look up the parent project to
-        # cross-check both fields.
+        # Look up the parent project up front — it drives both the single-PM
+        # constraint below and the reviewer-role cross-checks that follow.
         parent = db.query(Project).filter(
             Project.id == assignment.project_id,
             Project.org_id == current_user.org_id,
         ).first()
+        # Multi-PM projects legitimately have MANY top-level PMs, each flagged
+        # Primary. Enforcing a single Primary here wrongly blocks routine edits
+        # to any top PM (e.g. assigning that member a per-member Secondary
+        # Evaluator re-sends evaluator_type="Primary"). Constraint is single-PM
+        # only.
+        if not (parent and parent.multi_pm_enabled):
+            existing_primary = db.query(ProjectAssignment).filter(
+                ProjectAssignment.project_id == assignment.project_id,
+                ProjectAssignment.org_id == current_user.org_id,
+                ProjectAssignment.evaluator_type == "Primary",
+                ProjectAssignment.id != assignment_id,
+                ProjectAssignment.is_deleted == False,  # noqa: E712
+            ).first()
+            if existing_primary:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This project already has a Primary evaluator.",
+                )
+        # The promoted PM cannot also be the senior who reviews them or
+        # the project's secondary evaluator (cross-checked against the parent
+        # project looked up above).
         if parent and assignment.user_id == parent.reports_to_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
