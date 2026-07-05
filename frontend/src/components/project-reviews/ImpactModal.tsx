@@ -2,21 +2,21 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Save, Send, X } from "lucide-react";
 import type {
-  ProjectReviewResponse,
   SecondaryEvalPayload,
   SecondaryEvalDraftPayload,
 } from "../../services/project-review.service";
 
 /**
- * Minimal header data ImpactModal needs. Both PMEvaluationTab and
- * MenteeProjectsTab satisfy this shape when they build their row objects.
+ * Minimal header data ImpactModal needs. Secondary writes are keyed on
+ * (project_id, user_id) — the impact may be created before the PM's review
+ * row exists, so there's no review id to target.
  */
 export interface ImpactModalRow {
   employee_name: string;
   project_name: string;
   review_status: string; // "pending" | "submitted" | ...
-  /** The underlying ProjectReview used to POST/PUT the impact. */
-  secondaryReview?: ProjectReviewResponse;
+  project_id: number;
+  user_id: number | null;
   existingImpact?: string;
 }
 
@@ -28,11 +28,13 @@ interface ImpactModalProps {
   /** When true, inputs are disabled and the submit button is hidden. */
   readonly readOnly?: boolean;
   readonly onSubmit: (
-    reviewId: number,
+    projectId: number,
+    userId: number,
     payload: SecondaryEvalPayload,
   ) => Promise<void>;
   readonly onSaveDraft?: (
-    reviewId: number,
+    projectId: number,
+    userId: number,
     payload: SecondaryEvalDraftPayload,
   ) => Promise<void>;
   readonly onClose: () => void;
@@ -135,11 +137,11 @@ export function ImpactModal({
           >
             {readOnly ? "Close" : "Cancel"}
           </button>
-          {!readOnly && onSaveDraft && (
+          {!readOnly && onSaveDraft && row.user_id !== null && (
             <button
               type="button"
               onClick={() =>
-                onSaveDraft(row.secondaryReview!.id, {
+                onSaveDraft(row.project_id, row.user_id as number, {
                   impact_statement: impactStatement,
                 })
               }
@@ -154,11 +156,11 @@ export function ImpactModal({
               {isDraftSaving ? "Saving…" : "Save Draft"}
             </button>
           )}
-          {!readOnly && (
+          {!readOnly && row.user_id !== null && (
             <button
               type="button"
               onClick={() =>
-                onSubmit(row.secondaryReview!.id, {
+                onSubmit(row.project_id, row.user_id as number, {
                   impact_statement: impactStatement,
                 })
               }

@@ -186,6 +186,35 @@ class PMPendingReviewCard(BaseModel):
     has_draft_content: bool = False
 
 
+class SecondaryEvalCard(BaseModel):
+    """Secondary evaluator's queue — one card per member they must write an
+    Impact Statement for.
+
+    Unlike the PM queue, a Secondary can write BEFORE the PM starts, so
+    ``review_id`` is None until a ProjectReview row exists (created lazily on
+    the first draft/submit). ``review_status`` / ``has_draft_content`` /
+    ``existing_impact`` describe the SECONDARY's own progress on this member,
+    NOT the PM's review.
+    """
+    project_id: int
+    project_name: str
+    project_code: str
+    user_id: int
+    employee_name: str
+    cycle: str
+    review_id: Optional[int] = None
+    # The secondary's own submission state: "submitted" once they finalise,
+    # else "pending" (no impact yet, or only a saved draft).
+    review_status: str = "pending"
+    # True iff the secondary has a saved-but-unsubmitted draft.
+    has_draft_content: bool = False
+    # The secondary's own impact text (draft or submitted), for modal prefill.
+    existing_impact: Optional[str] = None
+    # The PM's rating, redacted per the per-FY visibility rule and only
+    # meaningful once the PM finalises the review. Shown as display context.
+    performance_group: Optional[str] = None
+
+
 # =====================================================================
 # ROLE EXPECTATIONS
 # =====================================================================

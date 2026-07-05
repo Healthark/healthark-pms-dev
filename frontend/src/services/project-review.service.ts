@@ -101,6 +101,26 @@ export interface PMPendingReviewCard {
   has_draft_content: boolean;
 }
 
+export interface SecondaryEvalCard {
+  project_id: number;
+  project_name: string;
+  project_code: string;
+  user_id: number;
+  employee_name: string;
+  cycle: string;
+  /** Null until a ProjectReview row exists (created lazily on first write). */
+  review_id: number | null;
+  /** The SECONDARY's own submission state: "submitted" once finalized, else
+   *  "pending" (no impact yet, or only a saved draft). */
+  review_status: "pending" | "submitted";
+  /** True iff the secondary has a saved-but-unsubmitted draft. */
+  has_draft_content: boolean;
+  /** The secondary's own impact text (draft or submitted), for modal prefill. */
+  existing_impact: string | null;
+  /** The PM's rating once finalized (redacted per visibility). Display only. */
+  performance_group: string | null;
+}
+
 export interface RoleExpectation {
   id: number;
   department_name: string;
@@ -269,19 +289,25 @@ export const projectReviewService = {
   },
 
   // ── Secondary Evaluator ────────────────────────────────────────
-  /** List reviews pending secondary impact statement. */
-  getSecondaryQueue: async (): Promise<ProjectReviewResponse[]> => {
-    const res = await apiClient.get<ProjectReviewResponse[]>("/project-reviews/secondary-queue");
+  // Writes are keyed on (projectId, userId), not a review id — a Secondary can
+  // now write BEFORE the PM starts, when no review row exists yet. The backend
+  // creates the parent PENDING review lazily and the PM's later evaluate
+  // promotes it.
+  /** List members awaiting a secondary impact statement (incl. before the PM
+   *  has started — placeholder cards have review_id === null). */
+  getSecondaryQueue: async (): Promise<SecondaryEvalCard[]> => {
+    const res = await apiClient.get<SecondaryEvalCard[]>("/project-reviews/secondary-queue");
     return res.data;
   },
 
-  /** Submit secondary impact statement. */
+  /** Submit secondary impact statement for a member on a project. */
   submitSecondaryEval: async (
-    reviewId: number,
+    projectId: number,
+    userId: number,
     payload: SecondaryEvalPayload,
   ): Promise<SecondaryEvalResponse> => {
     const res = await apiClient.post<SecondaryEvalResponse>(
-      `/project-reviews/${reviewId}/secondary`,
+      `/project-reviews/${projectId}/secondary/${userId}`,
       payload,
     );
     return res.data;
@@ -290,23 +316,25 @@ export const projectReviewService = {
   /** Secondary evaluator saves an in-progress impact statement as a
    *  draft. Submit promotes it. */
   saveSecondaryDraft: async (
-    reviewId: number,
+    projectId: number,
+    userId: number,
     payload: SecondaryEvalDraftPayload,
   ): Promise<SecondaryEvalResponse> => {
     const res = await apiClient.patch<SecondaryEvalResponse>(
-      `/project-reviews/${reviewId}/secondary/draft`,
+      `/project-reviews/${projectId}/secondary/${userId}/draft`,
       payload,
     );
     return res.data;
   },
 
-  /** Update an existing secondary impact statement. */
+  /** Update an existing secondary impact statement (active cycle). */
   updateSecondaryEval: async (
-    reviewId: number,
+    projectId: number,
+    userId: number,
     payload: SecondaryEvalPayload,
   ): Promise<SecondaryEvalResponse> => {
     const res = await apiClient.put<SecondaryEvalResponse>(
-      `/project-reviews/${reviewId}/secondary`,
+      `/project-reviews/${projectId}/secondary/${userId}`,
       payload,
     );
     return res.data;

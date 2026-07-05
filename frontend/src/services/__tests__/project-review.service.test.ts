@@ -9,6 +9,7 @@ vi.mock("../api.client", () => ({
   default: {
     post: vi.fn().mockResolvedValue({ data: {} }),
     patch: vi.fn().mockResolvedValue({ data: {} }),
+    put: vi.fn().mockResolvedValue({ data: {} }),
   },
 }));
 
@@ -46,6 +47,36 @@ describe("projectReviewService — reports-to targets a reviewee by id", () => {
     expect(mockClient.patch).toHaveBeenCalledWith(
       "/project-reviews/reports-to/7/evaluate/42/draft",
       payload,
+    );
+  });
+});
+
+describe("projectReviewService — secondary targets a member by (project, user)", () => {
+  // Secondary impact is now keyed on (projectId, userId), not a review id, so
+  // it can be written BEFORE the PM's review row exists.
+  const impact = { impact_statement: "great work" };
+
+  it("submit posts to /{projectId}/secondary/{userId}", async () => {
+    await projectReviewService.submitSecondaryEval(7, 42, impact);
+    expect(mockClient.post).toHaveBeenCalledWith(
+      "/project-reviews/7/secondary/42",
+      impact,
+    );
+  });
+
+  it("draft patches to /{projectId}/secondary/{userId}/draft", async () => {
+    await projectReviewService.saveSecondaryDraft(7, 42, impact);
+    expect(mockClient.patch).toHaveBeenCalledWith(
+      "/project-reviews/7/secondary/42/draft",
+      impact,
+    );
+  });
+
+  it("update puts to /{projectId}/secondary/{userId}", async () => {
+    await projectReviewService.updateSecondaryEval(7, 42, impact);
+    expect(mockClient.put).toHaveBeenCalledWith(
+      "/project-reviews/7/secondary/42",
+      impact,
     );
   });
 });

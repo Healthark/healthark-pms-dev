@@ -15,7 +15,6 @@ import { TablePagination } from "../common/TablePagination";
 import {
   type PMEvaluationPayload,
   type PMEvaluationDraftPayload,
-  type ProjectReviewResponse,
   type SecondaryEvalPayload,
   type SecondaryEvalDraftPayload,
   type RoleExpectation,
@@ -41,7 +40,6 @@ import { ClearFiltersButton } from "../common/ClearFiltersButton";
 import { compareValues, type SortKind, type SortState } from "../../utils/sort";
 import { buildProjectCodeIndex } from "../../utils/projectCodeIndex";
 import { sortCyclesDesc } from "../../utils/fy";
-import { resolveSecondaryRowStatus } from "../../utils/secondaryReviewStatus";
 // EvalModal + ImpactModal lazy-loaded (F3). EvalModal is the heaviest
 // modal in the app at ~475 LOC; ImpactModal is paired (same parents)
 // so we split them together. Each opens on row-click only.
@@ -93,8 +91,7 @@ interface UnifiedEvalRow {
   /** True iff a real draft has been saved (not just a pre-seeded
    *  placeholder pending row). Drives the Draft pill + filter. */
   has_draft_content: boolean;
-  // Secondary-specific
-  secondaryReview?: ProjectReviewResponse;
+  // Secondary-specific — the impact text to prefill the modal.
   existingImpact?: string;
 }
 
@@ -112,7 +109,6 @@ const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEv
 
 export function PMEvaluationTab() {
   const { user } = useAuth();
-  const currentUserId = user?.user_id;
   const { settings } = useSystemSettings();
   const activeCycle = settings?.active_cycle_name ?? null;
   const toast = useToast();
@@ -238,11 +234,12 @@ export function PMEvaluationTab() {
   }
 
   for (const r of secReviews) {
-    // A saved draft (status="draft") must NOT read as submitted — see
-    // resolveSecondaryRowStatus. Draft → "pending" + has_draft_content.
-    const sec = resolveSecondaryRowStatus(r.secondary_evaluations, currentUserId);
+    // The backend now classifies the secondary's own progress (pending /
+    // draft / submitted) on each card — a saved draft stays "pending" +
+    // has_draft_content, and a card can exist before the PM starts (review_id
+    // null). Writes are keyed on (project_id, user_id), not a review id.
     unifiedRows.push({
-      key: `sec-${r.id}`,
+      key: `sec-${r.project_id}-${r.user_id}-${r.cycle}`,
       type: "secondary",
       employee_name: r.employee_name,
       project_id: r.project_id,
@@ -251,16 +248,15 @@ export function PMEvaluationTab() {
       department_name: null,
       designation_name: null,
       assignment_role: null,
-      review_status: sec.review_status,
-      review_id: r.id,
+      review_status: r.review_status,
+      review_id: r.review_id,
       user_id: r.user_id,
       cycle: r.cycle,
-      performance_group: null,
+      performance_group: r.performance_group,
       // On a secondary row the current user IS the secondary evaluator.
       secondary_evaluator_name: user?.full_name ?? null,
-      has_draft_content: sec.has_draft_content,
-      secondaryReview: r,
-      existingImpact: sec.existing_impact,
+      has_draft_content: r.has_draft_content,
+      existingImpact: r.existing_impact ?? "",
     });
   }
 
@@ -367,10 +363,14 @@ export function PMEvaluationTab() {
     }
   };
 
-  const handleSecSubmit = async (reviewId: number, payload: SecondaryEvalPayload) => {
+  const handleSecSubmit = async (
+    projectId: number,
+    userId: number,
+    payload: SecondaryEvalPayload,
+  ) => {
     setModalError("");
     try {
-      await submitSecMutation.mutateAsync({ reviewId, payload });
+      await submitSecMutation.mutateAsync({ projectId, userId, payload });
       closeModal();
       toast.success("Impact statement saved.");
     } catch (err: unknown) {
@@ -399,12 +399,13 @@ export function PMEvaluationTab() {
   };
 
   const handleSecSaveDraft = async (
-    reviewId: number,
+    projectId: number,
+    userId: number,
     payload: SecondaryEvalDraftPayload,
   ) => {
     setModalError("");
     try {
-      await saveSecDraftMutation.mutateAsync({ reviewId, payload });
+      await saveSecDraftMutation.mutateAsync({ projectId, userId, payload });
       toast.success("Draft saved.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
@@ -564,7 +565,7 @@ export function PMEvaluationTab() {
               <tr className="bg-surface-muted/80 border-b border-border">
                 <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-text-muted">#</th>
                 <th className="text-left px-5 py-2.5">
-                  <SortableHeader label="Employee" columnKey="employee_name" sort={sort} onSort={setSort} />
+                  <SortableHeader label="Member" columnKey="employee_name" sort={sort} onSort={setSort} />
                 </th>
                 <th className="text-left px-4 py-2.5">
                   <SortableHeader label="Project" columnKey="project_name" sort={sort} onSort={setSort} />

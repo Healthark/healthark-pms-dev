@@ -13,6 +13,7 @@ import {
   type PMPendingReviewCard,
   type ProjectReviewResponse,
   type RoleExpectation,
+  type SecondaryEvalCard,
   type SecondaryEvalPayload,
   type SecondaryEvalDraftPayload,
   type SecondaryEvalResponse,
@@ -76,7 +77,7 @@ export function usePMQueue() {
 }
 
 export function useSecondaryQueue() {
-  return useQuery<ProjectReviewResponse[]>({
+  return useQuery<SecondaryEvalCard[]>({
     queryKey: secondaryQueueQueryKey,
     queryFn: () => projectReviewService.getSecondaryQueue(),
   });
@@ -239,10 +240,10 @@ export function useSubmitSecondaryEval() {
   return useMutation<
     SecondaryEvalResponse,
     Error,
-    { reviewId: number; payload: SecondaryEvalPayload }
+    { projectId: number; userId: number; payload: SecondaryEvalPayload }
   >({
-    mutationFn: ({ reviewId, payload }) =>
-      projectReviewService.submitSecondaryEval(reviewId, payload),
+    mutationFn: ({ projectId, userId, payload }) =>
+      projectReviewService.submitSecondaryEval(projectId, userId, payload),
     onSuccess: () => invalidateProjectReviewsAndDashboard(qc),
   });
 }
@@ -252,10 +253,10 @@ export function useSaveSecondaryDraft() {
   return useMutation<
     SecondaryEvalResponse,
     Error,
-    { reviewId: number; payload: SecondaryEvalDraftPayload }
+    { projectId: number; userId: number; payload: SecondaryEvalDraftPayload }
   >({
-    mutationFn: ({ reviewId, payload }) =>
-      projectReviewService.saveSecondaryDraft(reviewId, payload),
+    mutationFn: ({ projectId, userId, payload }) =>
+      projectReviewService.saveSecondaryDraft(projectId, userId, payload),
     onSuccess: () => invalidateProjectReviewDrafts(qc),
   });
 }
@@ -265,10 +266,10 @@ export function useUpdateSecondaryEval() {
   return useMutation<
     SecondaryEvalResponse,
     Error,
-    { reviewId: number; payload: SecondaryEvalPayload }
+    { projectId: number; userId: number; payload: SecondaryEvalPayload }
   >({
-    mutationFn: ({ reviewId, payload }) =>
-      projectReviewService.updateSecondaryEval(reviewId, payload),
+    mutationFn: ({ projectId, userId, payload }) =>
+      projectReviewService.updateSecondaryEval(projectId, userId, payload),
     onSuccess: () => invalidateProjectReviewsAndDashboard(qc),
   });
 }

@@ -259,25 +259,26 @@ def test_secondary_routes_to_the_per_member_evaluator(db):
     _org, project, a, b, c, _senior, sec = _chain(db)
     # Both B and C get PM-reviewed so two reviewed rows exist.
     submit_pm_evaluation(project.id, b.id, _payload(), db, a)
-    c_review = submit_pm_evaluation(project.id, c.id, _payload(), db, b)
+    submit_pm_evaluation(project.id, c.id, _payload(), db, b)
 
     # sec is only C's secondary — B's review (no secondary) must not appear.
     queue = get_secondary_evaluation_queue(db, sec)
     assert [r.user_id for r in queue] == [c.id]
 
+    # Secondary writes are keyed on (project, member), not the review id.
     out = submit_secondary_evaluation(
-        c_review.id, SecondaryEvalSubmit(impact_statement="Strong client impact."), db, sec
+        project.id, c.id, SecondaryEvalSubmit(impact_statement="Strong client impact."), db, sec
     )
     assert out.evaluator_id == sec.id
 
 
 def test_non_secondary_cannot_submit_secondary(db):
     _org, project, _a, b, c, _senior, _sec = _chain(db)
-    c_review = submit_pm_evaluation(project.id, c.id, _payload(), db, b)
+    submit_pm_evaluation(project.id, c.id, _payload(), db, b)
     other = _user(db, project.org_id)  # nobody's secondary
     with pytest.raises(HTTPException) as ei:
         submit_secondary_evaluation(
-            c_review.id, SecondaryEvalSubmit(impact_statement="x"), db, other
+            project.id, c.id, SecondaryEvalSubmit(impact_statement="x"), db, other
         )
     assert ei.value.status_code == 403
     assert get_secondary_evaluation_queue(db, other) == []
