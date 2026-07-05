@@ -3,7 +3,7 @@
  * dismisses after the dwell window, can be dismissed manually, and the stack
  * is capped so a burst of arrivals drops the oldest.
  */
-import React from "react";
+import React, { useRef } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { NotificationToastProvider } from "../NotificationToastProvider";
@@ -26,43 +26,58 @@ const item = (
   is_read: false,
 });
 
-// Capture the notify() fn from context so tests can pop toasts imperatively.
-let notify: (i: StoredNotificationItem) => void;
-function Capture() {
-  notify = useNotificationToast().notify;
-  return null;
+// A "Pop next" button pops items from the provided list, one per click. Driving
+// notify() through a real interaction (rather than capturing it into an outer
+// variable) keeps the harness pure — no reassigning module-scope from render.
+function Harness({ items }: { readonly items: StoredNotificationItem[] }) {
+  const { notify } = useNotificationToast();
+  const nextRef = useRef(0);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const next = items[nextRef.current];
+        nextRef.current += 1;
+        if (next) notify(next);
+      }}
+    >
+      pop-next
+    </button>
+  );
 }
 
-function renderProvider() {
+function renderProvider(items: StoredNotificationItem[]) {
   render(
     <NotificationToastProvider>
-      <Capture />
+      <Harness items={items} />
     </NotificationToastProvider>,
   );
 }
+
+const popNext = () => fireEvent.click(screen.getByText("pop-next"));
 
 describe("NotificationToastProvider", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
   it("renders a pop with the notification title and category label", () => {
-    renderProvider();
-    act(() => notify(item(1)));
+    renderProvider([item(1)]);
+    popNext();
 
     expect(screen.getByText("Title 1")).toBeInTheDocument();
     expect(screen.getByText("Notification")).toBeInTheDocument();
   });
 
   it("labels an announcement distinctly", () => {
-    renderProvider();
-    act(() => notify(item(7, "announcement")));
+    renderProvider([item(7, "announcement")]);
+    popNext();
 
     expect(screen.getByText("Announcement")).toBeInTheDocument();
   });
 
   it("auto-dismisses after ~3.5s", () => {
-    renderProvider();
-    act(() => notify(item(1)));
+    renderProvider([item(1)]);
+    popNext();
     expect(screen.getByText("Title 1")).toBeInTheDocument();
 
     act(() => vi.advanceTimersByTime(3500));
@@ -70,18 +85,16 @@ describe("NotificationToastProvider", () => {
   });
 
   it("can be dismissed manually before the timer fires", () => {
-    renderProvider();
-    act(() => notify(item(1)));
+    renderProvider([item(1)]);
+    popNext();
 
     fireEvent.click(screen.getByLabelText("Dismiss notification"));
     expect(screen.queryByText("Title 1")).not.toBeInTheDocument();
   });
 
   it("caps the visible stack, dropping the oldest", () => {
-    renderProvider();
-    act(() => {
-      for (let i = 1; i <= 5; i++) notify(item(i));
-    });
+    renderProvider([item(1), item(2), item(3), item(4), item(5)]);
+    for (let i = 0; i < 5; i++) popNext();
 
     // Oldest (Title 1) dropped; newest four remain.
     expect(screen.queryByText("Title 1")).not.toBeInTheDocument();
