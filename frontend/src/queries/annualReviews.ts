@@ -204,11 +204,13 @@ export function useSaveMentorDraft() {
       reviewId: number;
       payload: MentorEvalDraftPayload;
     }) => annualReviewService.saveMentorDraft(reviewId, payload),
-    onSuccess: () => {
-      // Drafts: refresh annual-reviews caches so the form sees the
-      // persisted draft on next mount. Dashboard counters unaffected.
-      qc.invalidateQueries({ queryKey: annualReviewsQueryKey });
-    },
+    // Drafts: refresh annual-reviews AND the mentee caches so the persisted
+    // draft is what the eval form (fed by ['mentees', id, 'reviews']) and the
+    // Annual Summary "Draft saved" pill see on next read. Previously only
+    // ['annual-reviews'] was invalidated, so the mentee-scoped cache went
+    // stale and reopening the drawer showed the pre-save draft until a hard
+    // refresh. Dashboard counters are unaffected by drafts.
+    onSuccess: () => invalidateAnnualReviewDrafts(qc),
   });
 }
 

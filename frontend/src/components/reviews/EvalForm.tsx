@@ -89,8 +89,14 @@ export function EvalForm({
     rating: (review.mentor_performance_rating_draft ?? "") as number | "",
   });
 
-  // Re-seed when the review prop changes (different mentee). Skip the
-  // first-render autosave for the freshly-seeded values.
+  // Re-seed only when we switch to a DIFFERENT review (mentee / FY). We
+  // deliberately DON'T reseed when this same review's draft fields change:
+  // saving a draft invalidates ['mentees'], so the freshly-persisted draft
+  // flows back through the cache — reseeding on that would clobber the
+  // mentor's in-progress edits (e.g. text typed after an autosave fired, or
+  // the value they just saved). Identity change is the only reseed trigger;
+  // the draft fields are read fresh inside the effect but intentionally left
+  // out of the deps.
   const skipNextAutosaveRef = useRef(true);
   useEffect(() => {
     const seededReview = review.mentor_overall_review_draft ?? "";
@@ -104,11 +110,8 @@ export function EvalForm({
       rating: seededRating,
     };
     skipNextAutosaveRef.current = true;
-  }, [
-    review.id,
-    review.mentor_overall_review_draft,
-    review.mentor_performance_rating_draft,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review.id]);
 
   const saveDraftMutation = useMutation({
     mutationFn: async (vars: {
