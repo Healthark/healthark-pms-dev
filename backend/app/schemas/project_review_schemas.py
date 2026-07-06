@@ -21,14 +21,15 @@ Schema Map:
     7. Competency and Skills
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
 from datetime import date, datetime
-from app.models.project_review_models import (
-    ProjectReviewStatus,
-    PerformanceGroup,
-)
+from typing import Optional
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.project_review_models import (
+    PerformanceGroup,
+    ProjectReviewStatus,
+)
 
 # =====================================================================
 # PM EVALUATION
@@ -123,6 +124,13 @@ class ProjectReviewResponse(BaseModel):
     comment_mentoring: Optional[str] = None
     comment_competency_skills: Optional[str] = None
 
+    # Dynamic competency comments — {competency_id: text}. The department/
+    # level-aware source of truth; the frontend renders boxes from this keyed
+    # by the resolved competency set. Mirrors the legacy comment_* fields above
+    # for the default set (both are populated). Null on empty placeholder rows;
+    # individual values may be null for competencies left blank.
+    comments: Optional[dict[str, Optional[str]]] = None
+
     # PM's summary
     performance_group: Optional[str] = None
     impact_statement: Optional[str] = None
@@ -149,6 +157,10 @@ class MyProjectCard(BaseModel):
     assignment_role: Optional[str] = None
     designation_name: Optional[str] = None
     department_name: Optional[str] = None
+    # Reviewee's department id + designation level — lets the frontend fetch the
+    # applicable competency set (GET /project-reviews/competencies) for this row.
+    department_id: Optional[int] = None
+    level: Optional[int] = None
     review_status: Optional[str] = None  # null = no review yet, "pending", "reviewed"
     performance_group: Optional[str] = None
     pm_name: Optional[str] = None
@@ -172,6 +184,10 @@ class PMPendingReviewCard(BaseModel):
     assignment_role: Optional[str] = None
     department_name: Optional[str] = None
     designation_name: Optional[str] = None
+    # Reviewee's department id + designation level — lets the frontend fetch the
+    # applicable competency set (GET /project-reviews/competencies) for this row.
+    department_id: Optional[int] = None
+    level: Optional[int] = None
     assigned_date: Optional[date] = None
     review_status: Optional[str] = None
     performance_group: Optional[str] = None
@@ -245,6 +261,11 @@ class RoleExpectationResponse(BaseModel):
     exp_mentoring: Optional[str] = None
     exp_firm_growth: Optional[str] = None
     exp_competency_skills: Optional[str] = None
+    # Dynamic expectations — {competency_id: text}. The frontend matches these
+    # to the resolved competency set by id (rather than the fixed exp_* keys),
+    # so custom per-department/level competencies can carry their own text.
+    # Mirrors the exp_* fields above for the default set; values may be null.
+    expectations: Optional[dict[str, Optional[str]]] = None
 
 
 # =====================================================================

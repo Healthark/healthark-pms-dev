@@ -169,6 +169,27 @@ def _resolved_comment_values(
     return out
 
 
+def _comments_map_for_response(
+    db: DbSession, review: ProjectReview
+) -> Optional[dict[str, Optional[str]]]:
+    """The {competency_id: text} map for the API response.
+
+    Prefers the stored `comments` JSON (source of truth, and forward-compatible
+    with custom competencies whose ids aren't in the default set). For a legacy
+    row with no JSON, builds the map from the comment_* columns keyed by the
+    org's default competency ids. Returns None when there's nothing to show
+    (e.g. an empty placeholder row)."""
+    if review.comments:
+        return review.comments
+    key_to_id = _default_competency_id_by_key(db, review.org_id)
+    built: dict[str, Optional[str]] = {
+        str(key_to_id[key]): getattr(review, field)
+        for key, field in _COMMENT_FIELD_BY_KEY.items()
+        if key in key_to_id
+    }
+    return built if any(built.values()) else None
+
+
 def _pm_review_has_draft_content(review: ProjectReview) -> bool:
     """True iff the PM has typed anything into this review row.
 
@@ -335,6 +356,7 @@ def _build_review_response(
         comment_communication=comment_values["comment_communication"],
         comment_mentoring=comment_values["comment_mentoring"],
         comment_competency_skills=comment_values["comment_competency_skills"],
+        comments=_comments_map_for_response(db, review),
         performance_group=review.performance_group,
         impact_statement=review.impact_statement,
         secondary_evaluations=secondary_responses,
@@ -597,6 +619,8 @@ def get_my_projects(
                 assignment_role=a.assignment_role,
                 designation_name=my_designation_name,
                 department_name=dept.name if dept else None,
+                department_id=dept.id if dept else None,
+                level=my_designation.level if my_designation else None,
                 review_status=review.status,
                 performance_group=_visible_performance_group(
                     review, current_user, db, current_user.org_id, current_cycle
@@ -621,6 +645,8 @@ def get_my_projects(
                 assignment_role=a.assignment_role,
                 designation_name=my_designation_name,
                 department_name=dept.name if dept else None,
+                department_id=dept.id if dept else None,
+                level=my_designation.level if my_designation else None,
                 review_status="pending",
                 pm_name=pm_name,
                 secondary_evaluator_name=sec_name_by_user_id.get(
@@ -818,6 +844,8 @@ def get_pm_evaluation_queue(
                     assignment_role=ta.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=ta.assigned_date,
                     review_status=review.status,
                     performance_group=review.performance_group,
@@ -840,6 +868,8 @@ def get_pm_evaluation_queue(
                     assignment_role=ta.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=ta.assigned_date,
                     review_status=None,
                     performance_group=None,
@@ -881,6 +911,7 @@ def get_role_expectations(
             exp_mentoring=exp.exp_mentoring,
             exp_firm_growth=exp.exp_firm_growth,
             exp_competency_skills=exp.exp_competency_skills,
+            expectations=exp.expectations,
         ))
 
     return results
@@ -1352,6 +1383,8 @@ def get_reports_to_evaluation_queue(
                     assignment_role=root_a.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=root_a.assigned_date,
                     review_status=review.status,
                     performance_group=review.performance_group,
@@ -1373,6 +1406,8 @@ def get_reports_to_evaluation_queue(
                     assignment_role=root_a.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=root_a.assigned_date,
                     review_status=None,
                     performance_group=None,

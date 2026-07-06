@@ -26,7 +26,9 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401 — registers every table on Base.metadata
 from app.api.routes.project_review_routes import (
     _build_review_response,
+    _comments_map_for_response,
     _pm_review_has_draft_content,
+    get_pm_evaluation_queue,
     get_review,
     submit_pm_evaluation,
 )
@@ -39,6 +41,7 @@ from app.models.project_review_models import (
     ProjectReview,
     ProjectReviewStatus,
 )
+from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.project_review_schemas import PMEvaluationSubmit
@@ -268,3 +271,91 @@ def test_has_draft_content_false_for_empty_placeholder(db):
         comments={str(ids["ownership"]): "   "},  # whitespace only
     )
     assert _pm_review_has_draft_content(row) is False
+
+
+# ── PR 3: dynamic API surface (additive, invisible) ───────────────────────
+
+def test_response_exposes_comments_map(db):
+    """ProjectReviewResponse carries the {competency_id: text} map alongside
+    the legacy comment_* fields, so the frontend can render dynamically."""
+    org, pm, member, project, ids = _scenario(db)
+    submit_pm_evaluation(project.id, member.id, _payload(), db, pm)
+    row = db.query(ProjectReview).filter_by(
+        project_id=project.id, user_id=member.id
+    ).one()
+
+    resp = get_review(row.id, db, pm)
+    assert resp.comments == {
+        str(ids["task_execution"]): "TE",
+        str(ids["ownership"]): "OWN",
+        str(ids["project_management"]): "PMG",
+        str(ids["client_deliverables"]): "CD",
+        str(ids["communication"]): "COMM",
+        str(ids["mentoring"]): "MENT",
+        str(ids["competency_skills"]): "CS",
+    }
+    # Legacy fields still populated (default set) — invisible to old clients.
+    assert resp.comment_task_execution == "TE"
+
+
+def test_comments_map_none_for_empty_placeholder(db):
+    org, pm, member, project, ids = _scenario(db)
+    row = ProjectReview(
+        org_id=org.id, user_id=member.id, project_id=project.id, cycle=ACTIVE_CYCLE,
+        status=ProjectReviewStatus.PENDING.value, is_deleted=False, comments=None,
+    )
+    db.add(row)
+    db.commit()
+    assert _comments_map_for_response(db, row) is None
+
+
+def test_comments_map_built_from_columns_for_legacy_row(db):
+    """A legacy row (columns, no JSON) still yields a map keyed by the default
+    competency ids."""
+    org, pm, member, project, ids = _scenario(db)
+    row = ProjectReview(
+        org_id=org.id, user_id=member.id, project_id=project.id, cycle=ACTIVE_CYCLE,
+        reviewer_id=pm.id, status=ProjectReviewStatus.REVIEWED.value, is_deleted=False,
+        comment_task_execution="LEGACY", comments=None,
+    )
+    db.add(row)
+    db.commit()
+    m = _comments_map_for_response(db, row)
+    assert m[str(ids["task_execution"])] == "LEGACY"
+
+
+def test_pm_queue_card_carries_department_and_level(db):
+    """The PM queue card exposes the reviewee's department_id + designation
+    level, so the frontend can fetch the applicable competency set."""
+    org = Organization(name="Org", enabled_features=[])
+    db.add(org)
+    db.flush()
+    db.add(SystemSettings(org_id=org.id, active_cycle_name=ACTIVE_CYCLE))
+    dept = Department(org_id=org.id, name="Strategy")
+    db.add(dept)
+    db.flush()
+    desig = Designation(org_id=org.id, department_id=dept.id, name="Manager", level=4)
+    db.add(desig)
+    db.flush()
+    pm = _user(db, org.id)
+    member = _user(db, org.id)
+    member.designation_id = desig.id
+    project = Project(
+        org_id=org.id, project_code="P-1", name="Proj", status=PROJECT_STATUS_ACTIVE,
+    )
+    db.add(project)
+    db.flush()
+    db.add(ProjectAssignment(
+        org_id=org.id, project_id=project.id, user_id=pm.id,
+        evaluator_type="Primary", is_deleted=False,
+    ))
+    db.add(ProjectAssignment(
+        org_id=org.id, project_id=project.id, user_id=member.id,
+        department_id=dept.id, is_deleted=False,
+    ))
+    db.commit()
+
+    cards = get_pm_evaluation_queue(db, pm)
+    card = next(c for c in cards if c.user_id == member.id)
+    assert card.department_id == dept.id
+    assert card.level == 4
