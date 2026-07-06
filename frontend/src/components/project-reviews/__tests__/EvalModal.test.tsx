@@ -135,6 +135,29 @@ describe("EvalModal — dynamic competency rendering", () => {
     expect(screen.getByRole("button", { name: /Save Draft/ })).toBeDisabled();
   });
 
+  it("renders an existing review by its STORED competencies, not the current set", async () => {
+    // The review was written against a competency the current default set
+    // doesn't contain; it must still render by its own stored framework.
+    vi.mocked(projectReviewService.getReview).mockResolvedValue({
+      id: 77,
+      comments: { "50": "stored text" },
+      competencies: [
+        { id: 50, key: "custom_x", label: "Custom X", display_order: 1, is_reviewable: true },
+      ],
+      performance_group: "2",
+      impact_statement: "impact",
+      secondary_evaluations: [],
+    } as never);
+
+    renderModal({ card: { ...card, review_id: 77 }, isEditMode: true });
+
+    // Renders the review's OWN competency, prefilled by stored id…
+    expect(await screen.findByLabelText(/Custom X/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("stored text")).toBeInTheDocument();
+    // …and NOT the current (fetched) default set.
+    expect(screen.queryByLabelText(/Task Execution/)).not.toBeInTheDocument();
+  });
+
   it("prefills boxes from an existing review's comments id-map", async () => {
     vi.mocked(projectReviewService.getReview).mockResolvedValue({
       id: 99,
