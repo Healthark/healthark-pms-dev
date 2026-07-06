@@ -70,7 +70,10 @@ from app.schemas.project_review_schemas import (
     SecondaryEvalResponse,
     SecondaryEvalSubmit,
 )
-from app.services.competency_service import get_competency_set
+from app.services.competency_service import (
+    get_competencies_by_ids,
+    get_competency_set,
+)
 
 router = APIRouter()
 
@@ -188,6 +191,28 @@ def _comments_map_for_response(
         if key in key_to_id
     }
     return built if any(built.values()) else None
+
+
+def _competencies_for_review(
+    db: DbSession,
+    review: ProjectReview,
+    comments: Optional[dict[str, Optional[str]]],
+) -> list[Competency]:
+    """The competencies THIS review was written against — resolved by the ids
+    in its (already-computed) comments map, so it always renders by its OWN
+    framework even after the department's framework changes (competencies are
+    soft-deleted, so old ids still resolve their labels). Empty when the review
+    has no comments yet (a fresh eval uses the current (department, level) set
+    instead). Takes the resolved map from the caller to avoid recomputing it."""
+    if not comments:
+        return []
+    ids: list[int] = []
+    for key in comments:
+        try:
+            ids.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    return get_competencies_by_ids(db, review.org_id, ids)
 
 
 def _pm_review_has_draft_content(review: ProjectReview) -> bool:
@@ -336,6 +361,7 @@ def _build_review_response(
             ))
 
     comment_values = _resolved_comment_values(db, review)
+    comments_map = _comments_map_for_response(db, review)
 
     return ProjectReviewResponse(
         id=review.id,
@@ -356,7 +382,11 @@ def _build_review_response(
         comment_communication=comment_values["comment_communication"],
         comment_mentoring=comment_values["comment_mentoring"],
         comment_competency_skills=comment_values["comment_competency_skills"],
-        comments=_comments_map_for_response(db, review),
+        comments=comments_map,
+        competencies=[
+            CompetencyResponse.model_validate(c)
+            for c in _competencies_for_review(db, review, comments_map)
+        ],
         performance_group=review.performance_group,
         impact_statement=review.impact_statement,
         secondary_evaluations=secondary_responses,

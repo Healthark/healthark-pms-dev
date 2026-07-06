@@ -324,6 +324,59 @@ def test_comments_map_built_from_columns_for_legacy_row(db):
     assert m[str(ids["task_execution"])] == "LEGACY"
 
 
+def test_response_embeds_competencies_by_stored_ids(db):
+    """The review response embeds the competencies it was written against,
+    resolved by the ids in its comments and ordered by display_order."""
+    org, pm, member, project, ids = _scenario(db)
+    submit_pm_evaluation(project.id, member.id, _payload(), db, pm)
+    row = db.query(ProjectReview).filter_by(
+        project_id=project.id, user_id=member.id
+    ).one()
+
+    resp = get_review(row.id, db, pm)
+    # The 7 reviewable competencies (firm_growth is not in comments), ordered
+    # by display_order.
+    assert [c.key for c in resp.competencies] == [
+        "task_execution", "ownership", "project_management",
+        "client_deliverables", "communication", "mentoring", "competency_skills",
+    ]
+    assert [c.id for c in resp.competencies] == [
+        ids["task_execution"], ids["ownership"], ids["project_management"],
+        ids["client_deliverables"], ids["communication"], ids["mentoring"],
+        ids["competency_skills"],
+    ]
+
+
+def test_embed_resolves_soft_deleted_competency(db):
+    """A competency soft-deleted after a review was written still resolves its
+    label in that review's embed — so the historical review renders intact."""
+    org, pm, member, project, ids = _scenario(db)
+    submit_pm_evaluation(project.id, member.id, _payload(), db, pm)
+    db.query(Competency).filter(Competency.id == ids["mentoring"]).update(
+        {Competency.is_deleted: True}
+    )
+    db.commit()
+    row = db.query(ProjectReview).filter_by(
+        project_id=project.id, user_id=member.id
+    ).one()
+
+    resp = get_review(row.id, db, pm)
+    mentoring = next(c for c in resp.competencies if c.id == ids["mentoring"])
+    assert mentoring.label == "Mentoring"
+
+
+def test_embed_empty_for_review_without_comments(db):
+    org, pm, member, project, ids = _scenario(db)
+    row = ProjectReview(
+        org_id=org.id, user_id=member.id, project_id=project.id, cycle=ACTIVE_CYCLE,
+        status=ProjectReviewStatus.PENDING.value, is_deleted=False, comments=None,
+    )
+    db.add(row)
+    db.commit()
+    resp = _build_review_response(row, db)
+    assert resp.competencies == []
+
+
 def test_pm_queue_card_carries_department_and_level(db):
     """The PM queue card exposes the reviewee's department_id + designation
     level, so the frontend can fetch the applicable competency set."""

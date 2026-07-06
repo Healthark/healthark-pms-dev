@@ -131,6 +131,13 @@ class ProjectReviewResponse(BaseModel):
     # individual values may be null for competencies left blank.
     comments: Optional[dict[str, Optional[str]]] = None
 
+    # The competencies THIS review was written against, resolved by the ids
+    # stored in `comments` (so a review always renders by its own framework,
+    # including competencies later soft-deleted or re-scoped). Ordered by
+    # display_order. Empty for a review with no comments yet — a fresh eval
+    # uses the current (department, level) set from GET /competencies instead.
+    competencies: "list[CompetencyResponse]" = []
+
     # PM's summary
     performance_group: Optional[str] = None
     impact_statement: Optional[str] = None
@@ -292,6 +299,11 @@ class CompetencySetResponse(BaseModel):
     """
     is_default: bool
     competencies: list[CompetencyResponse]
+
+
+# ProjectReviewResponse.competencies is a forward reference to CompetencyResponse
+# (defined above), so resolve it now that the target type exists.
+ProjectReviewResponse.model_rebuild()
 
 
 # =====================================================================
