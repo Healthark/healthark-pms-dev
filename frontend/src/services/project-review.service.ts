@@ -55,6 +55,10 @@ export interface ProjectReviewResponse {
   comment_communication: string | null;
   comment_mentoring: string | null;
   comment_competency_skills: string | null;
+  /** Dynamic competency comments — {competency_id: text}. Source of truth for
+   *  the department/level-aware framework; mirrors the comment_* fields above
+   *  for the default set. Null on empty placeholder rows. */
+  comments: Record<string, string | null> | null;
   performance_group: string | null;
   impact_statement: string | null;
   secondary_evaluations: SecondaryEvalResponse[];
@@ -73,6 +77,10 @@ export interface MyProjectCard {
   assignment_role: string | null;
   designation_name: string | null;
   department_name: string | null;
+  /** Reviewee's department id + designation level — used to fetch the
+   *  applicable competency set for the dynamic eval form. */
+  department_id: number | null;
+  level: number | null;
   review_status: string | null; // "pending" | "reviewed" | null
   performance_group: string | null;
   pm_name: string | null;
@@ -90,6 +98,10 @@ export interface PMPendingReviewCard {
   assignment_role: string | null;
   department_name: string | null;
   designation_name: string | null;
+  /** Reviewee's department id + designation level — used to fetch the
+   *  applicable competency set for the dynamic eval form. */
+  department_id: number | null;
+  level: number | null;
   assigned_date: string | null;
   review_status: string | null;
   performance_group: string | null;
@@ -140,6 +152,28 @@ export interface RoleExpectation {
   exp_mentoring: string | null;
   exp_firm_growth: string | null;
   exp_competency_skills: string | null;
+  /** Dynamic expectations — {competency_id: text}. Matched to the resolved
+   *  competency set by id; mirrors the exp_* fields for the default set. The
+   *  API always sends it; optional here because a few call sites build a
+   *  RoleExpectation-shaped adapter locally (e.g. goals self-review). */
+  expectations?: Record<string, string | null> | null;
+}
+
+/** A single competency in a resolved (department, level) framework set. */
+export interface Competency {
+  id: number;
+  key: string;
+  label: string;
+  display_order: number;
+  is_reviewable: boolean;
+}
+
+/** The competency set that applies to a (department, level). `is_default` is
+ *  true when the org default set is returned because that (department, level)
+ *  has no framework of its own. */
+export interface CompetencySet {
+  is_default: boolean;
+  competencies: Competency[];
 }
 
 // ── Request Payloads ────────────────────────────────────────────────
@@ -214,6 +248,23 @@ export const projectReviewService = {
   /** Get role expectations reference data for evaluation. */
   getRoleExpectations: async (): Promise<RoleExpectation[]> => {
     const res = await apiClient.get<RoleExpectation[]>("/project-reviews/role-expectations");
+    return res.data;
+  },
+
+  /** Resolve the competency set for a (department, level). Omitting either
+   *  falls back to the org default set (flagged is_default). Drives the
+   *  dynamic evaluation form. */
+  getCompetencies: async (
+    departmentId: number | null,
+    level: number | null,
+  ): Promise<CompetencySet> => {
+    const params: Record<string, number> = {};
+    if (departmentId != null) params.department_id = departmentId;
+    if (level != null) params.level = level;
+    const res = await apiClient.get<CompetencySet>(
+      "/project-reviews/competencies",
+      { params },
+    );
     return res.data;
   },
 

@@ -7,6 +7,7 @@ import {
 import {
   projectReviewService,
   type AdminProjectSummary,
+  type CompetencySet,
   type MyProjectCard,
   type PMEvaluationPayload,
   type PMEvaluationDraftPayload,
@@ -47,6 +48,10 @@ export const roleExpectationsQueryKey = [
   "project-reviews",
   "role-expectations",
 ] as const;
+export const competenciesQueryKey = (
+  departmentId: number | null,
+  level: number | null,
+) => ["project-reviews", "competencies", departmentId ?? "def", level ?? "def"] as const;
 export const projectReviewDetailQueryKey = (reviewId: number) =>
   ["project-reviews", "detail", reviewId] as const;
 export const allProjectReviewsQueryKey = [
@@ -94,6 +99,20 @@ export function useRoleExpectations() {
   return useQuery<RoleExpectation[]>({
     queryKey: roleExpectationsQueryKey,
     queryFn: () => projectReviewService.getRoleExpectations(),
+    staleTime: ROLE_EXPECTATIONS_STALE_TIME,
+  });
+}
+
+/** Resolve the competency set for a (department, level) — drives the dynamic
+ *  eval form. Null args resolve to the org default set. Cached like role
+ *  expectations (competencies change rarely, at seed time). */
+export function useCompetencies(
+  departmentId: number | null,
+  level: number | null,
+) {
+  return useQuery<CompetencySet>({
+    queryKey: competenciesQueryKey(departmentId, level),
+    queryFn: () => projectReviewService.getCompetencies(departmentId, level),
     staleTime: ROLE_EXPECTATIONS_STALE_TIME,
   });
 }
