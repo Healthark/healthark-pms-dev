@@ -20,7 +20,7 @@ Completely restructured:
 
 from enum import Enum as PyEnum
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index
+    Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index, JSON
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -80,6 +80,13 @@ class ProjectReview(Base):
     comment_communication = Column(Text, nullable=True)
     comment_mentoring = Column(Text, nullable=True)
     comment_competency_skills = Column(Text, nullable=True)
+
+    # ── Dynamic competency comments (additive foundation) ────────────
+    # {competency_id: comment_text} — the department/level-aware replacement
+    # for the fixed comment_* columns above. Backfilled from comment_* on
+    # migration; not yet read by the live flows (cutover happens in a
+    # follow-up). Keyed by Competency.id (only is_reviewable competencies).
+    comments = Column(JSON, nullable=True)
 
     # ── PM's Summary Fields ──────────────────────────────────────────
     performance_group = Column(String, nullable=True)
