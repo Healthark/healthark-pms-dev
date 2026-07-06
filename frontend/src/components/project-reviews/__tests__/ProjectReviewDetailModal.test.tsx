@@ -77,6 +77,40 @@ describe("ProjectReviewDetailModal — pending placeholder", () => {
   });
 });
 
+describe("ProjectReviewDetailModal — renders by embedded competencies", () => {
+  it("renders competency comments from the review's own framework, not the fixed labels", () => {
+    const dynamicReview = {
+      ...reviewedReview,
+      comment_task_execution: null, // legacy fields empty — must not be used
+      comments: { "50": "Feedback on custom competency" },
+      competencies: [
+        {
+          id: 50,
+          key: "custom_x",
+          label: "Custom Competency X",
+          display_order: 1,
+          is_reviewable: true,
+        },
+      ],
+    } as unknown as ProjectReviewResponse;
+
+    render(
+      <ProjectReviewDetailModal
+        review={dynamicReview}
+        onClose={vi.fn()}
+        projectRatingsVisible={true}
+      />,
+    );
+
+    expect(screen.getByText("Custom Competency X")).toBeInTheDocument();
+    expect(screen.getByText("Feedback on custom competency")).toBeInTheDocument();
+    // The hardcoded legacy label is NOT rendered — the review's own set drives it.
+    expect(
+      screen.queryByText("Task Execution & Problem Solving"),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("ProjectReviewDetailModal — reviewed content labels", () => {
   it("labels the PM and secondary sections 'Overall Review' (renamed from 'Impact Statement')", () => {
     render(
