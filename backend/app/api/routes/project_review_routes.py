@@ -56,6 +56,8 @@ from app.models.user_models import User
 from app.schemas.project_review_schemas import (
     AdminMemberReviewRow,
     AdminProjectSummary,
+    CompetencyResponse,
+    CompetencySetResponse,
     MyProjectCard,
     PMEvaluationDraft,
     PMEvaluationSubmit,
@@ -67,6 +69,7 @@ from app.schemas.project_review_schemas import (
     SecondaryEvalResponse,
     SecondaryEvalSubmit,
 )
+from app.services.competency_service import get_competency_set
 
 router = APIRouter()
 
@@ -791,6 +794,31 @@ def get_role_expectations(
         ))
 
     return results
+
+
+@router.get("/competencies", response_model=CompetencySetResponse)
+def get_competencies(
+    db: DbSession,
+    current_user: CurrentUser,
+    department_id: Optional[int] = Query(None),
+    level: Optional[int] = Query(None),
+):
+    """Resolve the competency set for a (department, level).
+
+    Falls back to the org DEFAULT set (flagged ``is_default=True``) when the
+    given (department, level) has no framework of its own — or when either
+    parameter is omitted. Read-only reference used by the evaluation form and
+    the expectations panel.
+    """
+    competencies, is_default = get_competency_set(
+        db, current_user.org_id, department_id, level
+    )
+    return CompetencySetResponse(
+        is_default=is_default,
+        competencies=[
+            CompetencyResponse.model_validate(c) for c in competencies
+        ],
+    )
 
 
 @router.post("/{project_id}/evaluate/{user_id}", response_model=ProjectReviewResponse, status_code=status.HTTP_201_CREATED)

@@ -12,7 +12,7 @@ a team member, so they know what "good" looks like for that role.
 """
 
 from sqlalchemy import (
-    Column, Integer, Text, DateTime, ForeignKey, Index
+    Column, Integer, Text, DateTime, ForeignKey, Index, JSON
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -36,6 +36,13 @@ class RoleExpectation(Base):
     exp_mentoring = Column(Text, nullable=True)
     exp_firm_growth = Column(Text, nullable=True)
     exp_competency_skills = Column(Text, nullable=True)
+
+    # ── Dynamic expectations (additive foundation) ───────────────────
+    # {competency_id: expectation_text} — the department/level-aware
+    # replacement for the fixed exp_* columns above. Backfilled from exp_* on
+    # migration; not yet read by the live flows (cutover happens in a
+    # follow-up). Keyed by Competency.id.
+    expectations = Column(JSON, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

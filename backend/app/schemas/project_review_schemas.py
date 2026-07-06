@@ -248,6 +248,32 @@ class RoleExpectationResponse(BaseModel):
 
 
 # =====================================================================
+# COMPETENCY FRAMEWORK (department/level-aware)
+# =====================================================================
+
+class CompetencyResponse(BaseModel):
+    """One competency in a resolved framework set."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    key: str
+    label: str
+    display_order: int
+    is_reviewable: bool
+
+
+class CompetencySetResponse(BaseModel):
+    """The competency set that applies to a (department, level).
+
+    ``is_default`` is True when this (department, level) has no framework of its
+    own and the org default set is being returned — the UI surfaces that as
+    "not defined for this role (using default)".
+    """
+    is_default: bool
+    competencies: list[CompetencyResponse]
+
+
+# =====================================================================
 # ADMIN MANAGEMENT VIEW
 # =====================================================================
 
