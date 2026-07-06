@@ -59,6 +59,12 @@ export interface ProjectReviewResponse {
    *  the department/level-aware framework; mirrors the comment_* fields above
    *  for the default set. Null on empty placeholder rows. */
   comments: Record<string, string | null> | null;
+  /** The competencies THIS review was written against, resolved by the ids in
+   *  its comments (ordered, soft-deleted included). Lets the eval form and
+   *  read surfaces render an existing review by its OWN framework rather than
+   *  re-resolving the reviewee's current set. Empty for a review with no
+   *  comments yet. Optional: some local adapters build this shape without it. */
+  competencies?: Competency[];
   performance_group: string | null;
   impact_statement: string | null;
   secondary_evaluations: SecondaryEvalResponse[];

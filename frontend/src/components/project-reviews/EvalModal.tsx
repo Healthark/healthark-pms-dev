@@ -85,10 +85,20 @@ export function EvalModal({
     isLoading: compLoading,
     isError: compError,
   } = useCompetencies(card.department_id, card.level);
-  const reviewableComps = useMemo<Competency[]>(
-    () => (competencySet?.competencies ?? []).filter((c) => c.is_reviewable),
-    [competencySet],
+  // For an EXISTING review, render by the competencies it was written against
+  // — embedded on the review payload, resolved by its stored comment ids — so a
+  // later framework change can't blank or misattribute its comments. A NEW
+  // review (or an existing row with no comments yet) uses the current
+  // (department, level) set fetched above.
+  const [reviewCompetencies, setReviewCompetencies] = useState<Competency[] | null>(
+    null,
   );
+  const reviewableComps = useMemo<Competency[]>(() => {
+    const stored = (reviewCompetencies ?? []).filter((c) => c.is_reviewable);
+    if (stored.length > 0) return stored;
+    return (competencySet?.competencies ?? []).filter((c) => c.is_reviewable);
+  }, [reviewCompetencies, competencySet]);
+  const usingStoredSet = (reviewCompetencies ?? []).some((c) => c.is_reviewable);
 
   // Pre-load whenever a review row already exists. That covers three
   // distinct cases: editing a finalised review (isEditMode=true), the
@@ -109,25 +119,19 @@ export function EvalModal({
   // read-only view so they can see the secondary's feedback on the review.
   const [secondaryEvals, setSecondaryEvals] = useState<SecondaryEvalResponse[]>([]);
 
-  const isLoading = isLoadingReview || compLoading;
-  // A failed competencies fetch must NOT silently render an empty form: without
-  // the set there are no boxes to fill and the reverse-map would emit all-empty
-  // comment_* fields, which a Save Draft / autosave would persist and wipe any
-  // existing comments. Surface it as a blocking error (like the review-load
-  // error) so the form can't be submitted or saved in that state.
+  // Once we know the review brought its own competencies, don't block on (or
+  // fail for) the current-set fetch — it's unused in that case.
+  const isLoading = isLoadingReview || (!usingStoredSet && compLoading);
+  // A failed current-set fetch must NOT silently render an empty form: without
+  // a set there are no boxes and the reverse-map would emit all-empty comment_*
+  // fields, which a Save Draft / autosave would persist and wipe existing
+  // comments. Surface it as a blocking error so the form can't be saved in that
+  // state. Irrelevant once we're rendering from the review's own stored set.
   const loadError =
     fetchError ||
-    (compError ? "Couldn't load the evaluation form. Please close and try again." : "");
-
-  // NOTE (prefill assumption): `comments` from the review is keyed by the
-  // competency ids that were current when it was written, and the boxes render
-  // by the ids of the CURRENTLY-resolved (department, level) set. Today these
-  // are always the org default ids (no custom framework is seeded yet), so they
-  // match. When custom per-(dept, level) frameworks are introduced, an existing
-  // review must be rendered by the ids stored IN its comments (with labels
-  // resolved by id) — otherwise its text won't map onto the new boxes. That
-  // requires the backend to embed competency metadata in the review response;
-  // it is a hard prerequisite for the phase that seeds custom frameworks.
+    (!usingStoredSet && compError
+      ? "Couldn't load the evaluation form. Please close and try again."
+      : "");
 
   // Field-change autosave guard: skip while preload is in flight (would
   // race with the GET) and skip until the user has actually edited a field.
@@ -162,6 +166,8 @@ export function EvalModal({
           map[cid] = text ?? "";
         }
         setComments(map);
+        // Render this review by the competencies it was written against.
+        setReviewCompetencies(review.competencies ?? []);
         setPerformanceGroup((review.performance_group ?? "") as PerformanceGroup | "");
         setImpactStatement(review.impact_statement ?? "");
         setSecondaryEvals(review.secondary_evaluations ?? []);
