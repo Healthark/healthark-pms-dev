@@ -245,7 +245,7 @@ export function PMEvaluationTab() {
       project_id: r.project_id,
       project_name: r.project_name,
       project_code: r.project_code,
-      department_name: null,
+      department_name: r.department_name,
       designation_name: null,
       assignment_role: null,
       review_status: r.review_status,
@@ -372,7 +372,7 @@ export function PMEvaluationTab() {
     try {
       await submitSecMutation.mutateAsync({ projectId, userId, payload });
       closeModal();
-      toast.success("Impact statement saved.");
+      toast.success("Overall review saved.");
     } catch (err: unknown) {
       setModalError(getErrorMessage(err));
     }
@@ -660,7 +660,7 @@ export function PMEvaluationTab() {
                       ) : (
                         <button type="button" onClick={() => handleAction(r)}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 transition-opacity">
-                          {r.type === "secondary" ? "Write Impact" : "Evaluate"}
+                          {r.type === "secondary" ? "Write Overall Review" : "Evaluate"}
                         </button>
                       )}
                     </td>

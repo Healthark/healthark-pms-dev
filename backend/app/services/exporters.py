@@ -546,7 +546,7 @@ def build_annual_reviews_sheet(
 PROJECT_REVIEWS_HEADERS = [
     "Sr No", "Project Code", "Project Name",
     "Employee Code", "Employee Name", "Reviewer",
-    "Cycle", "Status", "Performance Group", "Impact Statement",
+    "Cycle", "Status", "Performance Group", "Overall Review",
     "Comment: Task Execution",
     "Comment: Ownership",
     "Comment: Project Management",
@@ -555,7 +555,7 @@ PROJECT_REVIEWS_HEADERS = [
     "Comment: Mentoring",
     "Comment: Competency & Skills",
     "Secondary Evaluators",
-    "Secondary Impact Statements",
+    "Secondary Overall Reviews",
     "Is Deleted", "Created At", "Updated At",
 ]
 
@@ -626,7 +626,7 @@ PROJECT_REVIEW_EVALUATORS_HEADERS = [
     "Sr No", "Project Review ID",
     "Project Code", "Project Name",
     "Reviewed Employee", "Evaluator Name", "Evaluator Type",
-    "Status", "Impact Statement", "Created At",
+    "Status", "Overall Review", "Created At",
 ]
 
 

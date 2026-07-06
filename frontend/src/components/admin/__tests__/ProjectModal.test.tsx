@@ -104,6 +104,33 @@ describe("ProjectModal — team members", () => {
     expect(practitionerSelects[1].value).toBe("1"); // previously filled card below
   });
 
+  it("submits a long, spaced, hyphenated Project Code verbatim (no client cap)", async () => {
+    // Regression for the create-project 422: the code the admin typed
+    // ("Project_ERROR Replication - 1" — spaces + hyphen, >20 chars) must reach
+    // the API unchanged, with no client-side truncation or character block.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockProjectService.createProject.mockResolvedValue({} as any);
+    const user = userEvent.setup();
+    const longCode = "Project_ERROR Replication - 1";
+    renderModal();
+
+    await user.type(screen.getByLabelText(/project code/i), longCode);
+    await user.type(screen.getByLabelText(/project name/i), "Market Access - Q2");
+    await user.selectOptions(screen.getByLabelText("PM Reports To"), "99");
+
+    // One member, marked PM (single-PM mode requires exactly one Primary).
+    await user.click(screen.getByRole("button", { name: /add member/i }));
+    await user.selectOptions(screen.getByLabelText("Practitioner"), "1");
+    await user.click(screen.getByLabelText(/is PM/i));
+
+    await user.click(screen.getByRole("button", { name: /create project/i }));
+    await waitFor(() =>
+      expect(mockProjectService.createProject).toHaveBeenCalledTimes(1),
+    );
+    const payload = mockProjectService.createProject.mock.calls[0][0];
+    expect(payload.project_code).toBe(longCode);
+  });
+
   it("allows ticking two PMs but blocks save with an inline error", async () => {
     const user = userEvent.setup();
     renderModal();

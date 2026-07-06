@@ -210,8 +210,12 @@ class SecondaryEvalCard(BaseModel):
     has_draft_content: bool = False
     # The secondary's own impact text (draft or submitted), for modal prefill.
     existing_impact: Optional[str] = None
-    # The PM's rating, redacted per the per-FY visibility rule and only
-    # meaningful once the PM finalises the review. Shown as display context.
+    # The reviewed member's department on this project (from their assignment),
+    # shown in the queue's Department column.
+    department_name: Optional[str] = None
+    # The PM's rating. As a reviewer (not the rated employee), the Secondary
+    # sees it once the PM finalises the review (status=reviewed); the PM's
+    # unsubmitted draft rating stays hidden. Shown as display context.
     performance_group: Optional[str] = None
 
 

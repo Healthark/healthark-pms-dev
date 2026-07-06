@@ -284,7 +284,7 @@ export function GoalMentorReviewModal({
             <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-brand/5 shrink-0">
               <ClipboardCheck className="h-4 w-4 text-brand" aria-hidden="true" />
               <span className="text-xs font-semibold uppercase tracking-wider text-brand">
-                Your Review
+                Mentor Review
               </span>
               {isReadOnly && (
                 <span className="ml-auto text-[10px] font-medium text-green-600 dark:text-green-300 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded px-1.5 py-0.5">
@@ -318,7 +318,7 @@ export function GoalMentorReviewModal({
                   htmlFor="mentor-overall"
                   className="block text-xs font-semibold text-text-main mb-1"
                 >
-                  Your Review
+                  Mentor Review
                   {!isReadOnly && " *"}
                 </label>
                 {isReadOnly ? (

@@ -111,7 +111,7 @@ export function ImpactModal({
               htmlFor="sec-impact"
               className="block text-xs font-semibold text-text-main mb-1"
             >
-              Impact Statement {!readOnly && "*"}
+              Overall Review {!readOnly && "*"}
             </label>
             {!readOnly && (
               <p className="text-xs text-text-muted mb-2">

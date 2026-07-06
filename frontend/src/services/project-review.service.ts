@@ -117,7 +117,10 @@ export interface SecondaryEvalCard {
   has_draft_content: boolean;
   /** The secondary's own impact text (draft or submitted), for modal prefill. */
   existing_impact: string | null;
-  /** The PM's rating once finalized (redacted per visibility). Display only. */
+  /** The reviewed member's department on this project. */
+  department_name: string | null;
+  /** The PM's rating, shown once the PM finalizes the review (draft hidden).
+   *  Display only. */
   performance_group: string | null;
 }
 
