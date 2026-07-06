@@ -91,7 +91,11 @@ class ProjectCreate(BaseModel):
           (the PM). Members beyond the PM are optional.
         - secondary_evaluator_id is optional (editable later).
     """
-    project_code: str = Field(..., min_length=1, max_length=20)
+    # No max_length / character pattern: project codes are free-form and may
+    # contain spaces and hyphens (e.g. "Project ERROR Replication - 1"). The DB
+    # column is an unbounded String, so only the "required, non-empty" rule
+    # (min_length=1) is enforced here.
+    project_code: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     start_date: Optional[date] = None
@@ -246,7 +250,8 @@ class ProjectCreate(BaseModel):
 
 class ProjectUpdate(BaseModel):
     """Payload for updating project metadata."""
-    project_code: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    # Mirrors ProjectCreate: free-form code, no length/character cap.
+    project_code: Optional[str] = Field(default=None, min_length=1)
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
     start_date: Optional[date] = None
