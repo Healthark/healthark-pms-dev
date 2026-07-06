@@ -72,7 +72,7 @@ export function ImpactBlock({
           } border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/50`}
         >
           <h3 className="text-[12px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
-            <MessageSquare className="h-3.5 w-3.5" /> Overall Impact Statement
+            <MessageSquare className="h-3.5 w-3.5" /> Overall Review
           </h3>
           <p
             className={`leading-relaxed text-text-main whitespace-pre-wrap ${

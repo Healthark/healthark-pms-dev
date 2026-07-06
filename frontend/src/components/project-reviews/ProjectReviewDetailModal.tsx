@@ -198,7 +198,7 @@ export function ProjectReviewDetailModal({
               <section className="space-y-2">
                 <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   <MessageSquare className="h-3 w-3" aria-hidden="true" />
-                  Manager&rsquo;s Impact Statement
+                  Manager&rsquo;s Overall Review
                 </h3>
                 <div className="rounded-lg border border-border bg-blue-50/30 dark:bg-blue-950/20 px-4 py-3">
                   <p className="text-[13px] text-text-main whitespace-pre-wrap leading-relaxed">
@@ -213,7 +213,7 @@ export function ProjectReviewDetailModal({
             <section className="space-y-2">
               <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                 <UserCircle className="h-3 w-3" aria-hidden="true" />
-                Secondary Impact Statements
+                Secondary Overall Reviews
               </h3>
               <div className="space-y-2">
                 {submittedEvals.map((ev) => (

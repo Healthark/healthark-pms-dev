@@ -1556,6 +1556,9 @@ def get_secondary_evaluation_queue(
     projects_by_id: dict[int, Project] = {p.id: p for p in single_projects}
     seen: set[tuple[int, int]] = set()
     ordered_pairs: list[tuple[Project, int]] = []
+    # The reviewed member's department on this project (from their assignment),
+    # keyed by (project_id, user_id) so the Department column can be filled.
+    dept_id_by_pair: dict[tuple[int, int], Optional[int]] = {}
 
     for p in single_projects:
         members = (
@@ -1572,6 +1575,7 @@ def get_secondary_evaluation_queue(
             if (p.id, m.user_id) not in seen:
                 seen.add((p.id, m.user_id))
                 ordered_pairs.append((p, m.user_id))
+                dept_id_by_pair[(p.id, m.user_id)] = m.department_id
 
     for a in multi_assignments:
         proj = projects_by_id.get(a.project_id)
@@ -1585,6 +1589,7 @@ def get_secondary_evaluation_queue(
         if proj is not None and a.user_id != current_user.id and (proj.id, a.user_id) not in seen:
             seen.add((proj.id, a.user_id))
             ordered_pairs.append((proj, a.user_id))
+            dept_id_by_pair[(proj.id, a.user_id)] = a.department_id
 
     if not ordered_pairs:
         return []
@@ -1595,6 +1600,11 @@ def get_secondary_evaluation_queue(
     users_by_id = {
         u.id: u for u in db.query(User).filter(User.id.in_(member_ids)).all()
     }
+    dept_ids = {d for d in dept_id_by_pair.values() if d is not None}
+    depts_by_id = {
+        d.id: d
+        for d in db.query(Department).filter(Department.id.in_(dept_ids)).all()
+    } if dept_ids else {}
 
     reviews_by_pair: dict[tuple[int, int], list[ProjectReview]] = {}
     review_ids: list[int] = []
@@ -1635,14 +1645,15 @@ def get_secondary_evaluation_queue(
             and mine.status == EvaluatorStatus.DRAFT.value
             and (mine.impact_statement or "").strip()
         )
-        # Only expose the PM's rating once the PM has finalised, then apply the
-        # per-FY visibility rule (same gate as get_review).
+        # The Secondary is a reviewer (not the rated employee), so they see the
+        # PM's rating once the PM finalises the review — NOT gated by the
+        # employee-facing per-FY visibility toggle (that's the PM/Reports-To
+        # reviewer convention). The PM's unsubmitted draft rating stays hidden.
         rating = None
-        if review is not None:
-            rating = _visible_performance_group(
-                review, current_user, db, current_user.org_id, active_cycle,
-                is_mentor=bool(user.mentor_id == current_user.id),
-            )
+        if review is not None and review.status == ProjectReviewStatus.REVIEWED.value:
+            rating = review.performance_group
+        dept_id = dept_id_by_pair.get((project.id, user.id))
+        dept = depts_by_id.get(dept_id) if dept_id is not None else None
         return SecondaryEvalCard(
             project_id=project.id,
             project_name=project.name,
@@ -1654,6 +1665,7 @@ def get_secondary_evaluation_queue(
             review_status="submitted" if submitted else "pending",
             has_draft_content=has_draft,
             existing_impact=(mine.impact_statement if mine else None),
+            department_name=dept.name if dept else None,
             performance_group=rating,
         )
 

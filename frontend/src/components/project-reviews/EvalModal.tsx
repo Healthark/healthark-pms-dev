@@ -416,7 +416,7 @@ export function EvalModal({
                 htmlFor="impact"
                 className="block text-xs font-semibold text-text-main mb-1"
               >
-                Overall Impact Statement {!readOnly && "*"}
+                Overall Review {!readOnly && "*"}
               </label>
               <textarea
                 id="impact"
