@@ -217,6 +217,11 @@ class SecondaryEvalCard(BaseModel):
     # sees it once the PM finalises the review (status=reviewed); the PM's
     # unsubmitted draft rating stays hidden. Shown as display context.
     performance_group: Optional[str] = None
+    # True once the member's PM evaluation is in (review REVIEWED). The
+    # Secondary can save a draft anytime but can only SUBMIT after this flips
+    # true — the frontend disables Submit (with a note) until then, and the
+    # backend enforces the same gate on POST /secondary/{user_id}.
+    pm_submitted: bool = False
 
 
 # =====================================================================

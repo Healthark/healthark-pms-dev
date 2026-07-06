@@ -27,6 +27,10 @@ interface ImpactModalProps {
   readonly row: ImpactModalRow;
   /** When true, inputs are disabled and the submit button is hidden. */
   readonly readOnly?: boolean;
+  /** Whether the member's PM evaluation is in (review reviewed). The Secondary
+   *  can always Save Draft, but can only Submit once this is true. Defaults to
+   *  true so callers that don't pass it keep the pre-gate behavior. */
+  readonly pmSubmitted?: boolean;
   readonly onSubmit: (
     projectId: number,
     userId: number,
@@ -46,6 +50,7 @@ interface ImpactModalProps {
 export function ImpactModal({
   row,
   readOnly = false,
+  pmSubmitted = true,
   onSubmit,
   onSaveDraft,
   onClose,
@@ -56,6 +61,11 @@ export function ImpactModal({
   const isEdit = row.review_status === "submitted";
   const isDraft = row.review_status === "draft";
   const [impactStatement, setImpactStatement] = useState(row.existingImpact ?? "");
+
+  // The Secondary can draft before the PM, but can only submit once the PM's
+  // evaluation is in. An already-submitted row (isEdit) is only reachable
+  // after the PM finalized, so editing stays open regardless.
+  const canSubmit = pmSubmitted || isEdit;
 
   const title = readOnly
     ? "Secondary Feedback"
@@ -105,6 +115,13 @@ export function ImpactModal({
             <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
+          )}
+          {!readOnly && !canSubmit && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+              You can save a draft now, but you can only submit your review once
+              the Project Manager has submitted their evaluation for this team
+              member.
+            </div>
           )}
           <div>
             <label
@@ -164,7 +181,12 @@ export function ImpactModal({
                   impact_statement: impactStatement,
                 })
               }
-              disabled={isSaving || isDraftSaving || !impactStatement.trim()}
+              disabled={isSaving || isDraftSaving || !impactStatement.trim() || !canSubmit}
+              title={
+                !canSubmit
+                  ? "The Project Manager must submit their evaluation before you can submit yours."
+                  : undefined
+              }
               className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {isSaving ? (

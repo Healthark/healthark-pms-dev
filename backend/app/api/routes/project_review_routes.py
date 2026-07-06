@@ -1649,9 +1649,11 @@ def get_secondary_evaluation_queue(
         # PM's rating once the PM finalises the review — NOT gated by the
         # employee-facing per-FY visibility toggle (that's the PM/Reports-To
         # reviewer convention). The PM's unsubmitted draft rating stays hidden.
-        rating = None
-        if review is not None and review.status == ProjectReviewStatus.REVIEWED.value:
-            rating = review.performance_group
+        pm_submitted = (
+            review is not None
+            and review.status == ProjectReviewStatus.REVIEWED.value
+        )
+        rating = review.performance_group if pm_submitted else None
         dept_id = dept_id_by_pair.get((project.id, user.id))
         dept = depts_by_id.get(dept_id) if dept_id is not None else None
         return SecondaryEvalCard(
@@ -1667,6 +1669,7 @@ def get_secondary_evaluation_queue(
             existing_impact=(mine.impact_statement if mine else None),
             department_name=dept.name if dept else None,
             performance_group=rating,
+            pm_submitted=pm_submitted,
         )
 
     cards: list[SecondaryEvalCard] = []
@@ -1708,12 +1711,36 @@ def submit_secondary_evaluation(
 ):
     """Secondary evaluator submits an impact statement for a team member.
 
-    Keyed on (project, member) rather than a review id so the Secondary can
-    write BEFORE the PM starts — the parent PENDING review is created lazily
-    when needed and promoted to REVIEWED once the PM evaluates.
+    PM-first gate: the Secondary may SUBMIT only once the member's PM
+    evaluation is in — i.e. the (project, member, cycle) ``ProjectReview`` is
+    REVIEWED. Before then they can still park a draft (see
+    ``save_secondary_draft``), mirroring the Annual-Goals mentor-review rule
+    ("draft anytime, submit only after the prior review lands"). Keyed on
+    (project, member), not a review id.
     """
     project = _authorize_secondary_write(db, current_user, project_id, user_id)
-    review = _get_or_create_secondary_review(db, current_user, project, user_id)
+
+    cycle = _get_active_cycle(db, current_user.org_id)
+    review = db.query(ProjectReview).filter(
+        ProjectReview.org_id == current_user.org_id,
+        ProjectReview.user_id == user_id,
+        ProjectReview.project_id == project.id,
+        ProjectReview.cycle == cycle,
+        ProjectReview.is_deleted == False,  # noqa: E712
+    ).first()
+
+    # No review row, or a still-pending / draft one, means the PM hasn't
+    # submitted their evaluation for this member yet. A draft may have lazily
+    # created a reviewer-less PENDING row, so "row exists" alone isn't enough —
+    # only a REVIEWED row unlocks the Secondary's submit. Draft stays open.
+    if review is None or review.status != ProjectReviewStatus.REVIEWED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The Project Manager has not yet submitted their evaluation "
+                "for this team member. You can save a draft in the meantime."
+            ),
+        )
 
     existing = db.query(ProjectReviewEvaluator).filter(
         ProjectReviewEvaluator.project_review_id == review.id,
