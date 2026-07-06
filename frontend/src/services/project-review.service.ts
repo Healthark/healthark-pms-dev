@@ -187,13 +187,18 @@ export interface CompetencySet {
 export interface PMEvaluationPayload {
   performance_group: PerformanceGroup;
   impact_statement: string;
-  comment_task_execution: string;
-  comment_ownership: string;
-  comment_project_management: string;
-  comment_client_deliverables: string;
-  comment_communication: string;
-  comment_mentoring: string;
-  comment_competency_skills: string;
+  /** Dynamic {competency_id: text} map — the current write shape, covering
+   *  the reviewee's applicable (incl. custom) competencies. */
+  comments?: Record<string, string>;
+  // Legacy fixed fields — still accepted by the backend for older clients, but
+  // the current form sends `comments` instead.
+  comment_task_execution?: string;
+  comment_ownership?: string;
+  comment_project_management?: string;
+  comment_client_deliverables?: string;
+  comment_communication?: string;
+  comment_mentoring?: string;
+  comment_competency_skills?: string;
 }
 
 /** Save-draft payload — every field optional so the PM can park a

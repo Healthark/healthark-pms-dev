@@ -33,20 +33,6 @@ export interface EvalModalCard {
   level: number | null;
 }
 
-// The legacy fixed competency keys. The write API still takes the fixed
-// comment_* fields, so on submit/draft we reverse-map the dynamic (id-keyed)
-// comments back onto these keys. Rendering + local state are fully dynamic —
-// driven by the fetched competency set — which is what lets custom
-// per-department/level frameworks render once they're seeded.
-type FixedCommentKey =
-  | "task_execution"
-  | "ownership"
-  | "project_management"
-  | "client_deliverables"
-  | "communication"
-  | "mentoring"
-  | "competency_skills";
-
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed";
 
@@ -181,13 +167,16 @@ export function EvalModal({
   const setComment = (id: string, value: string) =>
     setComments((prev) => ({ ...prev, [id]: value }));
 
-  // The stored comment for a fixed competency key — looked up via the fetched
-  // set's id for that key. Bridges dynamic (id-keyed) state to the fixed
-  // comment_* write contract. Empty when the set lacks that key (won't happen
-  // for the default set, which carries all 7 fixed keys).
-  const commentForKey = (key: FixedCommentKey): string => {
-    const comp = reviewableComps.find((c) => c.key === key);
-    return comp ? (comments[String(comp.id)] ?? "") : "";
+  // The dynamic {competency_id: text} write payload, covering every reviewable
+  // competency currently rendered — including custom per-department/level ones.
+  // The backend stores this as the source of truth and dual-writes the legacy
+  // columns for the default competencies.
+  const buildCommentsMap = (): Record<string, string> => {
+    const map: Record<string, string> = {};
+    for (const c of reviewableComps) {
+      map[String(c.id)] = comments[String(c.id)] ?? "";
+    }
+    return map;
   };
 
   // Resolve the expectation text for a competency: prefer the id-keyed
@@ -204,13 +193,7 @@ export function EvalModal({
   const buildDraftPayload = (): PMEvaluationDraftPayload => {
     const payload: PMEvaluationDraftPayload = {
       impact_statement: impactStatement,
-      comment_task_execution: commentForKey("task_execution"),
-      comment_ownership: commentForKey("ownership"),
-      comment_project_management: commentForKey("project_management"),
-      comment_client_deliverables: commentForKey("client_deliverables"),
-      comment_communication: commentForKey("communication"),
-      comment_mentoring: commentForKey("mentoring"),
-      comment_competency_skills: commentForKey("competency_skills"),
+      comments: buildCommentsMap(),
     };
     if (performanceGroup !== "") {
       payload.performance_group = performanceGroup;
@@ -292,13 +275,7 @@ export function EvalModal({
     onSubmit({
       performance_group: performanceGroup as PerformanceGroup,
       impact_statement: impactStatement,
-      comment_task_execution: commentForKey("task_execution"),
-      comment_ownership: commentForKey("ownership"),
-      comment_project_management: commentForKey("project_management"),
-      comment_client_deliverables: commentForKey("client_deliverables"),
-      comment_communication: commentForKey("communication"),
-      comment_mentoring: commentForKey("mentoring"),
-      comment_competency_skills: commentForKey("competency_skills"),
+      comments: buildCommentsMap(),
     });
   };
 

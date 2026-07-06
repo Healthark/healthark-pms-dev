@@ -19,6 +19,7 @@ All routes are plain functions, called directly against in-memory SQLite.
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -30,6 +31,7 @@ from app.api.routes.project_review_routes import (
     _pm_review_has_draft_content,
     get_pm_evaluation_queue,
     get_review,
+    save_pm_evaluation_draft,
     submit_pm_evaluation,
 )
 from app.core.database import Base
@@ -44,7 +46,10 @@ from app.models.project_review_models import (
 from app.models.reference_models import Department, Designation
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
-from app.schemas.project_review_schemas import PMEvaluationSubmit
+from app.schemas.project_review_schemas import (
+    PMEvaluationDraft,
+    PMEvaluationSubmit,
+)
 
 ACTIVE_CYCLE = "H1 FY26-27"
 
@@ -375,6 +380,96 @@ def test_embed_empty_for_review_without_comments(db):
     db.commit()
     resp = _build_review_response(row, db)
     assert resp.competencies == []
+
+
+def _full_map(ids):
+    return {
+        ids["task_execution"]: "TE", ids["ownership"]: "OWN",
+        ids["project_management"]: "PMG", ids["client_deliverables"]: "CD",
+        ids["communication"]: "COMM", ids["mentoring"]: "MENT",
+        ids["competency_skills"]: "CS",
+    }
+
+
+# ── PR 6a: dynamic write payload (competency-id -> text map) ───────────────
+
+def test_submit_via_comments_map_dual_writes(db):
+    """Submitting the dynamic map stores it to JSON and dual-writes the legacy
+    columns for the default competencies (invisible for the default set)."""
+    org, pm, member, project, ids = _scenario(db)
+    payload = PMEvaluationSubmit(
+        performance_group=PerformanceGroup.RATING_3,
+        impact_statement="ok",
+        comments=_full_map(ids),
+    )
+    resp = submit_pm_evaluation(project.id, member.id, payload, db, pm)
+    row = db.query(ProjectReview).filter_by(
+        project_id=project.id, user_id=member.id
+    ).one()
+    assert row.comments == {str(k): v for k, v in _full_map(ids).items()}
+    assert row.comment_task_execution == "TE"  # dual-written legacy column
+    assert resp.comment_ownership == "OWN"
+
+
+def test_submit_via_comments_map_custom_competency(db):
+    """A custom (non-default-key) competency's comment is stored in the JSON
+    only — no legacy column exists for it, and the legacy columns are cleared."""
+    org, pm, member, project, ids = _scenario(db)
+    custom = Competency(
+        org_id=org.id, department_id=5, level=2, key="custom_x",
+        label="Custom X", display_order=1, is_reviewable=True, is_deleted=False,
+    )
+    db.add(custom)
+    db.flush()
+    db.commit()
+    payload = PMEvaluationSubmit(
+        performance_group=PerformanceGroup.RATING_3,
+        impact_statement="ok",
+        comments={custom.id: "custom feedback"},
+    )
+    submit_pm_evaluation(project.id, member.id, payload, db, pm)
+    row = db.query(ProjectReview).filter_by(
+        project_id=project.id, user_id=member.id
+    ).one()
+    assert row.comments == {str(custom.id): "custom feedback"}
+    assert row.comment_task_execution is None  # no legacy column for a custom key
+
+
+def test_submit_rejects_empty_comment_value(db):
+    org, pm, member, project, ids = _scenario(db)
+    payload = PMEvaluationSubmit(
+        performance_group=PerformanceGroup.RATING_3,
+        impact_statement="ok",
+        comments={ids["ownership"]: "   "},
+    )
+    with pytest.raises(HTTPException) as ei:
+        submit_pm_evaluation(project.id, member.id, payload, db, pm)
+    assert ei.value.status_code == 422
+
+
+def test_submit_rejects_incomplete_legacy_fields(db):
+    """No map + not all fixed fields present → 422 (replaces the schema-level
+    required check now that the fixed fields are optional)."""
+    org, pm, member, project, ids = _scenario(db)
+    payload = PMEvaluationSubmit(
+        performance_group=PerformanceGroup.RATING_3,
+        impact_statement="ok",
+        comment_task_execution="only one",
+    )
+    with pytest.raises(HTTPException) as ei:
+        submit_pm_evaluation(project.id, member.id, payload, db, pm)
+    assert ei.value.status_code == 422
+
+
+def test_draft_via_comments_map(db):
+    org, pm, member, project, ids = _scenario(db)
+    payload = PMEvaluationDraft(comments={ids["ownership"]: "draft text"})
+    save_pm_evaluation_draft(project.id, member.id, payload, db, pm)
+    row = db.query(ProjectReview).filter_by(
+        project_id=project.id, user_id=member.id
+    ).one()
+    assert row.comments == {str(ids["ownership"]): "draft text"}
+    assert row.comment_ownership == "draft text"
 
 
 def test_pm_queue_card_carries_department_and_level(db):

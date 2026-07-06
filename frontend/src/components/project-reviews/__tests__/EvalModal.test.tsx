@@ -89,7 +89,7 @@ describe("EvalModal — dynamic competency rendering", () => {
     expect(screen.queryByLabelText(/Firm Growth/)).not.toBeInTheDocument();
   });
 
-  it("reverse-maps id-keyed comments onto the fixed comment_* payload on submit", async () => {
+  it("submits the dynamic comments map keyed by competency id", async () => {
     const { onSubmit } = renderModal();
     fireEvent.change(await screen.findByLabelText(/Task Execution/), {
       target: { value: "did the work" },
@@ -107,16 +107,12 @@ describe("EvalModal — dynamic competency rendering", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit Evaluation/ }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // Map keyed by the reviewable competency ids (10, 11); firm_growth (12,
+    // non-reviewable) is not included. No fixed comment_* fields.
     expect(onSubmit).toHaveBeenCalledWith({
       performance_group: "3",
       impact_statement: "solid overall",
-      comment_task_execution: "did the work",
-      comment_ownership: "owned it",
-      comment_project_management: "",
-      comment_client_deliverables: "",
-      comment_communication: "",
-      comment_mentoring: "",
-      comment_competency_skills: "",
+      comments: { "10": "did the work", "11": "owned it" },
     });
   });
 
