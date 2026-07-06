@@ -60,3 +60,26 @@ def get_competency_set(
         .all()
     )
     return defaults, True
+
+
+def get_competencies_by_ids(
+    db: Session,
+    org_id: int,
+    ids: list[int],
+) -> list[Competency]:
+    """Resolve specific competencies by id, ordered by ``display_order``.
+
+    Used to render a review against the exact competencies it was written for
+    (the ids stored in its comments). Deliberately does NOT filter
+    ``is_deleted`` — a competency removed after a review was written must still
+    resolve its label so the historical review renders correctly. Scoped to the
+    org for safety. Returns [] for an empty id list.
+    """
+    if not ids:
+        return []
+    return (
+        db.query(Competency)
+        .filter(Competency.org_id == org_id, Competency.id.in_(ids))
+        .order_by(Competency.display_order, Competency.id)
+        .all()
+    )
