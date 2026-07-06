@@ -17,11 +17,10 @@ Security Layers Applied:
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import DbSession, CurrentUser
-from app.core.security import verify_password, get_password_hash
-from app.schemas.user_schemas import PasswordChangeRequest, UserProfile
+from app.api.dependencies import CurrentUser, DbSession
+from app.core.security import get_password_hash, verify_password
 from app.models.role_expectation_models import RoleExpectation
-from app.schemas.user_schemas import UserRoleExpectationResponse
+from app.schemas.user_schemas import PasswordChangeRequest, UserProfile, UserRoleExpectationResponse
 
 router = APIRouter()
 
@@ -141,4 +140,5 @@ def get_my_role_expectations(
         exp_mentoring=expectation.exp_mentoring or "Role expectation not defined",
         exp_firm_growth=expectation.exp_firm_growth or "Role expectation not defined",
         exp_competency_skills=expectation.exp_competency_skills or "Role expectation not defined",
+        expectations=expectation.expectations,
     )

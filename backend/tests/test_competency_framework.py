@@ -24,7 +24,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — registers every table on Base.metadata
-from app.api.routes.project_review_routes import get_competencies
+from app.api.routes.project_review_routes import get_competencies, get_role_expectations
 from app.core.database import Base
 from app.models.competency_models import Competency
 from app.models.organization_models import Organization
@@ -34,7 +34,6 @@ from app.models.reference_models import Department, Designation
 from app.models.role_expectation_models import RoleExpectation
 from app.models.user_models import User
 from app.services.competency_service import get_competency_set
-
 
 # ── Load the migration module (filename starts with a digit) ─────────────
 _MIG_PATH = (
@@ -285,3 +284,28 @@ def test_endpoint_returns_scoped_set(db):
     resp = get_competencies(db, user, department_id=7, level=4)
     assert resp.is_default is False
     assert [c.key for c in resp.competencies] == ["custom_a"]
+
+
+# ── PR 3: role-expectations endpoint exposes the expectations id-map ───────
+
+def test_role_expectations_exposes_expectations_map(db):
+    org = _org(db)
+    user = _user(db, org.id)
+    dept = Department(org_id=org.id, name="Strategy")
+    db.add(dept)
+    db.flush()
+    desig = Designation(org_id=org.id, department_id=dept.id, name="Consultant", level=1)
+    db.add(desig)
+    db.flush()
+    db.add(RoleExpectation(
+        org_id=org.id, department_id=dept.id, designation_id=desig.id,
+        exp_task_execution="TE text",
+        expectations={"5": "TE text", "6": None},
+    ))
+    db.commit()
+
+    results = get_role_expectations(db, user)
+    assert len(results) == 1
+    # The JSON map (id -> text) rides alongside the legacy exp_* fields.
+    assert results[0].expectations == {"5": "TE text", "6": None}
+    assert results[0].exp_task_execution == "TE text"

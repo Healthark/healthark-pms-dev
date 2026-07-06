@@ -5,10 +5,10 @@ These schemas power the Profile page and password change flow.
 They are NOT admin schemas — these are what regular users see about themselves.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
+from pydantic import BaseModel, Field
 
 # ── Password Change ──────────────────────────────────────────────────
 
@@ -59,3 +59,7 @@ class UserRoleExpectationResponse(BaseModel):
     exp_mentoring: str
     exp_firm_growth: str
     exp_competency_skills: str
+    # Dynamic expectations — {competency_id: text}. Lets the frontend match
+    # expectation text to the resolved competency set by id. Null when the role
+    # has no mapped expectation row (the exp_* fields carry the fallback text).
+    expectations: dict[str, str | None] | None = None
