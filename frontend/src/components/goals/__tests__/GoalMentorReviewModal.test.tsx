@@ -80,6 +80,15 @@ describe("GoalMentorReviewModal — role expectations card", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels the mentor's panel 'Mentor Review' (not 'Your Review')", () => {
+    renderModal();
+    // The right-hand panel header reads "Mentor Review" exactly.
+    expect(screen.getByText("Mentor Review")).toBeInTheDocument();
+    // The old heading/label wording is gone (exact match, so it ignores the
+    // "…draft your review now…" helper sentence, which is intentionally kept).
+    expect(screen.queryByText("Your Review")).not.toBeInTheDocument();
+  });
+
   it("expands to show the mentee's (goal owner's) expectations, bullet-formatted", async () => {
     const user = userEvent.setup();
     renderModal();
