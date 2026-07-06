@@ -1,20 +1,24 @@
 """
-Secondary evaluator writes independently of the PM.
+Secondary evaluator: draft anytime, submit only after the PM.
 
-The old gate required the PM's ProjectReview to be REVIEWED before a Secondary
-evaluator could add an Impact Statement — and since PM review rows are created
-lazily, a Secondary who wasn't on the team saw an empty queue and no "Write
-Impact" affordance until the PM acted. That gate is removed: the Secondary's
-queue lists every member they're bound to (with an active-cycle placeholder when
-no review row exists), and a write lazily creates a PENDING parent review row so
-the impact statement has something to hang off.
+A Secondary evaluator can start writing (and save a draft of) their Impact
+Statement for a team member BEFORE the PM has evaluated them — the queue lists
+every member they're bound to, and a draft lazily creates a reviewer-less
+PENDING parent review so the impact has somewhere to hang. But they may only
+*submit* once the member's PM evaluation is in (the ProjectReview is REVIEWED).
+This mirrors the Annual-Goals mentor-review rule ("draft now, submit after the
+prior review lands").
 
 Guarded here:
-  - queue lists members before the PM starts (placeholder, review_id=None),
-  - submit / draft create a reviewer-less PENDING review + evaluator row,
-  - the early impact never leaks to others until the PM finalizes (REVIEWED),
-  - the PM's later evaluate promotes the placeholder and preserves the impact,
-  - auth: non-secondary, self, non-member, and excluded-member guards.
+  - queue lists members before the PM starts (placeholder, review_id=None,
+    pm_submitted=False),
+  - draft before the PM creates a reviewer-less PENDING review + draft row,
+  - submit before the PM is blocked (400) and persists nothing,
+  - the early draft never leaks to others until the PM finalizes (REVIEWED),
+  - the PM's evaluate promotes the placeholder + preserves the draft, after
+    which the Secondary can submit,
+  - auth guards (non-secondary, self, non-member, ineligible, completed) still
+    fire ahead of the PM gate.
 
 Routes are plain functions, so we call them directly against an in-memory
 SQLite session (mirrors test_project_multi_pm_routing.py).
@@ -48,6 +52,7 @@ from app.models.project_review_models import (
     EvaluatorStatus,
     PerformanceGroup,
     ProjectReview,
+    ProjectReviewEvaluator,
     ProjectReviewStatus,
 )
 from app.models.system_settings_models import SystemSettings
@@ -181,12 +186,14 @@ def test_secondary_queue_lists_members_before_pm_starts(db):
     # Project-level secondary covers every member — the PM included (the
     # reports-to senior reviews the PM, the secondary adds a perspective).
     assert {c.user_id for c in cards} == {pm.id, m1.id, m2.id}
-    # No PM review rows exist yet → every card is an active-cycle placeholder.
+    # No PM review rows exist yet → every card is an active-cycle placeholder,
+    # and the PM hasn't submitted so the secondary can't submit yet.
     for c in cards:
         assert c.review_id is None
         assert c.cycle == ACTIVE_CYCLE
         assert c.review_status == "pending"
         assert c.has_draft_content is False
+        assert c.pm_submitted is False
 
 
 def test_secondary_who_is_not_on_the_team_still_gets_the_queue(db):
@@ -197,34 +204,7 @@ def test_secondary_who_is_not_on_the_team_still_gets_the_queue(db):
     assert m1.id in {c.user_id for c in cards}
 
 
-# ── Submit / draft before any PM review row exists ────────────────────
-
-def test_secondary_submits_before_pm_creates_pending_review(db):
-    _org, project, _pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
-
-    out = submit_secondary_evaluation(
-        project.id, m1.id,
-        SecondaryEvalSubmit(impact_statement="Great client work."), db, sec,
-    )
-    assert out.evaluator_id == sec.id
-    assert out.status == EvaluatorStatus.SUBMITTED.value
-    assert out.impact_statement == "Great client work."
-
-    # A reviewer-less PENDING parent review row was created on the fly.
-    review = db.query(ProjectReview).filter(
-        ProjectReview.project_id == project.id,
-        ProjectReview.user_id == m1.id,
-        ProjectReview.cycle == ACTIVE_CYCLE,
-    ).one()
-    assert review.status == ProjectReviewStatus.PENDING.value
-    assert review.reviewer_id is None
-
-    # The queue now reflects the submission for that member.
-    cards = {c.user_id: c for c in get_secondary_evaluation_queue(db, sec)}
-    assert cards[m1.id].review_status == "submitted"
-    assert cards[m1.id].review_id == review.id
-    assert cards[m1.id].existing_impact == "Great client work."
-
+# ── Draft before the PM works; submit is blocked ──────────────────────
 
 def test_secondary_draft_before_pm_shows_as_draft(db):
     _org, project, _pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
@@ -233,19 +213,58 @@ def test_secondary_draft_before_pm_shows_as_draft(db):
         project.id, m1.id,
         SecondaryEvalDraft(impact_statement="WIP thoughts"), db, sec,
     )
+    # The draft lazily created a reviewer-less PENDING parent review.
     review = db.query(ProjectReview).filter(
         ProjectReview.project_id == project.id, ProjectReview.user_id == m1.id,
     ).one()
     assert review.status == ProjectReviewStatus.PENDING.value
+    assert review.reviewer_id is None
 
     card = next(c for c in get_secondary_evaluation_queue(db, sec) if c.user_id == m1.id)
     assert card.review_status == "pending"        # a draft is not "submitted"
     assert card.has_draft_content is True
     assert card.existing_impact == "WIP thoughts"
+    assert card.pm_submitted is False             # PM still hasn't submitted
+
+
+def test_secondary_cannot_submit_before_pm(db):
+    """The new gate: submitting before the PM's evaluation is in → 400, and
+    nothing is persisted (no evaluator row, no placeholder review)."""
+    _org, project, _pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
+
+    with pytest.raises(HTTPException) as ei:
+        submit_secondary_evaluation(
+            project.id, m1.id, SecondaryEvalSubmit(impact_statement="early"), db, sec,
+        )
+    assert ei.value.status_code == 400
+
+    assert db.query(ProjectReviewEvaluator).count() == 0
+    assert db.query(ProjectReview).count() == 0
+    card = next(c for c in get_secondary_evaluation_queue(db, sec) if c.user_id == m1.id)
+    assert card.review_status == "pending"
+    assert card.pm_submitted is False
+
+
+def test_secondary_can_submit_after_pm(db):
+    _org, project, pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
+    # PM evaluates first → review REVIEWED, which unlocks the secondary submit.
+    submit_pm_evaluation(project.id, m1.id, _pm_payload(), db, pm)
+
+    out = submit_secondary_evaluation(
+        project.id, m1.id, SecondaryEvalSubmit(impact_statement="Great work."), db, sec,
+    )
+    assert out.evaluator_id == sec.id
+    assert out.status == EvaluatorStatus.SUBMITTED.value
+    assert out.impact_statement == "Great work."
+
+    card = next(c for c in get_secondary_evaluation_queue(db, sec) if c.user_id == m1.id)
+    assert card.pm_submitted is True
+    assert card.review_status == "submitted"
 
 
 def test_double_submit_conflicts(db):
-    _org, project, _pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
+    _org, project, pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
+    submit_pm_evaluation(project.id, m1.id, _pm_payload(), db, pm)  # PM first
     submit_secondary_evaluation(
         project.id, m1.id, SecondaryEvalSubmit(impact_statement="one"), db, sec,
     )
@@ -258,10 +277,11 @@ def test_double_submit_conflicts(db):
 
 # ── No early leak; PM promotes the placeholder ────────────────────────
 
-def test_early_impact_hidden_from_others_until_pm_finalizes(db):
+def test_early_draft_hidden_from_others(db):
     _org, project, pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
-    submit_secondary_evaluation(
-        project.id, m1.id, SecondaryEvalSubmit(impact_statement="secret"), db, sec,
+    # Pre-PM, the only write the secondary can make is a draft.
+    save_secondary_draft(
+        project.id, m1.id, SecondaryEvalDraft(impact_statement="secret"), db, sec,
     )
 
     review = db.query(ProjectReview).filter(
@@ -273,19 +293,20 @@ def test_early_impact_hidden_from_others_until_pm_finalizes(db):
         get_review(review.id, db, m1)
     assert ei.value.status_code == 403
 
-    # The PM may view it, but the secondary's impact is hidden while pending.
+    # The PM may view it, but the secondary's draft is hidden while pending.
     as_pm = get_review(review.id, db, pm)
     assert as_pm.secondary_evaluations == []
 
-    # The author (secondary) always sees their own submission.
+    # The author (secondary) always sees their own draft.
     as_author = get_review(review.id, db, sec)
     assert [e.impact_statement for e in as_author.secondary_evaluations] == ["secret"]
 
 
 def test_pm_evaluate_promotes_placeholder_and_preserves_impact(db):
     _org, project, pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
-    submit_secondary_evaluation(
-        project.id, m1.id, SecondaryEvalSubmit(impact_statement="kept"), db, sec,
+    # Secondary drafts before the PM (submit is blocked until the PM is in).
+    save_secondary_draft(
+        project.id, m1.id, SecondaryEvalDraft(impact_statement="kept"), db, sec,
     )
 
     # PM evaluates the same member → promotes the PENDING row to REVIEWED.
@@ -298,7 +319,10 @@ def test_pm_evaluate_promotes_placeholder_and_preserves_impact(db):
     ).one()
     assert review.status == ProjectReviewStatus.REVIEWED.value
 
-    # Now the secondary's impact is visible to others (review finalized).
+    # The draft survived the promotion; now the secondary may submit it.
+    submit_secondary_evaluation(
+        project.id, m1.id, SecondaryEvalSubmit(impact_statement="kept"), db, sec,
+    )
     as_pm = get_review(review.id, db, pm)
     assert [e.impact_statement for e in as_pm.secondary_evaluations] == ["kept"]
 
@@ -310,7 +334,7 @@ def test_pm_evaluate_promotes_placeholder_and_preserves_impact(db):
     assert [e.impact_statement for e in as_pm2.secondary_evaluations] == ["edited"]
 
 
-# ── Authorization guards ──────────────────────────────────────────────
+# ── Authorization guards (fire ahead of the PM gate) ──────────────────
 
 def test_non_secondary_cannot_submit(db):
     _org, project, _pm, m1, _m2, _senior, _sec = _single_pm_scenario(db)
@@ -354,7 +378,10 @@ def test_ineligible_project_is_not_queued_and_cannot_be_written(db):
     assert ei.value.status_code == 403
 
 
-def test_cannot_start_impact_on_completed_project(db):
+def test_cannot_start_draft_on_completed_project(db):
+    # Draft is the only pre-PM write; on a completed project starting a fresh
+    # impact (which would create a new review row) 409s. Submit can't reach a
+    # completed project either (no REVIEWED review exists to submit against).
     org = _org_cycle(db)
     pm = _user(db, org.id)
     member = _user(db, org.id)
@@ -365,15 +392,15 @@ def test_cannot_start_impact_on_completed_project(db):
     db.commit()
 
     with pytest.raises(HTTPException) as ei:
-        submit_secondary_evaluation(
-            project.id, member.id, SecondaryEvalSubmit(impact_statement="x"), db, sec,
+        save_secondary_draft(
+            project.id, member.id, SecondaryEvalDraft(impact_statement="x"), db, sec,
         )
     assert ei.value.status_code == 409
 
 
-# ── multi-PM: per-member secondary before the PM starts ───────────────
+# ── multi-PM: per-member secondary drafts, then submits after the PM ──
 
-def test_multi_pm_per_member_secondary_before_pm(db):
+def test_multi_pm_per_member_secondary_drafts_then_submits(db):
     org = _org_cycle(db)
     pm = _user(db, org.id)
     member = _user(db, org.id)
@@ -388,8 +415,22 @@ def test_multi_pm_per_member_secondary_before_pm(db):
     cards = get_secondary_evaluation_queue(db, sec)
     assert [c.user_id for c in cards] == [member.id]
     assert cards[0].review_id is None
+    assert cards[0].pm_submitted is False
 
+    # Draft works before the PM; submit is blocked.
+    save_secondary_draft(
+        project.id, member.id, SecondaryEvalDraft(impact_statement="wip"), db, sec,
+    )
+    with pytest.raises(HTTPException) as ei:
+        submit_secondary_evaluation(
+            project.id, member.id, SecondaryEvalSubmit(impact_statement="ok"), db, sec,
+        )
+    assert ei.value.status_code == 400
+
+    # The member's PM (their manager) evaluates → submit unlocks.
+    submit_pm_evaluation(project.id, member.id, _pm_payload(), db, pm)
     out = submit_secondary_evaluation(
         project.id, member.id, SecondaryEvalSubmit(impact_statement="ok"), db, sec,
     )
     assert out.evaluator_id == sec.id
+    assert out.status == EvaluatorStatus.SUBMITTED.value

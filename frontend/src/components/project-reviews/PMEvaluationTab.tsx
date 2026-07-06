@@ -33,6 +33,7 @@ import {
 } from "../../queries/projectReviews";
 import { getErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../hooks/useAuth";
+import { useConfirm } from "../../hooks/useConfirm";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import { useToast } from "../../hooks/useToast";
 import { SortableHeader } from "../SortableHeader";
@@ -93,6 +94,9 @@ interface UnifiedEvalRow {
   has_draft_content: boolean;
   // Secondary-specific — the impact text to prefill the modal.
   existingImpact?: string;
+  // Secondary-specific — whether the member's PM evaluation is in. The
+  // Secondary can draft anytime but can only submit once this is true.
+  pm_submitted?: boolean;
 }
 
 const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEvalRow) => unknown }> = {
@@ -112,6 +116,7 @@ export function PMEvaluationTab() {
   const { settings } = useSystemSettings();
   const activeCycle = settings?.active_cycle_name ?? null;
   const toast = useToast();
+  const confirm = useConfirm();
 
   // ['project-reviews', 'pm-queue' | 'secondary-queue' | 'role-expectations']
   // — shared TanStack caches across PMEvaluationTab + ProjectReviews page.
@@ -257,6 +262,7 @@ export function PMEvaluationTab() {
       secondary_evaluator_name: user?.full_name ?? null,
       has_draft_content: r.has_draft_content,
       existingImpact: r.existing_impact ?? "",
+      pm_submitted: r.pm_submitted,
     });
   }
 
@@ -347,8 +353,22 @@ export function PMEvaluationTab() {
 
   const closeModal = () => { setEvalTarget(null); setViewOnly(false); setModalError(""); };
 
+  // Final PM submission is locking + becomes visible to the employee per the
+  // org's visibility settings, so confirm before it fires. Shared by the
+  // Primary and Reports-To evaluate flows (both go through EvalModal's Submit).
+  const confirmFinalEvaluation = (employeeName: string) =>
+    confirm({
+      title: "Submit evaluation?",
+      message:
+        `Once submitted, ${employeeName}'s evaluation is finalized and can be ` +
+        "shared with them per your organization's settings. Make sure the " +
+        "rating and comments are final before you continue.",
+      confirmText: "Submit",
+    });
+
   const handlePMSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
+    if (!(await confirmFinalEvaluation(evalTarget.employee_name))) return;
     setModalError("");
     try {
       await submitPMMutation.mutateAsync({
@@ -418,6 +438,7 @@ export function PMEvaluationTab() {
   // is locked (view-only) like any other.
   const handleReportsToSubmit = async (payload: PMEvaluationPayload) => {
     if (!evalTarget) return;
+    if (!(await confirmFinalEvaluation(evalTarget.employee_name))) return;
     setModalError("");
     try {
       await submitReportsToMutation.mutateAsync({
@@ -699,6 +720,7 @@ export function PMEvaluationTab() {
       <Suspense fallback={null}>
         {evalTarget?.type === "secondary" && (
           <ImpactModal row={evalTarget} readOnly={viewOnly}
+            pmSubmitted={evalTarget.pm_submitted ?? false}
             onSubmit={handleSecSubmit}
             onSaveDraft={viewOnly ? undefined : handleSecSaveDraft}
             onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />

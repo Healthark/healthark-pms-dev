@@ -25,8 +25,8 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401 — registers every table on Base.metadata
 from app.api.routes.project_review_routes import (
     get_secondary_evaluation_queue,
+    save_secondary_draft,
     submit_pm_evaluation,
-    submit_secondary_evaluation,
 )
 from app.core.database import Base
 from app.models.organization_models import Organization
@@ -45,7 +45,7 @@ from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.project_review_schemas import (
     PMEvaluationSubmit,
-    SecondaryEvalSubmit,
+    SecondaryEvalDraft,
 )
 
 ACTIVE_CYCLE = "H1 FY26-27"
@@ -165,9 +165,10 @@ def test_secondary_queue_carries_member_department(db):
 def test_rating_hidden_while_pm_review_not_finalized(db):
     _org, project, _pm, m1, _m2, sec, _d1, _d2 = _scenario(db)
 
-    # Secondary writes first → a PENDING parent review is created lazily.
-    submit_secondary_evaluation(
-        project.id, m1.id, SecondaryEvalSubmit(impact_statement="early"), db, sec,
+    # Secondary drafts first (submit is gated on the PM) → a PENDING parent
+    # review is created lazily.
+    save_secondary_draft(
+        project.id, m1.id, SecondaryEvalDraft(impact_statement="early"), db, sec,
     )
     # Simulate the PM parking a DRAFT rating on the still-pending review.
     review = db.query(ProjectReview).filter(
@@ -177,9 +178,10 @@ def test_rating_hidden_while_pm_review_not_finalized(db):
     review.performance_group = FIRST_GROUP.value
     db.commit()
 
-    # The Secondary must NOT see the PM's draft rating.
+    # The Secondary must NOT see the PM's draft rating, and can't submit yet.
     card = next(c for c in get_secondary_evaluation_queue(db, sec) if c.user_id == m1.id)
     assert card.performance_group is None
+    assert card.pm_submitted is False
 
 
 def test_rating_visible_once_pm_finalizes(db):
@@ -192,3 +194,4 @@ def test_rating_visible_once_pm_finalizes(db):
     # The Secondary, as a reviewer, now sees the PM's finalized rating —
     # regardless of the employee-facing per-FY visibility toggle.
     assert card.performance_group == FIRST_GROUP.value
+    assert card.pm_submitted is True

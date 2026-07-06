@@ -122,6 +122,10 @@ export interface SecondaryEvalCard {
   /** The PM's rating, shown once the PM finalizes the review (draft hidden).
    *  Display only. */
   performance_group: string | null;
+  /** True once the member's PM evaluation is in (review reviewed). The
+   *  Secondary can save a draft anytime but can only submit after this is
+   *  true — the modal disables Submit until then, and the backend enforces it. */
+  pm_submitted: boolean;
 }
 
 export interface RoleExpectation {
