@@ -98,7 +98,7 @@ export function UserModal({
         d.id === currentId,
     );
     return [...pool].sort(
-      (a, b) => a.level - b.level || a.name.localeCompare(b.name),
+      (a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name),
     );
   }, [designations, selectedDeptId, form.designation_id]);
 

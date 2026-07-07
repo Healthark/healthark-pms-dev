@@ -31,7 +31,9 @@ class DesignationBrief(BaseModel):
     rows that predate scoping."""
     id: int
     name: str
-    level: int
+    # Nullable: a role may be intentionally unleveled (blank in the competency
+    # matrix) — it then maps to no level column in the framework.
+    level: Optional[int] = None
     department_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)

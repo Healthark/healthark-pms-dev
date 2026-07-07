@@ -153,7 +153,7 @@ export function UsersTab({
         ? designations.filter((d) => d.department_id === departmentFilter)
         : designations;
     return [...pool].sort(
-      (a, b) => a.level - b.level || a.name.localeCompare(b.name),
+      (a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name),
     );
   }, [designations, departmentFilter]);
   // Searchable-combobox option lists. Designation labels carry the department's

@@ -13,7 +13,9 @@ export interface DepartmentBrief {
 export interface DesignationBrief {
   id: number;
   name: string;
-  level: number;
+  /** May be null for an intentionally unleveled role (blank in the competency
+   *  matrix) — it maps to no level column in the framework. */
+  level: number | null;
   /** Home department — roles are department-scoped. Null only for legacy/
    *  unscoped rows. Used to filter the role dropdown by the chosen department
    *  and to infer the department from a chosen role. */
