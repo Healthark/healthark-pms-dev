@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401 — registers every table on Base.metadata
 from app.api.routes.admin_competency_routes import (
     add_level,
+    bulk_save_framework,
     create_competency,
     delete_competency,
     get_framework,
@@ -27,6 +28,10 @@ from app.models.reference_models import Department, Designation
 from app.models.user_models import User
 from app.schemas.admin_schemas import (
     DesignationLevelUpdate,
+    FrameworkBulkCell,
+    FrameworkBulkCompetency,
+    FrameworkBulkDesignation,
+    FrameworkBulkSave,
     FrameworkCellUpdate,
     FrameworkCompetencyCreate,
     FrameworkCompetencyUpdate,
@@ -191,5 +196,134 @@ def test_admin_guard(db):
     with pytest.raises(HTTPException) as ei:
         create_competency(
             FrameworkCompetencyCreate(department_id=dept.id, label="X"), db, staff
+        )
+    assert ei.value.status_code == 403
+
+
+# ── Bulk save (the Save-button endpoint) ─────────────────────────────────
+
+def test_bulk_create_update_delete_and_designations(db):
+    org, admin, dept = _scenario(db)  # levels 2, 3 from designations
+    create_competency(
+        FrameworkCompetencyCreate(department_id=dept.id, label="Task Execution"), db, admin
+    )
+    create_competency(
+        FrameworkCompetencyCreate(department_id=dept.id, label="Ownership"), db, admin
+    )
+    before = get_framework(db, admin, department_id=dept.id)
+    analyst = next(d for d in before.designations if d.name == "Analyst")  # L2
+
+    out = bulk_save_framework(
+        FrameworkBulkSave(
+            department_id=dept.id,
+            competencies=[
+                # update: rename, retoggle, set the L2 cell
+                FrameworkBulkCompetency(
+                    key="task_execution", label="Task Exec (renamed)",
+                    is_reviewable=False, display_order=1,
+                    cells=[
+                        FrameworkBulkCell(level=2, expectation="L2 text"),
+                        FrameworkBulkCell(level=3, expectation=None),
+                    ],
+                ),
+                # soft-delete
+                FrameworkBulkCompetency(
+                    key="ownership", label="Ownership", is_reviewable=True,
+                    display_order=2, is_deleted=True,
+                    cells=[FrameworkBulkCell(level=2), FrameworkBulkCell(level=3)],
+                ),
+                # create
+                FrameworkBulkCompetency(
+                    key=None, label="Communication", is_reviewable=True, display_order=3,
+                    cells=[
+                        FrameworkBulkCell(level=2, expectation="comm L2"),
+                        FrameworkBulkCell(level=3, expectation="comm L3"),
+                    ],
+                ),
+            ],
+            designations=[FrameworkBulkDesignation(id=analyst.id, level=4)],
+        ),
+        db, admin,
+    )
+
+    keys = {c.key for c in out.competencies}
+    assert "communication" in keys
+    assert "ownership" not in keys  # soft-deleted, dropped from the live set
+
+    te = next(c for c in out.competencies if c.key == "task_execution")
+    assert te.label == "Task Exec (renamed)"
+    assert te.is_reviewable is False
+    assert te.cells["2"].expectation == "L2 text"
+
+    comm = next(c for c in out.competencies if c.key == "communication")
+    assert comm.cells["2"].expectation == "comm L2"
+    assert comm.cells["3"].expectation == "comm L3"
+
+    # Analyst re-leveled to 4 → the column set now includes it.
+    assert 4 in out.levels
+    assert next(d for d in out.designations if d.id == analyst.id).level == 4
+
+
+def test_bulk_new_competencies_get_unique_keys(db):
+    org, admin, dept = _scenario(db)
+    out = bulk_save_framework(
+        FrameworkBulkSave(
+            department_id=dept.id,
+            competencies=[
+                FrameworkBulkCompetency(
+                    key=None, label="Skills", is_reviewable=True, display_order=1,
+                    cells=[FrameworkBulkCell(level=2), FrameworkBulkCell(level=3)],
+                ),
+                FrameworkBulkCompetency(
+                    key=None, label="Skills", is_reviewable=True, display_order=2,
+                    cells=[FrameworkBulkCell(level=2), FrameworkBulkCell(level=3)],
+                ),
+            ],
+        ),
+        db, admin,
+    )
+    assert sorted(c.key for c in out.competencies) == ["skills", "skills_2"]
+
+
+def test_bulk_leaves_absent_competency_untouched(db):
+    """A competency absent from the payload is NOT deleted — deletion is
+    explicit only, so a partial payload can't wipe data."""
+    org, admin, dept = _scenario(db)
+    create_competency(
+        FrameworkCompetencyCreate(department_id=dept.id, label="Keep Me"), db, admin
+    )
+    out = bulk_save_framework(
+        FrameworkBulkSave(department_id=dept.id, competencies=[]), db, admin
+    )
+    assert any(c.key == "keep_me" for c in out.competencies)
+
+
+def test_bulk_default_set_single_cell(db):
+    org, admin, dept = _scenario(db)
+    out = bulk_save_framework(
+        FrameworkBulkSave(
+            department_id=None,
+            competencies=[
+                FrameworkBulkCompetency(
+                    key=None, label="Task Execution", is_reviewable=True, display_order=1,
+                    cells=[FrameworkBulkCell(level=None, expectation="default text")],
+                ),
+            ],
+        ),
+        db, admin,
+    )
+    assert out.is_default is True
+    comp = out.competencies[0]
+    assert set(comp.cells.keys()) == {"default"}
+    assert comp.cells["default"].expectation == "default text"
+
+
+def test_bulk_admin_guard(db):
+    org, admin, dept = _scenario(db)
+    staff = _user(db, org.id, role="Staff")
+    db.commit()
+    with pytest.raises(HTTPException) as ei:
+        bulk_save_framework(
+            FrameworkBulkSave(department_id=dept.id, competencies=[]), db, staff
         )
     assert ei.value.status_code == 403

@@ -1,6 +1,7 @@
 /**
  * CompetencyFrameworkTab — renders the per-department matrix (competencies ×
- * levels) + role→level panel, and adds a competency. Query/mutation and
+ * levels) + role→level panel. This is a staged editor: edits accumulate in a
+ * local draft and only hit the API (one bulk save) on Save. Query/mutation and
  * toast/snackbar/confirm hooks are mocked so no QueryClient/providers needed.
  */
 import React from "react";
@@ -8,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { createMutate } = vi.hoisted(() => ({ createMutate: vi.fn() }));
+const { saveMutate } = vi.hoisted(() => ({ saveMutate: vi.fn() }));
 
 const FW = {
   is_default: false,
@@ -32,12 +33,7 @@ const FW = {
 vi.mock("../../../queries/competencyFramework", () => ({
   frameworkQueryKey: () => ["fw"],
   useFramework: () => ({ data: FW, isLoading: false }),
-  useCreateCompetency: () => ({ mutate: createMutate, isPending: false }),
-  useUpdateCompetency: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useDeleteCompetency: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateCell: () => ({ mutate: vi.fn(), isPending: false }),
-  useAddLevel: () => ({ mutate: vi.fn(), isPending: false }),
-  useSetDesignationLevel: () => ({ mutate: vi.fn(), isPending: false }),
+  useBulkSaveFramework: () => ({ mutate: saveMutate, isPending: false }),
 }));
 
 vi.mock("../../../queries/adminReferenceData", () => ({
@@ -58,7 +54,7 @@ import { CompetencyFrameworkTab } from "../CompetencyFrameworkTab";
 
 void React;
 
-beforeEach(() => createMutate.mockReset());
+beforeEach(() => saveMutate.mockReset());
 
 describe("CompetencyFrameworkTab", () => {
   it("renders the matrix: competency, level columns, cells, and roles", () => {
@@ -72,19 +68,51 @@ describe("CompetencyFrameworkTab", () => {
     expect(screen.getAllByText("Analyst").length).toBeGreaterThan(0);
   });
 
-  it("adds a competency via the create mutation", async () => {
+  it("stages edits locally — nothing saves until Save", async () => {
     const user = userEvent.setup();
     render(<CompetencyFrameworkTab />);
+
+    // Save starts disabled (no changes yet).
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    // Adding a competency stages it — no API call.
     await user.type(
       screen.getByPlaceholderText(/Task Execution & Problem Solving/),
       "Ownership",
     );
     await user.click(screen.getByRole("button", { name: /Add competency/ }));
-    expect(createMutate).toHaveBeenCalledTimes(1);
-    expect(createMutate.mock.calls[0][0]).toMatchObject({
-      departmentId: 1,
-      label: "Ownership",
-      isReviewable: true,
-    });
+    expect(saveMutate).not.toHaveBeenCalled();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+
+  it("saves the whole draft in one bulk call on Save", async () => {
+    const user = userEvent.setup();
+    render(<CompetencyFrameworkTab />);
+
+    await user.type(
+      screen.getByPlaceholderText(/Task Execution & Problem Solving/),
+      "Ownership",
+    );
+    await user.click(screen.getByRole("button", { name: /Add competency/ }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(saveMutate).toHaveBeenCalledTimes(1);
+    const payload = saveMutate.mock.calls[0][0];
+    expect(payload.department_id).toBe(1);
+    const labels = payload.competencies.map((c: { label: string }) => c.label);
+    expect(labels).toContain("Task Execution");
+    expect(labels).toContain("Ownership");
+    // The new competency carries a null key (server assigns the slug); the
+    // existing one keeps its key.
+    const own = payload.competencies.find(
+      (c: { label: string }) => c.label === "Ownership",
+    );
+    expect(own.key).toBeNull();
+    const te = payload.competencies.find(
+      (c: { label: string }) => c.label === "Task Execution",
+    );
+    expect(te.key).toBe("task_execution");
+    // Each competency carries a cell per level column.
+    expect(te.cells.map((c: { level: number }) => c.level).sort()).toEqual([2, 3]);
   });
 });

@@ -429,3 +429,43 @@ class FrameworkLevelAdd(BaseModel):
 class DesignationLevelUpdate(BaseModel):
     """Set a designation's level (role→level mapping)."""
     level: int = Field(..., ge=1, le=20)
+
+
+# ── Bulk save (the whole matrix at once — the admin editor's Save button) ──
+
+class FrameworkBulkCell(BaseModel):
+    """One desired (level, expectation) cell. `level` is null for the org
+    default set's single column."""
+    level: Optional[int] = Field(default=None, ge=1, le=20)
+    expectation: Optional[str] = Field(default=None, max_length=10000)
+
+
+class FrameworkBulkCompetency(BaseModel):
+    """A desired competency row. `key` null = a NEW competency (the server
+    assigns a unique slug from the label). `is_deleted` marks an EXISTING
+    competency for soft-deletion. label/is_reviewable/display_order apply to all
+    of the competency's per-level rows; `cells` carries the per-level text."""
+    key: Optional[str] = None
+    label: str = Field(..., min_length=1, max_length=200)
+    is_reviewable: bool = True
+    display_order: int = Field(..., ge=0)
+    is_deleted: bool = False
+    cells: list[FrameworkBulkCell] = Field(default_factory=list)
+
+
+class FrameworkBulkDesignation(BaseModel):
+    """Role→level mapping entry. `level` null clears the mapping."""
+    id: int
+    level: Optional[int] = Field(default=None, ge=1, le=20)
+
+
+class FrameworkBulkSave(BaseModel):
+    """Declarative desired state for one department's framework (or the org
+    default set when `department_id` is null), applied in a single transaction.
+
+    Deletion is EXPLICIT (via each competency's `is_deleted`) — a competency
+    merely absent from the list is left untouched, so a partial payload can
+    never silently wipe data. New competencies carry `key=null`."""
+    department_id: Optional[int] = None
+    competencies: list[FrameworkBulkCompetency] = Field(default_factory=list)
+    designations: list[FrameworkBulkDesignation] = Field(default_factory=list)
