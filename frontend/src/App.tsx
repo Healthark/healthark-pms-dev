@@ -55,6 +55,9 @@ const Feedback360 = lazy(() =>
 const FeedbackGive = lazy(() =>
   import("./pages/FeedbackGive").then((m) => ({ default: m.FeedbackGive })),
 );
+const Support = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.Support })),
+);
 
 function Spinner() {
   return (
@@ -180,6 +183,11 @@ export default function App() {
               </Route>
               {/* Profile — always visible, no feature gate */}
               <Route path="/profile" element={<Profile />} />
+
+              {/* Support — always visible, no feature gate. Admins see the
+                  Responses queue + Preview toggle; everyone else sees the
+                  Report-an-Issue form. */}
+              <Route path="/support" element={<Support />} />
 
               <Route element={<ProtectedRoute requiredFeature="mentoring" />}>
                 <Route path="/my-mentees" element={<MyMentees />} />
