@@ -46,6 +46,8 @@ export function ReviewEligibilityTab() {
   const [perPage, setPerPage] = useState(25);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  // Billable filter: undefined = all, true = billable, false = non-billable.
+  const [billable, setBillable] = useState<boolean | undefined>(undefined);
 
   // Debounce the server search so we don't fetch on every keystroke; a search
   // change resets to page 1.
@@ -58,10 +60,17 @@ export function ReviewEligibilityTab() {
     applySearch(v);
   };
 
+  // A filter change resets to page 1 so results start from the top.
+  const onBillableChange = (v: boolean | undefined) => {
+    setBillable(v);
+    setPage(1);
+  };
+
   const { data, isLoading, isError } = useReviewEligibility({
     page,
     per_page: perPage,
     search: search || undefined,
+    billable,
   });
   const update = useUpdateReviewEligibility();
 
@@ -141,6 +150,40 @@ export function ReviewEligibilityTab() {
             className="w-full rounded-lg border border-border bg-surface py-1.5 pl-8 pr-3 text-sm text-text-main outline-none focus:border-brand"
           />
         </div>
+
+        {/* Billable filter — server-side so it spans all pages, not just the
+            visible one. */}
+        <div
+          className="inline-flex shrink-0 rounded-lg border border-border p-0.5"
+          role="group"
+          aria-label="Filter by billable"
+        >
+          {(
+            [
+              { label: "All", value: undefined },
+              { label: "Billable", value: true },
+              { label: "Non-billable", value: false },
+            ] as const
+          ).map((opt) => {
+            const active = billable === opt.value;
+            return (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => onBillableChange(opt.value)}
+                aria-pressed={active}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-brand text-white"
+                    : "text-text-muted hover:text-text-main"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
         {dirtyCount > 0 && (
           <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
             {dirtyCount} unsaved {dirtyCount === 1 ? "change" : "changes"}
@@ -175,7 +218,9 @@ export function ReviewEligibilityTab() {
         <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-text-muted">
           {search
             ? `No projects match “${search}”.`
-            : "No active projects."}
+            : billable !== undefined
+              ? "No projects match this filter."
+              : "No active projects."}
         </p>
       ) : (
         <div className="rounded-lg border border-border">
