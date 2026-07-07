@@ -274,11 +274,13 @@ export interface ReviewEligibilityProject {
   review_eligible: boolean;
 }
 
-/** GET /admin/review-eligibility query — page/per_page + name/code search. */
+/** GET /admin/review-eligibility query — page/per_page + name/code search +
+ *  optional billable filter (true = billable, false = non-billable, omitted = all). */
 export interface ReviewEligibilityQuery {
   page: number;
   per_page: number;
   search?: string;
+  billable?: boolean;
 }
 
 /** PATCH /admin/review-eligibility body — only the listed projects change. */

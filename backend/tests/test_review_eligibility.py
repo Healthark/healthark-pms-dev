@@ -144,6 +144,28 @@ def test_search_filters_by_name_or_code(db):
     assert [p.project_id for p in by_name.items] == [proj.id]
 
 
+def test_billable_filter(db):
+    _org, admin, _pm, _member, billable_proj = _scenario(db)  # is_billable=True
+    non_billable = Project(
+        org_id=_org.id, project_code="NB-1", name="Non Billable",
+        status=PROJECT_STATUS_ACTIVE, is_billable=False,
+    )
+    db.add(non_billable)
+    db.commit()
+
+    # No filter → both projects.
+    all_resp = get_review_eligibility(db, admin, _pg(), search=None, billable=None)
+    assert all_resp.total == 2
+
+    # billable=True → only the billable project.
+    billable_resp = get_review_eligibility(db, admin, _pg(), search=None, billable=True)
+    assert [p.project_id for p in billable_resp.items] == [billable_proj.id]
+
+    # billable=False → only the non-billable project.
+    non_resp = get_review_eligibility(db, admin, _pg(), search=None, billable=False)
+    assert [p.project_id for p in non_resp.items] == [non_billable.id]
+
+
 def test_pagination_slices_results(db):
     _org, admin, _pm, _member, _proj = _scenario(db)  # 1 project so far
     for i in range(4):

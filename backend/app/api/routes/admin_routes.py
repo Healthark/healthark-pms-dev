@@ -2007,12 +2007,15 @@ def get_review_eligibility(
     search: Optional[str] = Query(
         None, description="Matches project name or code"
     ),
+    billable: Optional[bool] = Query(
+        None, description="Filter to billable (true) or non-billable (false) projects"
+    ),
 ):
     """Paginated list of ACTIVE projects (not completed/deleted) + whether each
     is eligible for review — the Review Eligibility tab. Server-side search
-    (name/code) + offset pagination so the FE never holds every project at once.
-    The checkbox edits accumulate client-side across pages; Save (PATCH) sends
-    only the changed ones."""
+    (name/code) + optional billable filter + offset pagination so the FE never
+    holds every project at once. The checkbox edits accumulate client-side
+    across pages; Save (PATCH) sends only the changed ones."""
     _require_admin(current_user)
     query = db.query(Project).filter(
         Project.org_id == current_user.org_id,
@@ -2024,6 +2027,10 @@ def get_review_eligibility(
         query = query.filter(
             or_(Project.name.ilike(term), Project.project_code.ilike(term))
         )
+    # isinstance (not `is not None`) so a direct call that omits the arg — where
+    # the Query(None) default arrives as a FieldInfo — is treated as "no filter".
+    if isinstance(billable, bool):
+        query = query.filter(Project.is_billable == billable)
     total = query.with_entities(func.count(Project.id)).order_by(None).scalar() or 0
     rows = (
         query.order_by(Project.name, Project.id.asc())  # stable across pages
