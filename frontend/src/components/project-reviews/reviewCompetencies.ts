@@ -102,7 +102,10 @@ export function resolveReviewBlocks(
       key: String(c.id),
       label: c.label,
       comment: review.comments?.[String(c.id)] ?? null,
-      expText: roleExp?.expectations?.[String(c.id)] ?? legacyExp(c.key),
+      // Prefer the expectation seeded on the competency (the department/level
+      // framework — "Not defined" for the org default set), matching the eval
+      // form; fall back to the legacy per-designation map / exp_<key>.
+      expText: c.expectation ?? roleExp?.expectations?.[String(c.id)] ?? legacyExp(c.key),
     }));
   }
 

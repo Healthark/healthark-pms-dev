@@ -179,9 +179,11 @@ export function EvalModal({
     return map;
   };
 
-  // Resolve the expectation text for a competency: prefer the id-keyed
-  // expectations map, fall back to the legacy exp_<key> field (default set).
+  // Resolve the expectation text for a competency: prefer the text seeded on
+  // the competency itself (the department/level framework), then the legacy
+  // per-designation expectations map, then the fixed exp_<key> field.
   const expectationText = (comp: Competency): string | null => {
+    if (comp.expectation) return comp.expectation;
     const byId = expectation?.expectations?.[String(comp.id)];
     if (byId != null) return byId;
     const legacy = expectation

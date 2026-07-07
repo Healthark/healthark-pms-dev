@@ -11,7 +11,9 @@ consume the same helper so resolution logic lives in exactly one place.
 
 from sqlalchemy.orm import Session
 
+from app.data.competency_framework import load_framework
 from app.models.competency_models import Competency
+from app.models.reference_models import Department
 
 
 def get_competency_set(
@@ -83,3 +85,95 @@ def get_competencies_by_ids(
         .order_by(Competency.display_order, Competency.id)
         .all()
     )
+
+
+def seed_competency_framework(db: Session, org_id: int) -> None:
+    """Seed the department/level competency framework for an org (idempotent).
+
+    - Fills the org DEFAULT set's (department/level NULL) expectation with the
+      framework's default text ("Not defined") so departments without their own
+      framework surface that under each competency.
+    - For each department named in the framework (IDT, Strategy, RWE) that
+      exists in this org, creates the per-level competencies with their
+      expectation text. Get-or-create keyed by (org, department, level, key),
+      so it's safe to re-run and to run alongside the migration.
+
+    Designation levels are intentionally NOT set here (HR maps roles→levels
+    separately); until then a reviewee resolves to level 1 or, for an
+    undefined department, the org default set.
+    """
+    fw = load_framework()
+    canon = fw["competencies"]  # canonical, ordered
+    default_exp = fw.get("default_expectation") or ""
+
+    # 0. Ensure the org DEFAULT set (department/level NULL) exists — one row per
+    # canonical competency — and carries the default expectation. Get-or-create
+    # so it works whether or not the earlier migration already seeded it.
+    for order, comp in enumerate(canon, start=1):
+        existing = (
+            db.query(Competency)
+            .filter(
+                Competency.org_id == org_id,
+                Competency.department_id.is_(None),
+                Competency.level.is_(None),
+                Competency.key == comp["key"],
+            )
+            .first()
+        )
+        if existing:
+            if not existing.expectation:
+                existing.expectation = default_exp
+        else:
+            db.add(
+                Competency(
+                    org_id=org_id,
+                    department_id=None,
+                    level=None,
+                    key=comp["key"],
+                    label=comp["label"],
+                    display_order=order,
+                    is_reviewable=comp["is_reviewable"],
+                    is_deleted=False,
+                    expectation=default_exp,
+                )
+            )
+    db.flush()
+
+    for dept_name, data in fw["departments"].items():
+        dept = (
+            db.query(Department)
+            .filter(Department.org_id == org_id, Department.name == dept_name)
+            .first()
+        )
+        if not dept:
+            continue
+        for level_str, texts in data["levels"].items():
+            level = int(level_str)
+            for order, comp in enumerate(canon, start=1):
+                key = comp["key"]
+                exists = (
+                    db.query(Competency)
+                    .filter(
+                        Competency.org_id == org_id,
+                        Competency.department_id == dept.id,
+                        Competency.level == level,
+                        Competency.key == key,
+                    )
+                    .first()
+                )
+                if exists:
+                    continue
+                db.add(
+                    Competency(
+                        org_id=org_id,
+                        department_id=dept.id,
+                        level=level,
+                        key=key,
+                        label=comp["label"],
+                        display_order=order,
+                        is_reviewable=comp["is_reviewable"],
+                        is_deleted=False,
+                        expectation=texts.get(key) or "",
+                    )
+                )
+    db.flush()

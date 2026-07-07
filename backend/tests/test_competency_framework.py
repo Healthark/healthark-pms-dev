@@ -33,7 +33,10 @@ from app.models.project_review_models import ProjectReview, ProjectReviewStatus
 from app.models.reference_models import Department, Designation
 from app.models.role_expectation_models import RoleExpectation
 from app.models.user_models import User
-from app.services.competency_service import get_competency_set
+from app.services.competency_service import (
+    get_competency_set,
+    seed_competency_framework,
+)
 
 # ── Load the migration module (filename starts with a digit) ─────────────
 _MIG_PATH = (
@@ -309,3 +312,84 @@ def test_role_expectations_exposes_expectations_map(db):
     # The JSON map (id -> text) rides alongside the legacy exp_* fields.
     assert results[0].expectations == {"5": "TE text", "6": None}
     assert results[0].exp_task_execution == "TE text"
+
+
+# ── PR 6b: seed the department/level competency framework ──────────────────
+
+def _seed_depts(db, org):
+    for name in ("IDT", "Strategy", "RWE", "Marketing"):
+        db.add(Department(org_id=org.id, name=name))
+    db.flush()
+
+
+def test_seed_framework_default_set_and_per_department(db):
+    org = _org(db)
+    _seed_depts(db, org)
+    db.commit()
+
+    seed_competency_framework(db, org.id)
+    db.commit()
+
+    # Org DEFAULT set: 8 competencies, dept/level NULL, "Not defined".
+    defaults = (
+        db.query(Competency)
+        .filter(Competency.department_id.is_(None), Competency.level.is_(None))
+        .all()
+    )
+    assert len(defaults) == 8
+    assert all(c.expectation == "Not defined" for c in defaults)
+    fg = next(c for c in defaults if c.key == "firm_growth")
+    assert fg.is_reviewable is False
+
+    # IDT: 7 levels, 8 competencies each, real expectation text.
+    idt = db.query(Department).filter_by(org_id=org.id, name="IDT").one()
+    idt_comps = db.query(Competency).filter_by(org_id=org.id, department_id=idt.id).all()
+    assert {c.level for c in idt_comps} == {1, 2, 3, 4, 5, 6, 7}
+    assert len(idt_comps) == 7 * 8
+    l3_te = next(
+        c for c in idt_comps
+        if c.level == 3 and c.key == "task_execution"
+    )
+    assert l3_te.expectation and l3_te.expectation != "Not defined"
+
+    # RWE + Strategy: 3 levels each.
+    for name in ("RWE", "Strategy"):
+        d = db.query(Department).filter_by(org_id=org.id, name=name).one()
+        comps = db.query(Competency).filter_by(org_id=org.id, department_id=d.id).all()
+        assert {c.level for c in comps} == {1, 2, 3}
+        assert len(comps) == 3 * 8
+
+
+def test_seed_framework_resolution_and_fallback(db):
+    org = _org(db)
+    _seed_depts(db, org)
+    db.commit()
+    seed_competency_framework(db, org.id)
+    db.commit()
+
+    idt = db.query(Department).filter_by(org_id=org.id, name="IDT").one()
+    mkt = db.query(Department).filter_by(org_id=org.id, name="Marketing").one()
+
+    # IDT level 3 → its own set, with expectation text.
+    comps, is_default = get_competency_set(db, org.id, idt.id, level=3)
+    assert is_default is False
+    assert len(comps) == 8
+    assert all(c.expectation for c in comps)
+
+    # Marketing (no framework) → org default set, "Not defined".
+    comps, is_default = get_competency_set(db, org.id, mkt.id, level=1)
+    assert is_default is True
+    assert all(c.expectation == "Not defined" for c in comps)
+
+
+def test_seed_framework_is_idempotent(db):
+    org = _org(db)
+    _seed_depts(db, org)
+    db.commit()
+    seed_competency_framework(db, org.id)
+    db.commit()
+    n1 = db.query(Competency).filter_by(org_id=org.id).count()
+    seed_competency_framework(db, org.id)
+    db.commit()
+    n2 = db.query(Competency).filter_by(org_id=org.id).count()
+    assert n1 == n2 == 8 + 7 * 8 + 3 * 8 + 3 * 8  # default + IDT + RWE + Strategy

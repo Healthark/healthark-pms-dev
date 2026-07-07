@@ -297,6 +297,9 @@ class CompetencyResponse(BaseModel):
     label: str
     display_order: int
     is_reviewable: bool
+    # Role-expectation text for this competency at its (department, level).
+    # "Not defined" for the org default set (undefined departments).
+    expectation: Optional[str] = None
 
 
 class CompetencySetResponse(BaseModel):
