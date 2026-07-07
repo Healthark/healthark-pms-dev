@@ -42,6 +42,7 @@ import {
   useMenteeProjects,
 } from "../../queries/mentees";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
+import { resolveReviewBlocks } from "../project-reviews/reviewCompetencies";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
 import {
   extractFyToken,
@@ -298,26 +299,6 @@ function GoalSummaryCard({ goal }: { readonly goal: TeamGoal }) {
 
 // ── Project card ────────────────────────────────────────────────────
 
-const COMPETENCY_LABELS: ReadonlyArray<{
-  key:
-    | "comment_task_execution"
-    | "comment_ownership"
-    | "comment_project_management"
-    | "comment_client_deliverables"
-    | "comment_communication"
-    | "comment_mentoring"
-    | "comment_competency_skills";
-  label: string;
-}> = [
-  { key: "comment_task_execution", label: "Task Execution" },
-  { key: "comment_ownership", label: "Ownership" },
-  { key: "comment_project_management", label: "Project Management" },
-  { key: "comment_client_deliverables", label: "Client Deliverables" },
-  { key: "comment_communication", label: "Communication" },
-  { key: "comment_mentoring", label: "Mentoring" },
-  { key: "comment_competency_skills", label: "Competency & Skills" },
-];
-
 function ProjectSummaryCard({
   assignment,
 }: {
@@ -325,8 +306,12 @@ function ProjectSummaryCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const detail = assignment.review_detail;
+  // Render the review's own framework (competencies + comments, by id), same
+  // as the other read surfaces — not a hardcoded competency list.
   const filledComments = detail
-    ? COMPETENCY_LABELS.filter(({ key }) => Boolean(detail[key]))
+    ? resolveReviewBlocks(detail, undefined).filter(
+        (b) => typeof b.comment === "string" && b.comment.trim().length > 0,
+      )
     : [];
   const secondaryEvals = detail?.secondary_evaluations ?? [];
   const hasNarrative = filledComments.length > 0 || secondaryEvals.length > 0;
@@ -403,13 +388,13 @@ function ProjectSummaryCard({
 
       {expanded && hasNarrative && (
         <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
-          {filledComments.map(({ key, label }) => (
-            <div key={key}>
+          {filledComments.map((b) => (
+            <div key={b.key}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                {label}
+                {b.label}
               </p>
               <p className="mt-0.5 whitespace-pre-wrap text-xs text-text-main">
-                {detail![key]}
+                {b.comment}
               </p>
             </div>
           ))}

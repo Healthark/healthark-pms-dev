@@ -19,8 +19,8 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.core.security import get_password_hash, verify_password
-from app.models.role_expectation_models import RoleExpectation
 from app.schemas.user_schemas import PasswordChangeRequest, UserProfile, UserRoleExpectationResponse
+from app.services.competency_service import get_competency_set
 
 router = APIRouter()
 
@@ -117,28 +117,29 @@ def get_my_role_expectations(
     if not current_user.department_id or not current_user.designation_id:
         return fallback_response
 
-    # Query the database for the specific expectations
-    expectation = db.query(RoleExpectation).filter(
-        RoleExpectation.org_id == current_user.org_id,
-        RoleExpectation.department_id == current_user.department_id,
-        RoleExpectation.designation_id == current_user.designation_id,
-    ).first()
-
-    # If no specific expectations are mapped for this role, return fallbacks
-    if not expectation:
+    # Resolve the competency framework for this role's (department, level).
+    # Expectation text now lives on the competency, so this stays consistent
+    # with the project-review eval form; an unmapped (dept, level) falls back to
+    # the org default set (which carries "Not defined").
+    level = current_user.designation.level if current_user.designation else None
+    comps, _is_default = get_competency_set(
+        db, current_user.org_id, current_user.department_id, level
+    )
+    if not comps:
         return fallback_response
 
-    # Return the mapped expectations
+    nf = "Role expectation not defined"
+    by_key = {c.key: (c.expectation or nf) for c in comps}
     return UserRoleExpectationResponse(
         department_name=dept_name,
         designation_name=desig_name,
-        exp_task_execution=expectation.exp_task_execution or "Role expectation not defined",
-        exp_ownership=expectation.exp_ownership or "Role expectation not defined",
-        exp_project_management=expectation.exp_project_management or "Role expectation not defined",
-        exp_client_deliverables=expectation.exp_client_deliverables or "Role expectation not defined",
-        exp_communication=expectation.exp_communication or "Role expectation not defined",
-        exp_mentoring=expectation.exp_mentoring or "Role expectation not defined",
-        exp_firm_growth=expectation.exp_firm_growth or "Role expectation not defined",
-        exp_competency_skills=expectation.exp_competency_skills or "Role expectation not defined",
-        expectations=expectation.expectations,
+        exp_task_execution=by_key.get("task_execution", nf),
+        exp_ownership=by_key.get("ownership", nf),
+        exp_project_management=by_key.get("project_management", nf),
+        exp_client_deliverables=by_key.get("client_deliverables", nf),
+        exp_communication=by_key.get("communication", nf),
+        exp_mentoring=by_key.get("mentoring", nf),
+        exp_firm_growth=by_key.get("firm_growth", nf),
+        exp_competency_skills=by_key.get("competency_skills", nf),
+        expectations={str(c.id): c.expectation for c in comps},
     )
