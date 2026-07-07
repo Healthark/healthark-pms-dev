@@ -41,6 +41,20 @@ class GoalMentorReview(Base):
     org_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     cycle_half = Column(String, nullable=False)  # "H1" or "H2"
 
+    # The mentor who actually authored THIS half's review, snapshotted at
+    # write time. Distinct from Goal.manager_id, which tracks the mentee's
+    # *current* mentor and is re-pointed on reassignment — so once a mentee
+    # changes mentors mid-cycle, this column is the only record of who wrote
+    # the earlier half's review. Nullable: legacy rows predate the column
+    # (backfilled best-effort from the goal's manager_id) and a review can
+    # exist without a resolvable author.
+    mentor_id  = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
     submitted_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -66,3 +80,10 @@ class GoalMentorReview(Base):
     )
 
     goal = relationship("Goal", back_populates="mentor_reviews")
+    mentor = relationship("User", foreign_keys=[mentor_id])
+
+    @property
+    def mentor_name(self):
+        """Display name of the mentor who authored this half's review, or None
+        for legacy rows with no resolvable author."""
+        return self.mentor.full_name if self.mentor else None

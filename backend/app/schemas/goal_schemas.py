@@ -165,6 +165,12 @@ class GoalMentorReviewResponse(BaseModel):
     cycle_half: SelfReviewCycleHalf
     submitted_at: datetime
     mentor_overall_review: str
+    # The mentor who authored THIS half's review, snapshotted at write time.
+    # Distinct from Goal.manager_id (the mentee's current mentor), so a half
+    # reviewed before a mentor change still shows its real author. mentor_name
+    # resolves via the model property; null for legacy rows with no author.
+    mentor_id: Optional[int] = None
+    mentor_name: Optional[str] = None
     # True while the mentor still has the row open as an unsubmitted
     # draft. Submit flips this to False; mentees don't see draft rows.
     is_draft: bool = False

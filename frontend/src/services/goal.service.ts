@@ -104,6 +104,11 @@ export interface GoalMentorReview {
   /** Single freeform paragraph; the form surfaces Firm Growth and Competency
    *  & Skills role expectations as reference panels rather than separate fields. */
   mentor_overall_review: string;
+  /** The mentor who authored THIS half's review, snapshotted at write time.
+   *  Distinct from the goal's current mentor (manager_name) — a half reviewed
+   *  before a mentor change keeps its real author. Null for legacy rows. */
+  mentor_id: number | null;
+  mentor_name: string | null;
   /** True while the row is a saved-but-not-submitted draft. Mentees only
    *  see rows where this is false. */
   is_draft: boolean;
@@ -268,6 +273,12 @@ export const goalService = {
   submitGoal: async (goalId: number): Promise<Goal> => {
     const res = await apiClient.patch<Goal>(`/goals/${goalId}/submit`, {});
     return res.data;
+  },
+
+  /** Soft-delete a goal. Backend allows this only for the owner and only
+   *  while the goal is still a DRAFT (returns 204). */
+  deleteGoal: async (goalId: number): Promise<void> => {
+    await apiClient.delete(`/goals/${goalId}`);
   },
 
   submitSelfReview: async (

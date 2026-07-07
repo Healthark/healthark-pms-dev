@@ -322,8 +322,22 @@ export function GoalMentorReviewModal({
                   {!isReadOnly && " *"}
                 </label>
                 {isReadOnly ? (
-                  <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
-                    {overall || "—"}
+                  <div className="space-y-1.5">
+                    {/* Who actually authored this half's review — matters when
+                        the mentee's mentor changed after it was submitted, so
+                        the reviewer may differ from the current mentor. */}
+                    {existingMentorReview?.mentor_name && (
+                      <p className="flex items-center gap-1 text-[11px] text-text-muted">
+                        <User className="h-3 w-3" aria-hidden="true" />
+                        Reviewed by{" "}
+                        <span className="font-medium text-text-main">
+                          {existingMentorReview.mentor_name}
+                        </span>
+                      </p>
+                    )}
+                    <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-main whitespace-pre-wrap leading-relaxed">
+                      {overall || "—"}
+                    </div>
                   </div>
                 ) : (
                   <textarea

@@ -185,6 +185,14 @@ export function useSubmitGoal() {
   });
 }
 
+export function useDeleteGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (goalId: number) => goalService.deleteGoal(goalId),
+    onSuccess: () => invalidateGoalsAndDashboard(qc),
+  });
+}
+
 export function useSubmitSelfReview() {
   const qc = useQueryClient();
   return useMutation({

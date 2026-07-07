@@ -2,8 +2,8 @@ import { useState, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Plus, Target, Lock, ChevronDown,
-  Pencil, SendHorizonal, MessageSquare,
-  UserCircle, BookOpen, Unlock,
+  Pencil, Send, MessageSquare,
+  UserCircle, BookOpen, Unlock, Trash2,
 } from "lucide-react";
 import {
   type Goal,
@@ -18,6 +18,7 @@ import {
   useCreateGoal,
   useUpdateGoal,
   useSubmitGoal,
+  useDeleteGoal,
   useSubmitSelfReview,
   useSaveSelfReviewDraft,
   useMyGoalAccess,
@@ -90,8 +91,10 @@ function buildFilterConfig(
 
 type ActiveTab = "my" | "team" | "all";
 
-// My Goals table sort config — Goal/Mentor/Status are alpha, Year is numeric.
-// Actions column is not sortable (has no backing data).
+// My Goals table sort config — Goal/Current Mentor/Status are alpha, Year is
+// numeric. The Current Mentor column shows the mentee's *current* mentor
+// (manager_name); per-half review authors live in the expanded detail. Actions
+// column is not sortable (has no backing data).
 type MyGoalsSortKey = "title" | "manager_name" | "fy_year" | "approval_status";
 
 const MY_GOALS_SORT_CONFIG: Record<
@@ -232,6 +235,7 @@ export function AnnualGoals() {
   const createGoalMutation = useCreateGoal();
   const updateGoalMutation = useUpdateGoal();
   const submitGoalMutation = useSubmitGoal();
+  const deleteGoalMutation = useDeleteGoal();
   const submitSelfReviewMutation = useSubmitSelfReview();
   const saveSelfReviewDraftMutation = useSaveSelfReviewDraft();
   const isSaving = createGoalMutation.isPending || updateGoalMutation.isPending;
@@ -299,6 +303,25 @@ export function AnnualGoals() {
     try {
       await submitGoalMutation.mutateAsync(goal.id);
       toast.success("Goal submitted for review.");
+    } catch (err) {
+      snackbar.error(getErrorMessage(err));
+    }
+  };
+
+  // Delete a goal — only offered while it's a DRAFT (backend enforces this too).
+  const handleDelete = async (goal: Goal) => {
+    const ok = await confirm({
+      title: "Delete this goal?",
+      message: `"${goal.title}" will be permanently removed from your goals. This can't be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
+    try {
+      await deleteGoalMutation.mutateAsync(goal.id);
+      // Collapse the row if it was expanded, so we don't leave a dangling panel.
+      setExpandedGoalId((cur) => (cur === goal.id ? null : cur));
+      toast.success("Goal deleted.");
     } catch (err) {
       snackbar.error(getErrorMessage(err));
     }
@@ -544,51 +567,57 @@ export function AnnualGoals() {
                 </div>
               )}
 
-              {/* Toolbar */}
-              {!isLoading && goals.length > 0 && (
+              {/* Toolbar — shown when there are goals to filter/export, or when
+                  a role expectation exists (so "View Role Expectations" stays
+                  reachable even before the mentee has created any goals). */}
+              {!isLoading && !error && (goals.length > 0 || roleExpectation) && (
                 <div className="flex flex-col gap-3">
                   {/* Filters */}
                   <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="goal-year-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Fiscal Year</label>
-                      <select
-                        id="goal-year-filter"
-                        value={effectiveYear}
-                        onChange={(e) => setYearFilter(e.target.value)}
-                        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
-                      >
-                        <option value="all">All Years</option>
-                        {availableYears.map((y) => (
-                          <option key={y} value={y}>{formatFyYearSpan(y)}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {goals.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <label htmlFor="goal-year-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Fiscal Year</label>
+                          <select
+                            id="goal-year-filter"
+                            value={effectiveYear}
+                            onChange={(e) => setYearFilter(e.target.value)}
+                            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[120px] cursor-pointer"
+                          >
+                            <option value="all">All Years</option>
+                            {availableYears.map((y) => (
+                              <option key={y} value={y}>{formatFyYearSpan(y)}</option>
+                            ))}
+                          </select>
+                        </div>
 
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="goal-status-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
-                      <select
-                        id="goal-status-filter"
-                        value={approvalFilter}
-                        onChange={(e) => setApprovalFilter(e.target.value as ApprovalFilter)}
-                        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
-                      >
-                        {buildFilterConfig(settings?.cycle_type ?? null).map((f) => (
-                          <option key={f.value} value={f.value}>{f.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                        <div className="flex items-center gap-2">
+                          <label htmlFor="goal-status-filter" className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Status</label>
+                          <select
+                            id="goal-status-filter"
+                            value={approvalFilter}
+                            onChange={(e) => setApprovalFilter(e.target.value as ApprovalFilter)}
+                            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-text-main outline-none focus:border-brand min-w-[160px] cursor-pointer"
+                          >
+                            {buildFilterConfig(settings?.cycle_type ?? null).map((f) => (
+                              <option key={f.value} value={f.value}>{f.label}</option>
+                            ))}
+                          </select>
+                        </div>
 
-                    <ClearFiltersButton
-                      active={hasActiveFilters}
-                      onClear={clearFilters}
-                      className="ml-auto"
-                    />
-                    <ExportMyGoalsMenu />
+                        <ClearFiltersButton
+                          active={hasActiveFilters}
+                          onClear={clearFilters}
+                          className="ml-auto"
+                        />
+                        <ExportMyGoalsMenu />
+                      </>
+                    )}
                     {roleExpectation && (
                       <button
                         type="button"
                         onClick={() => setShowRoleExp(true)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] font-medium text-text-main transition-colors hover:bg-surface-muted"
+                        className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] font-medium text-text-main transition-colors hover:bg-surface-muted ${goals.length === 0 ? "ml-auto" : ""}`}
                       >
                         <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
                         View Role Expectations
@@ -626,7 +655,7 @@ export function AnnualGoals() {
                           <SortableHeader label="Goal" columnKey="title" sort={sort} onSort={setSort} />
                         </th>
                         <th className="text-left px-4 py-2.5">
-                          <SortableHeader label="Mentor" columnKey="manager_name" sort={sort} onSort={setSort} />
+                          <SortableHeader label="Current Mentor" columnKey="manager_name" sort={sort} onSort={setSort} />
                         </th>
                         <th className="text-left px-4 py-2.5">
                           <SortableHeader label="Fiscal Year" columnKey="fy_year" sort={sort} onSort={setSort} />
@@ -668,7 +697,6 @@ export function AnnualGoals() {
                               <td className="px-4 py-3">
                                 {goal.manager_name ? (
                                   <div className="flex items-center gap-1.5 text-[12.5px] text-text-main">
-                                    <UserCircle className="h-3.5 w-3.5 text-text-muted shrink-0" />
                                     <span className="truncate">{goal.manager_name}</span>
                                   </div>
                                 ) : (
@@ -695,18 +723,35 @@ export function AnnualGoals() {
                                     <button
                                       type="button"
                                       onClick={() => openEdit(goal)}
-                                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-text-muted hover:bg-brand/10 hover:text-brand transition-colors"
+                                      title="Edit"
+                                      aria-label="Edit"
+                                      className="p-1 text-text-muted hover:text-brand transition-colors"
                                     >
-                                      <Pencil className="h-3 w-3" /> Edit
+                                      <Pencil className="h-4 w-4" aria-hidden="true" />
                                     </button>
                                   )}
                                   {canSubmit && (
                                     <button
                                       type="button"
                                       onClick={() => handleSubmit(goal)}
-                                      className="flex items-center gap-1 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand hover:bg-brand hover:text-white transition-colors"
+                                      title="Request Approval"
+                                      aria-label="Request Approval"
+                                      className="p-1 text-text-muted hover:text-brand transition-colors"
                                     >
-                                      <SendHorizonal className="h-3 w-3" /> Request Approval
+                                      <Send className="h-4 w-4" aria-hidden="true" />
+                                    </button>
+                                  )}
+                                  {/* Delete — drafts only (backend enforces the
+                                      same rule; a submitted goal can't be deleted). */}
+                                  {isDraft && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelete(goal)}
+                                      title="Delete"
+                                      aria-label="Delete"
+                                      className="p-1 text-text-muted hover:text-red-600 dark:hover:text-red-300 transition-colors"
+                                    >
+                                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                                     </button>
                                   )}
                                   {goal.approval_status === "pending_approval" && (
@@ -759,9 +804,19 @@ export function AnnualGoals() {
                                             key={mr.cycle_half}
                                             className="rounded-lg border border-emerald-100 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/40 px-3 py-2"
                                           >
-                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-0.5">
-                                              {mr.cycle_half} Mentor Review
-                                            </p>
+                                            <div className="mb-0.5 flex items-center gap-1.5 flex-wrap">
+                                              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                                                {mr.cycle_half} Mentor Review
+                                              </p>
+                                              {/* Who actually wrote this half — may
+                                                  differ from the current mentor
+                                                  above if the mentor changed. */}
+                                              {mr.mentor_name && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] text-text-muted">
+                                                  reviewed by {mr.mentor_name}
+                                                </span>
+                                              )}
+                                            </div>
                                             <p className="text-xs text-text-main whitespace-pre-wrap">
                                               {mr.mentor_overall_review}
                                             </p>

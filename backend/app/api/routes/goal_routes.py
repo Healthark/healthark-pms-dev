@@ -788,9 +788,10 @@ def delete_goal(
 ):
     """
     Soft-delete a goal (sets is_deleted=True so its criteria + self/mentor
-    review history survive). Owner-only, and only before approval — an
-    approved goal cannot be deleted. Annual goals also require the annual
-    goal-setting window to be open.
+    review history survive). Owner-only, and only while the goal is still a
+    DRAFT — once it has been submitted for approval it can no longer be
+    deleted (submit/approval owns the lifecycle from there). Annual goals
+    also require the annual goal-setting window to be open.
     """
     goal = db.query(Goal).filter(
         Goal.id == goal_id,
@@ -807,11 +808,12 @@ def delete_goal(
             detail="Only the goal's owner can delete it.",
         )
 
-    # Deletable only before approval; once approved the review cycle owns it.
-    if goal.approval_status in POST_APPROVAL_STATES:
+    # Deletable only in DRAFT. Once submitted (pending_approval /
+    # changes_requested / approved / any review state) it is off-limits.
+    if goal.approval_status != ApprovalStatus.DRAFT.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A goal cannot be deleted once it has been approved.",
+            detail="Only a draft goal can be deleted.",
         )
 
     # Gate check for annual goal deletion (same window as create/edit).
@@ -1483,6 +1485,9 @@ def submit_goal_mentor_review(
         existing.mentor_overall_review = payload.mentor_overall_review
         existing.is_draft = False
         existing.submitted_at = datetime.now(timezone.utc)
+        # Re-attribute to whoever actually submits — covers the case where a
+        # new mentor picks up a draft the previous mentor started.
+        existing.mentor_id = current_user.id
     else:
         mentor_review = GoalMentorReview(
             goal_id=goal.id,
@@ -1490,6 +1495,7 @@ def submit_goal_mentor_review(
             cycle_half=half,
             mentor_overall_review=payload.mentor_overall_review,
             is_draft=False,
+            mentor_id=current_user.id,
         )
         db.add(mentor_review)
     # Advance the goal's lifecycle state.
@@ -1606,6 +1612,7 @@ def save_goal_mentor_review_draft(
     if existing is not None:
         existing.mentor_overall_review = payload.mentor_overall_review
         existing.is_draft = True
+        existing.mentor_id = current_user.id
     else:
         draft = GoalMentorReview(
             goal_id=goal.id,
@@ -1613,6 +1620,7 @@ def save_goal_mentor_review_draft(
             cycle_half=half,
             mentor_overall_review=payload.mentor_overall_review,
             is_draft=True,
+            mentor_id=current_user.id,
         )
         db.add(draft)
     db.commit()
