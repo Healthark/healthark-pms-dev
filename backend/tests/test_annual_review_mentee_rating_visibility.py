@@ -94,6 +94,7 @@ def _review(
     mentor=3,
     mgmt=4,
     final_rating_enabled=True,
+    mentor_review_text="Strong delivery this year.",
 ):
     r = AnnualReview(
         org_id=org_id,
@@ -102,6 +103,7 @@ def _review(
         status=status,
         self_performance_rating=2,
         mentor_performance_rating=mentor,
+        mentor_overall_review=mentor_review_text,
         mentor_overall_review_draft="draft text",
         mentor_performance_rating_draft=5,
         management_performance_rating=mgmt,
@@ -177,6 +179,28 @@ def test_final_gate_open_but_unpublished_row_hides_final(db):
     r = _review(db, org.id, emp.id, mgmt=4, final_rating_enabled=False)
     _strip_private_ratings(db, org.id, r, ACTIVE_FY)
     assert r.final_performance_rating is None  # per-row publish flag is off
+
+
+def test_written_mentor_review_survives_while_rating_gated(db):
+    """The mentor's WRITTEN review reaches the mentee as soon as the mentor
+    submits — it is NOT stripped by the rating gate. Only the numeric mentor
+    rating stays gated. (Feeds the mentee "My Review" → detail modal, which now
+    renders the written review even while the rating reads "Hidden".)"""
+    org = _org(db)
+    emp = _user(db, org.id)
+    # No override row → mentor rating gate closed (default-deny).
+    r = _review(
+        db,
+        org.id,
+        emp.id,
+        mentor=3,
+        mentor_review_text="You owned the migration end-to-end.",
+    )
+    _strip_private_ratings(db, org.id, r, ACTIVE_FY)
+    assert r.mentor_performance_rating is None  # numeric rating gated off
+    assert r.mentor_overall_review == "You owned the migration end-to-end."
+    # In-progress mentor draft text is still always wiped.
+    assert r.mentor_overall_review_draft is None
 
 
 def test_past_fy_bypasses_both_gates(db):

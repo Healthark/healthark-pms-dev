@@ -594,7 +594,11 @@ def submit_mentor_evaluation(
     review.status = ReviewStatus.PENDING_MANAGEMENT.value
 
     # Notify the employee their mentor evaluation is in (in-app + email).
-    # Generic body — the mentee must NOT see the rating/text yet.
+    # The mentee can now read the mentor's WRITTEN review on their review page
+    # (mentor_overall_review is sent from this stage onward — see
+    # _strip_private_ratings, which never strips the text). Only the numeric
+    # mentor RATING stays gated by annual_review_mentor_rating_visible, so keep
+    # the notification body free of any rating value.
     employee = db.query(User).filter(User.id == review.user_id).first()
     create_notification(
         db,

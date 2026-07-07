@@ -6,6 +6,7 @@ import type {
 } from "../../services/annual-review.service";
 import { ReviewStatusBadge } from "./ReviewStatusBadge";
 import { PerformanceRatingBadge } from "./PerformanceRatingBadge";
+import { RatingHiddenBadge } from "./RatingHiddenBadge";
 import { formatFyLabel } from "../../utils/fy";
 
 /**
@@ -13,6 +14,13 @@ import { formatFyLabel } from "../../utils/fy";
  * employee's overall self-review, and (when present) the mentor's overall
  * review and management comments. Visibility is enforced server-side — this
  * component only renders what the backend included.
+ *
+ * Mentor review visibility: the mentor's *written* review is surfaced to the
+ * mentee as soon as the mentor submits (the backend sends `mentor_overall_review`
+ * from the pending_management stage onward). The mentor's numeric *rating* is
+ * a separate, admin-gated field (`annual_review_mentor_rating_visible`) — the
+ * backend nulls it while the gate is closed, so we render "Hidden" for it while
+ * still showing the written review. The two are intentionally decoupled here.
  */
 
 interface AnnualReviewDetailModalProps {
@@ -34,7 +42,13 @@ export function AnnualReviewDetailModal({
   ratingLabel = "Final Rating",
   onClose,
 }: AnnualReviewDetailModalProps) {
-  const showMentor = review.mentor_performance_rating != null;
+  // The written review being present means the mentor has submitted — show it
+  // regardless of the (separately-gated) numeric rating.
+  const hasMentorReview = !!review.mentor_overall_review;
+  const hasMentorRating = review.mentor_performance_rating != null;
+  // Surface the Mentor Rating slot whenever there's a submitted mentor review
+  // to attach it to; render "Hidden" when the rating itself is gated off.
+  const showMentorSection = hasMentorReview || hasMentorRating;
   const showFinal = review.final_performance_rating != null;
 
   return createPortal(
@@ -83,15 +97,19 @@ export function AnnualReviewDetailModal({
                 size="md"
               />
             </div>
-            {showMentor && (
+            {showMentorSection && (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-text-muted">
                   Mentor Rating
                 </span>
-                <PerformanceRatingBadge
-                  value={review.mentor_performance_rating}
-                  size="md"
-                />
+                {hasMentorRating ? (
+                  <PerformanceRatingBadge
+                    value={review.mentor_performance_rating}
+                    size="md"
+                  />
+                ) : (
+                  <RatingHiddenBadge />
+                )}
               </div>
             )}
             {showFinal && (
@@ -115,14 +133,17 @@ export function AnnualReviewDetailModal({
               </p>
             </div>
             <div className="p-4">
-              <p className="text-sm text-text-main whitespace-pre-wrap">
+              <p className="text-sm text-text-main whitespace-pre-wrap break-words">
                 {review.self_overall_review || "—"}
               </p>
             </div>
           </div>
 
-          {/* Mentor Overall Review — same shell as Self Review for visual consistency */}
-          {showMentor && review.mentor_overall_review && (
+          {/* Mentor Overall Review — same shell as Self Review for visual
+              consistency. Shown as soon as the mentor's written review exists
+              (from the pending_management stage), independent of the numeric
+              rating gate handled in the summary above. */}
+          {hasMentorReview && (
             <div className="rounded-lg border border-border overflow-hidden">
               <div className="bg-surface-muted px-4 py-2 border-b border-border">
                 <p className="text-xs font-semibold text-text-main uppercase tracking-wide">
@@ -130,7 +151,7 @@ export function AnnualReviewDetailModal({
                 </p>
               </div>
               <div className="p-4">
-                <p className="text-sm text-text-main whitespace-pre-wrap">
+                <p className="text-sm text-text-main whitespace-pre-wrap break-words">
                   {review.mentor_overall_review}
                 </p>
               </div>
