@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Save, Send, X } from "lucide-react";
+import { ClipboardList, Loader2, MessageSquare, Save, Send, X } from "lucide-react";
 import type {
+  ProjectReviewResponse,
   SecondaryEvalPayload,
   SecondaryEvalDraftPayload,
 } from "../../services/project-review.service";
+import { CompetencyBlock } from "./CompetencyBlock";
+import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
 
 /**
  * Minimal header data ImpactModal needs. Secondary writes are keyed on
@@ -31,6 +34,16 @@ interface ImpactModalProps {
    *  can always Save Draft, but can only Submit once this is true. Defaults to
    *  true so callers that don't pass it keep the pre-gate behavior. */
   readonly pmSubmitted?: boolean;
+  /** The PM's finalized review for this member, shown read-only above the
+   *  Secondary's own field once the PM has submitted. Null while the PM hasn't
+   *  submitted (or while the parent hasn't fetched it). */
+  readonly pmReview?: ProjectReviewResponse | null;
+  /** True while the parent is fetching `pmReview`. */
+  readonly pmReviewLoading?: boolean;
+  /** The PM's rating string, sourced from the queue card (reviewer-visible once
+   *  reviewed, ungated by the employee-facing toggle) — NOT from `pmReview`,
+   *  whose rating goes through the employee visibility gate. */
+  readonly pmRating?: string | null;
   readonly onSubmit: (
     projectId: number,
     userId: number,
@@ -51,6 +64,9 @@ export function ImpactModal({
   row,
   readOnly = false,
   pmSubmitted = true,
+  pmReview = null,
+  pmReviewLoading = false,
+  pmRating = null,
   onSubmit,
   onSaveDraft,
   onClose,
@@ -67,6 +83,11 @@ export function ImpactModal({
   // after the PM finalized, so editing stays open regardless.
   const canSubmit = pmSubmitted || isEdit;
 
+  // The PM's review reference block appears once the parent has decided to
+  // fetch it — i.e. the PM has submitted. Show a loading line while it loads.
+  const showPmReview = pmReviewLoading || pmReview !== null;
+  const pmImpact = pmReview?.impact_statement?.trim() ? pmReview.impact_statement : null;
+
   const title = readOnly
     ? "Secondary Feedback"
     : isEdit
@@ -81,8 +102,12 @@ export function ImpactModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-xl bg-surface shadow-xl">
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+      <div
+        className={`w-full rounded-xl bg-surface shadow-xl flex flex-col max-h-[90vh] ${
+          showPmReview ? "max-w-[70%]" : "max-w-md"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <div>
             <div className="flex items-center gap-2">
               {readOnly ? (
@@ -110,12 +135,69 @@ export function ImpactModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {error && (
             <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-4 py-2.5 text-sm text-red-600 dark:text-red-300">
               {error}
             </p>
           )}
+
+          {/* The PM's finalized review — read-only reference for the Secondary.
+              Only present once the PM has submitted (parent gates the fetch on
+              pm_submitted), so the Secondary's write is never a blind guess. */}
+          {showPmReview && (
+            <section className="rounded-lg border border-border bg-background/40 px-4 py-3.5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+                  Project Manager&rsquo;s Review
+                  {pmReview?.reviewer_name && (
+                    <span className="font-medium normal-case tracking-normal text-text-muted/80">
+                      · {pmReview.reviewer_name}
+                    </span>
+                  )}
+                </h3>
+                {pmRating && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] font-medium text-text-muted">
+                      Rating
+                    </span>
+                    <PerformanceRatingBadge value={pmRating} />
+                  </div>
+                )}
+              </div>
+
+              {pmReviewLoading ? (
+                <p className="flex items-center gap-2 text-xs text-text-muted">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Loading the Project Manager&rsquo;s review…
+                </p>
+              ) : pmReview ? (
+                <div className="space-y-3">
+                  <CompetencyBlock review={pmReview} roleExp={undefined} compact />
+                  {pmImpact && (
+                    <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30 p-3">
+                      <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-1">
+                        <MessageSquare className="h-3 w-3" aria-hidden="true" />
+                        Manager&rsquo;s Overall Review
+                      </h4>
+                      <p className="text-[13px] text-text-main whitespace-pre-wrap leading-relaxed">
+                        {pmImpact}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {!readOnly && !pmReviewLoading && pmReview && (
+                <p className="text-[11px] text-text-muted">
+                  Read-only — use the Project Manager&rsquo;s evaluation as
+                  reference for your overall review below.
+                </p>
+              )}
+            </section>
+          )}
+
           {!readOnly && !canSubmit && (
             <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
               You can save a draft now, but you can only submit your review once
@@ -146,7 +228,7 @@ export function ImpactModal({
             />
           </div>
         </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-border px-6 py-4 shrink-0">
           <button
             type="button"
             onClick={onClose}

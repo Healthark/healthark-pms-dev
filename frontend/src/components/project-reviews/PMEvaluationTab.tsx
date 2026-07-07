@@ -24,6 +24,7 @@ import {
   useSecondaryQueue,
   useReportsToQueue,
   useRoleExpectations,
+  useProjectReviewDetail,
   useSubmitPMEvaluation,
   useSavePMDraft,
   useSubmitReportsToEvaluation,
@@ -352,6 +353,17 @@ export function PMEvaluationTab() {
   };
 
   const closeModal = () => { setEvalTarget(null); setViewOnly(false); setModalError(""); };
+
+  // For a Secondary row whose PM has already submitted (pm_submitted), fetch the
+  // PM's finalized review so the ImpactModal can show it read-only as reference.
+  // review_id is non-null once any review row exists (guaranteed when the PM has
+  // submitted). Gated on pm_submitted so the PM's in-progress draft never leaks.
+  const pmReviewId =
+    evalTarget?.type === "secondary" && evalTarget.pm_submitted
+      ? evalTarget.review_id
+      : null;
+  const { data: pmReview, isLoading: pmReviewLoading } =
+    useProjectReviewDetail(pmReviewId);
 
   // Final PM submission is locking + becomes visible to the employee per the
   // org's visibility settings, so confirm before it fires. Shared by the
@@ -721,6 +733,9 @@ export function PMEvaluationTab() {
         {evalTarget?.type === "secondary" && (
           <ImpactModal row={evalTarget} readOnly={viewOnly}
             pmSubmitted={evalTarget.pm_submitted ?? false}
+            pmReview={pmReviewId !== null ? pmReview ?? null : null}
+            pmReviewLoading={pmReviewId !== null && pmReviewLoading}
+            pmRating={evalTarget.performance_group}
             onSubmit={handleSecSubmit}
             onSaveDraft={viewOnly ? undefined : handleSecSaveDraft}
             onClose={closeModal} isSaving={isSaving} isDraftSaving={isDraftSaving} error={modalError} />
