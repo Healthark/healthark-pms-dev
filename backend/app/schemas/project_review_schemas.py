@@ -37,25 +37,34 @@ from app.models.project_review_models import (
 
 class PMEvaluationSubmit(BaseModel):
     """
-    PM fills this for each team member.
-    All 7 competency comments + performance group + impact required.
+    PM fills this for each team member. performance_group + impact required.
+
+    Competency comments arrive one of two ways (completeness is enforced in the
+    route, since the applicable competencies are department/level-specific):
+      - `comments`: the dynamic {competency_id: text} map (the current client) —
+        required for custom per-department/level competencies;
+      - the legacy fixed comment_* fields (older clients) — still accepted.
     """
     performance_group: PerformanceGroup
     impact_statement: str = Field(..., min_length=1, max_length=5000)
-    comment_task_execution: str = Field(..., min_length=1, max_length=5000)
-    comment_ownership: str = Field(..., min_length=1, max_length=5000)
-    comment_project_management: str = Field(..., min_length=1, max_length=5000)
-    comment_client_deliverables: str = Field(..., min_length=1, max_length=5000)
-    comment_communication: str = Field(..., min_length=1, max_length=5000)
-    comment_mentoring: str = Field(..., min_length=1, max_length=5000)
-    comment_competency_skills: str = Field(..., min_length=1, max_length=5000)
+    comments: Optional[dict[int, str]] = None
+    comment_task_execution: Optional[str] = Field(default=None, max_length=5000)
+    comment_ownership: Optional[str] = Field(default=None, max_length=5000)
+    comment_project_management: Optional[str] = Field(default=None, max_length=5000)
+    comment_client_deliverables: Optional[str] = Field(default=None, max_length=5000)
+    comment_communication: Optional[str] = Field(default=None, max_length=5000)
+    comment_mentoring: Optional[str] = Field(default=None, max_length=5000)
+    comment_competency_skills: Optional[str] = Field(default=None, max_length=5000)
 
 
 class PMEvaluationDraft(BaseModel):
     """Partial save for the PM's evaluation. Every field optional so the PM
-    can park work mid-thought and pick up later."""
+    can park work mid-thought and pick up later. `comments` is the dynamic
+    {competency_id: text} map (current client); the legacy fixed comment_*
+    fields are still accepted."""
     performance_group: Optional[PerformanceGroup] = None
     impact_statement: Optional[str] = Field(default=None, max_length=5000)
+    comments: Optional[dict[int, str]] = None
     comment_task_execution: Optional[str] = Field(default=None, max_length=5000)
     comment_ownership: Optional[str] = Field(default=None, max_length=5000)
     comment_project_management: Optional[str] = Field(default=None, max_length=5000)
