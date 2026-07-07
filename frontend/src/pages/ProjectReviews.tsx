@@ -15,6 +15,7 @@
  */
 
 import { useState, useMemo, Fragment } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Briefcase,
   CheckCircle2,
@@ -88,7 +89,6 @@ export function ProjectReviews() {
   // getAllReviews). Backend re-checks the role — this is a UI affordance.
   const isAdmin = user?.role === "Admin";
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("my");
   // My Reviews defaults to "All Cycles" — the employee usually wants to see
   // every cycle, and a stable literal (vs lazy-seeding from settings, which
   // may not be loaded at mount) avoids a false "active filter" state.
@@ -110,6 +110,28 @@ export function ProjectReviews() {
   const isLoading = cardsLoading || expectationsLoading;
   const showEvaluateTab =
     pmQueue.length > 0 || secQueue.length > 0 || reportsToQueue.length > 0;
+
+  // Persist the active tab in the URL (?tab=) so a refresh / deep link lands on
+  // the same tab — matching Annual Goals & the Admin Panel. A gated tab falls
+  // back to "my" when the viewer can't see it (non-PM → evaluate, non-admin →
+  // all-reviews); it re-resolves once the gating query loads.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab: ActiveTab =
+    tabParam === "evaluate" && showEvaluateTab
+      ? "evaluate"
+      : tabParam === "all-reviews" && isAdmin
+        ? "all-reviews"
+        : "my";
+  const setActiveTab = (tab: ActiveTab) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
 
   // ── Derived filter sources + filtered/sorted cards (memoised) ──────
 
