@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     # Used to render the "Sign in" CTA link inside outbound emails.
     APP_BASE_URL: str = "http://localhost:5173"
 
+    # ── Support ("Report an Issue") ─────────────────────────────────
+    # Comma-separated inboxes notified when a user submits a support
+    # ticket. Best-effort email (BackgroundTasks); a delivery failure never
+    # blocks the submission. Override per-deployment via env var:
+    #   SUPPORT_NOTIFY_EMAILS=a@x.com,b@x.com
+    SUPPORT_NOTIFY_EMAILS: str = (
+        "amol@healthark.ai,devanshi@healthark.ai,trapti@healthark.ai"
+    )
+
     # ── 360 Feedback ────────────────────────────────────────────────
     # Per-deployment HMAC secret used to anonymise reviewers in the
     # 360 feedback module. Never logged. Rotating it invalidates the

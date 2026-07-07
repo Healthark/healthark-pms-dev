@@ -17,6 +17,7 @@ from app.api.routes import (
     notification_routes,
     project_review_routes,
     project_routes,
+    support_routes,
     system_settings_routes,
     user_routes,
 )
@@ -107,6 +108,7 @@ app.include_router(project_review_routes.router, prefix=f"{settings.API_V1_STR}/
 app.include_router(mentee_routes.router,         prefix=f"{settings.API_V1_STR}/mentees",         tags=["Mentees"])
 app.include_router(feedback_360_routes.router,   prefix=f"{settings.API_V1_STR}/feedback-360",    tags=["360 Feedback"])
 app.include_router(export_routes.router,         prefix=f"{settings.API_V1_STR}/exports",         tags=["Exports"])
+app.include_router(support_routes.router,        prefix=f"{settings.API_V1_STR}/support",         tags=["Support"])
 
 @app.get("/")
 def root():
