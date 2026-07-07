@@ -29,6 +29,36 @@ export interface FrameworkResponse {
 /** Cell key used for the org default set (no levels). */
 export const DEFAULT_CELL_KEY = "default";
 
+// ── Bulk save (mirror backend admin_schemas FrameworkBulkSave) ──────────
+
+export interface BulkCell {
+  /** null for the org default set's single column. */
+  level: number | null;
+  expectation: string | null;
+}
+
+export interface BulkCompetency {
+  /** null = a NEW competency (server assigns a unique slug from the label). */
+  key: string | null;
+  label: string;
+  is_reviewable: boolean;
+  display_order: number;
+  /** true marks an existing competency for soft-deletion. */
+  is_deleted: boolean;
+  cells: BulkCell[];
+}
+
+export interface BulkDesignation {
+  id: number;
+  level: number | null;
+}
+
+export interface FrameworkBulkSave {
+  department_id: number | null;
+  competencies: BulkCompetency[];
+  designations: BulkDesignation[];
+}
+
 const BASE = "/admin/competency-framework";
 
 export const competencyFrameworkService = {
@@ -99,6 +129,13 @@ export const competencyFrameworkService = {
       `${BASE}/designations/${designationId}`,
       { level },
     );
+    return res.data;
+  },
+
+  /** Save the whole framework (one department or the org default set) at once —
+   *  the editor's Save button. Reconciled server-side in a single transaction. */
+  bulkSave: async (payload: FrameworkBulkSave): Promise<FrameworkResponse> => {
+    const res = await apiClient.put<FrameworkResponse>(`${BASE}/bulk`, payload);
     return res.data;
   },
 };

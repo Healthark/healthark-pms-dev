@@ -29,6 +29,7 @@ from app.models.user_models import User
 from app.schemas.admin_schemas import (
     DesignationBrief,
     DesignationLevelUpdate,
+    FrameworkBulkSave,
     FrameworkCell,
     FrameworkCellUpdate,
     FrameworkCompetency,
@@ -399,3 +400,121 @@ def set_designation_level(
     designations_cache.invalidate(org_id)
     db.refresh(d)
     return DesignationBrief.model_validate(d, from_attributes=True)
+
+
+@router.put("/bulk", response_model=FrameworkResponse)
+def bulk_save_framework(
+    payload: FrameworkBulkSave, db: DbSession, current_user: CurrentUser
+):
+    """Save the WHOLE framework for a department (or the org default set) in one
+    transaction — the admin editor's Save button.
+
+    Declarative + explicit-delete: each competency is created (key=null),
+    updated (existing key), or soft-deleted (is_deleted=true). A competency
+    absent from the payload is left untouched, so a partial payload can't wipe
+    data. Cells are upserted per (competency, level); designations' levels are
+    set. A single commit at the end makes the whole save atomic — nothing lands
+    unless every change succeeds.
+    """
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    dept_id = payload.department_id
+    _validate_department(db, org_id, dept_id)
+    is_default = dept_id is None
+
+    # Existing NON-deleted rows in scope, grouped by competency key.
+    rows_by_key: dict[str, list[Competency]] = {}
+    for r in _dept_scope(
+        db.query(Competency).filter(
+            Competency.org_id == org_id, Competency.is_deleted.is_(False)
+        ),
+        dept_id,
+    ).all():
+        rows_by_key.setdefault(r.key, []).append(r)
+
+    # Every key ever used in this scope (incl. soft-deleted) — a fresh key must
+    # avoid them so a new competency never reuses a removed one's stored ids.
+    used_keys = {
+        row[0]
+        for row in _dept_scope(
+            db.query(Competency.key).filter(Competency.org_id == org_id), dept_id
+        ).distinct()
+    }
+
+    def _fresh_key(label: str) -> str:
+        base = _slugify(label)
+        key = base
+        i = 2
+        while key in used_keys:
+            key = f"{base}_{i}"
+            i += 1
+        used_keys.add(key)
+        return key
+
+    def _desired_cells(comp) -> dict:
+        """{level -> expectation}. The default set collapses to a single
+        None-level cell regardless of what levels the payload carries."""
+        if is_default:
+            return {None: comp.cells[0].expectation if comp.cells else None}
+        return {c.level: c.expectation for c in comp.cells if c.level is not None}
+
+    def _add_row(key, level, exp, comp):
+        db.add(
+            Competency(
+                org_id=org_id,
+                department_id=dept_id,
+                level=level,
+                key=key,
+                label=comp.label,
+                display_order=comp.display_order,
+                is_reviewable=comp.is_reviewable,
+                is_deleted=False,
+                expectation=exp,
+            )
+        )
+
+    for comp in payload.competencies:
+        existing = rows_by_key.get(comp.key) if comp.key else None
+
+        if existing is not None:
+            if comp.is_deleted:
+                for r in existing:
+                    r.is_deleted = True
+                continue
+            for r in existing:
+                r.label = comp.label
+                r.is_reviewable = comp.is_reviewable
+                r.display_order = comp.display_order
+            by_level = {r.level: r for r in existing}
+            for level, exp in _desired_cells(comp).items():
+                if level in by_level:
+                    by_level[level].expectation = exp
+                else:
+                    _add_row(comp.key, level, exp, comp)
+        elif not comp.is_deleted:
+            # New competency — a null key, or a key with no live rows.
+            key = _fresh_key(comp.label)
+            cells = _desired_cells(comp)
+            if not cells:
+                # Brand-new competency before any level exists — seed level 1.
+                cells = {1: None}
+            for level, exp in cells.items():
+                _add_row(key, level, exp, comp)
+
+    if not is_default and payload.designations:
+        desig_by_id = {
+            d.id: d
+            for d in db.query(Designation).filter(
+                Designation.org_id == org_id,
+                Designation.department_id == dept_id,
+            ).all()
+        }
+        for entry in payload.designations:
+            d = desig_by_id.get(entry.id)
+            if d is not None:
+                d.level = entry.level
+
+    db.commit()
+    if not is_default:
+        designations_cache.invalidate(org_id)
+    return _framework_for(db, org_id, dept_id)

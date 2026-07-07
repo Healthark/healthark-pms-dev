@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   competencyFrameworkService,
+  type FrameworkBulkSave,
   type FrameworkResponse,
 } from "../services/competencyFramework.service";
 import { designationsQueryKey } from "./adminReferenceData";
@@ -61,6 +62,21 @@ export function useAddLevel() {
   return useFrameworkWrite((v: { departmentId: number; level: number }) =>
     competencyFrameworkService.addLevel(v.departmentId, v.level),
   );
+}
+
+/** Save the whole framework at once (the editor's Save button). Primes the
+ *  framework cache with the returned matrix and, since a bulk save can re-level
+ *  designations, refreshes the shared designations list too. */
+export function useBulkSaveFramework() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: FrameworkBulkSave) =>
+      competencyFrameworkService.bulkSave(payload),
+    onSuccess: (data) => {
+      qc.setQueryData(frameworkQueryKey(data.department_id), data);
+      qc.invalidateQueries({ queryKey: designationsQueryKey });
+    },
+  });
 }
 
 /** Setting a designation's level changes which level columns the department
