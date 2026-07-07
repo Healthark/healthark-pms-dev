@@ -38,6 +38,7 @@ from app.core.cycle_utils import (
     extract_fy_label,
     get_year_override,
 )
+from app.models.competency_models import Competency
 from app.models.project_models import (
     PROJECT_STATUS_COMPLETED,
     Project,
@@ -56,6 +57,8 @@ from app.models.user_models import User
 from app.schemas.project_review_schemas import (
     AdminMemberReviewRow,
     AdminProjectSummary,
+    CompetencyResponse,
+    CompetencySetResponse,
     MyProjectCard,
     PMEvaluationDraft,
     PMEvaluationSubmit,
@@ -66,6 +69,10 @@ from app.schemas.project_review_schemas import (
     SecondaryEvalDraft,
     SecondaryEvalResponse,
     SecondaryEvalSubmit,
+)
+from app.services.competency_service import (
+    get_competencies_by_ids,
+    get_competency_set,
 )
 
 router = APIRouter()
@@ -83,6 +90,130 @@ _DRAFT_COMMENT_FIELDS = (
     "comment_competency_skills",
 )
 
+# The 7 reviewable default-competency keys mapped to their legacy comment_*
+# columns. This bridges the fixed request/response contract to the dynamic
+# `comments` JSON while the two coexist (expand phase). firm_growth is
+# expectation-only and has no comment column, so it's absent here.
+_COMMENT_FIELD_BY_KEY = {
+    "task_execution": "comment_task_execution",
+    "ownership": "comment_ownership",
+    "project_management": "comment_project_management",
+    "client_deliverables": "comment_client_deliverables",
+    "communication": "comment_communication",
+    "mentoring": "comment_mentoring",
+    "competency_skills": "comment_competency_skills",
+}
+
+
+def _default_competency_id_by_key(db: DbSession, org_id: int) -> dict[str, int]:
+    """{competency key -> id} for the org's DEFAULT reviewable competencies.
+
+    The bridge between the fixed comment_* columns and the `comments` JSON,
+    which is keyed by competency id. Empty if the org has no default set
+    seeded yet (pre-migration), in which case the JSON sync is a safe no-op.
+    """
+    rows = (
+        db.query(Competency)
+        .filter(
+            Competency.org_id == org_id,
+            Competency.department_id.is_(None),
+            Competency.level.is_(None),
+            Competency.is_reviewable.is_(True),
+            Competency.is_deleted.is_(False),
+        )
+        .all()
+    )
+    return {c.key: c.id for c in rows}
+
+
+def _sync_review_comments_json(db: DbSession, review: ProjectReview) -> None:
+    """Mirror the legacy comment_* columns into review.comments JSON.
+
+    Keeps the JSON (the read source of truth) in lockstep with the columns on
+    every write path, keyed by the org's default competency ids. Reassigns the
+    whole dict so SQLAlchemy marks the column dirty. No-op if the org has no
+    default competencies seeded (keeps pre-migration writes working)."""
+    key_to_id = _default_competency_id_by_key(db, review.org_id)
+    if not key_to_id:
+        return
+    review.comments = {
+        str(key_to_id[key]): getattr(review, field)
+        for key, field in _COMMENT_FIELD_BY_KEY.items()
+        if key in key_to_id
+    }
+
+
+def _resolved_comment_values(
+    db: DbSession, review: ProjectReview
+) -> dict[str, Optional[str]]:
+    """The 7 comment values for the API response.
+
+    Base = the legacy comment_* columns; the `comments` JSON (the source of
+    truth) is then overlaid PER FIELD. The overlay is deliberately per-field
+    rather than all-or-nothing: a competency id that no longer resolves — e.g.
+    a default competency later soft-deleted or re-flagged by framework
+    management — leaves the column value showing through instead of silently
+    dropping the comment. In the expand phase the JSON mirrors the columns, so
+    this is behaviourally identical today; it also covers rows written by
+    pre-cutover code (JSON absent → columns used as-is).
+    """
+    out: dict[str, Optional[str]] = {
+        field: getattr(review, field) for field in _COMMENT_FIELD_BY_KEY.values()
+    }
+    if review.comments:
+        id_to_key = {
+            str(cid): key
+            for key, cid in _default_competency_id_by_key(db, review.org_id).items()
+        }
+        for cid, text in review.comments.items():
+            key = id_to_key.get(str(cid))
+            if key:
+                out[_COMMENT_FIELD_BY_KEY[key]] = text
+    return out
+
+
+def _comments_map_for_response(
+    db: DbSession, review: ProjectReview
+) -> Optional[dict[str, Optional[str]]]:
+    """The {competency_id: text} map for the API response.
+
+    Prefers the stored `comments` JSON (source of truth, and forward-compatible
+    with custom competencies whose ids aren't in the default set). For a legacy
+    row with no JSON, builds the map from the comment_* columns keyed by the
+    org's default competency ids. Returns None when there's nothing to show
+    (e.g. an empty placeholder row)."""
+    if review.comments:
+        return review.comments
+    key_to_id = _default_competency_id_by_key(db, review.org_id)
+    built: dict[str, Optional[str]] = {
+        str(key_to_id[key]): getattr(review, field)
+        for key, field in _COMMENT_FIELD_BY_KEY.items()
+        if key in key_to_id
+    }
+    return built if any(built.values()) else None
+
+
+def _competencies_for_review(
+    db: DbSession,
+    review: ProjectReview,
+    comments: Optional[dict[str, Optional[str]]],
+) -> list[Competency]:
+    """The competencies THIS review was written against — resolved by the ids
+    in its (already-computed) comments map, so it always renders by its OWN
+    framework even after the department's framework changes (competencies are
+    soft-deleted, so old ids still resolve their labels). Empty when the review
+    has no comments yet (a fresh eval uses the current (department, level) set
+    instead). Takes the resolved map from the caller to avoid recomputing it."""
+    if not comments:
+        return []
+    ids: list[int] = []
+    for key in comments:
+        try:
+            ids.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    return get_competencies_by_ids(db, review.org_id, ids)
+
 
 def _pm_review_has_draft_content(review: ProjectReview) -> bool:
     """True iff the PM has typed anything into this review row.
@@ -90,12 +221,18 @@ def _pm_review_has_draft_content(review: ProjectReview) -> bool:
     Distinguishes a saved draft from the empty placeholder rows that
     seed.py / the queue pre-creates for upcoming cycles. A row counts as
     a draft if any of: rating selected, impact statement filled, or any
-    per-competency comment present (after stripping whitespace).
+    per-competency comment present (after stripping whitespace). Checks both
+    the JSON and the legacy columns (a union) so it's correct regardless of
+    which source a given row was written through.
     """
     if review.performance_group:
         return True
     if review.impact_statement and review.impact_statement.strip():
         return True
+    if review.comments:
+        for v in review.comments.values():
+            if v and v.strip():
+                return True
     for f in _DRAFT_COMMENT_FIELDS:
         v = getattr(review, f, None)
         if v and v.strip():
@@ -223,6 +360,9 @@ def _build_review_response(
                 created_at=ev.created_at,
             ))
 
+    comment_values = _resolved_comment_values(db, review)
+    comments_map = _comments_map_for_response(db, review)
+
     return ProjectReviewResponse(
         id=review.id,
         org_id=review.org_id,
@@ -235,13 +375,18 @@ def _build_review_response(
         reviewer_name=reviewer.full_name if reviewer else None,
         project_name=project.name if project else "Unknown",
         project_code=project.project_code if project else "???",
-        comment_task_execution=review.comment_task_execution,
-        comment_ownership=review.comment_ownership,
-        comment_project_management=review.comment_project_management,
-        comment_client_deliverables=review.comment_client_deliverables,
-        comment_communication=review.comment_communication,
-        comment_mentoring=review.comment_mentoring,
-        comment_competency_skills=review.comment_competency_skills,
+        comment_task_execution=comment_values["comment_task_execution"],
+        comment_ownership=comment_values["comment_ownership"],
+        comment_project_management=comment_values["comment_project_management"],
+        comment_client_deliverables=comment_values["comment_client_deliverables"],
+        comment_communication=comment_values["comment_communication"],
+        comment_mentoring=comment_values["comment_mentoring"],
+        comment_competency_skills=comment_values["comment_competency_skills"],
+        comments=comments_map,
+        competencies=[
+            CompetencyResponse.model_validate(c)
+            for c in _competencies_for_review(db, review, comments_map)
+        ],
         performance_group=review.performance_group,
         impact_statement=review.impact_statement,
         secondary_evaluations=secondary_responses,
@@ -504,6 +649,8 @@ def get_my_projects(
                 assignment_role=a.assignment_role,
                 designation_name=my_designation_name,
                 department_name=dept.name if dept else None,
+                department_id=dept.id if dept else None,
+                level=my_designation.level if my_designation else None,
                 review_status=review.status,
                 performance_group=_visible_performance_group(
                     review, current_user, db, current_user.org_id, current_cycle
@@ -528,6 +675,8 @@ def get_my_projects(
                 assignment_role=a.assignment_role,
                 designation_name=my_designation_name,
                 department_name=dept.name if dept else None,
+                department_id=dept.id if dept else None,
+                level=my_designation.level if my_designation else None,
                 review_status="pending",
                 pm_name=pm_name,
                 secondary_evaluator_name=sec_name_by_user_id.get(
@@ -725,6 +874,8 @@ def get_pm_evaluation_queue(
                     assignment_role=ta.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=ta.assigned_date,
                     review_status=review.status,
                     performance_group=review.performance_group,
@@ -747,6 +898,8 @@ def get_pm_evaluation_queue(
                     assignment_role=ta.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=ta.assigned_date,
                     review_status=None,
                     performance_group=None,
@@ -788,9 +941,35 @@ def get_role_expectations(
             exp_mentoring=exp.exp_mentoring,
             exp_firm_growth=exp.exp_firm_growth,
             exp_competency_skills=exp.exp_competency_skills,
+            expectations=exp.expectations,
         ))
 
     return results
+
+
+@router.get("/competencies", response_model=CompetencySetResponse)
+def get_competencies(
+    db: DbSession,
+    current_user: CurrentUser,
+    department_id: Optional[int] = Query(None),
+    level: Optional[int] = Query(None),
+):
+    """Resolve the competency set for a (department, level).
+
+    Falls back to the org DEFAULT set (flagged ``is_default=True``) when the
+    given (department, level) has no framework of its own — or when either
+    parameter is omitted. Read-only reference used by the evaluation form and
+    the expectations panel.
+    """
+    competencies, is_default = get_competency_set(
+        db, current_user.org_id, department_id, level
+    )
+    return CompetencySetResponse(
+        is_default=is_default,
+        competencies=[
+            CompetencyResponse.model_validate(c) for c in competencies
+        ],
+    )
 
 
 @router.post("/{project_id}/evaluate/{user_id}", response_model=ProjectReviewResponse, status_code=status.HTTP_201_CREATED)
@@ -908,6 +1087,7 @@ def submit_pm_evaluation(
         )
         db.add(review)
 
+    _sync_review_comments_json(db, review)
     db.commit()
     db.refresh(review)
 
@@ -1013,6 +1193,7 @@ def save_pm_evaluation_draft(
         else:
             setattr(review, field, value)
 
+    _sync_review_comments_json(db, review)
     db.commit()
     db.refresh(review)
     return _build_review_response(review, db, viewer_user_id=current_user.id)
@@ -1232,6 +1413,8 @@ def get_reports_to_evaluation_queue(
                     assignment_role=root_a.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=root_a.assigned_date,
                     review_status=review.status,
                     performance_group=review.performance_group,
@@ -1253,6 +1436,8 @@ def get_reports_to_evaluation_queue(
                     assignment_role=root_a.assignment_role,
                     department_name=dept.name if dept else None,
                     designation_name=desig.name if desig else None,
+                    department_id=dept.id if dept else None,
+                    level=desig.level if desig else None,
                     assigned_date=root_a.assigned_date,
                     review_status=None,
                     performance_group=None,
@@ -1344,6 +1529,7 @@ def submit_reports_to_evaluation(
         )
         db.add(review)
 
+    _sync_review_comments_json(db, review)
     db.commit()
     db.refresh(review)
     return _build_review_response(review, db, viewer_user_id=current_user.id)
@@ -1414,6 +1600,7 @@ def save_reports_to_evaluation_draft(
         else:
             setattr(review, field, value)
 
+    _sync_review_comments_json(db, review)
     db.commit()
     db.refresh(review)
     return _build_review_response(review, db, viewer_user_id=current_user.id)
@@ -2180,6 +2367,7 @@ def update_review(
     review.impact_statement = payload.impact_statement
     review.performance_group = payload.performance_group.value
 
+    _sync_review_comments_json(db, review)
     db.commit()
     db.refresh(review)
 

@@ -1,28 +1,24 @@
 import { useState } from "react";
 import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
-import type { RoleExpectation } from "../../services/project-review.service";
-
-// The "exp_*" keys are exactly the role-expectation columns on
-// `RoleExpectation`; constraining the prop to that subset removes the
-// previous `as Record<string, unknown>` cast and lets TypeScript verify
-// callers pass a real column name.
-type ExpKey = Extract<keyof RoleExpectation, `exp_${string}`>;
 
 /**
  * Collapsible panel that surfaces the role-expectation text for one
- * competency. Used inside evaluation modals so the PM can cross-check
- * against the department/designation's canonical expectations.
+ * competency. Used inside the evaluation modal so the PM can cross-check
+ * against the department/level's canonical expectations.
+ *
+ * The parent resolves the text (from the department/level expectations map,
+ * keyed by competency id) and passes it in — this component just renders it.
  */
 export function ExpectationPanel({
-  expectation,
-  expKey,
+  text,
+  deptName,
+  desigName,
 }: {
-  readonly expectation: RoleExpectation | null;
-  readonly expKey: ExpKey;
+  readonly text: string | null;
+  readonly deptName?: string | null;
+  readonly desigName?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  if (!expectation) return null;
-  const text = expectation[expKey];
   if (!text) return null;
 
   return (
@@ -41,9 +37,11 @@ export function ExpectationPanel({
           <p className="text-xs text-blue-800 dark:text-blue-300 whitespace-pre-wrap leading-relaxed">
             {text.replace(/ \| /g, "\n• ")}
           </p>
-          <p className="mt-1 text-[10px] text-blue-500 dark:text-blue-400">
-            {expectation.department_name} / {expectation.designation_name}
-          </p>
+          {(deptName || desigName) && (
+            <p className="mt-1 text-[10px] text-blue-500 dark:text-blue-400">
+              {deptName} / {desigName}
+            </p>
+          )}
         </div>
       )}
     </div>

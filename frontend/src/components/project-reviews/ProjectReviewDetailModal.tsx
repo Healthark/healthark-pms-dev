@@ -19,7 +19,7 @@ import { createPortal } from "react-dom";
 import { Briefcase, Clock, Lock, MessageSquare, UserCircle, X } from "lucide-react";
 import type { ProjectReviewResponse } from "../../services/project-review.service";
 import { PerformanceRatingBadge } from "../reviews/PerformanceRatingBadge";
-import { PROJECT_COMPETENCIES } from "./CompetencyBlock";
+import { resolveReviewBlocks } from "./reviewCompetencies";
 
 /** Minimal header context for the read-only "not yet evaluated" placeholder,
  *  used when `review` is null — a pending cycle on the All Reviews tab that
@@ -55,12 +55,13 @@ export function ProjectReviewDetailModal({
   if (!header) return null;
   const isPending = review === null;
 
-  // Only show competency blocks the PM actually filled in.
+  // Only show competency blocks the PM actually filled in. Resolved from the
+  // review's own framework (embedded competencies), falling back to the fixed
+  // fields for a legacy payload.
   const filledComps = review
-    ? PROJECT_COMPETENCIES.filter((c) => {
-        const v = review[c.commentKey];
-        return typeof v === "string" && v.trim().length > 0;
-      })
+    ? resolveReviewBlocks(review, undefined).filter(
+        (b) => typeof b.comment === "string" && b.comment.trim().length > 0,
+      )
     : [];
 
   const submittedEvals = review
@@ -175,16 +176,16 @@ export function ProjectReviewDetailModal({
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {filledComps.map((c) => (
+                {filledComps.map((b) => (
                   <div
-                    key={c.key}
+                    key={b.key}
                     className="rounded-lg border border-border bg-surface-muted px-3 py-2.5"
                   >
                     <p className="text-[11px] font-semibold text-text-main mb-1">
-                      {c.label}
+                      {b.label}
                     </p>
                     <p className="text-[12px] text-text-muted whitespace-pre-wrap leading-snug">
-                      {review[c.commentKey]}
+                      {b.comment}
                     </p>
                   </div>
                 ))}

@@ -1,15 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Info, Loader2, Pencil, Save, Send, X } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import {
   projectReviewService,
+  type Competency,
   type PMEvaluationPayload,
   type PMEvaluationDraftPayload,
   type PerformanceGroup,
   type RoleExpectation,
   type SecondaryEvalResponse,
 } from "../../services/project-review.service";
+import { useCompetencies } from "../../queries/projectReviews";
 import { ExpectationPanel } from "./ExpectationPanel";
 import { SecondaryFeedback } from "./ImpactBlock";
 import { useDebounce } from "../../hooks/useDebounce";
@@ -17,9 +19,9 @@ import { useDebounce } from "../../hooks/useDebounce";
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 
 /**
- * Minimal header data the modal needs to render its title + context line.
- * Both PMEvaluationTab's UnifiedEvalRow and MenteeProjectsTab's row-builder
- * satisfy this shape without any adapter code.
+ * Minimal header data the modal needs to render its title + context line,
+ * plus the reviewee's department_id + level so it can fetch the applicable
+ * competency set. PMEvaluationTab's UnifiedEvalRow satisfies this shape.
  */
 export interface EvalModalCard {
   employee_name: string;
@@ -27,29 +29,23 @@ export interface EvalModalCard {
   project_code: string;
   department_name: string | null;
   review_id: number | null;
+  department_id: number | null;
+  level: number | null;
 }
 
-export const COMPETENCIES = [
-  { key: "task_execution",      label: "Task Execution & Problem Solving",             expKey: "exp_task_execution" },
-  { key: "ownership",           label: "Ownership & Accountability",                    expKey: "exp_ownership" },
-  { key: "project_management",  label: "Project Management and Risk Mitigation",        expKey: "exp_project_management" },
-  { key: "client_deliverables", label: "Building Client-Ready Deliverables",            expKey: "exp_client_deliverables" },
-  { key: "communication",       label: "Communication & Client/Stakeholder Management", expKey: "exp_communication" },
-  { key: "mentoring",           label: "Mentoring and Team Development",                expKey: "exp_mentoring" },
-  { key: "competency_skills",   label: "Competency and Skills",                         expKey: "exp_competency_skills" },
-] as const;
-
-export type CompKey = (typeof COMPETENCIES)[number]["key"];
-
-const EMPTY_COMMENTS: Record<CompKey, string> = {
-  task_execution: "",
-  ownership: "",
-  project_management: "",
-  client_deliverables: "",
-  communication: "",
-  mentoring: "",
-  competency_skills: "",
-};
+// The legacy fixed competency keys. The write API still takes the fixed
+// comment_* fields, so on submit/draft we reverse-map the dynamic (id-keyed)
+// comments back onto these keys. Rendering + local state are fully dynamic —
+// driven by the fetched competency set — which is what lets custom
+// per-department/level frameworks render once they're seeded.
+type FixedCommentKey =
+  | "task_execution"
+  | "ownership"
+  | "project_management"
+  | "client_deliverables"
+  | "communication"
+  | "mentoring"
+  | "competency_skills";
 
 const TEXTAREA_CLS =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed";
@@ -81,42 +77,77 @@ export function EvalModal({
   isDraftSaving: externalIsDraftSaving = false,
   error,
 }: EvalModalProps) {
+  // The competency set for this reviewee's (department, level). Falls back to
+  // the org default set when the card carries no dept/level (or none is
+  // defined for that role). Only reviewable competencies get a comment box.
+  const {
+    data: competencySet,
+    isLoading: compLoading,
+    isError: compError,
+  } = useCompetencies(card.department_id, card.level);
+  // For an EXISTING review, render by the competencies it was written against
+  // — embedded on the review payload, resolved by its stored comment ids — so a
+  // later framework change can't blank or misattribute its comments. A NEW
+  // review (or an existing row with no comments yet) uses the current
+  // (department, level) set fetched above.
+  const [reviewCompetencies, setReviewCompetencies] = useState<Competency[] | null>(
+    null,
+  );
+  const reviewableComps = useMemo<Competency[]>(() => {
+    const stored = (reviewCompetencies ?? []).filter((c) => c.is_reviewable);
+    if (stored.length > 0) return stored;
+    return (competencySet?.competencies ?? []).filter((c) => c.is_reviewable);
+  }, [reviewCompetencies, competencySet]);
+  const usingStoredSet = (reviewCompetencies ?? []).some((c) => c.is_reviewable);
+
   // Pre-load whenever a review row already exists. That covers three
   // distinct cases: editing a finalised review (isEditMode=true), the
   // read-only viewer (readOnly=true), AND continuing from a saved draft
-  // — drafts share the same columns as finalised reviews but keep the
-  // row's status="pending", so without this branch a PM who saved a
-  // draft would re-open the form to empty fields.
+  // — drafts share the same row as finalised reviews but keep the row's
+  // status="pending", so without this branch a PM who saved a draft would
+  // re-open the form to empty fields.
   const shouldPreload = card.review_id != null;
   const [isLoadingReview, setIsLoadingReview] = useState(shouldPreload);
   const [fetchError, setFetchError] = useState("");
-  const [comments, setComments] = useState<Record<CompKey, string>>(EMPTY_COMMENTS);
+  // Comments keyed by competency id (string) — the dynamic, framework-aware
+  // shape. Hydrated directly from the review's `comments` map (also id-keyed;
+  // the backend fills the legacy-column fallback server-side).
+  const [comments, setComments] = useState<Record<string, string>>({});
   const [performanceGroup, setPerformanceGroup] = useState<PerformanceGroup | "">("");
   const [impactStatement, setImpactStatement] = useState("");
   // Submitted secondary-evaluator impact statements — shown to the PM in the
   // read-only view so they can see the secondary's feedback on the review.
   const [secondaryEvals, setSecondaryEvals] = useState<SecondaryEvalResponse[]>([]);
 
+  // Once we know the review brought its own competencies, don't block on (or
+  // fail for) the current-set fetch — it's unused in that case.
+  const isLoading = isLoadingReview || (!usingStoredSet && compLoading);
+  // A failed current-set fetch must NOT silently render an empty form: without
+  // a set there are no boxes and the reverse-map would emit all-empty comment_*
+  // fields, which a Save Draft / autosave would persist and wipe existing
+  // comments. Surface it as a blocking error so the form can't be saved in that
+  // state. Irrelevant once we're rendering from the review's own stored set.
+  const loadError =
+    fetchError ||
+    (!usingStoredSet && compError
+      ? "Couldn't load the evaluation form. Please close and try again."
+      : "");
+
   // Field-change autosave guard: skip while preload is in flight (would
   // race with the GET) and skip until the user has actually edited a field.
   const skipNextAutosaveRef = useRef(true);
 
-  // Latest onSaveDraft kept in a ref so the autosave effect doesn't
-  // re-fire on every parent re-render (which happens whenever a TanStack
-  // query invalidation triggers a refetch — the parent rebuilds the
-  // callback closure each render). Without this ref, the effect's
-  // `[onSaveDraft]` dep would feedback-loop: invalidation → re-render →
-  // new callback ref → effect fires → debouncedAutosave → mutation →
-  // invalidation → repeat.
+  // Latest onSaveDraft kept in a ref so the autosave effect doesn't re-fire
+  // on every parent re-render (which happens whenever a TanStack query
+  // invalidation triggers a refetch). Without this ref, the effect's
+  // `[onSaveDraft]` dep would feedback-loop.
   const onSaveDraftRef = useRef(onSaveDraft);
   useEffect(() => {
     onSaveDraftRef.current = onSaveDraft;
   });
 
-  // Last successfully saved payload (JSON-serialized) so the effect can
-  // bail when field values haven't changed since the last save. Same
-  // pattern as EvalForm's `baselineRef`. Critical safety net against
-  // re-render storms from cross-domain invalidation.
+  // Last successfully saved payload (JSON-serialized) so the effect can bail
+  // when field values haven't changed since the last save.
   const lastSavedSerializedRef = useRef<string>("");
 
   useEffect(() => {
@@ -128,15 +159,15 @@ export function EvalModal({
     projectReviewService
       .getReview(card.review_id)
       .then((review) => {
-        setComments({
-          task_execution: review.comment_task_execution ?? "",
-          ownership: review.comment_ownership ?? "",
-          project_management: review.comment_project_management ?? "",
-          client_deliverables: review.comment_client_deliverables ?? "",
-          communication: review.comment_communication ?? "",
-          mentoring: review.comment_mentoring ?? "",
-          competency_skills: review.comment_competency_skills ?? "",
-        });
+        // review.comments is keyed by competency id (the backend builds it
+        // from the legacy columns for pre-cutover rows), so hydrate directly.
+        const map: Record<string, string> = {};
+        for (const [cid, text] of Object.entries(review.comments ?? {})) {
+          map[cid] = text ?? "";
+        }
+        setComments(map);
+        // Render this review by the competencies it was written against.
+        setReviewCompetencies(review.competencies ?? []);
         setPerformanceGroup((review.performance_group ?? "") as PerformanceGroup | "");
         setImpactStatement(review.impact_statement ?? "");
         setSecondaryEvals(review.secondary_evaluations ?? []);
@@ -147,19 +178,39 @@ export function EvalModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setComment = (key: CompKey, value: string) =>
-    setComments((prev) => ({ ...prev, [key]: value }));
+  const setComment = (id: string, value: string) =>
+    setComments((prev) => ({ ...prev, [id]: value }));
+
+  // The stored comment for a fixed competency key — looked up via the fetched
+  // set's id for that key. Bridges dynamic (id-keyed) state to the fixed
+  // comment_* write contract. Empty when the set lacks that key (won't happen
+  // for the default set, which carries all 7 fixed keys).
+  const commentForKey = (key: FixedCommentKey): string => {
+    const comp = reviewableComps.find((c) => c.key === key);
+    return comp ? (comments[String(comp.id)] ?? "") : "";
+  };
+
+  // Resolve the expectation text for a competency: prefer the id-keyed
+  // expectations map, fall back to the legacy exp_<key> field (default set).
+  const expectationText = (comp: Competency): string | null => {
+    const byId = expectation?.expectations?.[String(comp.id)];
+    if (byId != null) return byId;
+    const legacy = expectation
+      ? (expectation as unknown as Record<string, string | null>)[`exp_${comp.key}`]
+      : null;
+    return legacy ?? null;
+  };
 
   const buildDraftPayload = (): PMEvaluationDraftPayload => {
     const payload: PMEvaluationDraftPayload = {
       impact_statement: impactStatement,
-      comment_task_execution: comments.task_execution,
-      comment_ownership: comments.ownership,
-      comment_project_management: comments.project_management,
-      comment_client_deliverables: comments.client_deliverables,
-      comment_communication: comments.communication,
-      comment_mentoring: comments.mentoring,
-      comment_competency_skills: comments.competency_skills,
+      comment_task_execution: commentForKey("task_execution"),
+      comment_ownership: commentForKey("ownership"),
+      comment_project_management: commentForKey("project_management"),
+      comment_client_deliverables: commentForKey("client_deliverables"),
+      comment_communication: commentForKey("communication"),
+      comment_mentoring: commentForKey("mentoring"),
+      comment_competency_skills: commentForKey("competency_skills"),
     };
     if (performanceGroup !== "") {
       payload.performance_group = performanceGroup;
@@ -171,64 +222,40 @@ export function EvalModal({
     mutationFn: async (
       { payload, silent }: { payload: PMEvaluationDraftPayload; silent: boolean },
     ) => {
-      // Read the latest onSaveDraft via ref so we always invoke the current
-      // callback, regardless of parent re-render timing. `silent` tells the
-      // parent this was the debounced autosave (no toast) vs an explicit
-      // Save Draft click (toast).
       const fn = onSaveDraftRef.current;
       if (!fn) return payload;
       await fn(payload, silent);
       return payload;
     },
     onSuccess: (saved) => {
-      // Snapshot the just-saved payload so the autosave effect can
-      // bail when subsequent re-renders fire without the user having
-      // changed any field.
       lastSavedSerializedRef.current = JSON.stringify(saved);
     },
   });
 
   const [debouncedAutosave, cancelAutosave] = useDebounce(
     (payload: PMEvaluationDraftPayload) => {
-      // Autosave is silent — no toast on every keystroke.
       saveDraftMutation.mutate({ payload, silent: true });
     },
     AUTOSAVE_DEBOUNCE_MS,
   );
 
   // Debounced autosave on field changes. Skipped for the read-only viewer,
-  // the edit-mode submit-only flow, and the initial hydration pass.
-  //
-  // Critical: `onSaveDraft` is intentionally NOT in the dep array — it's
-  // read via `onSaveDraftRef.current` below. A bare `onSaveDraft` dep
-  // would feedback-loop because every mutation invalidates queries →
-  // parent refetches → parent re-renders → new onSaveDraft callback ref →
-  // effect re-fires → another autosave → another mutation → loop.
-  //
-  // Belt-and-suspenders: the `lastSavedSerializedRef` baseline check
-  // means even if the effect fires post-save (e.g. due to other state
-  // bumps), we don't trigger another save when the payload hasn't
-  // actually changed since the last successful one.
+  // while anything is still loading, and on the initial hydration pass. The
+  // payload is the reverse-mapped fixed shape, so its serialization is stable
+  // regardless of the dynamic (id-keyed) state.
   useEffect(() => {
-    if (readOnly || !onSaveDraftRef.current || isLoadingReview || fetchError) return;
+    if (readOnly || !onSaveDraftRef.current || isLoading || loadError) return;
     if (skipNextAutosaveRef.current) {
       skipNextAutosaveRef.current = false;
-      // Seed the baseline so a save-on-fresh-mount with no edits is a no-op.
       lastSavedSerializedRef.current = JSON.stringify(buildDraftPayload());
       return;
     }
     const currentPayload = buildDraftPayload();
     const currentSerialized = JSON.stringify(currentPayload);
     if (currentSerialized === lastSavedSerializedRef.current) {
-      // Field values match the last-saved snapshot — nothing to do.
       return;
     }
     debouncedAutosave(currentPayload);
-    // We intentionally exclude buildDraftPayload + onSaveDraft from deps —
-    // the latter is read via ref to avoid the feedback loop described
-    // above; the former is a fresh closure each render but only the
-    // latest field values matter and `debouncedAutosave`'s identity is
-    // stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     comments,
@@ -236,6 +263,8 @@ export function EvalModal({
     impactStatement,
     readOnly,
     isLoadingReview,
+    compLoading,
+    compError,
     fetchError,
     debouncedAutosave,
   ]);
@@ -243,13 +272,13 @@ export function EvalModal({
   const isDraftSaving = saveDraftMutation.isPending || externalIsDraftSaving;
 
   const allFilled =
-    COMPETENCIES.every((c) => comments[c.key].trim().length > 0) &&
+    reviewableComps.length > 0 &&
+    reviewableComps.every((c) => (comments[String(c.id)] ?? "").trim().length > 0) &&
     performanceGroup !== "" &&
     impactStatement.trim().length > 0;
 
   const handleManualSaveDraft = () => {
     cancelAutosave();
-    // Explicit click — not silent, so the parent shows the "Draft saved" toast.
     saveDraftMutation.mutate({ payload: buildDraftPayload(), silent: false });
   };
 
@@ -263,13 +292,13 @@ export function EvalModal({
     onSubmit({
       performance_group: performanceGroup as PerformanceGroup,
       impact_statement: impactStatement,
-      comment_task_execution: comments.task_execution,
-      comment_ownership: comments.ownership,
-      comment_project_management: comments.project_management,
-      comment_client_deliverables: comments.client_deliverables,
-      comment_communication: comments.communication,
-      comment_mentoring: comments.mentoring,
-      comment_competency_skills: comments.competency_skills,
+      comment_task_execution: commentForKey("task_execution"),
+      comment_ownership: commentForKey("ownership"),
+      comment_project_management: commentForKey("project_management"),
+      comment_client_deliverables: commentForKey("client_deliverables"),
+      comment_communication: commentForKey("communication"),
+      comment_mentoring: commentForKey("mentoring"),
+      comment_competency_skills: commentForKey("competency_skills"),
     });
   };
 
@@ -318,19 +347,19 @@ export function EvalModal({
           </button>
         </div>
 
-        {isLoadingReview ? (
+        {isLoading ? (
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 animate-pulse">
-            {COMPETENCIES.map((c) => (
-              <div key={c.key} className="space-y-1.5">
+            {Array.from({ length: reviewableComps.length || 7 }).map((_, i) => (
+              <div key={i} className="space-y-1.5">
                 <div className="h-3 w-48 rounded bg-surface-hover" />
                 <div className="h-24 rounded-lg bg-surface-hover" />
               </div>
             ))}
           </div>
-        ) : fetchError ? (
+        ) : loadError ? (
           <div className="flex-1 flex items-center justify-center px-6 py-10">
             <p className="rounded-lg bg-red-50 dark:bg-red-950/40 px-5 py-4 text-sm text-red-600 dark:text-red-300 text-center max-w-sm">
-              {fetchError}
+              {loadError}
             </p>
           </div>
         ) : (
@@ -389,23 +418,27 @@ export function EvalModal({
                 <option value="5">5</option>
               </select>
             </div>
-            {COMPETENCIES.map((comp, idx) => (
-              <div key={comp.key}>
+            {reviewableComps.map((comp, idx) => (
+              <div key={comp.id}>
                 <label
-                  htmlFor={`eval-${comp.key}`}
+                  htmlFor={`eval-${comp.id}`}
                   className="block text-xs font-semibold text-text-main mb-1"
                 >
                   {idx + 1}. {comp.label} {!readOnly && "*"}
                 </label>
                 {!readOnly && (
-                  <ExpectationPanel expectation={expectation} expKey={comp.expKey} />
+                  <ExpectationPanel
+                    text={expectationText(comp)}
+                    deptName={expectation?.department_name}
+                    desigName={expectation?.designation_name}
+                  />
                 )}
                 <textarea
-                  id={`eval-${comp.key}`}
+                  id={`eval-${comp.id}`}
                   rows={4}
                   className={TEXTAREA_CLS}
-                  value={comments[comp.key]}
-                  onChange={(e) => setComment(comp.key, e.target.value)}
+                  value={comments[String(comp.id)] ?? ""}
+                  onChange={(e) => setComment(String(comp.id), e.target.value)}
                   placeholder={`Evaluate ${card.employee_name}'s ${comp.label.toLowerCase()}…`}
                   disabled={readOnly}
                 />
@@ -446,7 +479,7 @@ export function EvalModal({
             <button
               type="button"
               onClick={handleManualSaveDraft}
-              disabled={isSaving || isDraftSaving || isLoadingReview || !!fetchError}
+              disabled={isSaving || isDraftSaving || isLoading || !!loadError}
               className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-main hover:bg-surface-muted disabled:opacity-50 transition-colors"
             >
               {isDraftSaving ? (
@@ -461,7 +494,7 @@ export function EvalModal({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isSaving || isDraftSaving || !allFilled || isLoadingReview || !!fetchError}
+              disabled={isSaving || isDraftSaving || !allFilled || isLoading || !!loadError}
               className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity ${
                 isEditMode ? "bg-amber-500" : "bg-brand"
               }`}

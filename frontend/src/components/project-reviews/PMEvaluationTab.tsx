@@ -83,6 +83,11 @@ interface UnifiedEvalRow {
   project_code: string;
   department_name: string | null;
   designation_name: string | null;
+  // Reviewee's department id + designation level — passed to EvalModal so it
+  // can fetch the applicable competency set. Null on secondary rows (they open
+  // ImpactModal, not the competency form).
+  department_id: number | null;
+  level: number | null;
   assignment_role: string | null;
   review_status: string; // "pending" | "reviewed" | "submitted"
   review_id: number | null;
@@ -204,6 +209,8 @@ export function PMEvaluationTab() {
       project_code: c.project_code,
       department_name: c.department_name,
       designation_name: c.designation_name,
+      department_id: c.department_id,
+      level: c.level,
       assignment_role: c.assignment_role,
       review_status: c.review_status === "reviewed" ? "reviewed" : "pending",
       review_id: c.review_id,
@@ -228,6 +235,8 @@ export function PMEvaluationTab() {
       project_code: c.project_code,
       department_name: c.department_name,
       designation_name: c.designation_name,
+      department_id: c.department_id,
+      level: c.level,
       assignment_role: c.assignment_role,
       review_status: c.review_status === "reviewed" ? "reviewed" : "pending",
       review_id: c.review_id,
@@ -253,6 +262,8 @@ export function PMEvaluationTab() {
       project_code: r.project_code,
       department_name: r.department_name,
       designation_name: null,
+      department_id: null,
+      level: null,
       assignment_role: null,
       review_status: r.review_status,
       review_id: r.review_id,
