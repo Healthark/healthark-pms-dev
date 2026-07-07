@@ -9,6 +9,8 @@ Used by the read endpoint today; the review-form / expectation cutover will
 consume the same helper so resolution logic lives in exactly one place.
 """
 
+import re
+
 from sqlalchemy.orm import Session
 
 from app.data.competency_framework import load_framework
@@ -87,6 +89,30 @@ def get_competencies_by_ids(
     )
 
 
+def _find_department(db: Session, org_id: int, key: str, aliases=()) -> "Department | None":
+    """Match a framework department key to an org Department.
+
+    Departments are often named more verbosely than the framework's short keys
+    (e.g. the "IDT" framework vs a "Information Data Technology (IDT)"
+    department). Match, in order: an exact case-insensitive hit on the key or any
+    alias, then a word-boundary hit of the key/alias inside a department name —
+    so "IDT" matches "…(IDT)" and "Strategy" matches "Strategy Consulting",
+    without matching unrelated departments.
+    """
+    depts = db.query(Department).filter(Department.org_id == org_id).all()
+    names = [key, *aliases]
+    by_lower = {d.name.strip().lower(): d for d in depts}
+    for n in names:
+        hit = by_lower.get(n.strip().lower())
+        if hit:
+            return hit
+    for d in depts:
+        for n in names:
+            if re.search(rf"\b{re.escape(n)}\b", d.name, flags=re.IGNORECASE):
+                return d
+    return None
+
+
 def seed_competency_framework(db: Session, org_id: int) -> None:
     """Seed the department/level competency framework for an org (idempotent).
 
@@ -140,17 +166,14 @@ def seed_competency_framework(db: Session, org_id: int) -> None:
     db.flush()
 
     for dept_name, data in fw["departments"].items():
-        dept = (
-            db.query(Department)
-            .filter(Department.org_id == org_id, Department.name == dept_name)
-            .first()
-        )
+        dept = _find_department(db, org_id, dept_name, data.get("aliases", ()))
         if not dept:
             continue
         for level_str, texts in data["levels"].items():
             level = int(level_str)
             for order, comp in enumerate(canon, start=1):
                 key = comp["key"]
+                text = texts.get(key) or ""
                 exists = (
                     db.query(Competency)
                     .filter(
@@ -162,6 +185,11 @@ def seed_competency_framework(db: Session, org_id: int) -> None:
                     .first()
                 )
                 if exists:
+                    # Backfill a BLANK expectation from the framework — e.g. a
+                    # row created empty via the admin UI before the framework
+                    # was seeded. Never overwrite text an admin already entered.
+                    if text and not (exists.expectation and exists.expectation.strip()):
+                        exists.expectation = text
                     continue
                 db.add(
                     Competency(
@@ -173,7 +201,7 @@ def seed_competency_framework(db: Session, org_id: int) -> None:
                         display_order=order,
                         is_reviewable=comp["is_reviewable"],
                         is_deleted=False,
-                        expectation=texts.get(key) or "",
+                        expectation=text,
                     )
                 )
     db.flush()
