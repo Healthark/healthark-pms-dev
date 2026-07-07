@@ -1,5 +1,5 @@
 /**
- * Support.tsx — "Performance Evaluation System — Report an Issue".
+ * Support.tsx — "Performance Management System — Report an Issue".
  *
  * A first-class page (replaces the old Google-Sheet modal):
  *   • Every user gets the in-app issue form (SupportForm).
@@ -30,7 +30,7 @@ export function Support() {
   const subtitle =
     isAdmin && view === "responses"
       ? "Review issues and questions submitted by your team."
-      : "Hit a bug or have a question? Tell us where it happened and what went wrong — we'll follow up.";
+      : "Hit a bug or have a question? Tell us where it happened and what went wrong - we'll follow up.";
 
   return (
     <div className="flex flex-col gap-6 pb-10 animate-in fade-in duration-500">
@@ -38,7 +38,7 @@ export function Support() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-semibold text-text-main">
-            Performance Evaluation System — Report an Issue
+            Performance Management System - Report an Issue
           </h1>
           <p className="mt-0.5 text-sm text-text-muted">{subtitle}</p>
         </div>
