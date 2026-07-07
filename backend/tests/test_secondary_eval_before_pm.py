@@ -41,6 +41,7 @@ from app.api.routes.project_review_routes import (
     update_secondary_evaluation,
 )
 from app.core.database import Base
+from app.models.competency_models import Competency
 from app.models.organization_models import Organization
 from app.models.project_models import (
     PROJECT_STATUS_ACTIVE,
@@ -160,6 +161,25 @@ def _assign(db, org, project, user, *, primary=False, manager=None,
     return a
 
 
+_DEFAULT_COMPETENCY_KEYS = [
+    "task_execution", "ownership", "project_management",
+    "client_deliverables", "communication", "mentoring", "competency_skills",
+]
+
+
+def _seed_default_competencies(db, org_id):
+    """Seed the org's 7 default reviewable competencies so a PM evaluation sent
+    via the legacy fixed comment_* fields round-trips through the comments JSON
+    (the sole source of truth) and reconstructs on read."""
+    for i, key in enumerate(_DEFAULT_COMPETENCY_KEYS, start=1):
+        db.add(Competency(
+            org_id=org_id, department_id=None, level=None, key=key,
+            label=key.replace("_", " ").title(), display_order=i,
+            is_reviewable=True, is_deleted=False,
+        ))
+    db.flush()
+
+
 def _single_pm_scenario(db):
     """single-PM project: PM + two members, an outside project-level Secondary.
     Returns (org, project, pm, m1, m2, senior, sec)."""
@@ -173,6 +193,7 @@ def _single_pm_scenario(db):
     _assign(db, org, project, pm, primary=True)
     _assign(db, org, project, m1)
     _assign(db, org, project, m2)
+    _seed_default_competencies(db, org.id)
     db.commit()
     return org, project, pm, m1, m2, senior, sec
 

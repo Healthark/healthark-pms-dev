@@ -1,18 +1,16 @@
 """
-Project-review comments — expand phase (competency JSON as source of truth).
+Project-review comments — competency JSON is the sole source of truth.
 
-PR 2 makes ``ProjectReview.comments`` (JSON keyed by competency id) the read
-source of truth while the legacy ``comment_*`` columns are dual-written for
-rollback safety. The API request/response contract is unchanged, so this is an
-invisible plumbing change. These tests pin that:
+``ProjectReview.comments`` (JSON keyed by competency id) is the only store for
+per-competency comments; the legacy ``comment_*`` columns have been dropped. The
+API request/response contract is unchanged — the fixed comment_* response fields
+are reconstructed from the JSON for the default competency set. These tests pin:
 
-  * write paths dual-write the JSON (keyed by the org's default competency ids)
-    AND the columns;
+  * write paths persist the JSON (keyed by the org's default competency ids),
+    whether the client sends the dynamic map or the legacy fixed fields;
   * reads reconstruct the comment_* response fields from the JSON;
-  * when JSON and columns disagree, the JSON wins (it's the source of truth);
-  * when JSON is absent (a row written by pre-cutover code), reads fall back to
-    the columns;
-  * draft-detection counts content stored in either place.
+  * custom (non-default) competencies live only in the JSON;
+  * draft-detection counts content stored in the JSON.
 
 All routes are plain functions, called directly against in-memory SQLite.
 """
@@ -156,21 +154,19 @@ def _payload():
     )
 
 
-# ── Write path dual-writes JSON + columns ─────────────────────────────────
+# ── Write path persists JSON (from legacy fixed fields) ───────────────────
 
-def test_submit_dual_writes_json_and_columns(db):
+def test_submit_from_fixed_fields_writes_json(db):
     org, pm, member, project, ids = _scenario(db)
     resp = submit_pm_evaluation(project.id, member.id, _payload(), db, pm)
 
-    # Response contract unchanged — comment_* fields present.
+    # Response contract unchanged — comment_* fields present (reconstructed).
     assert resp.comment_task_execution == "TE"
     assert resp.comment_competency_skills == "CS"
 
     row = db.query(ProjectReview).filter_by(
         project_id=project.id, user_id=member.id
     ).one()
-    # Legacy columns still written (rollback safety).
-    assert row.comment_task_execution == "TE"
     # JSON written, keyed by the 7 reviewable competency ids (no firm_growth).
     assert row.comments == {
         str(ids["task_execution"]): "TE",
@@ -196,64 +192,47 @@ def test_get_review_reconstructs_from_json(db):
     assert resp.comment_mentoring == "MENT"
 
 
-# ── JSON is the source of truth ───────────────────────────────────────────
+# ── JSON is the sole source of truth ──────────────────────────────────────
 
-def test_json_wins_over_columns(db):
+def test_response_follows_json(db):
     org, pm, member, project, ids = _scenario(db)
     submit_pm_evaluation(project.id, member.id, _payload(), db, pm)
     row = db.query(ProjectReview).filter_by(
         project_id=project.id, user_id=member.id
     ).one()
 
-    # Diverge the JSON from the column; the response must follow the JSON.
-    row.comments = {**row.comments, str(ids["task_execution"]): "FROM_JSON"}
+    # Editing the JSON changes the reconstructed response field.
+    row.comments = {**row.comments, str(ids["task_execution"]): "EDITED"}
     db.commit()
 
     resp = _build_review_response(row, db)
-    assert resp.comment_task_execution == "FROM_JSON"  # JSON wins
-    assert row.comment_task_execution == "TE"           # column untouched
+    assert resp.comment_task_execution == "EDITED"
 
 
-def test_per_field_fallback_for_unresolvable_json_id(db):
-    """Hardening: if the JSON holds a competency id that no longer resolves
-    (e.g. a default competency later soft-deleted/re-flagged), that field must
-    fall back to the column rather than silently dropping to None."""
+def test_legacy_field_none_for_soft_deleted_default_competency(db):
+    """If a default competency is soft-deleted after a review was written, its
+    fixed comment_* response field can no longer be reconstructed (the id no
+    longer maps to a default key) — but the comment survives in the `comments`
+    map and the embedded competencies, which render it."""
     org, pm, member, project, ids = _scenario(db)
     submit_pm_evaluation(project.id, member.id, _payload(), db, pm)
     row = db.query(ProjectReview).filter_by(
         project_id=project.id, user_id=member.id
     ).one()
 
-    # Simulate mentoring's default competency being soft-deleted after write:
-    # its stored JSON id (ids["mentoring"]) will no longer resolve.
     db.query(Competency).filter(Competency.id == ids["mentoring"]).update(
         {Competency.is_deleted: True}
     )
     db.commit()
 
     resp = _build_review_response(row, db)
-    # Unresolvable id → column value shows through (not dropped to None).
-    assert resp.comment_mentoring == "MENT"
-    # Still-resolving ids continue to come from the JSON source of truth.
+    # The legacy fixed field no longer reconstructs (default-key lookup misses).
+    assert resp.comment_mentoring is None
+    # But the comment is preserved in the id-keyed map + embedded competencies.
+    assert resp.comments[str(ids["mentoring"])] == "MENT"
+    assert any(c.id == ids["mentoring"] for c in resp.competencies)
+    # Still-resolving fields reconstruct normally.
     assert resp.comment_task_execution == "TE"
-
-
-def test_column_fallback_when_json_absent(db):
-    """A row written by pre-cutover code has columns but no JSON — reads must
-    fall back to the columns."""
-    org, pm, member, project, ids = _scenario(db)
-    row = ProjectReview(
-        org_id=org.id, user_id=member.id, project_id=project.id, cycle=ACTIVE_CYCLE,
-        reviewer_id=pm.id, status=ProjectReviewStatus.REVIEWED.value, is_deleted=False,
-        comment_task_execution="LEGACY", comment_ownership="LEGACY-O",
-        comments=None,
-    )
-    db.add(row)
-    db.commit()
-
-    resp = _build_review_response(row, db)
-    assert resp.comment_task_execution == "LEGACY"
-    assert resp.comment_ownership == "LEGACY-O"
 
 
 # ── Draft-detection honours the JSON ──────────────────────────────────────
@@ -311,22 +290,7 @@ def test_comments_map_none_for_empty_placeholder(db):
     )
     db.add(row)
     db.commit()
-    assert _comments_map_for_response(db, row) is None
-
-
-def test_comments_map_built_from_columns_for_legacy_row(db):
-    """A legacy row (columns, no JSON) still yields a map keyed by the default
-    competency ids."""
-    org, pm, member, project, ids = _scenario(db)
-    row = ProjectReview(
-        org_id=org.id, user_id=member.id, project_id=project.id, cycle=ACTIVE_CYCLE,
-        reviewer_id=pm.id, status=ProjectReviewStatus.REVIEWED.value, is_deleted=False,
-        comment_task_execution="LEGACY", comments=None,
-    )
-    db.add(row)
-    db.commit()
-    m = _comments_map_for_response(db, row)
-    assert m[str(ids["task_execution"])] == "LEGACY"
+    assert _comments_map_for_response(row) is None
 
 
 def test_response_embeds_competencies_by_stored_ids(db):
@@ -393,9 +357,9 @@ def _full_map(ids):
 
 # ── PR 6a: dynamic write payload (competency-id -> text map) ───────────────
 
-def test_submit_via_comments_map_dual_writes(db):
-    """Submitting the dynamic map stores it to JSON and dual-writes the legacy
-    columns for the default competencies (invisible for the default set)."""
+def test_submit_via_comments_map_writes_json(db):
+    """Submitting the dynamic map stores it as the review's comments JSON; the
+    response still exposes the reconstructed comment_* fields (default set)."""
     org, pm, member, project, ids = _scenario(db)
     payload = PMEvaluationSubmit(
         performance_group=PerformanceGroup.RATING_3,
@@ -407,8 +371,7 @@ def test_submit_via_comments_map_dual_writes(db):
         project_id=project.id, user_id=member.id
     ).one()
     assert row.comments == {str(k): v for k, v in _full_map(ids).items()}
-    assert row.comment_task_execution == "TE"  # dual-written legacy column
-    assert resp.comment_ownership == "OWN"
+    assert resp.comment_ownership == "OWN"  # reconstructed from JSON
 
 
 def test_submit_via_comments_map_custom_competency(db):
@@ -432,7 +395,6 @@ def test_submit_via_comments_map_custom_competency(db):
         project_id=project.id, user_id=member.id
     ).one()
     assert row.comments == {str(custom.id): "custom feedback"}
-    assert row.comment_task_execution is None  # no legacy column for a custom key
 
 
 def test_submit_rejects_empty_comment_value(db):
@@ -469,7 +431,6 @@ def test_draft_via_comments_map(db):
         project_id=project.id, user_id=member.id
     ).one()
     assert row.comments == {str(ids["ownership"]): "draft text"}
-    assert row.comment_ownership == "draft text"
 
 
 def test_pm_queue_card_carries_department_and_level(db):

@@ -27,7 +27,7 @@ from app.models.project_review_models import ProjectReview, ProjectReviewEvaluat
 from app.models.annual_review_models import AnnualReview
 from app.models.goal_models import Goal
 from app.models.goal_self_review_models import GoalSelfReview
-from app.models.role_expectation_models import RoleExpectation
+from app.models.competency_models import Competency
 from app.models.feedback_360_models import Feedback360Review, Feedback360Answer
 from app.services.competency_service import seed_competency_framework
 
@@ -87,9 +87,9 @@ def seed_database():
             desig_director           = Designation(org_id=org.id, name="Director",            level=6)
 
             # IDT engineering ladder (L1–L4 IC track) + Engineering Manager (L7).
-            # IDT uses the June-2026 L1–L10 expectations framework; expectations
-            # are seeded by level (see EXPECTATIONS_DATA["IDT"]). Associate
-            # Director (L7) and Director (L8) already exist above.
+            # IDT uses the June-2026 L1–L10 expectations framework; expectation
+            # text is seeded per (department, level) by seed_competency_framework.
+            # Associate Director (L7) and Director (L8) already exist above.
             idt_ladder = [
                 Designation(org_id=org.id, name="Associate Software Developer", level=1),
                 Designation(org_id=org.id, name="Software Developer",           level=2),
@@ -492,204 +492,12 @@ def seed_database():
                 print("  [~] PRJ-105 already exists, skipping...")
             proj_marketing = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-105").first()
 
-# ================================================================== #
+        # ================================================================== #
         # 7. ROLE EXPECTATIONS                                                #
         # ================================================================== #
-
-        # IDT adopted the L1–L10 expectations framework (June 2026). We seed the
-        # levels the department uses today — L1–L4 (IC track) and L7–L8
-        # (leadership) — and infer each designation's level from its title, so
-        # the level text is shared across role families (Software Developer,
-        # Data Engineer, …) without touching other departments' designations.
-        IDT_LEVEL_EXPECTATIONS = {
-            "L1": {
-                "exp_task_execution": "Execute straightforward, well-defined tasks under supervision. | Break problems into smaller components with guidance. | Ask clarifying questions to understand context before starting.",
-                "exp_ownership": "Execute tasks independently once goals are defined. | Proactively seek guidance when encountering roadblocks. | Self-review deliverables for quality before passing to a lead.",
-                "exp_project_management": "Adhere to timelines and communicate potential delays early. | Understand and follow project delivery processes; keep documents updated. | Proactively reach out to the project manager on progress.",
-                "exp_client_deliverables": "Produce quality code/deliverables with no major defects. | Draft well-formatted and accurate emails and documents. | Design simple visualisations to convey data insights.",
-                "exp_communication": "Draft clear meeting notes listing action items with ownership. | Actively listen to client and project manager needs and reflect them in deliverables. | Communicate progress updates and next steps to internal teams.",
-                "exp_mentoring": "Participate in team building and knowledge management sessions. | Share learnings on delivery processes and technology trends within the team.",
-                "exp_firm_growth": "Participate in firm activities and initiatives. | Contribute to knowledge sharing within the firm. | Support eminence and excellence activities in their practice area.",
-                "exp_competency_skills": "Developing proficiency in assigned technology area. | Demonstrates reduction in guidance needed as experience grows. | Understands the domain of the project assigned.",
-            },
-            "L2": {
-                "exp_task_execution": "Perform simple to medium complexity tasks independently. | Develop an initial approach for assigned tasks rather than waiting for instructions. | Identify gaps in requirements and raise them proactively.",
-                "exp_ownership": "Take full responsibility for assigned tasks and modules. | Demonstrate initiative by suggesting minor improvements in deliverables. | Assist senior team members during the absence of a lead, as needed.",
-                "exp_project_management": "Manage own time and tasks without needing reminders. | Identify and flag risks within assigned scope to the project manager. | Understand the project lifecycle and contribute to process compliance.",
-                "exp_client_deliverables": "Produce quality code/deliverables on time with minimal rework. | Draft clear client-facing communications with appropriate tone and structure. | Suggest improvements to existing templates and deliverable formats.",
-                "exp_communication": "Structure written communication effectively - clear emails with progress, next steps, and open items. | Start interpreting client asks and translate them into tasks under supervision. | Track open items and communicate to leadership when blocked.",
-                "exp_mentoring": "Guide junior team members on tasks, deliverables, and quality. | Encourage and participate in team building activities. | Conduct knowledge sessions on delivery processes and technology trends. | Provide upward feedback on team dynamics and process gaps.",
-                "exp_firm_growth": "Actively contribute to knowledge sharing and firm initiatives. | Support eminence and excellence activities in their practice area. | Participate in firm events and represent the team positively.",
-                "exp_competency_skills": "Proficient in assigned technology area; produces quality deliverables on time. | Suggests process improvements, innovation, and automation opportunities. | Demonstrates awareness of delivery processes and project management basics.",
-            },
-            "L3": {
-                "exp_task_execution": "Independently structure and solve moderately complex problems. | Develop technical approach and solution design for assigned module or workstream. | Translate ambiguous requirements into concrete deliverables.",
-                "exp_ownership": "Own multiple modules within a project and ensure quality delivery. | Regularly update managers on progress and raise potential issues proactively. | Anticipate next steps in the project lifecycle and take initiative beyond assigned tasks.",
-                "exp_project_management": "Perform work estimation, planning, and schedule management within the team. | Proactively manage deadlines and risks; escalate issues when needed. | Assess risk scope - determine what to manage independently vs. escalate.",
-                "exp_client_deliverables": "Review deliverables by junior team members to ensure quality standards. | Leverage domain expertise to produce contextual, polished, high-quality outputs. | Generate new content types as required by the engagement.",
-                "exp_communication": "Lead internal discussions on project updates and next steps. | Interpret client asks effectively and translate them into actionable requirements. | Independently interact with clients and lead one or more project threads.",
-                "exp_mentoring": "Actively mentor 1-2 junior team members with structured feedback. | Identify areas of improvement for junior practitioners and run regular cadence sessions. | Demonstrate maturity in coaching across client communication and project knowledge.",
-                "exp_firm_growth": "Lead and own eminence and excellence activities in their practice area. | Participate in new proposal or SoW creation as a contributor. | Participate in screening and hiring of new members.",
-                "exp_competency_skills": "Expertise in core technology area; can act as backup SME in adjacent areas. | Able to lead estimations for specific areas of expertise. | Demonstrates process awareness and structured project management.",
-            },
-            "L4": {
-                "exp_task_execution": "Lead problem definition and solution design across multiple modules. | Develop technical architecture in collaboration with relevant stack leads. | Present architecture to review boards or clients for acceptance.",
-                "exp_ownership": "Step in and take lead during the absence of a manager. | Anticipate project-level risks and act without being prompted. | Hold themselves and peers accountable to quality and timeline standards.",
-                "exp_project_management": "Manage 2-3 project threads simultaneously with confidence. | Communicate timely status, key updates, and next steps to stakeholders. | Anticipate risks across the full project, not just their own scope.",
-                "exp_client_deliverables": "Ensure final deliverables are free from critical or major defects. | Lead the design of complex or novel deliverables - compelling, story-driven, client-aligned. | Set quality benchmarks and coach the team to meet them consistently.",
-                "exp_communication": "Build and manage relationships with working-level client stakeholders. | Summarise and communicate client feedback clearly to the team. | Develop long-term client relationships within the engagement.",
-                "exp_mentoring": "Actively mentor 3-4 junior team members with structured feedback. | Identify stretch opportunities for juniors to level up in their careers. | Create space for team members to think, approach problems, and build autonomy. | Create/Contribute towards a structured upskilling roadmap for the designated practice area.",
-                "exp_firm_growth": "Play a leadership role within the team - face of the organisation to junior members. | Contribute meaningfully to proposals; own specific sections. | Support recruitment activities and hiring decisions.",
-                "exp_competency_skills": "Deep expertise across one or more technology or domain areas. | Drive process improvements, innovation, and automation across the team. | Demonstrates strong communication skills at working-team level.",
-            },
-            "L7": {
-                "exp_task_execution": "Translate strategic objectives into delivery plans for the team. | Remove systemic blockers that impede team problem-solving capacity. | Ensure cross-functional alignment on solution design and approach.",
-                "exp_ownership": "Hold the team accountable to delivery and performance standards. | Manage stated compliance parameters and drive a culture of meeting expectations. | Address team challenges or disputes promptly and fairly.",
-                "exp_project_management": "Oversee portfolio-level scheduling, resourcing, and risk management. | Actively monitor delivery to ensure scope, schedule, budget, and quality. | Plan and prioritise activity across multiple threads and initiate action.",
-                "exp_client_deliverables": "Govern quality standards across the team or department. | Identify systemic quality gaps and design solutions to address them. | Champion continuous improvement in how the team builds and presents work.",
-                "exp_communication": "Own stakeholder communication strategy for the engagement or department. | Provide regular, structured updates to client and firm leadership. | Resolve communication breakdowns quickly and constructively.",
-                "exp_mentoring": "Develop a team culture of continuous learning, creativity, and quality. | Manage performance formally - set expectations, run reviews, manage PIPs. | Address team challenges or disputes promptly and with fairness.",
-                "exp_firm_growth": "Own recruiting, onboarding, and retention for their team. | Contribute to firm-wide strategic planning and growth conversations. | Foster a culture of collaboration and continuous learning within the team.",
-                "exp_competency_skills": "Manages people and performance - sets expectations, conducts frequent check-ins. | Deep expertise in delivery management across large, complex engagements. | Demonstrates strong cross-functional leadership and organisational skills.",
-            },
-            "L8": {
-                "exp_task_execution": "Define the problem-solving methodology and standards for the department. | Lead critical client situations requiring senior-level solutioning. | Drive innovation roadmaps aligned to client and firm strategy.",
-                "exp_ownership": "Accountable for the overall health and performance of the department. | Own relationships with senior client stakeholders at the director level. | Drive corrective actions when delivery or culture deviates from standards.",
-                "exp_project_management": "Set delivery governance frameworks adopted across the department. | Lead crisis management for high-risk client situations. | Ensure the department consistently delivers within commercial parameters.",
-                "exp_client_deliverables": "Own the firm's quality assurance standards and frameworks. | Ensure the department's outputs are consistently differentiated in the market. | Build a culture where quality is a non-negotiable expectation.",
-                "exp_communication": "Build trust with C-suite and board-level client stakeholders. | Represent the firm in high-visibility client forums and steering committees. | Set the communication standard and cadence for the department.",
-                "exp_mentoring": "Build leadership capability in the layers below - grow future managers and directors. | Sponsor individuals for firm-wide leadership and recognition programmes. | Create an environment that enables others to be creative, agile, and innovative.",
-                "exp_firm_growth": "Lead the department's commercial growth - revenue, pipeline, and client expansion. | Represent the firm in market conversations, conferences, and partnerships. | Act as a role model - fostering positive culture and holding the team to high standards.",
-                "exp_competency_skills": "Defines the technical and delivery capability strategy for the department. | Demonstrates strong executive presence; influences at board and C-suite level. | Drives consensus on architecture, tech stack, and methodology with clients and leadership.",
-            },
-        }
-
-        def _idt_level(name: str) -> str:
-            """Map an IDT designation title to its framework level. Leadership
-            titles are matched first, then the IC-track seniority prefix; a bare
-            role (e.g. "Software Developer") is L2."""
-            if name in ("Engineering Manager", "Associate Director"):
-                return "L7"
-            if name == "Director":
-                return "L8"
-            if name.startswith("Associate "):
-                return "L1"
-            if name.startswith("Senior "):
-                return "L3"
-            if name.startswith("Lead "):
-                return "L4"
-            return "L2"
-
-        # Representative IDT designations across the seeded levels. The full
-        # title list isn't fixed yet — add a name here and its level (hence its
-        # expectations) is inferred automatically by _idt_level().
-        IDT_DESIGNATIONS = [
-            "Associate Software Developer", "Software Developer",
-            "Senior Software Developer", "Lead Software Developer",
-            "Associate Data Engineer", "Data Engineer",
-            "Senior Data Engineer", "Lead Data Engineer",
-            "Engineering Manager", "Associate Director", "Director",
-        ]
-
-        EXPECTATIONS_DATA = {
-            "Strategy": {
-                "Consultant": {
-                    "exp_task_execution": "Applies fundamental frameworks with clear guidance and breaks down problems into smaller components.",
-                    "exp_ownership": "Takes responsibility for assigned tasks and modules, executes independently once goals are defined.",
-                    "exp_client_deliverables": "Produces accurate, well-formatted outputs with minimal errors.",
-                    "exp_communication": "Drafts clear and concise meeting notes and written updates.",
-                    "exp_project_management": "Conducts deep secondary research and takes ownership of specific sector research.",
-                    "exp_mentoring": "Encourages team building and performs peer reviews.",
-                    "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm",
-                    "exp_competency_skills": "Builds foundational knowledge in a specific sector or domain.",
-                },
-                "Senior Consultant": {
-                    "exp_task_execution": "Independently structures and solves moderately complex problems.",
-                    "exp_ownership": "Owns multiple modules within a project and ensures quality delivery.",
-                    "exp_client_deliverables": "Develops polished, visually appealing outputs with compelling narratives.",
-                    "exp_communication": "Leads internal discussions and co-leads client readouts.",
-                    "exp_project_management": "Develops project management plans and structures research effectively.",
-                    "exp_mentoring": "Provides guidance to junior team members on project tasks.",
-                    "exp_firm_growth": "Leads a firm initiative | Contribute to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Plays a major role in finalising proposals | Owns knowledge management at the end of the project (structured research uploads, key documents etc.) to facilitate firm knowledge build-up | Supports the recruitment efforts and drives interviews / other activities when required with some leadership team",
-                    "exp_competency_skills": "Leads a firm initiative and develops deeper industry expertise.",
-                },
-                "Manager": {
-                    "exp_task_execution": "Leads problem definition and solution design for complex issues.",
-                    "exp_ownership": "Understands each team member and leverages their strengths for project success.",
-                    "exp_client_deliverables": "Crafts compelling, story-driven outputs aligned with client expectations.",
-                    "exp_communication": "Leads client discussions, readouts, and critical meetings independently.",
-                    "exp_project_management": "Takes end-to-end ownership of projects or large workstreams.",
-                    "exp_mentoring": "Coaches team members on advanced skills and career development.",
-                    "exp_firm_growth": "Identifies opportunities for process improvements and efficiency | Supports organisation growth and continuously identifies areas for upskilling team/practice (encourages people to undertake development activities, makes required resources available) | Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Creates an environment to enable others to be creative, agile, innovative and value quality (gives space to team members working on a project to think of approach, delegating instead of hand-holding every time) | Plays a leadership role within their firm, sometimes leading a new initiative or a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc.) | Leads proposals independently with minimal guidance from the leadership | Supports recruitment activities; trains and retains top talent while fostering a culture of collaboration and continuous learning",
-                    "exp_competency_skills": "Identifies opportunities for process improvements and leads proposals.",
-                },
-            },
-            "IDT": {
-                name: IDT_LEVEL_EXPECTATIONS[_idt_level(name)]
-                for name in IDT_DESIGNATIONS
-            },
-            "RWE": {
-                "Consultant": {
-                    "exp_task_execution": "Performs simple to medium complexity RWE tasks.",
-                    "exp_ownership": "Completes assigned tasks on time with quality.",
-                    "exp_project_management": "Communicates timely status and updates to the team.",
-                    "exp_communication": "Drafts clear research summaries and meeting notes.",
-                    "exp_client_deliverables": "Produces accurate, well-formatted RWE outputs.",
-                    "exp_mentoring": "Encourages team building and participates actively.",
-                    "exp_firm_growth": "Participate in firm activities and initiatives | Contribute to knowledge sharing / development within the firm",
-                    "exp_competency_skills": "Proficient in project-specific RWE concepts.",
-                },
-                "Senior Consultant": {
-                    "exp_task_execution": "Develops independent perspective on RWE tasks and solves complex problems.",
-                    "exp_ownership": "Owns delivery of one or more workstreams end-to-end.",
-                    "exp_project_management": "Performs work estimation and manages team delivery.",
-                    "exp_communication": "Independently interacts with clients and leads workstreams.",
-                    "exp_client_deliverables": "Produces contextual, high-quality RWE deliverables.",
-                    "exp_mentoring": "Demonstrates maturity in coaching junior team members.",
-                    "exp_firm_growth": "Plays a leadership role within the team; is the face of the organization / leadership team to junior team members | Contributes to pitching for different projects and proposal development; able to identify small-scale opportunities for cross-sell or up-sell within existing client projects | Participates in / leads firm initiatives | Contributes to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Acts as a role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required | Helps in interviewing / recruiting new talent to the practice",
-                    "exp_competency_skills": "Is a Subject Matter Expert in one RWE vertical.",
-                },
-                "Manager": {
-                    "exp_task_execution": "Leads RWE methodology design for complex studies.",
-                    "exp_ownership": "Takes end-to-end ownership of RWE programs.",
-                    "exp_project_management": "Owns study governance and quality across multiple projects.",
-                    "exp_communication": "Leads client and clinical stakeholder discussions.",
-                    "exp_client_deliverables": "Ensures final RWE deliverables are publication-quality.",
-                    "exp_mentoring": "Coaches team members and leads knowledge building.",
-                    "exp_firm_growth": "Plays a leadership role within the firm; acts as a role model by fostering a positive culture and encouraging teamwork within the organisation | Drives initiatives that enhance the firm's service offerings and expand its market presence | Leads proposal development for new projects and opportunities | Contributes to the firm's knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use | Demonstrates responsibility for review and action where required | Recruits, trains, and retains top talent while fostering a culture of collaboration and continuous learning",
-                    "exp_competency_skills": "Thought leader in RWE methodology and scientific rigor.",
-                },
-            },
-        }
-
-        if db.query(RoleExpectation).filter(RoleExpectation.org_id == org.id).count() == 0:
-            added_count = 0
-            for dept_name, designations_dict in EXPECTATIONS_DATA.items():
-                dept = db.query(Department).filter(Department.org_id == org.id, Department.name == dept_name).first()
-                if not dept:
-                    continue
-                for desig_name, competencies in designations_dict.items():
-                    desig = db.query(Designation).filter(Designation.org_id == org.id, Designation.name == desig_name).first()
-                    if not desig:
-                        continue
-                    db.add(RoleExpectation(
-                        org_id=org.id,
-                        department_id=dept.id,
-                        designation_id=desig.id,
-                        exp_task_execution=competencies.get("exp_task_execution", ""),
-                        exp_ownership=competencies.get("exp_ownership", ""),
-                        exp_project_management=competencies.get("exp_project_management", ""),
-                        exp_client_deliverables=competencies.get("exp_client_deliverables", ""),
-                        exp_communication=competencies.get("exp_communication", ""),
-                        exp_mentoring=competencies.get("exp_mentoring", ""),
-                        exp_firm_growth=competencies.get("exp_firm_growth", ""),
-                        exp_competency_skills=competencies.get("exp_competency_skills", ""),
-                    ))
-                    added_count += 1
-            db.commit()
-            print(f"  [+] Seeded {added_count} Role Expectations for Healthark")
-        else:
-            print("  [~] Healthark Role expectations already exist, skipping...")
+        # Role-expectation text now lives on the competency framework, seeded
+        # by seed_competency_framework() above (section 2). The legacy
+        # RoleExpectation exp_* columns were dropped, so nothing is seeded here.
 
         # ================================================================== #
         # 8. PROJECT REVIEWS                                                  #
@@ -699,6 +507,37 @@ def seed_database():
         proj_trial     = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-102").first()
         proj_safety    = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-103").first()
         proj_payer     = db.query(Project).filter_by(org_id=org.id, project_code="PRJ-104").first()
+
+        # Project-review comments are stored as {competency_id: text} JSON now.
+        # Map the curated comment_* kwargs below → competency id via the org's
+        # default reviewable competencies (seeded by seed_competency_framework).
+        _COMMENT_KEY_BY_FIELD = {
+            "comment_task_execution": "task_execution",
+            "comment_ownership": "ownership",
+            "comment_project_management": "project_management",
+            "comment_client_deliverables": "client_deliverables",
+            "comment_communication": "communication",
+            "comment_mentoring": "mentoring",
+            "comment_competency_skills": "competency_skills",
+        }
+        _default_comp_id_by_key = {
+            c.key: c.id
+            for c in db.query(Competency).filter(
+                Competency.org_id == org.id,
+                Competency.department_id.is_(None),
+                Competency.level.is_(None),
+                Competency.is_reviewable.is_(True),
+                Competency.is_deleted.is_(False),
+            ).all()
+        }
+
+        def _comments_json(comments: dict) -> dict:
+            out: dict[str, str] = {}
+            for field, text in comments.items():
+                cid = _default_comp_id_by_key.get(_COMMENT_KEY_BY_FIELD.get(field, ""))
+                if cid is not None:
+                    out[str(cid)] = text
+            return out
 
         def _pr(user, project, reviewer, cycle, status, pg=None, impact=None, **comments):
             if not project:
@@ -719,14 +558,14 @@ def seed_database():
                 existing.status = status
                 existing.performance_group = pg
                 existing.impact_statement = impact
-                for field, value in comments.items():
-                    setattr(existing, field, value)
+                existing.comments = _comments_json(comments)
                 return
             db.add(ProjectReview(
                 org_id=org.id, user_id=user.id, project_id=project.id,
                 reviewer_id=reviewer.id if reviewer else None,
                 cycle=cycle, status=status,
-                performance_group=pg, impact_statement=impact, **comments,
+                performance_group=pg, impact_statement=impact,
+                comments=_comments_json(comments),
             ))
 
         def _pre(review_id, evaluator, impact, status="submitted"):

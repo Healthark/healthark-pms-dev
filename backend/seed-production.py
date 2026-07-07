@@ -333,18 +333,16 @@ def _seed_role_expectations(db, org):
             if already_exists:
                 skipped_count += 1
                 continue
+            # NOTE: expectation text now lives on the competency framework
+            # (Competency.expectation); the RoleExpectation exp_* columns were
+            # dropped. This script predates the framework and does not seed it —
+            # it only records the (dept, designation) row. Run seed.py for a
+            # framework-complete seed.
+            _ = competencies  # retained for the (now-dead) EXPECTATIONS_DATA map
             db.add(RoleExpectation(
                 org_id=org.id,
                 department_id=dept.id,
                 designation_id=desig.id,
-                exp_task_execution=competencies.get("exp_task_execution", ""),
-                exp_ownership=competencies.get("exp_ownership", ""),
-                exp_project_management=competencies.get("exp_project_management", ""),
-                exp_client_deliverables=competencies.get("exp_client_deliverables", ""),
-                exp_communication=competencies.get("exp_communication", ""),
-                exp_mentoring=competencies.get("exp_mentoring", ""),
-                exp_firm_growth=competencies.get("exp_firm_growth", ""),
-                exp_competency_skills=competencies.get("exp_competency_skills", ""),
             ))
             added_count += 1
     db.flush()
