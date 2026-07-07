@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 import { ImpactModal, type ImpactModalRow } from "../ImpactModal";
+import type { ProjectReviewResponse } from "../../../services/project-review.service";
 
 void React;
 
@@ -18,6 +19,34 @@ const row: ImpactModalRow = {
   project_id: 3,
   user_id: 2,
   existingImpact: "prior draft text",
+};
+
+// A finalized PM review the parent hands to the modal once the PM has
+// submitted. Only the fields the reference block renders are meaningful.
+const pmReview: ProjectReviewResponse = {
+  id: 99,
+  org_id: 1,
+  user_id: 2,
+  project_id: 3,
+  reviewer_id: 7,
+  cycle: "H1 FY26-27",
+  status: "reviewed",
+  employee_name: "Sam Doe",
+  reviewer_name: "Pat Manager",
+  project_name: "Apollo",
+  project_code: "APL-1",
+  comment_task_execution: "Shipped the parser ahead of schedule.",
+  comment_ownership: null,
+  comment_project_management: null,
+  comment_client_deliverables: null,
+  comment_communication: null,
+  comment_mentoring: null,
+  comment_competency_skills: null,
+  performance_group: "4",
+  impact_statement: "Strong quarter — owned the migration end to end.",
+  secondary_evaluations: [],
+  created_at: "2026-07-01T00:00:00Z",
+  updated_at: null,
 };
 
 function renderModal(overrides: Partial<React.ComponentProps<typeof ImpactModal>> = {}) {
@@ -78,5 +107,51 @@ describe("ImpactModal — PM-first submit gate", () => {
       screen.queryByText(/only submit your review once the Project Manager/i),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Changes" })).toBeEnabled();
+  });
+});
+
+describe("ImpactModal — PM review reference block", () => {
+  it("shows the PM's competency comments, overall review, and rating once submitted", () => {
+    renderModal({ pmSubmitted: true, pmReview, pmRating: "4" });
+    // Section header + the reviewer's name.
+    expect(screen.getByText(/Project Manager’s Review/)).toBeInTheDocument();
+    expect(screen.getByText(/Pat Manager/)).toBeInTheDocument();
+    // A filled competency comment surfaces; the PM's overall review too.
+    expect(
+      screen.getByText(/Shipped the parser ahead of schedule\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/owned the migration end to end\./),
+    ).toBeInTheDocument();
+    // The rating comes from the card (reviewer-visible), rendered as a badge.
+    expect(screen.getByTitle(/Performance rating: 4/)).toBeInTheDocument();
+  });
+
+  it("renders a loading line while the PM review is being fetched", () => {
+    renderModal({ pmSubmitted: true, pmReview: null, pmReviewLoading: true });
+    expect(
+      screen.getByText(/Loading the Project Manager’s review/i),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the PM review block entirely before the PM submits", () => {
+    renderModal({ pmSubmitted: false, pmReview: null });
+    expect(
+      screen.queryByText(/Project Manager’s Review/),
+    ).not.toBeInTheDocument();
+    // The Secondary's own field is still there.
+    expect(screen.getByText(/Overall Review/)).toBeInTheDocument();
+  });
+
+  it("still shows the PM review in read-only (view) mode", () => {
+    renderModal({ readOnly: true, pmSubmitted: true, pmReview, pmRating: "4" });
+    expect(screen.getByText(/Project Manager’s Review/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Shipped the parser ahead of schedule\./),
+    ).toBeInTheDocument();
+    // No "use as reference" helper in read-only mode.
+    expect(
+      screen.queryByText(/use the Project Manager’s evaluation as/i),
+    ).not.toBeInTheDocument();
   });
 });

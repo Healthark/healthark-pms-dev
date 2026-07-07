@@ -489,7 +489,7 @@ function renderMyReviewsBody(args: {
                   <td className="px-4 py-3">
                     {isReviewed ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
-                        <CheckCircle2 className="h-3 w-3" /> Reviewed
+                        <CheckCircle2 className="h-3 w-3" /> PM Reviewed
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">

@@ -262,6 +262,53 @@ def test_secondary_can_submit_after_pm(db):
     assert card.review_status == "submitted"
 
 
+def test_secondary_can_read_pm_review_once_reviewed(db):
+    """The Secondary's reference view: once the PM submits (REVIEWED), the
+    Secondary may fetch the PM's finalized review — all 7 competency comments
+    and the PM's overall impact — via get_review. This is the contract the
+    Impact modal's read-only "Project Manager's Review" block depends on.
+
+    The rating is deliberately NOT taken from get_review: its performance_group
+    runs through the employee-facing visibility gate, which hides it here (no
+    year override enables it). The queue card carries the rating instead —
+    reviewer-visible the moment the review is REVIEWED — so both the accessible
+    comments and the card-sourced rating are asserted together."""
+    _org, project, pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
+
+    payload = PMEvaluationSubmit(
+        performance_group=PerformanceGroup.RATING_4,
+        impact_statement="Owned the migration end to end.",
+        comment_task_execution="Shipped the parser early.",
+        comment_ownership="Took full ownership.",
+        comment_project_management="Managed risk well.",
+        comment_client_deliverables="Client-ready decks.",
+        comment_communication="Clear updates.",
+        comment_mentoring="Coached two juniors.",
+        comment_competency_skills="Deep SQL skills.",
+    )
+    submit_pm_evaluation(project.id, m1.id, payload, db, pm)
+
+    review = db.query(ProjectReview).filter(
+        ProjectReview.project_id == project.id, ProjectReview.user_id == m1.id,
+    ).one()
+
+    # The Secondary reads the PM's finalized review (comments + impact + author).
+    as_sec = get_review(review.id, db, sec)
+    assert as_sec.status == ProjectReviewStatus.REVIEWED
+    assert as_sec.comment_task_execution == "Shipped the parser early."
+    assert as_sec.comment_competency_skills == "Deep SQL skills."
+    assert as_sec.impact_statement == "Owned the migration end to end."
+    assert as_sec.reviewer_name == pm.full_name
+    # Rating is gated here (no override) — the modal doesn't rely on this field.
+    assert as_sec.performance_group is None
+
+    # The rating source of truth for the Secondary's view is the queue card,
+    # reviewer-visible once REVIEWED regardless of the employee-facing toggle.
+    card = next(c for c in get_secondary_evaluation_queue(db, sec) if c.user_id == m1.id)
+    assert card.pm_submitted is True
+    assert card.performance_group == "4"
+
+
 def test_double_submit_conflicts(db):
     _org, project, pm, m1, _m2, _senior, sec = _single_pm_scenario(db)
     submit_pm_evaluation(project.id, m1.id, _pm_payload(), db, pm)  # PM first
