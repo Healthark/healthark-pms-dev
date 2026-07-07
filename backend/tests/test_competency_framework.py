@@ -25,6 +25,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — registers every table on Base.metadata
 from app.api.routes.project_review_routes import get_competencies, get_role_expectations
+from app.api.routes.user_routes import get_my_role_expectations
 from app.core.database import Base
 from app.models.competency_models import Competency
 from app.models.organization_models import Organization
@@ -92,7 +93,7 @@ def _user(db, org_id, *, role="Admin"):
 
 
 def _competency(db, org_id, key, label, order, *, dept_id=None, level=None,
-                reviewable=True, deleted=False):
+                reviewable=True, deleted=False, expectation=None):
     c = Competency(
         org_id=org_id,
         department_id=dept_id,
@@ -102,6 +103,7 @@ def _competency(db, org_id, key, label, order, *, dept_id=None, level=None,
         display_order=order,
         is_reviewable=reviewable,
         is_deleted=deleted,
+        expectation=expectation,
     )
     db.add(c)
     db.flush()
@@ -289,29 +291,90 @@ def test_endpoint_returns_scoped_set(db):
     assert [c.key for c in resp.competencies] == ["custom_a"]
 
 
-# ── PR 3: role-expectations endpoint exposes the expectations id-map ───────
+# ── role-expectations endpoint is sourced from the competency framework ────
 
-def test_role_expectations_exposes_expectations_map(db):
+def test_role_expectations_sourced_from_framework(db):
+    """Expectation text now lives on the framework (dept + level), not the
+    legacy RoleExpectation table. The endpoint resolves the framework per
+    designation and projects it onto the fixed exp_* shape + id-map."""
     org = _org(db)
     user = _user(db, org.id)
     dept = Department(org_id=org.id, name="Strategy")
     db.add(dept)
     db.flush()
-    desig = Designation(org_id=org.id, department_id=dept.id, name="Consultant", level=1)
+    desig = Designation(org_id=org.id, department_id=dept.id, name="Consultant", level=2)
     db.add(desig)
     db.flush()
-    db.add(RoleExpectation(
-        org_id=org.id, department_id=dept.id, designation_id=desig.id,
-        exp_task_execution="TE text",
-        expectations={"5": "TE text", "6": None},
-    ))
+    # Framework for (Strategy, level 2) — the source of truth for this role.
+    te = _competency(db, org.id, "task_execution", "Task Execution", 1,
+                     dept_id=dept.id, level=2, expectation="TE text")
+    own = _competency(db, org.id, "ownership", "Ownership", 2,
+                      dept_id=dept.id, level=2, expectation=None)
+    db.commit()
+
+    results = get_role_expectations(db, user)
+    assert len(results) == 1  # one designation → one row
+    row = results[0]
+    assert row.department_name == "Strategy"
+    assert row.designation_name == "Consultant"
+    # exp_* fields projected from the framework by canonical key.
+    assert row.exp_task_execution == "TE text"
+    assert row.exp_ownership is None
+    # id-map mirrors the framework (competency id -> expectation), matching the
+    # eval form / expectations panel which resolve by id.
+    assert row.expectations == {str(te.id): "TE text", str(own.id): None}
+
+
+def test_role_expectations_falls_back_to_default_for_unmapped_level(db):
+    """A designation whose (department, level) has no framework resolves the
+    org DEFAULT set — so the panel shows the default ("Not defined") text
+    rather than nothing."""
+    org = _org(db)
+    user = _user(db, org.id)
+    dept = Department(org_id=org.id, name="Marketing")
+    db.add(dept)
+    db.flush()
+    # Designation level 5 has no scoped framework; only a default set exists.
+    desig = Designation(org_id=org.id, department_id=dept.id, name="Lead", level=5)
+    db.add(desig)
+    db.flush()
+    _competency(db, org.id, "task_execution", "Task Execution", 1,
+                expectation="Not defined")
     db.commit()
 
     results = get_role_expectations(db, user)
     assert len(results) == 1
-    # The JSON map (id -> text) rides alongside the legacy exp_* fields.
-    assert results[0].expectations == {"5": "TE text", "6": None}
-    assert results[0].exp_task_execution == "TE text"
+    assert results[0].exp_task_execution == "Not defined"
+
+
+def test_my_expectations_sourced_from_framework(db):
+    """/me/expectations resolves the current user's (department, level)
+    framework and projects it onto the fixed exp_* fields; unset competencies
+    fall back to the non-null sentinel the schema requires."""
+    org = _org(db)
+    dept = Department(org_id=org.id, name="IDT")
+    db.add(dept)
+    db.flush()
+    desig = Designation(org_id=org.id, department_id=dept.id, name="Analyst", level=3)
+    db.add(desig)
+    db.flush()
+    user = _user(db, org.id)
+    user.department_id = dept.id
+    user.designation_id = desig.id
+    db.flush()
+    te = _competency(db, org.id, "task_execution", "Task Execution", 1,
+                     dept_id=dept.id, level=3, expectation="Do the task well")
+    db.commit()
+
+    resp = get_my_role_expectations(db, user)
+    assert resp.department_name == "IDT"
+    assert resp.designation_name == "Analyst"
+    assert resp.exp_task_execution == "Do the task well"
+    # Competencies with no expectation text (and keys absent from the framework)
+    # fall back to the sentinel — the response schema is non-null.
+    assert resp.exp_ownership == "Role expectation not defined"
+    # id-map carries the framework competency ids.
+    assert resp.expectations == {str(te.id): "Do the task well"}
 
 
 # ── PR 6b: seed the department/level competency framework ──────────────────

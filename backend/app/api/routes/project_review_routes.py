@@ -51,7 +51,6 @@ from app.models.project_review_models import (
     ProjectReviewStatus,
 )
 from app.models.reference_models import Department, Designation
-from app.models.role_expectation_models import RoleExpectation
 from app.models.system_settings_models import SystemSettings
 from app.models.user_models import User
 from app.schemas.project_review_schemas import (
@@ -982,32 +981,59 @@ def get_role_expectations(
     current_user: CurrentUser,
 ):
     """
-    Return all role expectations for the org.
-    PM uses this as reference while evaluating team members.
+    Return role expectations for every designation in the org.
+    PM uses this as reference while evaluating team members, and the goals
+    mentor-review panel matches a mentee's (department, designation) here.
+
+    Expectation text now lives on the competency framework (keyed by
+    department + level), so we resolve the framework per designation and
+    project it onto the fixed exp_* shape the frontend cards expect — keeping
+    these panels consistent with the project-review evaluation form, which
+    reads the same framework. A designation whose (department, level) has no
+    framework falls back to the org default set ("Not defined").
     """
-    expectations = (
-        db.query(RoleExpectation)
-        .filter(RoleExpectation.org_id == current_user.org_id)
+    designations = (
+        db.query(Designation)
+        .filter(Designation.org_id == current_user.org_id)
         .all()
     )
+    dept_names = {
+        d.id: d.name
+        for d in db.query(Department)
+        .filter(Department.org_id == current_user.org_id)
+        .all()
+    }
+
+    # Resolving a framework touches the DB, and many designations share the same
+    # (department, level) — memoize so we resolve each distinct cell only once.
+    framework_cache: dict[tuple[Optional[int], Optional[int]], list[Competency]] = {}
+
+    def _comps_for(department_id: Optional[int], level: Optional[int]) -> list[Competency]:
+        cache_key = (department_id, level)
+        if cache_key not in framework_cache:
+            comps, _is_default = get_competency_set(
+                db, current_user.org_id, department_id, level
+            )
+            framework_cache[cache_key] = comps
+        return framework_cache[cache_key]
 
     results: list[RoleExpectationResponse] = []
-    for exp in expectations:
-        dept = db.query(Department).filter(Department.id == exp.department_id).first()
-        desig = db.query(Designation).filter(Designation.id == exp.designation_id).first()
+    for desig in designations:
+        comps = _comps_for(desig.department_id, desig.level)
+        by_key = {c.key: c.expectation for c in comps}
         results.append(RoleExpectationResponse(
-            id=exp.id,
-            department_name=dept.name if dept else "Unknown",
-            designation_name=desig.name if desig else "Unknown",
-            exp_task_execution=exp.exp_task_execution,
-            exp_ownership=exp.exp_ownership,
-            exp_project_management=exp.exp_project_management,
-            exp_client_deliverables=exp.exp_client_deliverables,
-            exp_communication=exp.exp_communication,
-            exp_mentoring=exp.exp_mentoring,
-            exp_firm_growth=exp.exp_firm_growth,
-            exp_competency_skills=exp.exp_competency_skills,
-            expectations=exp.expectations,
+            id=desig.id,
+            department_name=dept_names.get(desig.department_id, "Unknown"),
+            designation_name=desig.name,
+            exp_task_execution=by_key.get("task_execution"),
+            exp_ownership=by_key.get("ownership"),
+            exp_project_management=by_key.get("project_management"),
+            exp_client_deliverables=by_key.get("client_deliverables"),
+            exp_communication=by_key.get("communication"),
+            exp_mentoring=by_key.get("mentoring"),
+            exp_firm_growth=by_key.get("firm_growth"),
+            exp_competency_skills=by_key.get("competency_skills"),
+            expectations={str(c.id): c.expectation for c in comps},
         ))
 
     return results
