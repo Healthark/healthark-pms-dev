@@ -9,8 +9,13 @@ import { lazy, Suspense, useState } from "react";
 import {
   UserCircle, ClipboardList, Pencil, Eye,
   Search, CheckCircle2, Clock,
+  type LucideIcon,
 } from "lucide-react";
 import { StringCombobox } from "../common/StringCombobox";
+import {
+  getEvalStatusBadge,
+  type EvalStatusTone,
+} from "./evalStatusBadge";
 import { TablePagination } from "../common/TablePagination";
 import {
   type PMEvaluationPayload,
@@ -113,6 +118,16 @@ const EVAL_SORT_CONFIG: Record<EvalSortKey, { kind: SortKind; get: (r: UnifiedEv
   review_status:     { kind: "alpha",   get: (r) => r.review_status },
   secondary_evaluator_name: { kind: "alpha", get: (r) => r.secondary_evaluator_name },
   performance_group: { kind: "numeric", get: (r) => r.performance_group },
+};
+
+// Status-badge styling per flow tone (label + logic live in evalStatusBadge).
+// "awaiting" = a secondary row whose PM is done but the secondary hasn't
+// submitted — blue to read as "your turn", distinct from a green terminal.
+const EVAL_STATUS_STYLES: Record<EvalStatusTone, { cls: string; Icon: LucideIcon }> = {
+  done:     { cls: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300", Icon: CheckCircle2 },
+  awaiting: { cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300", Icon: CheckCircle2 },
+  draft:    { cls: "bg-brand/10 text-brand", Icon: Pencil },
+  pending:  { cls: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300", Icon: Clock },
 };
 
 // ── Tab Component ───────────────────────────────────────────────────
@@ -304,15 +319,12 @@ export function PMEvaluationTab() {
   const filteredRows = unifiedRows.filter((r) => {
     if (effectiveCycle !== "all" && r.cycle !== effectiveCycle) return false;
     if (typeFilter !== "all" && r.type !== typeFilter) return false;
-    // Status:
-    //   pending → row is pending AND no draft content has been typed yet
-    //   draft   → row is pending AND has_draft_content == true
-    //   done    → submitted / reviewed
-    if (statusFilter === "pending"
-        && (r.review_status !== "pending" || r.has_draft_content)) return false;
-    if (statusFilter === "draft"
-        && (r.review_status !== "pending" || !r.has_draft_content)) return false;
-    if (statusFilter === "done" && r.review_status === "pending") return false;
+    // Status buckets by the SAME flow key that drives the badge, so the filter
+    // always matches what's rendered:
+    //   pending → PM review not in yet · draft → a saved draft
+    //   pm_reviewed → PM done (incl. a secondary awaiting their turn)
+    //   completed → secondary submitted
+    if (statusFilter !== "all" && getEvalStatusBadge(r).key !== statusFilter) return false;
     if (deptFilter !== "all" && r.department_name !== deptFilter) return false;
     if (projectFilter !== "all" && r.project_name !== projectFilter) return false;
     if (employeeFilter !== "all" && r.employee_name !== employeeFilter) return false;
@@ -587,7 +599,8 @@ export function PMEvaluationTab() {
               <option value="all">All</option>
               <option value="pending">Pending</option>
               <option value="draft">Draft</option>
-              <option value="done">Completed</option>
+              <option value="pm_reviewed">PM Reviewed</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
           <ClearFiltersButton active={hasActiveFilters} onClear={clearFilters} className="ml-auto" />
@@ -635,10 +648,10 @@ export function PMEvaluationTab() {
             <tbody className="divide-y divide-border/50">
               {pageRows.map((r, i) => {
                 const isDone = r.review_status !== "pending";
-                // Draft pill applies to any row with saved-but-unsubmitted
-                // content — PM, reports-to, AND secondary (a secondary draft is
-                // "pending" + has_draft_content, same as the PM flow).
-                const rowHasDraft = !isDone && r.has_draft_content;
+                // Status flow (Pending → Draft → PM Reviewed → Completed) is
+                // computed centrally; the tone maps to colour/icon below.
+                const badge = getEvalStatusBadge(r);
+                const { cls: badgeCls, Icon: BadgeIcon } = EVAL_STATUS_STYLES[badge.tone];
                 return (
                   <tr key={r.key} className="hover:bg-surface-muted/60 transition-colors">
                     <td className="px-3 py-3 text-center text-text-muted tabular-nums text-xs">
@@ -671,19 +684,9 @@ export function PMEvaluationTab() {
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-text-muted">{r.department_name ?? "—"}</td>
                     <td className="px-4 py-3">
-                      {isDone ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
-                          <CheckCircle2 className="h-3 w-3" /> {r.review_status === "submitted" ? "Submitted" : "Reviewed"}
-                        </span>
-                      ) : rowHasDraft ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold uppercase text-brand">
-                          <Pencil className="h-3 w-3" /> Draft
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">
-                          <Clock className="h-3 w-3" /> Pending
-                        </span>
-                      )}
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase ${badgeCls}`}>
+                        <BadgeIcon className="h-3 w-3" /> {badge.label}
+                      </span>
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-text-muted">
                       {r.secondary_evaluator_name ?? "—"}
