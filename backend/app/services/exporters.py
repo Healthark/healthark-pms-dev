@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import settings
 from app.core.cycle_utils import extract_fy_label
 from app.models.annual_review_models import AnnualReview
+from app.models.competency_models import Competency
 from app.models.goal_criteria_models import GoalCriterion
 from app.models.goal_mentor_review_models import GoalMentorReview
 from app.models.goal_models import Goal
@@ -583,6 +584,36 @@ def build_project_reviews_sheet(
     users_by_id = _build_user_lookup(db, org_id)
     projects_by_id = _project_lookup(db, org_id)
 
+    # The 7 fixed comment columns are reconstructed from the `comments` JSON
+    # (the source of truth) via the org's DEFAULT reviewable competencies —
+    # {competency id -> its column}. Custom (department-specific) competencies
+    # have no fixed column and aren't emitted here. Built once for the sheet.
+    _COMMENT_COL_BY_KEY = {
+        "task_execution": 11,
+        "ownership": 12,
+        "project_management": 13,
+        "client_deliverables": 14,
+        "communication": 15,
+        "mentoring": 16,
+        "competency_skills": 17,
+    }
+    default_comps = (
+        db.query(Competency)
+        .filter(
+            Competency.org_id == org_id,
+            Competency.department_id.is_(None),
+            Competency.level.is_(None),
+            Competency.is_reviewable.is_(True),
+            Competency.is_deleted.is_(False),
+        )
+        .all()
+    )
+    comment_col_by_id = {
+        str(c.id): _COMMENT_COL_BY_KEY[c.key]
+        for c in default_comps
+        if c.key in _COMMENT_COL_BY_KEY
+    }
+
     r = 2
     for rv in reviews:
         proj = projects_by_id.get(rv.project_id)
@@ -603,13 +634,10 @@ def build_project_reviews_sheet(
         ws.cell(row=r, column=8, value=rv.status)
         ws.cell(row=r, column=9, value=rv.performance_group or "")
         ws.cell(row=r, column=10, value=rv.impact_statement or "")
-        ws.cell(row=r, column=11, value=rv.comment_task_execution or "")
-        ws.cell(row=r, column=12, value=rv.comment_ownership or "")
-        ws.cell(row=r, column=13, value=rv.comment_project_management or "")
-        ws.cell(row=r, column=14, value=rv.comment_client_deliverables or "")
-        ws.cell(row=r, column=15, value=rv.comment_communication or "")
-        ws.cell(row=r, column=16, value=rv.comment_mentoring or "")
-        ws.cell(row=r, column=17, value=rv.comment_competency_skills or "")
+        for cid, text in (rv.comments or {}).items():
+            col = comment_col_by_id.get(str(cid))
+            if col:
+                ws.cell(row=r, column=col, value=text or "")
         ws.cell(row=r, column=18, value=sec_names)
         ws.cell(row=r, column=19, value=sec_impacts)
         ws.cell(row=r, column=20, value=bool(rv.is_deleted))

@@ -72,20 +72,11 @@ class ProjectReview(Base):
 
     status = Column(String, default=ProjectReviewStatus.PENDING.value, nullable=False)
 
-    # ── PM's Evaluation (7 Competencies) ─────────────────────────────
-    comment_task_execution = Column(Text, nullable=True)
-    comment_ownership = Column(Text, nullable=True)
-    comment_project_management = Column(Text, nullable=True)
-    comment_client_deliverables = Column(Text, nullable=True)
-    comment_communication = Column(Text, nullable=True)
-    comment_mentoring = Column(Text, nullable=True)
-    comment_competency_skills = Column(Text, nullable=True)
-
-    # ── Dynamic competency comments (additive foundation) ────────────
-    # {competency_id: comment_text} — the department/level-aware replacement
-    # for the fixed comment_* columns above. Backfilled from comment_* on
-    # migration; not yet read by the live flows (cutover happens in a
-    # follow-up). Keyed by Competency.id (only is_reviewable competencies).
+    # ── PM's Evaluation — competency comments ────────────────────────
+    # {competency_id: comment_text}, keyed by Competency.id (only reviewable
+    # competencies). The sole source of truth for per-competency comments —
+    # the fixed comment_* columns it replaced were dropped once every flow read
+    # this JSON (see migration dropping them).
     comments = Column(JSON, nullable=True)
 
     # ── PM's Summary Fields ──────────────────────────────────────────

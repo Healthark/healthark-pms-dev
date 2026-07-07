@@ -79,20 +79,11 @@ router = APIRouter()
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
-_DRAFT_COMMENT_FIELDS = (
-    "comment_task_execution",
-    "comment_ownership",
-    "comment_project_management",
-    "comment_client_deliverables",
-    "comment_communication",
-    "comment_mentoring",
-    "comment_competency_skills",
-)
-
-# The 7 reviewable default-competency keys mapped to their legacy comment_*
-# columns. This bridges the fixed request/response contract to the dynamic
-# `comments` JSON while the two coexist (expand phase). firm_growth is
-# expectation-only and has no comment column, so it's absent here.
+# The 7 reviewable default-competency keys mapped to their fixed comment_*
+# field names. The comment_* DB columns are gone; this bridges the fixed
+# request/response contract (which still carries these field names) to the
+# `comments` JSON — keyed by competency id — that is now the sole store.
+# firm_growth is expectation-only and has no comment field, so it's absent here.
 _COMMENT_FIELD_BY_KEY = {
     "task_execution": "comment_task_execution",
     "ownership": "comment_ownership",
@@ -125,63 +116,39 @@ def _default_competency_id_by_key(db: DbSession, org_id: int) -> dict[str, int]:
     return {c.key: c.id for c in rows}
 
 
-def _sync_review_comments_json(db: DbSession, review: ProjectReview) -> None:
-    """Mirror the legacy comment_* columns into review.comments JSON.
+def _apply_comments_map(review: ProjectReview, comments_map: dict) -> None:
+    """Store a dynamic {competency_id: text} map as the review's comments JSON
+    — the sole source of truth. Custom competencies live only here."""
+    review.comments = {str(k): v for k, v in comments_map.items()}
 
-    Keeps the JSON (the read source of truth) in lockstep with the columns on
-    every write path, keyed by the org's default competency ids. Reassigns the
-    whole dict so SQLAlchemy marks the column dirty. No-op if the org has no
-    default competencies seeded (keeps pre-migration writes working)."""
+
+def _sync_review_comments(db: DbSession, review: ProjectReview, payload) -> None:
+    """Persist competency comments as ``review.comments`` JSON (the sole source
+    of truth, keyed by competency id).
+
+    The dynamic {competency_id: text} map (current client) is authoritative when
+    present; otherwise the legacy fixed comment_* fields — if the caller sent
+    any — are mapped onto the org's default competency ids. A write carrying
+    neither (e.g. a partial draft that only changed the rating) leaves the
+    existing comments untouched."""
+    comments_map = getattr(payload, "comments", None)
+    if comments_map is not None:
+        _apply_comments_map(review, comments_map)
+        return
+    fixed = {
+        field: getattr(payload, field, None)
+        for field in _COMMENT_FIELD_BY_KEY.values()
+    }
+    if all(v is None for v in fixed.values()):
+        return
     key_to_id = _default_competency_id_by_key(db, review.org_id)
     if not key_to_id:
         return
     review.comments = {
-        str(key_to_id[key]): getattr(review, field)
+        str(key_to_id[key]): fixed[field]
         for key, field in _COMMENT_FIELD_BY_KEY.items()
         if key in key_to_id
     }
-
-
-def _apply_comments_map(
-    db: DbSession, review: ProjectReview, comments_map: dict
-) -> None:
-    """Store a dynamic {competency_id: text} map as the review's comments.
-
-    The map is authoritative: it becomes ``review.comments`` (id-keyed, the read
-    source of truth), and the legacy comment_* columns are mirrored for any
-    competency whose key is one of the fixed 7 (so the exporter and other
-    column readers stay consistent), while columns for competencies NOT in the
-    map are cleared. Custom competencies live only in the JSON."""
-    normalized = {str(k): v for k, v in comments_map.items()}
-    review.comments = normalized
-
-    id_to_key = {
-        str(c.id): c.key
-        for c in get_competencies_by_ids(
-            db,
-            review.org_id,
-            [int(k) for k in normalized if str(k).lstrip("-").isdigit()],
-        )
-    }
-    # Clear every legacy column, then set those the map covers.
-    for field in _COMMENT_FIELD_BY_KEY.values():
-        setattr(review, field, None)
-    for cid, text in normalized.items():
-        field = _COMMENT_FIELD_BY_KEY.get(id_to_key.get(cid, ""))
-        if field:
-            setattr(review, field, text)
-
-
-def _sync_review_comments(
-    db: DbSession, review: ProjectReview, comments_map: Optional[dict]
-) -> None:
-    """Persist competency comments on a write. When the client sent the dynamic
-    map, it's authoritative; otherwise derive the JSON from the legacy columns
-    the caller just set."""
-    if comments_map is not None:
-        _apply_comments_map(db, review, comments_map)
-    else:
-        _sync_review_comments_json(db, review)
 
 
 def _require_complete_comments(payload) -> None:
@@ -211,19 +178,14 @@ def _require_complete_comments(payload) -> None:
 def _resolved_comment_values(
     db: DbSession, review: ProjectReview
 ) -> dict[str, Optional[str]]:
-    """The 7 comment values for the API response.
-
-    Base = the legacy comment_* columns; the `comments` JSON (the source of
-    truth) is then overlaid PER FIELD. The overlay is deliberately per-field
-    rather than all-or-nothing: a competency id that no longer resolves — e.g.
-    a default competency later soft-deleted or re-flagged by framework
-    management — leaves the column value showing through instead of silently
-    dropping the comment. In the expand phase the JSON mirrors the columns, so
-    this is behaviourally identical today; it also covers rows written by
-    pre-cutover code (JSON absent → columns used as-is).
+    """The 7 legacy-shaped comment values for the API response, reconstructed
+    from the `comments` JSON (the source of truth) by mapping each default
+    competency id back to its fixed comment_* field. Competencies outside the
+    default set (custom ones, or firm_growth) have no fixed field and surface
+    via the response's `comments` / `competencies` instead.
     """
     out: dict[str, Optional[str]] = {
-        field: getattr(review, field) for field in _COMMENT_FIELD_BY_KEY.values()
+        field: None for field in _COMMENT_FIELD_BY_KEY.values()
     }
     if review.comments:
         id_to_key = {
@@ -238,24 +200,11 @@ def _resolved_comment_values(
 
 
 def _comments_map_for_response(
-    db: DbSession, review: ProjectReview
+    review: ProjectReview,
 ) -> Optional[dict[str, Optional[str]]]:
-    """The {competency_id: text} map for the API response.
-
-    Prefers the stored `comments` JSON (source of truth, and forward-compatible
-    with custom competencies whose ids aren't in the default set). For a legacy
-    row with no JSON, builds the map from the comment_* columns keyed by the
-    org's default competency ids. Returns None when there's nothing to show
-    (e.g. an empty placeholder row)."""
-    if review.comments:
-        return review.comments
-    key_to_id = _default_competency_id_by_key(db, review.org_id)
-    built: dict[str, Optional[str]] = {
-        str(key_to_id[key]): getattr(review, field)
-        for key, field in _COMMENT_FIELD_BY_KEY.items()
-        if key in key_to_id
-    }
-    return built if any(built.values()) else None
+    """The {competency_id: text} map for the API response — the stored
+    `comments` JSON (the source of truth), or None when empty."""
+    return review.comments or None
 
 
 def _competencies_for_review(
@@ -286,9 +235,8 @@ def _pm_review_has_draft_content(review: ProjectReview) -> bool:
     Distinguishes a saved draft from the empty placeholder rows that
     seed.py / the queue pre-creates for upcoming cycles. A row counts as
     a draft if any of: rating selected, impact statement filled, or any
-    per-competency comment present (after stripping whitespace). Checks both
-    the JSON and the legacy columns (a union) so it's correct regardless of
-    which source a given row was written through.
+    per-competency comment present in the `comments` JSON (after stripping
+    whitespace).
     """
     if review.performance_group:
         return True
@@ -298,10 +246,6 @@ def _pm_review_has_draft_content(review: ProjectReview) -> bool:
         for v in review.comments.values():
             if v and v.strip():
                 return True
-    for f in _DRAFT_COMMENT_FIELDS:
-        v = getattr(review, f, None)
-        if v and v.strip():
-            return True
     return False
 
 
@@ -426,7 +370,7 @@ def _build_review_response(
             ))
 
     comment_values = _resolved_comment_values(db, review)
-    comments_map = _comments_map_for_response(db, review)
+    comments_map = _comments_map_for_response(review)
 
     return ProjectReviewResponse(
         id=review.id,
@@ -1142,13 +1086,6 @@ def submit_pm_evaluation(
         # Promote PENDING / DRAFT row to REVIEWED.
         review.reviewer_id = current_user.id
         review.status = ProjectReviewStatus.REVIEWED.value
-        review.comment_task_execution = payload.comment_task_execution
-        review.comment_ownership = payload.comment_ownership
-        review.comment_project_management = payload.comment_project_management
-        review.comment_client_deliverables = payload.comment_client_deliverables
-        review.comment_communication = payload.comment_communication
-        review.comment_mentoring = payload.comment_mentoring
-        review.comment_competency_skills = payload.comment_competency_skills
         review.performance_group = payload.performance_group.value
         review.impact_statement = payload.impact_statement
     else:
@@ -1168,19 +1105,12 @@ def submit_pm_evaluation(
             reviewer_id=current_user.id,
             cycle=cycle,
             status=ProjectReviewStatus.REVIEWED.value,
-            comment_task_execution=payload.comment_task_execution,
-            comment_ownership=payload.comment_ownership,
-            comment_project_management=payload.comment_project_management,
-            comment_client_deliverables=payload.comment_client_deliverables,
-            comment_communication=payload.comment_communication,
-            comment_mentoring=payload.comment_mentoring,
-            comment_competency_skills=payload.comment_competency_skills,
             performance_group=payload.performance_group.value,
             impact_statement=payload.impact_statement,
         )
         db.add(review)
 
-    _sync_review_comments(db, review, payload.comments)
+    _sync_review_comments(db, review, payload)
     db.commit()
     db.refresh(review)
 
@@ -1280,15 +1210,15 @@ def save_pm_evaluation_draft(
     # Apply only the fields the client included (partial save).
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
-        if field == "comments":
-            continue  # persisted below via _sync_review_comments (the map path)
+        if field == "comments" or field in _COMMENT_FIELD_BY_KEY.values():
+            continue  # comments persisted below via _sync_review_comments
         if field == "performance_group" and value is not None:
             # Pydantic model gives us the enum; persist the string value.
             setattr(review, field, value.value if hasattr(value, "value") else value)
         else:
             setattr(review, field, value)
 
-    _sync_review_comments(db, review, payload.comments)
+    _sync_review_comments(db, review, payload)
     db.commit()
     db.refresh(review)
     return _build_review_response(review, db, viewer_user_id=current_user.id)
@@ -1591,13 +1521,6 @@ def submit_reports_to_evaluation(
         # Promote PENDING / DRAFT row to REVIEWED.
         review.reviewer_id = current_user.id
         review.status = ProjectReviewStatus.REVIEWED.value
-        review.comment_task_execution = payload.comment_task_execution
-        review.comment_ownership = payload.comment_ownership
-        review.comment_project_management = payload.comment_project_management
-        review.comment_client_deliverables = payload.comment_client_deliverables
-        review.comment_communication = payload.comment_communication
-        review.comment_mentoring = payload.comment_mentoring
-        review.comment_competency_skills = payload.comment_competency_skills
         review.performance_group = payload.performance_group.value
         review.impact_statement = payload.impact_statement
     else:
@@ -1613,19 +1536,12 @@ def submit_reports_to_evaluation(
             reviewer_id=current_user.id,
             cycle=cycle,
             status=ProjectReviewStatus.REVIEWED.value,
-            comment_task_execution=payload.comment_task_execution,
-            comment_ownership=payload.comment_ownership,
-            comment_project_management=payload.comment_project_management,
-            comment_client_deliverables=payload.comment_client_deliverables,
-            comment_communication=payload.comment_communication,
-            comment_mentoring=payload.comment_mentoring,
-            comment_competency_skills=payload.comment_competency_skills,
             performance_group=payload.performance_group.value,
             impact_statement=payload.impact_statement,
         )
         db.add(review)
 
-    _sync_review_comments(db, review, payload.comments)
+    _sync_review_comments(db, review, payload)
     db.commit()
     db.refresh(review)
     return _build_review_response(review, db, viewer_user_id=current_user.id)
@@ -1691,14 +1607,14 @@ def save_reports_to_evaluation_draft(
     # Apply only the fields the client included (partial save).
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
-        if field == "comments":
-            continue  # persisted below via _sync_review_comments (the map path)
+        if field == "comments" or field in _COMMENT_FIELD_BY_KEY.values():
+            continue  # comments persisted below via _sync_review_comments
         if field == "performance_group" and value is not None:
             setattr(review, field, value.value if hasattr(value, "value") else value)
         else:
             setattr(review, field, value)
 
-    _sync_review_comments(db, review, payload.comments)
+    _sync_review_comments(db, review, payload)
     db.commit()
     db.refresh(review)
     return _build_review_response(review, db, viewer_user_id=current_user.id)
@@ -2456,17 +2372,10 @@ def update_review(
     if not is_admin:
         review.reviewer_id = current_user.id
 
-    review.comment_task_execution = payload.comment_task_execution
-    review.comment_ownership = payload.comment_ownership
-    review.comment_project_management = payload.comment_project_management
-    review.comment_client_deliverables = payload.comment_client_deliverables
-    review.comment_communication = payload.comment_communication
-    review.comment_mentoring = payload.comment_mentoring
-    review.comment_competency_skills = payload.comment_competency_skills
     review.impact_statement = payload.impact_statement
     review.performance_group = payload.performance_group.value
 
-    _sync_review_comments(db, review, payload.comments)
+    _sync_review_comments(db, review, payload)
     db.commit()
     db.refresh(review)
 

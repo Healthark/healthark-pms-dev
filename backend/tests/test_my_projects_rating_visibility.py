@@ -116,7 +116,6 @@ def _add_review(db, org, project, member, pm, status):
         status=status,
         performance_group=RATING,
         impact_statement="Solid contribution.",
-        comment_task_execution="ok",
         is_deleted=False,
     )
     db.add(rv)

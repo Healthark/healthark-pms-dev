@@ -473,16 +473,13 @@ def _seed_role_expectations(db, org):
             desig = db.query(Designation).filter_by(org_id=org.id, name=desig_name).first()
             if not desig:
                 continue
+            # Expectation text now lives on the competency framework
+            # (Competency.expectation); the exp_* columns were dropped. This
+            # script predates the framework and does not seed it (use seed.py) —
+            # only the (dept, designation) row is created here.
+            _ = comp
             db.add(RoleExpectation(
                 org_id=org.id, department_id=dept.id, designation_id=desig.id,
-                exp_task_execution=comp.get("exp_task_execution", ""),
-                exp_ownership=comp.get("exp_ownership", ""),
-                exp_project_management=comp.get("exp_project_management", ""),
-                exp_client_deliverables=comp.get("exp_client_deliverables", ""),
-                exp_communication=comp.get("exp_communication", ""),
-                exp_mentoring=comp.get("exp_mentoring", ""),
-                exp_firm_growth=comp.get("exp_firm_growth", ""),
-                exp_competency_skills=comp.get("exp_competency_skills", ""),
             ))
             added += 1
     db.flush()
@@ -777,13 +774,16 @@ def _seed_projects_and_reviews(db, org, users, depts):
             # The PM is reviewed by the project's reports_to senior; everyone
             # else is reviewed by the PM.
             reviewer = users[reports_by_code[code]] if member_key == pm_key else users[pm_key]
+            # Per-competency comments now live in ProjectReview.comments JSON,
+            # keyed by competency id. This script predates the framework and
+            # doesn't seed it, so it records the rating + impact only (no
+            # comments). Use seed.py for framework-complete review narratives.
             pr = ProjectReview(
                 org_id=org.id, user_id=member.id, project_id=proj.id,
                 reviewer_id=reviewer.id, cycle=COMPLETED_PROJECT_CYCLE,
                 status="reviewed",
                 performance_group=pg,
                 impact_statement=f"{member.full_name} made a strong, well-rounded contribution to {proj.name}.",
-                **_review_comments(member.full_name, pg),
             )
             db.add(pr)
             db.flush()

@@ -119,7 +119,6 @@ def test_role_expectation_repointed(db):
         org_id=org.id,
         department_id=idt.id,
         designation_id=eng.id,
-        exp_task_execution="x",
     )
     db.add(re)
     db.commit()
