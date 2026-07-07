@@ -116,6 +116,29 @@ describe("EvalModal — dynamic competency rendering", () => {
     });
   });
 
+  it("shows the competency's seeded expectation text (framework activation)", async () => {
+    vi.mocked(projectReviewService.getCompetencies).mockResolvedValue({
+      is_default: false,
+      competencies: [
+        {
+          id: 10,
+          key: "task_execution",
+          label: "Task Execution",
+          display_order: 1,
+          is_reviewable: true,
+          expectation: "Execute well-defined tasks under supervision",
+        },
+      ],
+    });
+    renderModal();
+    // Panels are collapsed; open the competency's expectations.
+    const toggles = await screen.findAllByText(/View Role Expectations/);
+    fireEvent.click(toggles[0]);
+    expect(
+      screen.getByText("Execute well-defined tasks under supervision"),
+    ).toBeInTheDocument();
+  });
+
   it("shows an error and blocks saving when the competency fetch fails", async () => {
     vi.mocked(projectReviewService.getCompetencies).mockRejectedValue(
       new Error("network"),

@@ -1,0 +1,189 @@
+{
+ "competencies": [
+  {
+   "key": "task_execution",
+   "label": "Task Execution & Problem Solving",
+   "is_reviewable": true
+  },
+  {
+   "key": "ownership",
+   "label": "Ownership & Accountability",
+   "is_reviewable": true
+  },
+  {
+   "key": "project_management",
+   "label": "Project Management & Risk Mitigation",
+   "is_reviewable": true
+  },
+  {
+   "key": "client_deliverables",
+   "label": "Building Client-Ready Deliverables",
+   "is_reviewable": true
+  },
+  {
+   "key": "communication",
+   "label": "Communication & Stakeholder Management",
+   "is_reviewable": true
+  },
+  {
+   "key": "mentoring",
+   "label": "Mentoring & Team Development",
+   "is_reviewable": true
+  },
+  {
+   "key": "firm_growth",
+   "label": "Firm Growth",
+   "is_reviewable": false
+  },
+  {
+   "key": "competency_skills",
+   "label": "Competency & Skills",
+   "is_reviewable": true
+  }
+ ],
+ "default_expectation": "Not defined",
+ "departments": {
+  "IDT": {
+   "levels": {
+    "1": {
+     "task_execution": "Execute straightforward, well-defined tasks under supervision.\nBreak problems into smaller components with guidance.\nAsk clarifying questions to understand context before starting.",
+     "ownership": "Execute tasks independently once goals are defined.\nProactively seek guidance when encountering roadblocks.\nSelf-review deliverables for quality before passing to a lead.",
+     "project_management": "Adhere to timelines and communicate potential delays early.\nUnderstand and follow project delivery processes; keep documents updated.\nProactively reach out to the project manager on progress.",
+     "client_deliverables": "Produce quality code/deliverables with no major defects.\nDraft well-formatted and accurate emails and documents.\nDesign simple visualisations to convey data insights.",
+     "communication": "Draft clear meeting notes listing action items with ownership.\nActively listen to client and project manager needs and reflect them in deliverables.\nCommunicate progress updates and next steps to internal teams.",
+     "mentoring": "Participate in team building and knowledge management sessions.\nShare learnings on delivery processes and technology trends within the team.",
+     "firm_growth": "Participate in firm activities and initiatives.\nContribute to knowledge sharing within the firm.\nSupport eminence and excellence activities in their practice area.",
+     "competency_skills": "Developing proficiency in assigned technology area.\nDemonstrates reduction in guidance needed as experience grows.\nUnderstands the domain of the project assigned."
+    },
+    "2": {
+     "task_execution": "Perform simple to medium complexity tasks independently.\nDevelop an initial approach for assigned tasks rather than waiting for instructions.\nIdentify gaps in requirements and raise them proactively.",
+     "ownership": "Take full responsibility for assigned tasks and modules.\nDemonstrate initiative by suggesting minor improvements in deliverables.\nAssist senior team members during the absence of a lead, as needed.",
+     "project_management": "Manage own time and tasks without needing reminders.\nIdentify and flag risks within assigned scope to the project manager.\nUnderstand the project lifecycle and contribute to process compliance.",
+     "client_deliverables": "Produce quality code/deliverables on time with minimal rework.\nDraft clear client-facing communications with appropriate tone and structure.\nSuggest improvements to existing templates and deliverable formats.",
+     "communication": "Structure written communication effectively - clear emails with progress, next steps, and open items.\nStart interpreting client asks and translate them into tasks under supervision.\nTrack open items and communicate to leadership when blocked.",
+     "mentoring": "Guide junior team members on tasks, deliverables, and quality.\nEncourage and participate in team building activities.\nConduct knowledge sessions on delivery processes and technology trends.\nProvide upward feedback on team dynamics and process gaps.",
+     "firm_growth": "Actively contribute to knowledge sharing and firm initiatives.\nSupport eminence and excellence activities in their practice area.\nParticipate in firm events and represent the team positively.",
+     "competency_skills": "Proficient in assigned technology area; produces quality deliverables on time.\nSuggests process improvements, innovation, and automation opportunities.\nDemonstrates awareness of delivery processes and project management basics."
+    },
+    "3": {
+     "task_execution": "Independently structure and solve moderately complex problems.\nDevelop technical approach and solution design for assigned module or workstream.\nTranslate ambiguous requirements into concrete deliverables.",
+     "ownership": "Own multiple modules within a project and ensure quality delivery.\nRegularly update managers on progress and raise potential issues proactively.\nAnticipate next steps in the project lifecycle and take initiative beyond assigned tasks.",
+     "project_management": "Perform work estimation, planning, and schedule management within the team.\nProactively manage deadlines and risks; escalate issues when needed.\nAssess risk scope - determine what to manage independently vs. escalate.",
+     "client_deliverables": "Review deliverables by junior team members to ensure quality standards.\nLeverage domain expertise to produce contextual, polished, high-quality outputs.\nGenerate new content types as required by the engagement.",
+     "communication": "Lead internal discussions on project updates and next steps.\nInterpret client asks effectively and translate them into actionable requirements.\nIndependently interact with clients and lead one or more project threads.",
+     "mentoring": "Actively mentor 1-2 junior team members with structured feedback.\nIdentify areas of improvement for junior practitioners and run regular cadence sessions.\nDemonstrate maturity in coaching across client communication and project knowledge.",
+     "firm_growth": "Lead and own eminence and excellence activities in their practice area.\nParticipate in new proposal or SoW creation as a contributor.\nParticipate in screening and hiring of new members.",
+     "competency_skills": "Expertise in core technology area; can act as backup SME in adjacent areas.\nAble to lead estimations for specific areas of expertise.\nDemonstrates process awareness and structured project management."
+    },
+    "4": {
+     "task_execution": "Lead problem definition and solution design across multiple modules.\nDevelop technical architecture in collaboration with relevant stack leads.\nPresent architecture to review boards or clients for acceptance.",
+     "ownership": "Step in and take lead during the absence of a manager.\nAnticipate project-level risks and act without being prompted.\nHold themselves and peers accountable to quality and timeline standards.",
+     "project_management": "Manage 2-3 project threads simultaneously with confidence.\nCommunicate timely status, key updates, and next steps to stakeholders.\nAnticipate risks across the full project, not just their own scope.",
+     "client_deliverables": "Ensure final deliverables are free from critical or major defects.\nLead the design of complex or novel deliverables - compelling, story-driven, client-aligned.\nSet quality benchmarks and coach the team to meet them consistently.",
+     "communication": "Build and manage relationships with working-level client stakeholders.\nSummarise and communicate client feedback clearly to the team.\nDevelop long-term client relationships within the engagement.",
+     "mentoring": "Actively mentor 3-4 junior team members with structured feedback.\nIdentify stretch opportunities for juniors to level up in their careers.\nCreate space for team members to think, approach problems, and build autonomy.\nCreate/Contribute towards a structured upskilling roadmap for the designated practice area.",
+     "firm_growth": "Play a leadership role within the team - face of the organisation to junior members.\nContribute meaningfully to proposals; own specific sections.\nSupport recruitment activities and hiring decisions.",
+     "competency_skills": "Deep expertise across one or more technology or domain areas.\nDrive process improvements, innovation, and automation across the team.\nDemonstrates strong communication skills at working-team level."
+    },
+    "5": {
+     "task_execution": "Define end-to-end technical or product solution architecture.\nLead design reviews and ensure architectural coherence across workstreams.\nBalance technical debt, delivery speed, and long-term scalability in decisions.",
+     "ownership": "Own full delivery of one or more project workstreams end-to-end.\nEnsure quality, risk, schedule, and budget adherence across their scope.\nIndependently manage multiple concurrent projects or threads.",
+     "project_management": "Lead project planning, resourcing, and milestone tracking.\nProactively identify cross-project risks and initiate mitigation plans.\nEnsure delivery governance standards are met across the engagement.",
+     "client_deliverables": "Define the quality bar for deliverables across the engagement.\nIntroduce deliverable frameworks and templates adopted by the team.\nReview and approve high-stakes outputs before client presentation.",
+     "communication": "Lead client meetings and workshops independently.\nManage expectations of multiple stakeholders across the client organisation.\nEscalate the right issues to the right people at the right time.",
+     "mentoring": "Coach team members on project delivery, client management, and professional growth.\nConduct regular performance check-ins and provide actionable feedback.\nIdentify high-potential individuals and advocate for their development.",
+     "firm_growth": "Lead proposals independently for defined scope areas.\nContribute to the growth of the practice through thought leadership and IP.\nPlay a leadership role in firm initiatives - recruiting, events, knowledge.",
+     "competency_skills": "Expert across full SDLC - Agile, Waterfall, DevOps - and adapts to client context.\nKeeps abreast of technology trends; identifies innovation opportunities.\nDemonstrates strong executive presence and communicates at all levels."
+    },
+    "6": {
+     "task_execution": "Set architectural standards adopted across the practice.\nResolve the most complex and ambiguous technical or product challenges.\nIntroduce new solution patterns that improve delivery quality firm-wide.",
+     "ownership": "Own the SoW/Work Order and govern process compliance.\nBuild a culture of accountability within the team.\nProactively manage escalations and client satisfaction independently.",
+     "project_management": "Own SoW governance, scope change management, and contract compliance.\nTrack scope creep and manage change with internal and client stakeholders.\nEnsure lessons learned are integrated into current and future projects.",
+     "client_deliverables": "Establish deliverable standards across multiple engagements.\nEnsure outputs reflect the firm's intellectual rigour and brand positioning.\nCoach teams to produce increasingly sophisticated and independent outputs.",
+     "communication": "Serve as the primary point of contact for senior client stakeholders.\nNavigate complex stakeholder dynamics and competing priorities.\nCoach team members in handling difficult client communications.",
+     "mentoring": "Build structured mentoring programmes within the team.\nGuide team members on long-term career paths within the firm.\nUnderstand each team member's working style and leverage their unique strengths.",
+     "firm_growth": "Lead multi-workstream proposals with light guidance from senior leadership.\nDrive eminence activities that raise the firm's profile in the market.\nParticipate in collective decisions - promotions, staffing, strategic investments.",
+     "competency_skills": "Recognised as a technical or domain SME internally and externally.\nShapes the technology strategy and evaluates emerging tools for the practice.\nBuilds and curates the firm's intellectual property and methodology assets."
+    },
+    "7": {
+     "task_execution": "Translate strategic objectives into delivery plans for the team.\nRemove systemic blockers that impede team problem-solving capacity.\nEnsure cross-functional alignment on solution design and approach.",
+     "ownership": "Hold the team accountable to delivery and performance standards.\nManage stated compliance parameters and drive a culture of meeting expectations.\nAddress team challenges or disputes promptly and fairly.",
+     "project_management": "Oversee portfolio-level scheduling, resourcing, and risk management.\nActively monitor delivery to ensure scope, schedule, budget, and quality.\nPlan and prioritise activity across multiple threads and initiate action.",
+     "client_deliverables": "Govern quality standards across the team or department.\nIdentify systemic quality gaps and design solutions to address them.\nChampion continuous improvement in how the team builds and presents work.",
+     "communication": "Own stakeholder communication strategy for the engagement or department.\nProvide regular, structured updates to client and firm leadership.\nResolve communication breakdowns quickly and constructively.",
+     "mentoring": "Develop a team culture of continuous learning, creativity, and quality.\nManage performance formally - set expectations, run reviews, manage PIPs.\nAddress team challenges or disputes promptly and with fairness.",
+     "firm_growth": "Own recruiting, onboarding, and retention for their team.\nContribute to firm-wide strategic planning and growth conversations.\nFoster a culture of collaboration and continuous learning within the team.",
+     "competency_skills": "Manages people and performance - sets expectations, conducts frequent check-ins.\nDeep expertise in delivery management across large, complex engagements.\nDemonstrates strong cross-functional leadership and organisational skills."
+    }
+   }
+  },
+  "RWE": {
+   "levels": {
+    "1": {
+     "task_execution": "Perform simple to medium complexity tasks\nFor the assigned task, develop an initial approach by exploring multiple solutions/options, researching existing work, and consulting peers to leverage past work before execution\nAbility to Break down problems/ assigned tasks into smaller components\nAsk clarifying questions to ensure understanding of the problem context",
+     "ownership": "Complete assigned tasks on time\nProactively seeks guidance when encountering roadblock to ensure timely completion of tasks\nSelf-review deliverables, work outputs for quality before passing onto team lead for review and take actions to improve as needed\nFocus on improving relevant RWE domain knowledge and problem-solving skills to handle tasks with less guidance and increased autonomy over time\nAssist manager/team members during the absence of lead, as needed",
+     "project_management": "Communicates timely status, key updates and next steps to internal teams & external teams (e.g. drafting MOMs, tracking open items)\nIdentify delivery (functional/technical) gaps in the tasks assigned and escalate as needed\nUnderstand and follow project delivery processes, effectively use project management tools, and maintain up-to-date project documentation.\nAssist team members/ senior consultants in adhereing to processes, task estimation and prioritization, implementing process improvement changes/solutions/automation/innovation",
+     "client_deliverables": "Produces accurate, well-formatted outputs with minimal errors (e.g., grammar, typos, and sourcing).\nDesigns simple visualizations to convey data insights.\nActively learns the basics of storyboarding",
+     "communication": "Drafts clear and concise meeting notes, listing action items with ownership assigned\nStructure written communication effectively - Draft clear mail to client / project manager with approach, progress updates, next steps mentioned for reference\nActively listen to the needs of client / project manager, interpret the asks and translate it in the deliverables\nAbility to effectively present their work/ deliverables\nAbility to tailor communications, messaging, deliverables keeping in mind the target audience and their appetite and interest",
+     "mentoring": "Encourage/participate in team building.\nConduct knowledge management sessions in the project around delivery processes and technology trends\n`",
+     "firm_growth": "Participate in firm activities and initiatives\nContribute to knowledge sharing/ development within the firm",
+     "competency_skills": "Proficient in project-specific concepts and areas\nBuild industry knowledge or business process knowledge relevant to the project\nLearn fundamentals of the client’s business operations or industry to contribute effectively"
+    },
+    "2": {
+     "task_execution": "Able to develop an independent perspective on tasks, structure and solve complex problems\nAble to use and apply concepts, tools, techniques specific to the vertical and topics when crafting solutions\nServe as the go-between client and team members, filtering out noise, breaking down and streamlining client requests into clear, structured, and meaningful tasks for team members\nDelegates and assigns tasks appropriately, and guides junior team members to ensure efficient task execution\nAble to consider long-term implications of solution",
+     "ownership": "Owns delivery of 1 or more threads within a project - is responsible for the end result and quality of project delivery\nMake informed and timely decisions that align with project goals, ensuring high-quality deliverables, adherence to schedules, and proactive risk management.\nAnticipates and plans for next steps in the project lifecycle and takes the initiative to go beyond assigned tasks to add value to the project\nAble to effectively collaborate in a team setting, guides junior team members on autonomy and task execution\nStep in and take lead during the absence of manager, as needed",
+     "project_management": "Perform work estimation, planning, allocation, and schedule management of delivery within team members\nCommunicates timely status, key updates and next steps to clients\nAblitty to anticipate, assess, and mitigate for potential risks to mitigate their impact while maintaining alignment with project timelines and objectives.\nAbillity to assess risk scope to determine which can be managed independently and which require escalation to project manager and/ or other internal stakeholders, ensuring timely resolution",
+     "client_deliverables": "Leverage expertise in the vertical to produce contextual, high-quality deliverables (polished and visually cohesive), along with the ability to generate new content as required.\nEnsures delverables are logically structured and visually aligned to tell a cohesive story (able to craft detailed storyboards).\nReviews deliverables by junior team members to ensure adherence to quality",
+     "communication": "Independently interact with clients and lead 1 or more project thread and a small team\nAble to present slides and story effectively using anecdotes, examples, and open questions while tailoring messaging to the audience’s interest and engagement level\nConfidently lead calls, keep discussions on track, guide clients back from deviations, build consensus, and steer them toward the suggested path\nAble to analyse and understand client's requirements and identify/propose a solution\nAble to assess situations and provide recommendations on opportunities beyond what is asked for",
+     "mentoring": "Demonstrate maturity of leading/grooming/coaching teams in the areas of client communication, project knowledge, and industry knowledge.\nReviews team members' work for quality.\nManage performance management of team members (based on scope of project).\nRamp-up of new joiners in the team.",
+     "firm_growth": "Play a leadership role within the team, is the face of the organization/ leadership team to junior team members\nContribute to pitching for different projects, proposal development. Able to identify small-scale opportunities for cross-sell or up-sell within existing client projects\nParticipate/ lead firm initiatives\nContribute to the firm’s knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use\nActs as role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required\nHelp in interviewing/ recruiting new talent to the practice",
+     "competency_skills": "Is a Subject Matter Expert (SME) in one of the verticals, able to collaborate with the different stakeholders involved, and plays a mentorship role to junior staff for areas within the vertical\nPlays an advisor role and help other threads/ projects in the account/ practice.\nDemonstrate project management and process awareness.\nProvide knowledge sharing training to internal staff.\nAble to lead estimations for specific areas of expertise.\nAuthor technical solution documents and review documents with client architecture teams.\nknow which tool, concept, ... to use for solving different problems within the vertical.."
+    },
+    "3": {
+     "task_execution": "Leads problem definition and solution design for complex issues across functions/ verticals\nApplies best practices in delivery and program management\nConsiders cross-functional and long-term implications of solutions.\nProvides clear problem-solving guidance to team members\nHas the ability to recognise unknowns, possibilities, inviting new understandings and being receptive to change",
+     "ownership": "Independently manages multiple/ large projects with substantial staff involvement\nOwns and manages end-to-end delivery of projects, ensuring quality, risk management, schedule and budget adherence, and meeting client satisfaction\nBuilds a culture of leadership within the team by aligning strategic goals with delivery expectations",
+     "project_management": "Manages resources, staffing, and undertakes reporting responsibilities.\nTracks scope changes, scope creep, and works with internal and client stakeholders to manage change in scope.\nReports project health and relevant metrics to clients, thereby bringing transparency to project status.\nProactively identifies risks, leads client/ internal discussions to mitigate risks and achieve strategic objectives. Manages quality and risks, ensuring alignment with client satisfaction.\nDrives quality improvements across multiple projects.",
+     "client_deliverables": "Leads the design and story boarding for complex/ new tasks or deliverable to ensure compelling, story-driven outputs aligned with client expectations.\nResponsible to ensure final deliverables are free from errors and meet client expectations\nCoaches team members on advanced storyboarding and tagline creation",
+     "communication": "Socializes with clients and onshore counterparts to prioritize client demand and meeting business KPIs.\nBuilds trust and strong relationships with client stakeholders.\nCollaborates and communicates with clients to bridge gaps related to delivery and address any ad-hoc requests.\nRepresents projects in engagement reviews",
+     "mentoring": "Builds and enhances skills of practitioners; undertakes counseling, coaching, and mentoring responsibilities.\nManages stated compliance parameters and drives the culture of meeting expectations within the team.\nCoaches team members in handling client communications and managing client expectations",
+     "firm_growth": "Play a leadership role within the firm, acts as role model by fostering a positive culture  and encourage team work. within the organisation\nDrive initiatives that enhance the firm’s service offerings, expand its market presence,\nLead proposal development for new projects, opportunities\nContribute to the firm’s knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use\ndemonstrates responsibility for review and action where required\nRecruit, train, and retain top talent while fostering a culture of collaboration and continuous learning",
+     "competency_skills": "Understands multiple areas/ domain in his/her vertical, sense new trends that accelerate growth and build competencies, able to collaborate with the different stakeholders involved\nAbility to produce improvements and tools to drive quality and improve productivity.\nApplies best practices in delivery and program management.\nLeadership in people management; ability to set up a followership culture in the team.\nDemonstrates strong communication skills and the ability to interact at all levels; demonstrates strong executive presence.\nDemonstrated project management skills across implement and operate body of work.\nManages people and performance—sets expectations, conducts frequent check-ins, etc."
+    }
+   }
+  },
+  "Strategy": {
+   "levels": {
+    "1": {
+     "task_execution": "Applies fundamental frameworks with clear guidance.\nBreaks down problems into smaller components - ability to tie back research and insights to client problem/ questions\nAsks clarifying questions to ensure understanding of the problem context.\nDevlops an initial thought process / approach for the assigned task (instead of relying on senior to provide instructions)",
+     "ownership": "Takes full responsibility for assigned tasks and modules and execute independently once goals are defined.\nAdheres to timelines and communicates potential delays early.\nProactively reach out to the project manager for timely progress.\nFocuses on quality output by double-checking work and able to maintain project files, standard data points / project-specific resources (e.g, world bank, IMF, WHO, CB Insights etc.)\nParticipates actively in planning and prioritizing smaller deliverables.\nAble to effectively collaborate in a team setting - avoid duplicate efforts, compiles the version ensures consistent formatting, provide regular updates to senior",
+     "project_management": "Able to conduct deep secondary research to support project requirements (able to use different combination of keywords, uses different sources to identify relevant information)\nPerforms note-taking, summarization of insights efficiently, and supporting interviews during primary research.\nTakes ownership of research in a specific sector or function.",
+     "client_deliverables": "Produces accurate, well-formatted outputs with minimal errors (e.g., grammar, typos, and sourcing).\nDesigns simple visualizations to convey data insights.\nEnsures consistent formatting and alignment across slides or documents.\nActively learns the basics of storyboarding and tagline crafting.\nFollow standard guidelines while deck-making (titles should tell a coherent story, version name should change every time, file name should be appropriate, color scheme should be consistent with deck, max two line titles etc.)\nAble to leverage Healthark's reports / past deliverables for appropriate & creative slide designs (without spending too much time)\nApply good modelling practices and able to support basic financial modeling / analysis tasks such as creating bottom up or top down forecasting models under guidance. Also able to use formulas to existing data sets, analyse and find insights from it\nAble to understand different components of financial statements and derive trends, insights & implications from the data",
+     "communication": "Drafts clear and concise meeting notes, listing action items with ownership assigned.\nStructure written communication effectively - Draft clear mail to client / project manager with progress updates, next steps mentioned for reference\nCommunicates key updates and next steps to internal teams & external teams (e.g. drafting MOMs, tracking open items)\nActive listening the needs of client / project manager and translate it in the deliverables\nStarts interpreting client asks and translates them into specific tasks under supervision.\nSupports preparation for client readouts by collating inputs.",
+     "mentoring": "Encourage/participate in team building.\nPerform peer reviews and reviews of team members’ work for relevance and quality",
+     "firm_growth": "Participate in firm activities and initiatives\nContribute to knowledge sharing/ development within the firm",
+     "competency_skills": "Builds foundational knowledge in a specific sector or a domain (that the practitioners has worked on)\nStays updated on key industry trends through reading and team discussions."
+    },
+    "2": {
+     "task_execution": "Independently structures and solves moderately complex problems.\nAble to think beyond the typical 3-chevron structure when crafting approaches, especially for proposals. Creating and using frameworks tailored to unique needs of the client\nConducts targeted secondary research and synthesizes insights into recommendations (able to identify alternative/ creative solutions to find information when juniors hit a roadblock).\nCreates independent perspective on the task and validates (and revalidates understanding) through different sources",
+     "ownership": "Owns multiple modules within a project and ensures quality delivery.\nProactively manages deadlines and risks, escalating issues when needed.\nRegularly updates managers on progress and raises potential issues proactively.\nAble to effectively collaborate in a team setting - avoid duplicate efforts, compiles the version ensures consistent formatting, provide regular updates to project manager / leadership team / client\nGuides junior team members on autonomy and task execution",
+     "project_management": "Develop project management plan and break down the problem - primary and secondary research plan: Structure sources, data requirements, approach, timelines for ease of coordination and delegation etc.\nAnticipates and plans for next steps in the project lifecycle and takes the initiative to go beyond assigned tasks to add value to the project.\nPrepares discussion guides and organizes findings from primary research interviews.\nIdentifies multiple ways to identify leads for expert interviews - Tracks the converted leads, highlights important summaries from the interview, validates finding through secondary; Able to weave primary insights in the slides",
+     "client_deliverables": "Develops polished, visually appealing outputs with compelling data-driven narratives.\nEnsures all slides are logically structured and visually aligned to tell a cohesive story (able to craft detailed storyboards).\nDemonstrates expertise in crafting visuals and insights that resonate with clients.\nOwns and manages sourcing, number-checking, and refining deliverables.\nEnsures accuracy in modeling outputs by conducting quality checks and reconciling data inconsistencies",
+     "communication": "Leads internal discussions on project updates and next steps.\nSummarizes and communicates client feedback clearly to the team.\nDevelop ability to present slides and story effectively and in a compelling/ engaging way using anecdotes/ examples/ implications/ open questions etc. (not just reading slide from top to bottom)\nInterprets client asks effectively and translates them into actionable project requirements.\nAble to drive content driven calls with junior to mid-management stakeholders (conduct dry run with project manager if needed)\nDevelop long term client relation\nBegins co-leading sections of client readouts with supervision\nTracks open items when working on multiple projects and timely communicate to leadership during roadblocks",
+     "mentoring": "Provides guidance to junior team members on project tasks and deliverables.\nIdentify areas of improvement for junior practitioners (working with you) and give them opportunity to improve in those areas. Conduct regular cadence sessions to pass on timely feedback\nContributes insights and knowledge during client or internal discussions",
+     "firm_growth": "Leads a firm initiative\nContribute to the firm’s knowledge base by writing white papers, blogs, or creating innovative frameworks/tools relevant to the firm's services or for internal use\nPlays a major role in finalising proposals\nOwns Knowledge management at the end of the project (structured research uploads, key documents etc.) to faciliate firm knowledge build-up\nSupports the recruitment efforts and drive interviews / other activities when required with some leadership team",
+     "competency_skills": "Develops a deeper understanding of industry trends and challenges (especially the domain the practitioner has worked on)\nLeads/ Support the primary interviews - able to cover important areas and ask questions based on the expert's response you are getting and not with an intention to cover the DG\nAbility to develop detailed financial models independently for moderately complex scenarios.\nAnalyzes financial data to identify trends, perform scenario analysis, and make preliminary recommendations."
+    },
+    "3": {
+     "task_execution": "Leads problem definition and solution design for complex issues.\nAdapts frameworks creatively to meet client-specific needs.\nConsiders cross-functional and long-term implications of solutions.\nProvides clear problem-solving guidance to team members.\nHas the ability to recognise unknowns, possibilities, inviting new understandings and being receptive to change",
+     "ownership": "Understand each team member’s working style and leverage their unique strengths for the project’s benefit\nDrive content-driven calls for big accounts apart from small accounts and deliver read out effectively; (dry run with leadership if needed, identify important things to cover during the call)\nActively and continually monitors and manages project delivery to ensure a project adds value, is within scope, schedule, on budget and delivers to quality criteria set for the project\nPlans and prioritises activity from multiple threads and start initiating action\nEnsures insights are well-integrated into deliverables and recommendations.",
+     "project_management": "Takes end-to-end ownership of projects or large workstreams.\nProactively identifies new client opportunities based on industry knowledge.\nProactively identifies and mitigates risks, and regular update on project progress, challenges and next steps to client and leadership team, ensuring smooth project execution.",
+     "client_deliverables": "Crafts compelling, story-driven outputs aligned with client expectations.\nReviews and ensures final deliverables are free from errors.\nCoaches team members on advanced storyboarding and tagline creation.\nReviews and refines team-built models, ensuring alignment with client objectives and industry standards.\nUses financial insights to guide strategic recommendations and support client decision-making processes.",
+     "communication": "Leads client discussions, readouts, and critical meetings independently.\nPresent slides and story effectively and in a compelling/ engaging way using anecdotes/ examples/ open questions/ implications etc.\nBuilds trust and strong relationships with client stakeholders.\nInterprets complex client asks and ensures they are effectively addressed in deliverables.\nCoaches team members in handling client communications and managing client expectations.",
+     "mentoring": "Coaches team members on advanced storyboarding and tagline creation\nGuides team members on career development within the firm.\nPressure test and identify areas of opportunity for juniors / mentees to level-up in their career development",
+     "firm_growth": "Identifies opportunities for process improvements and efficiency\nSupport organisation growth and continiously identify areas for upskilling team/ practice (Encourage people to undertake development activities, makes required resources available)\nActs as role model by fostering a positive culture within the organisation and demonstrates responsibility for review and action where required\nCreates an environment to enable others to be creative, agile, innovative and value quality (give space to team members working on a project to think of approach, delegation instead of handholding everytime)\nPlay a leadership role within their firm, sometimes leading an new initiative,  a function (e.g. recruiting, social events), contributing in making collective decisions (promotions, staffing etc)\nLeads proposals independently with minimal guidance from the leadership\nSupports recruitment activities, train, and retain top talent while fostering a culture of collaboration and continuous learning",
+     "competency_skills": "Becomes a recognized expert in a specific sector or function and leads knowledge-sharing sessions to upskill the team.\nLeadership in people management; ability to set up a followership culture in the team.\nDemonstrates strong communication skills and the ability to interact at all levels; demonstrates strong executive presence.\nManages people and performance—sets expectations, conducts frequent check-ins, etc.\nLeads the design and development of custom financial models and research work across healthcare domain for client-specific needs, incorporating advanced scenarios and sensitivity analyses."
+    }
+   }
+  }
+ }
+}

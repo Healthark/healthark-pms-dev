@@ -29,6 +29,7 @@ from app.models.goal_models import Goal
 from app.models.goal_self_review_models import GoalSelfReview
 from app.models.role_expectation_models import RoleExpectation
 from app.models.feedback_360_models import Feedback360Review, Feedback360Answer
+from app.services.competency_service import seed_competency_framework
 
 
 def seed_database():
@@ -120,6 +121,12 @@ def seed_database():
         dept_idt       = db.query(Department).filter_by(org_id=org.id, name="IDT").first()
         dept_rwe       = db.query(Department).filter_by(org_id=org.id, name="RWE").first()
         dept_marketing = db.query(Department).filter_by(org_id=org.id, name="Marketing").first()
+
+        # Competency framework (per-department/level competencies + expectation
+        # text). Idempotent; matches the a7f4e2c9b8d1 migration so fresh dev
+        # seeds and migrated DBs converge.
+        seed_competency_framework(db, org.id)
+        db.commit()
 
         desig_consultant        = db.query(Designation).filter_by(org_id=org.id, name="Consultant").first()
         desig_senior_consultant = db.query(Designation).filter_by(org_id=org.id, name="Senior Consultant").first()

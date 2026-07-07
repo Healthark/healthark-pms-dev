@@ -172,6 +172,9 @@ export interface Competency {
   label: string;
   display_order: number;
   is_reviewable: boolean;
+  /** Role-expectation text for this competency at its (department, level).
+   *  "Not defined" for the org default set. */
+  expectation?: string | null;
 }
 
 /** The competency set that applies to a (department, level). `is_default` is

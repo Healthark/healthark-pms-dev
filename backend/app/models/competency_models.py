@@ -22,7 +22,16 @@ but are not yet wired into the live read/write flows — the existing ``exp_*`` 
 reading/writing the dynamic set happens in a follow-up.
 """
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -52,6 +61,12 @@ class Competency(Base):
     # comment box on the review form.
     is_reviewable = Column(Boolean, nullable=False, default=True)
     is_deleted = Column(Boolean, nullable=False, default=False)
+
+    # The role-expectation text for THIS competency at THIS (department, level).
+    # Lives on the competency (not RoleExpectation) so the per-(dept, level)
+    # framework needs no designation→level mapping. NULL/"" renders as blank;
+    # the org default set carries "Not defined" for undefined departments.
+    expectation = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
