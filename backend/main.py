@@ -6,6 +6,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import (
+    admin_competency_routes,
     admin_routes,
     annual_review_routes,
     auth_routes,
@@ -98,6 +99,7 @@ app.add_middleware(
 app.include_router(auth_routes.router,  prefix=f"{settings.API_V1_STR}/auth",  tags=["Authentication"])
 app.include_router(goal_routes.router,  prefix=f"{settings.API_V1_STR}/goals", tags=["Goals"])
 app.include_router(admin_routes.router,     prefix=f"{settings.API_V1_STR}/admin",     tags=["Admin"])
+app.include_router(admin_competency_routes.router, prefix=f"{settings.API_V1_STR}/admin/competency-framework", tags=["Admin: Competency Framework"])
 app.include_router(dashboard_routes.router,      prefix=f"{settings.API_V1_STR}/dashboard",      tags=["Dashboard"])
 app.include_router(notification_routes.router,   prefix=f"{settings.API_V1_STR}/notifications",  tags=["Notifications"])
 app.include_router(user_routes.router,           prefix=f"{settings.API_V1_STR}/users",           tags=["Users"])

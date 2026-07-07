@@ -360,3 +360,70 @@ class ReviewEligibilityUpdate(BaseModel):
 class ReviewEligibilityUpdateResult(BaseModel):
     """PATCH /admin/review-eligibility response — how many projects changed."""
     updated: int
+
+
+# ── Competency Framework (admin editor) ──────────────────────────────
+# The editor works per department. A "competency" is the group of rows sharing
+# (department, key); label/is_reviewable/display_order are shared across its
+# levels, expectation is per (competency, level) cell.
+
+class FrameworkCell(BaseModel):
+    """One (competency, level) cell — the editable expectation."""
+    model_config = ConfigDict(from_attributes=True)
+    competency_id: int
+    expectation: Optional[str] = None
+
+
+class FrameworkCompetency(BaseModel):
+    """A competency (row) with its per-level expectation cells. For the org
+    default set the single cell is keyed "default"; for a department the cells
+    are keyed by level (as a string)."""
+    key: str
+    label: str
+    is_reviewable: bool
+    display_order: int
+    cells: dict[str, FrameworkCell]
+
+
+class FrameworkResponse(BaseModel):
+    """The framework for a department (or the org default set), for the admin
+    matrix editor + role→level panel."""
+    is_default: bool
+    department_id: Optional[int] = None
+    levels: list[int] = []
+    competencies: list[FrameworkCompetency] = []
+    designations: list[DesignationBrief] = []
+
+
+class FrameworkCompetencyCreate(BaseModel):
+    """Add a competency. department_id null = the org default set."""
+    department_id: Optional[int] = None
+    label: str = Field(..., min_length=1, max_length=200)
+    is_reviewable: bool = True
+
+
+class FrameworkCompetencyUpdate(BaseModel):
+    """Rename / retoggle / reorder a competency (identified by department + key).
+    Applies across the competency's level rows."""
+    department_id: Optional[int] = None
+    key: str
+    label: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    is_reviewable: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class FrameworkCellUpdate(BaseModel):
+    """Set one cell's expectation text (competency_id in the path)."""
+    expectation: Optional[str] = Field(default=None, max_length=10000)
+
+
+class FrameworkLevelAdd(BaseModel):
+    """Add a level column to a department (creates empty cells for its
+    competencies)."""
+    department_id: int
+    level: int = Field(..., ge=1, le=20)
+
+
+class DesignationLevelUpdate(BaseModel):
+    """Set a designation's level (role→level mapping)."""
+    level: int = Field(..., ge=1, le=20)

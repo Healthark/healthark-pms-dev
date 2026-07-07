@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
   UserPlus, Users, Settings, FolderOpen, Plus, Download, Megaphone, KeyRound,
-  ClipboardCheck,
+  ClipboardCheck, LayoutGrid,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
@@ -26,6 +26,7 @@ import { ExportsTab } from "../components/admin/ExportsTab";
 import { NotifyTab } from "../components/admin/NotifyTab";
 import { GoalAccessTab } from "../components/admin/GoalAccessTab";
 import { ReviewEligibilityTab } from "../components/admin/ReviewEligibilityTab";
+import { CompetencyFrameworkTab } from "../components/admin/CompetencyFrameworkTab";
 import { canExport } from "../utils/exportEligibility";
 import { useToast } from "../hooks/useToast";
 import { useAuth } from "../hooks/useAuth";
@@ -44,7 +45,8 @@ type ActiveTab =
   | "export"
   | "settings"
   | "goal-access"
-  | "review-eligibility";
+  | "review-eligibility"
+  | "competency-framework";
 
 export default function AdminPanel() {
   // ── Reference data (shared cache via ['admin', 'departments|designations']) ─
@@ -93,7 +95,9 @@ export default function AdminPanel() {
               ? "goal-access"
               : tabParam === "review-eligibility"
                 ? "review-eligibility"
-                : "users";
+                : tabParam === "competency-framework"
+                  ? "competency-framework"
+                  : "users";
   const setActiveTab = (tab: ActiveTab) => {
     setSearchParams(
       (prev) => {
@@ -280,6 +284,14 @@ export default function AdminPanel() {
             <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
             Review Eligibility
           </button>
+          <button
+            type="button"
+            className={tabCls("competency-framework")}
+            onClick={() => setActiveTab("competency-framework")}
+          >
+            <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+            Competency Framework
+          </button>
         </div>
 
         {activeTab === "users" && (
@@ -309,6 +321,8 @@ export default function AdminPanel() {
         {activeTab === "goal-access" && <GoalAccessTab />}
 
         {activeTab === "review-eligibility" && <ReviewEligibilityTab />}
+
+        {activeTab === "competency-framework" && <CompetencyFrameworkTab />}
       </div>
 
       {/* Modals — rendered outside the card so they overlay the full page.
