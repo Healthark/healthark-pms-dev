@@ -74,3 +74,44 @@ export const MAX_REMARKS_LENGTH = 2000;
 // bounce.
 export const PHOTO_MAX_DIMENSION = 1600;
 export const PHOTO_JPEG_QUALITY = 0.82;
+
+// ── Ticket status (mirror of SUPPORT_STATUSES in the backend model) ───
+export type SupportStatus = "pending" | "in_progress" | "completed";
+
+export interface SupportStatusOption {
+  readonly value: SupportStatus;
+  readonly label: string;
+  /** Tailwind classes for the status badge / select treatment. */
+  readonly badgeClass: string;
+}
+
+export const SUPPORT_STATUS_OPTIONS: readonly SupportStatusOption[] = [
+  {
+    value: "pending",
+    label: "Pending",
+    badgeClass:
+      "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+  },
+  {
+    value: "in_progress",
+    label: "In Progress",
+    badgeClass:
+      "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+    badgeClass:
+      "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300 border-green-200 dark:border-green-800",
+  },
+];
+
+/** New tickets land here, and it's the default filter on the Responses view. */
+export const DEFAULT_STATUS_FILTER: SupportStatus = "pending";
+
+export function statusMeta(value: string): SupportStatusOption {
+  return (
+    SUPPORT_STATUS_OPTIONS.find((s) => s.value === value) ??
+    SUPPORT_STATUS_OPTIONS[0]
+  );
+}

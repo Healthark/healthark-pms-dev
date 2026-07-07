@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import { HelpCircle, Loader2, X } from "lucide-react";
 import { useSupportTicket } from "../../queries/support";
 import { getErrorMessage } from "../../utils/errors";
+import { statusMeta } from "../../utils/supportOptions";
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -100,6 +101,13 @@ export function SupportTicketModal({
                 <Field label="Submitted">{formatWhen(data.created_at)}</Field>
                 <Field label="PMS Page">{data.pms_page}</Field>
                 <Field label="Tab">{data.tab ?? "—"}</Field>
+                <Field label="Status">
+                  <span
+                    className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${statusMeta(data.status).badgeClass}`}
+                  >
+                    {statusMeta(data.status).label}
+                  </span>
+                </Field>
               </div>
 
               <Field label="Issue / Query Description">

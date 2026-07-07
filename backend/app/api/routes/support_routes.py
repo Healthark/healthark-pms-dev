@@ -26,13 +26,19 @@ from sqlalchemy import func, or_
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.core.config import settings
-from app.models.support_models import SupportTicket, SupportTicketPhoto
+from app.models.support_models import (
+    SUPPORT_STATUSES,
+    SupportTicket,
+    SupportTicketPhoto,
+)
 from app.models.user_models import User
 from app.schemas.support_schemas import (
     SupportPhotoOut,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketRow,
+    SupportTicketStatusResponse,
+    SupportTicketStatusUpdate,
 )
 from app.services.support_notify import (
     build_ticket_notification,
@@ -142,10 +148,15 @@ def list_tickets(
     q: Optional[str] = Query(
         None, description="Case-insensitive search over reporter, description, remarks."
     ),
+    status_filter: Optional[str] = Query(
+        None,
+        alias="status",
+        description="Filter by lifecycle status (pending, in_progress, completed).",
+    ),
 ):
-    """List the org's support tickets, newest first. Optional `pms_page`
-    filter and free-text `q` search. Photos are excluded — each row carries
-    only a `photo_count`."""
+    """List the org's support tickets, newest first. Optional `pms_page`,
+    `status`, and free-text `q` filters. Photos are excluded — each row
+    carries only a `photo_count`."""
     _require_admin(current_user)
 
     query = db.query(SupportTicket).filter(
@@ -154,6 +165,9 @@ def list_tickets(
 
     if pms_page and pms_page.strip():
         query = query.filter(SupportTicket.pms_page == pms_page.strip())
+
+    if status_filter and status_filter in SUPPORT_STATUSES:
+        query = query.filter(SupportTicket.status == status_filter)
 
     if q and q.strip():
         like = f"%{q.strip()}%"
@@ -191,6 +205,7 @@ def list_tickets(
             tab=t.tab,
             description=t.description,
             remarks=t.remarks,
+            status=t.status,
             photo_count=counts.get(t.id, 0),
             created_at=t.created_at,
         )
@@ -228,9 +243,47 @@ def get_ticket(
         tab=ticket.tab,
         description=ticket.description,
         remarks=ticket.remarks,
+        status=ticket.status,
         created_at=ticket.created_at,
         photos=[
             SupportPhotoOut(id=p.id, data_uri=p.data_uri, filename=p.filename)
             for p in ticket.photos
         ],
     )
+
+
+# ── Update status (Admin) ─────────────────────────────────────────────
+
+
+@router.patch(
+    "/tickets/{ticket_id}/status",
+    response_model=SupportTicketStatusResponse,
+)
+def update_ticket_status(
+    ticket_id: int,
+    payload: SupportTicketStatusUpdate,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Set a ticket's lifecycle status. Admin-only, tenant-fenced. Any status
+    may be set from any status — the queue is a free-form triage board, not a
+    one-way ladder."""
+    _require_admin(current_user)
+
+    ticket = (
+        db.query(SupportTicket)
+        .filter(
+            SupportTicket.id == ticket_id,
+            SupportTicket.org_id == current_user.org_id,
+        )
+        .first()
+    )
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Support ticket not found.",
+        )
+
+    ticket.status = payload.status
+    db.commit()
+    return SupportTicketStatusResponse(id=ticket.id, status=ticket.status)

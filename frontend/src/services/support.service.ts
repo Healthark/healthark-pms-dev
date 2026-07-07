@@ -13,6 +13,9 @@
  */
 
 import apiClient from "./api.client";
+import type { SupportStatus } from "../utils/supportOptions";
+
+export type { SupportStatus } from "../utils/supportOptions";
 
 // ── Submission ──────────────────────────────────────────────────────
 
@@ -39,6 +42,7 @@ export interface SupportTicketRow {
   tab: string | null;
   description: string;
   remarks: string | null;
+  status: SupportStatus;
   photo_count: number;
   /** ISO timestamp. */
   created_at: string;
@@ -57,6 +61,7 @@ export interface SupportTicketDetail {
   tab: string | null;
   description: string;
   remarks: string | null;
+  status: SupportStatus;
   created_at: string;
   photos: SupportPhotoOut[];
 }
@@ -66,6 +71,8 @@ export interface SupportTicketFilters {
   pms_page?: string;
   /** Free-text search over reporter / description / remarks / tab. */
   q?: string;
+  /** Lifecycle-status filter. */
+  status?: SupportStatus;
 }
 
 // ── Service ─────────────────────────────────────────────────────────
@@ -82,6 +89,7 @@ export const supportService = {
     const params: Record<string, string> = {};
     if (filters.pms_page) params.pms_page = filters.pms_page;
     if (filters.q) params.q = filters.q;
+    if (filters.status) params.status = filters.status;
     const res = await apiClient.get<SupportTicketRow[]>("/support/tickets", {
       params,
     });
@@ -90,6 +98,17 @@ export const supportService = {
 
   getTicket: async (id: number): Promise<SupportTicketDetail> => {
     const res = await apiClient.get<SupportTicketDetail>(`/support/tickets/${id}`);
+    return res.data;
+  },
+
+  updateStatus: async (
+    id: number,
+    status: SupportStatus,
+  ): Promise<{ id: number; status: SupportStatus }> => {
+    const res = await apiClient.patch<{ id: number; status: SupportStatus }>(
+      `/support/tickets/${id}/status`,
+      { status },
+    );
     return res.data;
   },
 };
