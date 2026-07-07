@@ -173,10 +173,24 @@ export function FreeTextCombobox({
         </ul>
       )}
 
-      {open && filtered.length === 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text-muted shadow-lg">
-          No matching options — your text will be used as-is.
-        </div>
+      {open && filtered.length === 0 && value.trim() !== "" && (
+        <ul
+          id={`${id}-listbox`}
+          role="listbox"
+          className="absolute z-50 mt-1 w-full overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg"
+        >
+          <li
+            role="option"
+            aria-selected
+            className="cursor-pointer truncate px-3 py-1.5 text-sm text-text-main"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              commit(value.trim());
+            }}
+          >
+            Use “{value.trim()}”
+          </li>
+        </ul>
       )}
     </div>
   );

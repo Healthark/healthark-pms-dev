@@ -105,6 +105,24 @@ describe("SupportForm", () => {
     });
   });
 
+  it("offers the typed value as a 'Use …' option when nothing matches", async () => {
+    const user = userEvent.setup();
+    render(<SupportForm />);
+
+    const page = screen.getByLabelText(/PMS Page/i);
+    await user.click(page);
+    await user.type(page, "Payroll Portal");
+
+    // The empty-state now reflects what the user typed, and is selectable.
+    const useOption = await screen.findByRole("option", {
+      name: /Use .*Payroll Portal/,
+    });
+    expect(useOption).toBeInTheDocument();
+
+    fireEvent.mouseDown(useOption);
+    expect((page as HTMLInputElement).value).toBe("Payroll Portal");
+  });
+
   it("blocks submit and shows an error when the description is empty", async () => {
     const user = userEvent.setup();
     render(<SupportForm />);
