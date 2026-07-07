@@ -7,10 +7,11 @@ import type {
   SelfReviewDraftPayload,
 } from "../../services/annual-review.service";
 import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
+import { AutoGrowTextarea } from "../common/AutoGrowTextarea";
 import { formatFyLabel } from "../../utils/fy";
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 
 interface SelfReviewFormModalProps {
   readonly cycleName: string;
@@ -127,9 +128,9 @@ export function SelfReviewFormModal({
               Summarise your year — ownership, deliverables, communication,
               mentoring, skill growth, and any firm-level contributions.
             </p>
-            <textarea
+            <AutoGrowTextarea
               id="self-overall-review"
-              rows={10}
+              minRows={10}
               className={TEXTAREA_CLS}
               value={overallReview}
               onChange={(e) => setOverallReview(e.target.value)}

@@ -22,11 +22,12 @@ import type {
   MentorEvalDraftPayload,
 } from "../../services/annual-review.service";
 import { PerformanceRatingSelect } from "./PerformanceRatingSelect";
+import { AutoGrowTextarea } from "../common/AutoGrowTextarea";
 import { formatFyLabel } from "../../utils/fy";
 import { useDebounce } from "../../hooks/useDebounce";
 
 const TEXTAREA_CLS =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand resize-none";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand";
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 
@@ -231,7 +232,7 @@ export function EvalForm({
             </p>
           </div>
           <div className="p-4">
-            <p className="text-sm text-text-main whitespace-pre-wrap">
+            <p className="text-sm text-text-main whitespace-pre-wrap break-words">
               {review.self_overall_review || "—"}
             </p>
           </div>
@@ -248,9 +249,9 @@ export function EvalForm({
             Summarise the year for this mentee — strengths, areas for growth,
             and your overall assessment.
           </p>
-          <textarea
+          <AutoGrowTextarea
             id="mentor-overall-review"
-            rows={10}
+            minRows={10}
             className={TEXTAREA_CLS}
             value={mentorReview}
             onChange={(e) => setMentorReview(e.target.value)}
