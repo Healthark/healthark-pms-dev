@@ -11,7 +11,7 @@
  */
 
 import { createPortal } from "react-dom";
-import { ClipboardCheck, Loader2, MessageSquare, UserCircle, X } from "lucide-react";
+import { ClipboardCheck, Loader2, MessageSquare, User, UserCircle, X } from "lucide-react";
 import type { TeamGoal, SelfReviewCycleHalf } from "../../services/goal.service";
 import { useGoalDetail } from "../../queries/goals";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
@@ -158,6 +158,18 @@ export function GoalReviewDetailsModal({
                         <MessageSquare className="h-3 w-3" aria-hidden="true" />
                         Mentor Review
                       </div>
+                      {/* Who actually authored THIS half's review — matters when
+                          the mentee's mentor changed after it was submitted, so
+                          it may differ from the goal's current mentor. */}
+                      {mr.mentor_name && (
+                        <p className="flex items-center gap-1 text-[11px] text-text-muted mb-1.5">
+                          <User className="h-3 w-3" aria-hidden="true" />
+                          Reviewed by{" "}
+                          <span className="font-medium text-text-main">
+                            {mr.mentor_name}
+                          </span>
+                        </p>
+                      )}
                       <p className="text-[13px] text-text-main whitespace-pre-wrap leading-relaxed">
                         {mr.mentor_overall_review}
                       </p>
