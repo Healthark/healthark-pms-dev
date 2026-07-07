@@ -365,3 +365,69 @@ def test_seed_framework_is_idempotent(db):
     db.commit()
     n2 = db.query(Competency).filter_by(org_id=org.id).count()
     assert n1 == n2 == 8 + 7 * 8 + 3 * 8 + 3 * 8  # default + IDT + RWE + Strategy
+
+
+def test_seed_matches_verbosely_named_departments(db):
+    """The framework keys are short (IDT/RWE/Strategy) but real departments are
+    often named more verbosely. The seed must still match them by the embedded
+    abbreviation/word, and must NOT seed unrelated departments."""
+    org = _org(db)
+    idt = Department(org_id=org.id, name="Information Data Technology (IDT)")
+    rwe = Department(org_id=org.id, name="Real-World Evidence (RWE)")
+    strat = Department(org_id=org.id, name="Strategy Consulting")
+    other = Department(org_id=org.id, name="Accounts")
+    db.add_all([idt, rwe, strat, other])
+    db.commit()
+
+    seed_competency_framework(db, org.id)
+    db.commit()
+
+    # IDT framework (7 levels) landed on the verbosely-named IDT department,
+    # with real expectation text.
+    idt_comps = db.query(Competency).filter_by(org_id=org.id, department_id=idt.id).all()
+    assert {c.level for c in idt_comps} == {1, 2, 3, 4, 5, 6, 7}
+    l1_te = next(c for c in idt_comps if c.level == 1 and c.key == "task_execution")
+    assert l1_te.expectation and l1_te.expectation != "Not defined"
+
+    # RWE + Strategy matched too (3 levels each).
+    for dept in (rwe, strat):
+        levels = {
+            c.level
+            for c in db.query(Competency).filter_by(
+                org_id=org.id, department_id=dept.id
+            )
+        }
+        assert levels == {1, 2, 3}
+
+    # An unrelated department gets no scoped framework.
+    assert (
+        db.query(Competency)
+        .filter_by(org_id=org.id, department_id=other.id)
+        .count()
+        == 0
+    )
+
+
+def test_seed_backfills_blank_expectation_but_preserves_edits(db):
+    """A dept competency row left blank (e.g. added via the admin UI before the
+    framework was seeded) gets its expectation backfilled from the framework;
+    text an admin already entered is never overwritten."""
+    org = _org(db)
+    idt = Department(org_id=org.id, name="Information Data Technology (IDT)")
+    db.add(idt)
+    db.flush()
+    # A blank row (like a manual UI add whose key collided with a canonical one)
+    # and an admin-edited row, both at IDT level 1.
+    blank = _competency(db, org.id, "task_execution", "Task Execution", 1,
+                        dept_id=idt.id, level=1, expectation=None)
+    edited = _competency(db, org.id, "ownership", "Ownership", 2,
+                         dept_id=idt.id, level=1, expectation="ADMIN EDIT")
+    db.commit()
+
+    seed_competency_framework(db, org.id)
+    db.commit()
+
+    db.refresh(blank)
+    db.refresh(edited)
+    assert blank.expectation and blank.expectation.strip()   # backfilled
+    assert edited.expectation == "ADMIN EDIT"                # preserved
