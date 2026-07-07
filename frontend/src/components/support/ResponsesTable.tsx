@@ -1,18 +1,31 @@
 /**
  * ResponsesTable — the admin "Responses" view of submitted support tickets.
  *
- * A filterable/searchable list. Each row has a "View" button that opens
- * SupportTicketModal with the full details (description, remarks, photos).
- * The list itself is light (no photo blobs); the modal fetches a ticket's
- * photos on demand.
+ * A filterable/searchable list (PMS page, lifecycle status, free-text). The
+ * status filter defaults to "Pending" so the queue opens on what needs
+ * attention. Each row shows an EDITABLE status control (set any state at any
+ * time — no forced progression) and a "View" button that opens
+ * SupportTicketModal with the full details.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { Eye, ImageIcon, Inbox, Loader2, Search, X } from "lucide-react";
-import { useSupportTickets } from "../../queries/support";
-import { type SupportTicketRow } from "../../services/support.service";
+import {
+  useSupportTickets,
+  useUpdateSupportTicketStatus,
+} from "../../queries/support";
+import {
+  type SupportStatus,
+  type SupportTicketRow,
+} from "../../services/support.service";
 import { getErrorMessage } from "../../utils/errors";
-import { PMS_PAGES } from "../../utils/supportOptions";
+import { useToast } from "../../hooks/useToast";
+import {
+  DEFAULT_STATUS_FILTER,
+  PMS_PAGES,
+  SUPPORT_STATUS_OPTIONS,
+  statusMeta,
+} from "../../utils/supportOptions";
 import { SupportTicketModal } from "./SupportTicketModal";
 
 function formatWhen(iso: string): string {
@@ -26,9 +39,15 @@ function formatWhen(iso: string): string {
 
 export function ResponsesTable() {
   const [pageFilter, setPageFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<SupportStatus | "">(
+    DEFAULT_STATUS_FILTER,
+  );
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [viewingId, setViewingId] = useState<number | null>(null);
+
+  const toast = useToast();
+  const updateStatus = useUpdateSupportTicketStatus();
 
   // Debounce search so we don't fire a request per keystroke.
   useEffect(() => {
@@ -40,17 +59,53 @@ export function ResponsesTable() {
     () => ({
       pms_page: pageFilter || undefined,
       q: debouncedSearch || undefined,
+      status: statusFilter || undefined,
     }),
-    [pageFilter, debouncedSearch],
+    [pageFilter, debouncedSearch, statusFilter],
   );
 
   const { data: tickets = [], isPending, error } = useSupportTickets(filters);
+
+  const handleStatusChange = (id: number, status: SupportStatus) => {
+    updateStatus.mutate(
+      { id, status },
+      {
+        onSuccess: () =>
+          toast.success(`Marked "${statusMeta(status).label}".`),
+        onError: (err) => toast.info(getErrorMessage(err)),
+      },
+    );
+  };
+
+  const hasFilters = Boolean(pageFilter || debouncedSearch || statusFilter);
 
   return (
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="sm:w-56">
+        <div className="sm:w-48">
+          <label
+            htmlFor="responses-status-filter"
+            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-text-muted"
+          >
+            Status
+          </label>
+          <select
+            id="responses-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as SupportStatus | "")}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-main outline-none focus:border-brand"
+          >
+            <option value="">All statuses</option>
+            {SUPPORT_STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sm:w-48">
           <label
             htmlFor="responses-page-filter"
             className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-text-muted"
@@ -115,19 +170,20 @@ export function ResponsesTable() {
       ) : tickets.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border py-16 text-center text-sm text-text-muted">
           <Inbox className="h-6 w-6" />
-          {pageFilter || debouncedSearch
+          {hasFilters
             ? "No responses match your filters."
             : "No support responses yet."}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="bg-surface-muted/60 text-[11px] uppercase tracking-wider text-text-muted">
               <tr>
                 <th className="px-3 py-2.5 font-semibold">Name</th>
                 <th className="px-3 py-2.5 font-semibold">PMS Page</th>
                 <th className="px-3 py-2.5 font-semibold">Tab</th>
                 <th className="px-3 py-2.5 font-semibold">Description</th>
+                <th className="px-3 py-2.5 font-semibold">Status</th>
                 <th className="px-3 py-2.5 font-semibold">Photos</th>
                 <th className="px-3 py-2.5 font-semibold">Submitted</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Action</th>
@@ -135,7 +191,12 @@ export function ResponsesTable() {
             </thead>
             <tbody className="divide-y divide-border">
               {tickets.map((t) => (
-                <TicketRow key={t.id} row={t} onView={() => setViewingId(t.id)} />
+                <TicketRow
+                  key={t.id}
+                  row={t}
+                  onView={() => setViewingId(t.id)}
+                  onStatusChange={(status) => handleStatusChange(t.id, status)}
+                />
               ))}
             </tbody>
           </table>
@@ -155,17 +216,22 @@ export function ResponsesTable() {
 function TicketRow({
   row,
   onView,
+  onStatusChange,
 }: {
   readonly row: SupportTicketRow;
   readonly onView: () => void;
+  readonly onStatusChange: (status: SupportStatus) => void;
 }) {
   return (
     <tr className="align-top transition-colors hover:bg-surface-muted/40">
       <td className="px-3 py-3 font-medium text-text-main">{row.submitter_name}</td>
       <td className="px-3 py-3 text-text-main">{row.pms_page}</td>
       <td className="px-3 py-3 text-text-muted">{row.tab ?? "—"}</td>
-      <td className="max-w-[22rem] px-3 py-3 text-text-muted">
+      <td className="max-w-[20rem] px-3 py-3 text-text-muted">
         <span className="line-clamp-1">{row.description}</span>
+      </td>
+      <td className="px-3 py-3">
+        <StatusSelect value={row.status} onChange={onStatusChange} />
       </td>
       <td className="px-3 py-3 text-text-muted">
         {row.photo_count > 0 ? (
@@ -191,5 +257,48 @@ function TicketRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Editable status pill. Reflects the picked value immediately (local state)
+ * while the server round-trips, and re-syncs if the server value changes.
+ * Any status can be chosen at any time — no forced progression.
+ */
+function StatusSelect({
+  value,
+  onChange,
+}: {
+  readonly value: SupportStatus;
+  readonly onChange: (status: SupportStatus) => void;
+}) {
+  const [local, setLocal] = useState<SupportStatus>(value);
+  // Re-sync to the server value (after refetch) without an effect — the
+  // render-time adjustment pattern, mirroring StringCombobox.
+  const [seen, setSeen] = useState<SupportStatus>(value);
+  if (seen !== value) {
+    setSeen(value);
+    setLocal(value);
+  }
+
+  const meta = statusMeta(local);
+
+  return (
+    <select
+      value={local}
+      aria-label="Ticket status"
+      onChange={(e) => {
+        const next = e.target.value as SupportStatus;
+        setLocal(next);
+        onChange(next);
+      }}
+      className={`cursor-pointer rounded-md border px-2 py-1 text-xs font-semibold outline-none focus:ring-1 focus:ring-brand ${meta.badgeClass}`}
+    >
+      {SUPPORT_STATUS_OPTIONS.map((s) => (
+        <option key={s.value} value={s.value}>
+          {s.label}
+        </option>
+      ))}
+    </select>
   );
 }

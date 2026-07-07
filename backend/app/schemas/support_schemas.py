@@ -19,7 +19,7 @@ from __future__ import annotations
 import base64
 import re
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -33,6 +33,10 @@ MAX_REMARKS_LENGTH = 2000
 MAX_PAGE_LENGTH = 120
 MAX_TAB_LENGTH = 120
 MAX_FILENAME_LENGTH = 255
+
+# Ticket lifecycle. Mirrors SUPPORT_STATUSES in app/models/support_models.py.
+# Free progression — any state can be set at any time.
+SupportStatus = Literal["pending", "in_progress", "completed"]
 
 # Only raster image data URIs the browser actually produces. An allowlist,
 # not a blocklist — anything else (svg with scripts, arbitrary data:, http
@@ -150,6 +154,7 @@ class SupportTicketRow(BaseModel):
     tab: Optional[str] = None
     description: str
     remarks: Optional[str] = None
+    status: SupportStatus = "pending"
     photo_count: int = 0
     created_at: datetime
 
@@ -161,5 +166,15 @@ class SupportTicketDetail(BaseModel):
     tab: Optional[str] = None
     description: str
     remarks: Optional[str] = None
+    status: SupportStatus = "pending"
     created_at: datetime
     photos: List[SupportPhotoOut] = Field(default_factory=list)
+
+
+class SupportTicketStatusUpdate(BaseModel):
+    status: SupportStatus
+
+
+class SupportTicketStatusResponse(BaseModel):
+    id: int
+    status: SupportStatus

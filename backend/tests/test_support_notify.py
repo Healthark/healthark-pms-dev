@@ -15,12 +15,13 @@ from app.services.support_notify import (
 )
 
 
-def test_default_recipients_are_the_three_inboxes():
+def test_default_recipients_are_the_configured_inboxes():
     recips = support_notify_recipients()
     assert recips == [
         "amol@healthark.ai",
         "devanshi@healthark.ai",
         "trapti@healthark.ai",
+        "aakash.p@healthark.ai",
     ]
 
 

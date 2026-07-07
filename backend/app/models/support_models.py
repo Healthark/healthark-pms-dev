@@ -24,6 +24,7 @@ it (it's nullable-safe via SET NULL should the user ever be hard-deleted).
 """
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -36,6 +37,12 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+# Ticket lifecycle states. Deliberately a FREE set — an admin can move a
+# ticket to any state at any time (not a forced pending→in_progress→completed
+# ladder). Stored as a plain string with a CHECK constraint below.
+SUPPORT_STATUSES = ("pending", "in_progress", "completed")
+DEFAULT_SUPPORT_STATUS = "pending"
 
 
 class SupportTicket(Base):
@@ -63,6 +70,14 @@ class SupportTicket(Base):
     description = Column(Text, nullable=False)
     remarks = Column(Text, nullable=True)
 
+    # Admin-managed lifecycle. New tickets start "pending"; an admin can
+    # freely set any of SUPPORT_STATUSES from the Responses queue.
+    status = Column(
+        String,
+        nullable=False,
+        server_default=DEFAULT_SUPPORT_STATUS,
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -78,6 +93,10 @@ class SupportTicket(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'in_progress', 'completed')",
+            name="ck_support_tickets_status",
+        ),
         # Hot path: the admin queue lists a whole org newest-first.
         Index("ix_support_tickets_org_created", "org_id", "created_at"),
     )

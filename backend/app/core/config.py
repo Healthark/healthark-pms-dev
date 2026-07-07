@@ -89,7 +89,8 @@ class Settings(BaseSettings):
     # blocks the submission. Override per-deployment via env var:
     #   SUPPORT_NOTIFY_EMAILS=a@x.com,b@x.com
     SUPPORT_NOTIFY_EMAILS: str = (
-        "amol@healthark.ai,devanshi@healthark.ai,trapti@healthark.ai"
+        "amol@healthark.ai,devanshi@healthark.ai,"
+        "trapti@healthark.ai,aakash.p@healthark.ai"
     )
 
     # ── 360 Feedback ────────────────────────────────────────────────

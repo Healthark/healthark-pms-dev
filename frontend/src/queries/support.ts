@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   supportService,
+  type SupportStatus,
   type SupportTicketDetail,
   type SupportTicketFilters,
   type SupportTicketPayload,
@@ -17,7 +18,13 @@ import {
  */
 export const supportQueryKey = ["support"] as const;
 export const supportTicketsQueryKey = (filters: SupportTicketFilters = {}) =>
-  ["support", "tickets", filters.pms_page ?? "", filters.q ?? ""] as const;
+  [
+    "support",
+    "tickets",
+    filters.pms_page ?? "",
+    filters.q ?? "",
+    filters.status ?? "",
+  ] as const;
 export const supportTicketQueryKey = (id: number) =>
   ["support", "ticket", id] as const;
 
@@ -52,6 +59,20 @@ export function useSubmitSupportTicket() {
     onSuccess: () => {
       // Broadcast — refreshes the admin Responses list so a newly filed
       // ticket shows up without a manual reload.
+      qc.invalidateQueries({ queryKey: supportQueryKey });
+    },
+  });
+}
+
+export function useUpdateSupportTicketStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: SupportStatus }) =>
+      supportService.updateStatus(id, status),
+    onSuccess: () => {
+      // Refresh the queue — a status change may move the row in/out of the
+      // active status filter (e.g. Pending → Completed under the Pending
+      // filter).
       qc.invalidateQueries({ queryKey: supportQueryKey });
     },
   });
