@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Plus, Target, Lock, ChevronDown,
   Pencil, Send, MessageSquare,
-  UserCircle, BookOpen, Unlock, Trash2,
+  BookOpen, Unlock, Trash2,
 } from "lucide-react";
 import {
   type Goal,
