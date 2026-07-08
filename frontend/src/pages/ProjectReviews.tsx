@@ -509,7 +509,11 @@ function renderMyReviewsBody(args: {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {isReviewed ? (
+                    {card.has_secondary_submission ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-blue-700 dark:text-blue-300">
+                        <CheckCircle2 className="h-3 w-3" /> Secondary Reviewed
+                      </span>
+                    ) : isReviewed ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
                         <CheckCircle2 className="h-3 w-3" /> PM Reviewed
                       </span>

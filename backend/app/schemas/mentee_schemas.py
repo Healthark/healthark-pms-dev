@@ -78,6 +78,7 @@ class MenteeProjectAssignment(BaseModel):
     # Projects tab can render the same detail the employee sees on the
     # Project Reviews page.
     review_detail: Optional[ProjectReviewResponse] = None
+    has_secondary_submission: bool = False
 
 
 # =====================================================================

@@ -647,6 +647,11 @@ def get_my_projects(
         seen_cycles = set()
         for review in reviews:
             seen_cycles.add(review.cycle)
+            
+            has_secondary_submission = any(
+                ev.status == EvaluatorStatus.SUBMITTED.value for ev in review.secondary_evaluations
+            )
+
             cards.append(MyProjectCard(
                 review_id=review.id,
                 project_id=project.id,
@@ -669,6 +674,7 @@ def get_my_projects(
                     sec_id_by_project.get(a.project_id)
                 ),
                 cycle=review.cycle,
+                has_secondary_submission=has_secondary_submission,
             ))
 
         # If no review exists for the current cycle, add a pending card

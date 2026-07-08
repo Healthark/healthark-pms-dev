@@ -30,6 +30,7 @@ interface MenteeProjRow {
   review_status: string | null; // "pending" | "reviewed" | null
   performance_group: string | null;
   review_detail: ProjectReviewResponse | null;
+  has_secondary_submission?: boolean;
 }
 
 type StatusFilterValue = "all" | "pending" | "reviewed";
@@ -48,7 +49,20 @@ const SORT_CONFIG: Record<SortKey, { kind: SortKind; get: (r: MenteeProjRow) => 
   performance_group: { kind: "numeric", get: (r) => r.performance_group },
 };
 
-function StatusBadge({ status }: { readonly status: string | null }) {
+function StatusBadge({
+  status,
+  hasSecondarySubmission,
+}: {
+  readonly status: string | null;
+  readonly hasSecondarySubmission?: boolean;
+}) {
+  if (hasSecondarySubmission) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-blue-700 dark:text-blue-300">
+        Secondary Reviewed
+      </span>
+    );
+  }
   if (status === "reviewed") {
     return (
       <span className="inline-flex items-center rounded-full bg-green-50 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-bold uppercase text-green-700 dark:text-green-300">
@@ -98,6 +112,7 @@ export function MenteeProjectsTab({ menteeId, menteeName }: MenteeProjectsTabPro
         review_status: a.review_status,
         performance_group: a.performance_group,
         review_detail: a.review_detail,
+        has_secondary_submission: a.has_secondary_submission,
       })),
     [assignments],
   );
@@ -302,7 +317,7 @@ export function MenteeProjectsTab({ menteeId, menteeName }: MenteeProjectsTabPro
                       {r.cycle ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={r.review_status} />
+                      <StatusBadge status={r.review_status} hasSecondarySubmission={r.has_secondary_submission} />
                     </td>
                     <td className="hidden md:table-cell px-4 py-3">
                       <PerformanceRatingBadge

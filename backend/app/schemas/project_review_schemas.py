@@ -184,6 +184,7 @@ class MyProjectCard(BaseModel):
     # multi-PM mode, else the project-level secondary). Null when none is set.
     secondary_evaluator_name: Optional[str] = None
     cycle: Optional[str] = None
+    has_secondary_submission: bool = False
 
 
 class PMPendingReviewCard(BaseModel):

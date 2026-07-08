@@ -67,6 +67,7 @@ export interface MenteeProjectAssignment {
   viewer_evaluator_role: string | null;
   /** Full PM evaluation; populated only when review_status === "reviewed". */
   review_detail: ProjectReviewResponse | null;
+  has_secondary_submission?: boolean;
 }
 
 export interface MenteeSummary {
