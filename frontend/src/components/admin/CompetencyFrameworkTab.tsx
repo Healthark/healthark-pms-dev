@@ -39,7 +39,7 @@ const TEXTAREA_CLS =
 
 // Sticky-left column shells: keep the reorder + competency columns pinned while
 // the level columns scroll, so a wide matrix never loses the row it's on.
-const STICKY_NUM_CLS = "sticky left-0 z-10 w-12";
+const STICKY_NUM_CLS = "sticky left-0 z-10 w-12 min-w-[48px] max-w-[48px]";
 const STICKY_COMP_CLS = "sticky left-12 z-10 min-w-[240px] border-r border-border";
 
 // ── Draft model ─────────────────────────────────────────────────────────
@@ -485,10 +485,10 @@ export function CompetencyFrameworkTab() {
                   visible.map((comp, i) => (
                     <tr
                       key={comp.uid}
-                      className="group border-t border-border align-top hover:bg-surface-muted/40"
+                      className="group border-t border-border align-top hover:bg-surface-muted"
                     >
                       <td
-                        className={`${STICKY_NUM_CLS} bg-surface px-2 py-2 text-xs text-text-muted group-hover:bg-surface-muted/40`}
+                        className={`${STICKY_NUM_CLS} bg-surface px-2 py-2 text-xs text-text-muted group-hover:bg-surface-muted`}
                       >
                         <div className="flex flex-col items-center gap-0.5">
                           <button
@@ -515,7 +515,7 @@ export function CompetencyFrameworkTab() {
                         </div>
                       </td>
                       <td
-                        className={`${STICKY_COMP_CLS} bg-surface px-3 py-2 group-hover:bg-surface-muted/40`}
+                        className={`${STICKY_COMP_CLS} bg-surface px-3 py-2 group-hover:bg-surface-muted`}
                       >
                         <input
                           value={comp.label}
