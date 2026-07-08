@@ -427,6 +427,11 @@ export const projectReviewService = {
     return res.data;
   },
 
+  /** Admin-only: delete a specific project review by ID. */
+  deleteReview: async (reviewId: number): Promise<void> => {
+    await apiClient.delete<void>(`/project-reviews/${reviewId}`);
+  },
+
   /** Admin-only: per-project completion overview. Pass cycle string to view historical data. */
   getManagementView: async (cycle?: string): Promise<AdminProjectSummary[]> => {
     const params = cycle ? { cycle } : {};

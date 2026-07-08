@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     # via Workspace SMTP relay or a transactional provider.
     SMTP_FROM_EMAIL: str | None = None
     # Used to render the "Sign in" CTA link inside outbound emails.
-    APP_BASE_URL: str = "http://localhost:5173"
+    APP_BASE_URL: str = "http://4.213.126.218/"
 
     # ── Support ("Report an Issue") ─────────────────────────────────
     # Comma-separated inboxes notified when a user submits a support

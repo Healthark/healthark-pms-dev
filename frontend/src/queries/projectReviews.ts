@@ -21,6 +21,7 @@ import {
 } from "../services/project-review.service";
 import { dashboardSummaryQueryKey } from "./dashboard";
 import { invalidateMentees } from "./mentees";
+import { fyTokenToStartYear } from "../utils/fy";
 
 /**
  * Strict, shared query keys for the project-reviews domain.
@@ -219,6 +220,60 @@ export function useUpdateReview() {
       payload: PMEvaluationPayload;
     }) => projectReviewService.updateReview(reviewId, payload),
     onSuccess: () => invalidateProjectReviewsAndDashboard(qc),
+  });
+}
+
+export function useDeleteProjectReview() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, number>({
+    mutationFn: (reviewId: number) => projectReviewService.deleteReview(reviewId),
+    onMutate: async (reviewId: number) => {
+      await qc.cancelQueries({ queryKey: allProjectReviewsQueryKey });
+      const prev = qc.getQueriesData({ queryKey: allProjectReviewsQueryKey });
+      const backups: Array<[any, unknown]> = [];
+      for (const [qKey, data] of prev) {
+        backups.push([qKey, data]);
+        if (!data) continue;
+        const arr = data as ProjectReviewResponse[];
+        const idx = arr.findIndex((r) => r.id === reviewId);
+        if (idx === -1) continue;
+        const target = arr[idx];
+        const fy = target.cycle ? fyTokenToStartYear(target.cycle) : null;
+        // Remove the deleted review from this cached query
+        let newArr = arr.filter((r) => r.id !== reviewId);
+        // If this removal makes the group disappear, insert a lightweight placeholder
+        const groupStillExists = newArr.some((r) => {
+          const rfy = r.cycle ? fyTokenToStartYear(r.cycle) : null;
+          return r.user_id === target.user_id && r.project_id === target.project_id && rfy === fy;
+        });
+        if (!groupStillExists) {
+          const placeholder: ProjectReviewResponse = {
+            ...target,
+            id: -(Math.abs(reviewId)),
+            reviewer_id: null,
+            reviewer_name: null,
+            status: "pending",
+            comments: null,
+            competencies: undefined,
+            secondary_evaluations: [],
+            created_at: new Date().toISOString(),
+            updated_at: null,
+          };
+          newArr = [...newArr, placeholder];
+        }
+        qc.setQueryData(qKey, newArr);
+      }
+      return { backups };
+    },
+    onError: (_err, _variables, context: any) => {
+      // rollback
+      if (context?.backups) {
+        for (const [qKey, data] of context.backups) {
+          qc.setQueryData(qKey, data as unknown);
+        }
+      }
+    },
+    onSettled: () => invalidateProjectReviewsAndDashboard(qc),
   });
 }
 

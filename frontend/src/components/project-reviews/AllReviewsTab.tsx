@@ -16,14 +16,20 @@
  */
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import type { ProjectReviewResponse } from "../../services/project-review.service";
 import {
   useAllProjectReviews,
   useAllReviewYears,
+  useDeleteProjectReview,
 } from "../../queries/projectReviews";
 import { useSystemSettings } from "../../hooks/useSystemSettings";
-import { groupProjectReviews } from "../../utils/groupProjectReviews";
+import { useConfirm } from "../../hooks/useConfirm";
+import {
+  groupProjectReviews,
+  createEmptyGroupedReviewRow,
+  type GroupedReviewRow,
+} from "../../utils/groupProjectReviews";
 import { formatFyYearSpan, fyTokenToStartYear } from "../../utils/fy";
 import { buildProjectCodeIndex } from "../../utils/projectCodeIndex";
 import { CycleReviewChip } from "../reviews/CycleReviewChip";
@@ -57,8 +63,15 @@ export function AllReviewsTab() {
   const [modalTarget, setModalTarget] = useState<ReviewModalTarget | null>(
     null,
   );
+  const [deleteTarget, setDeleteTarget] = useState<GroupedReviewRow | null>(
+    null,
+  );
+  const [placeholderGroups, setPlaceholderGroups] = useState<Record<string, GroupedReviewRow>>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  const deleteReview = useDeleteProjectReview();
+  const confirm = useConfirm();
 
   // Year default = the active FY. "" state falls back to it. `effectiveYear`
   // is what the Year <select> shows and what drives the server fetch.
@@ -84,18 +97,40 @@ export function AllReviewsTab() {
     [reviews, settings?.cycle_type, settings?.active_cycle_name],
   );
 
+  const groupedWithPlaceholders = useMemo(() => {
+    const map = new Map<string, GroupedReviewRow>();
+    for (const g of grouped) {
+      if (g.reviewedCount === 0 && g.totalSlots > 0 && settings?.cycle_type) {
+        map.set(
+          g.key,
+          createEmptyGroupedReviewRow(g, settings.cycle_type, settings.active_cycle_name ?? null),
+        );
+      } else {
+        map.set(g.key, g);
+      }
+    }
+    // Merge any client-side placeholders for groups that vanished after deletion
+    for (const k of Object.keys(placeholderGroups)) {
+      if (!map.has(k)) map.set(k, placeholderGroups[k]);
+    }
+    return Array.from(map.values());
+  }, [grouped, placeholderGroups, settings?.cycle_type, settings?.active_cycle_name]);
+
   // Employee / Project / Reviewer options derive from the loaded (year-scoped)
   // rows — correct, since you filter within the year you're viewing.
   const employees = useMemo(
-    () => Array.from(new Set(grouped.map((g) => g.employee_name))).sort(),
-    [grouped],
+    () => Array.from(new Set(groupedWithPlaceholders.map((g) => g.employee_name))).sort(),
+    [groupedWithPlaceholders],
   );
   const projects = useMemo(
-    () => Array.from(new Set(grouped.map((g) => g.project_name))).sort(),
-    [grouped],
+    () => Array.from(new Set(groupedWithPlaceholders.map((g) => g.project_name))).sort(),
+    [groupedWithPlaceholders],
   );
   // Project Code filter — a synced view onto the name-keyed projectFilter.
-  const projectIndex = useMemo(() => buildProjectCodeIndex(grouped), [grouped]);
+  const projectIndex = useMemo(
+    () => buildProjectCodeIndex(groupedWithPlaceholders),
+    [groupedWithPlaceholders],
+  );
   const projectCodeFilter = projectFilter
     ? projectIndex.nameToCode.get(projectFilter) ?? ""
     : "";
@@ -103,10 +138,10 @@ export function AllReviewsTab() {
     () =>
       Array.from(
         new Set(
-          grouped.map((g) => g.reviewer_name).filter((n): n is string => !!n),
+          groupedWithPlaceholders.map((g) => g.reviewer_name).filter((n): n is string => !!n),
         ),
       ).sort(),
-    [grouped],
+    [groupedWithPlaceholders],
   );
   // Year dropdown lists every year that has reviews (from the endpoint) plus
   // the active FY, newest-first — independent of the currently-loaded year.
@@ -117,7 +152,7 @@ export function AllReviewsTab() {
   }, [yearOptions, activeFyYear]);
 
   const visible = useMemo(() => {
-    return grouped.filter((g) => {
+    return groupedWithPlaceholders.filter((g) => {
       if (employeeFilter && g.employee_name !== employeeFilter) return false;
       if (projectFilter && g.project_name !== projectFilter) return false;
       if (reviewerFilter && g.reviewer_name !== reviewerFilter) return false;
@@ -135,7 +170,7 @@ export function AllReviewsTab() {
       }
       return true;
     });
-  }, [grouped, employeeFilter, projectFilter, reviewerFilter, progressFilter]);
+  }, [groupedWithPlaceholders, employeeFilter, projectFilter, reviewerFilter, progressFilter]);
 
   // Client-side pagination over the filtered rows. Reset to page 1 when the
   // filter set, the selected year (server-fetched), or page size changes —
@@ -171,6 +206,91 @@ export function AllReviewsTab() {
     setReviewerFilter("");
     setProgressFilter("all");
     setYearFilter("");
+  };
+
+  const handleDeleteReview = async (reviewId: number, cycleName: string) => {
+    const ok = await confirm({
+      title: `Delete ${cycleName} review`,
+      message: `This will permanently delete the ${cycleName} project review for ${deleteTarget?.employee_name} on ${deleteTarget?.project_name}.`,
+      variant: "danger",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+    });
+    if (!ok) return;
+
+    // Optimistically preserve the group's row as an empty placeholder so the
+    // admin still sees the (employee, project, FY) line while the server
+    // processes the deletion and queries refetch.
+    let placeholderKey: string | null = null;
+    if (deleteTarget) {
+      placeholderKey = deleteTarget.key;
+      setPlaceholderGroups((p) => ({
+        ...p,
+        [deleteTarget!.key]: createEmptyGroupedReviewRow(
+          deleteTarget!,
+          settings?.cycle_type ?? null,
+          settings?.active_cycle_name ?? null,
+        ),
+      }));
+    }
+
+    try {
+      await deleteReview.mutateAsync(reviewId);
+    } catch (e) {
+      // Rollback the optimistic placeholder on error
+      if (placeholderKey) {
+        setPlaceholderGroups((p) => {
+          const next = { ...p };
+          delete next[placeholderKey!];
+          return next;
+        });
+      }
+      throw e;
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleDeleteAllReviews = async () => {
+    if (!deleteTarget) return;
+
+    const reviewIds = deleteTarget.slots
+      .map((slot) => slot.review?.id)
+      .filter((id): id is number => id !== undefined);
+    if (reviewIds.length === 0) return;
+
+    const ok = await confirm({
+      title: "Delete all reviews",
+      message: `This will permanently delete all reviews for ${deleteTarget.employee_name} on ${deleteTarget.project_name}.`,
+      variant: "danger",
+      confirmText: "Delete all",
+      cancelText: "Cancel",
+    });
+    if (!ok) return;
+    // Optimistically preserve the group's row before deleting so it doesn't
+    // vanish while the batch deletes and refetch occur.
+    const placeholder = createEmptyGroupedReviewRow(
+      deleteTarget,
+      settings?.cycle_type ?? null,
+      settings?.active_cycle_name ?? null,
+    );
+    setPlaceholderGroups((p) => ({ ...p, [deleteTarget.key]: placeholder }));
+
+    try {
+      for (const reviewId of reviewIds) {
+        await deleteReview.mutateAsync(reviewId);
+      }
+    } catch (e) {
+      // Rollback optimistic placeholder on error
+      setPlaceholderGroups((p) => {
+        const next = { ...p };
+        delete next[deleteTarget.key];
+        return next;
+      });
+      throw e;
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   if (isPending) {
@@ -328,12 +448,15 @@ export function AllReviewsTab() {
                 <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
                   Cycle Reviews
                 </th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center">
+                  <td colSpan={8} className="px-5 py-10 text-center">
                     <Search
                       className="h-6 w-6 text-text-muted mx-auto mb-1"
                       aria-hidden="true"
@@ -416,6 +539,16 @@ export function AllReviewsTab() {
                         ))}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(g)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Delete reviews for ${g.employee_name} on ${g.project_name}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -430,6 +563,89 @@ export function AllReviewsTab() {
           onPageSizeChange={setPageSize}
         />
       </div>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-review-modal-title"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-surface shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-border px-5 py-4">
+              <div>
+                <h2
+                  id="delete-review-modal-title"
+                  className="font-display text-base font-semibold text-text-main"
+                >
+                  Delete project review
+                </h2>
+                <p className="mt-2 text-sm text-text-muted">
+                  Choose which cycle review to remove for {deleteTarget.employee_name} on {deleteTarget.project_name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-md p-1.5 text-text-muted hover:bg-surface-muted transition-colors"
+                aria-label="Close delete dialog"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <div className="space-y-3 px-5 py-5">
+              {deleteTarget.slots.map((slot) => {
+                const hasReview = Boolean(slot.review);
+                return (
+                  <button
+                    type="button"
+                    key={slot.cycleName}
+                    disabled={!hasReview || deleteReview.isPending}
+                    onClick={() =>
+                      slot.review && handleDeleteReview(slot.review.id, slot.cycleName)
+                    }
+                    className={`w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition-colors ${
+                      hasReview
+                        ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                        : "border-border bg-surface text-text-muted cursor-not-allowed opacity-50"
+                    }`}
+                  >
+                    {hasReview
+                      ? `Delete ${slot.cycleName} review`
+                      : `${slot.cycleName} review not present`}
+                  </button>
+                );
+              })}
+
+              {deleteTarget.slots.filter((slot) => slot.review).length > 1 && (
+                <button
+                  type="button"
+                  disabled={deleteReview.isPending}
+                  onClick={handleDeleteAllReviews}
+                  className="w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                >
+                  Delete all reviews
+                </button>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface-muted transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalTarget && (
         <ProjectReviewDetailModal

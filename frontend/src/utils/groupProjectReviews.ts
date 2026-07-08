@@ -181,6 +181,42 @@ export function groupProjectReviews(
   return groups;
 }
 
+export function createEmptyGroupedReviewRow(
+  group: GroupedReviewRow,
+  cycleType: CycleType | null,
+  activeCycle: string | null,
+): GroupedReviewRow {
+  if (!cycleType) return group;
+  const periods = PERIODS_BY_CYCLE_TYPE[cycleType];
+  const activePeriod = activeCycle ? extractCyclePeriod(activeCycle) ?? "" : null;
+  const activeFyYear = activeCycle ? fyTokenToStartYear(activeCycle) : null;
+  const activePeriodIdx = activePeriod && activePeriod !== null ? periods.indexOf(activePeriod) : -1;
+
+  const slots: CycleSlot[] = periods.map((period, idx) => {
+    const cycleName = period
+      ? `${period} ${cycleSpanFromYear(group.fy_year)}`
+      : cycleSpanFromYear(group.fy_year);
+    const isPastOrActivePeriod =
+      activeFyYear !== null &&
+      group.fy_year === activeFyYear &&
+      activePeriodIdx >= 0 &&
+      idx <= activePeriodIdx;
+    return {
+      period,
+      cycleName,
+      review: null,
+      state: (isPastOrActivePeriod ? "pending" : "upcoming") as CycleChipState,
+    };
+  });
+
+  return {
+    ...group,
+    slots,
+    reviewedCount: 0,
+    totalSlots: slots.length,
+  };
+}
+
 /** Render the FY token for a start year (local mirror of
  *  fyStartYearToToken to avoid a circular import). */
 function cycleSpanFromYear(year: number): string {

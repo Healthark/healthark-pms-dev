@@ -2382,6 +2382,33 @@ def update_review(
     return _build_review_response(review, db, viewer_user_id=current_user.id)
 
 
+@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_review(
+    review_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Admin-only: permanently remove a project review."""
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete project reviews.",
+        )
+
+    review = db.query(ProjectReview).filter(
+        ProjectReview.id == review_id,
+        ProjectReview.org_id == current_user.org_id,
+    ).first()
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found.",
+        )
+
+    db.delete(review)
+    db.commit()
+
+
 @router.get("/{review_id}", response_model=ProjectReviewResponse)
 def get_review(
     review_id: int,
