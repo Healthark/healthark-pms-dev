@@ -144,7 +144,7 @@ export interface UserCreatePayload {
   department_id?: number | null;
   designation_id?: number | null;
   mentor_id?: number | null;
-  password: string;
+  password?: string;
 }
 
 export interface UserUpdatePayload {

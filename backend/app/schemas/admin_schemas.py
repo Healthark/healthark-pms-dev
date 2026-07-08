@@ -84,7 +84,7 @@ class UserCreate(BaseModel):
     department_id: Optional[int] = None
     designation_id: Optional[int] = None
     mentor_id: Optional[int] = None
-    password: str = Field(..., min_length=8, max_length=128)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
 
 
 class UserUpdate(BaseModel):

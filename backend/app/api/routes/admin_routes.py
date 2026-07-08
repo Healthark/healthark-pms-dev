@@ -351,6 +351,8 @@ def create_user(
         db, current_user.org_id, user_in.department_id, user_in.designation_id
     )
 
+    temp_password = user_in.password or _generate_temp_password()
+
     new_user = User(
         org_id=current_user.org_id,  # Forced from JWT — never trusted from body
         employee_code=user_in.employee_code,
@@ -361,7 +363,7 @@ def create_user(
         department_id=user_in.department_id,
         designation_id=user_in.designation_id,
         mentor_id=user_in.mentor_id,
-        password_hash=get_password_hash(user_in.password),
+        password_hash=get_password_hash(temp_password),
         # Force a password change on first login. The admin chose the
         # initial password and emailed it to the user; ProtectedRoute
         # routes the user to /change-password until they pick their own.
@@ -382,7 +384,7 @@ def create_user(
             send_welcome_user_email,
             to_email=new_user.email,
             full_name=new_user.full_name,
-            password=user_in.password,
+            password=temp_password,
             login_url=login_url,
             org_id=new_user.org_id,
         )
