@@ -92,6 +92,7 @@ export interface MyProjectCard {
   pm_name: string | null;
   secondary_evaluator_name: string | null;
   cycle: string | null;
+  has_secondary_submission?: boolean;
 }
 
 export interface PMPendingReviewCard {

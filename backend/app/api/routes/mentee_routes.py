@@ -26,7 +26,7 @@ from app.api.routes.project_review_routes import _build_review_response, _visibl
 from app.models.annual_review_models import AnnualReview, ReviewStatus
 from app.models.goal_models import POST_APPROVAL_STATES, ApprovalStatus, Goal, GoalType
 from app.models.project_models import Project, ProjectAssignment
-from app.models.project_review_models import ProjectReview, ProjectReviewStatus
+from app.models.project_review_models import ProjectReview, ProjectReviewStatus, EvaluatorStatus
 from app.models.system_settings_models import CycleType, SystemSettings
 from app.models.user_models import User
 from app.schemas.annual_review_schemas import AnnualReviewResponse
@@ -403,6 +403,11 @@ def _build_mentee_project_assignments(
                 gated_rating = None
             if review_detail is not None:
                 review_detail.performance_group = gated_rating
+                
+            has_secondary_submission = any(
+                ev.status == EvaluatorStatus.SUBMITTED.value for ev in review.secondary_evaluations
+            )
+            
             project_assignments_out.append(
                 MenteeProjectAssignment(
                     **common,
@@ -410,6 +415,7 @@ def _build_mentee_project_assignments(
                     performance_group=gated_rating,
                     cycle=review.cycle,
                     review_detail=review_detail,
+                    has_secondary_submission=has_secondary_submission,
                 )
             )
 
