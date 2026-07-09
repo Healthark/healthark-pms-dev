@@ -5,8 +5,8 @@ import numpy as np
 
 def generate_projects_seed_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    excel_path = os.path.join(current_dir, "Final Seed Data.xlsx")
-    json_output_path = os.path.join(current_dir, "database_seed_payload.json")
+    excel_path = os.path.join(current_dir, "Final Seed Data 00.xlsx")
+    json_output_path = os.path.join(current_dir, "projects_seed_payload.json")
 
     print(f"Reading data from: {excel_path}...")
 
@@ -44,9 +44,9 @@ def generate_projects_seed_data():
         pm_val = str(pm_raw).strip() if pm_raw and str(pm_raw).strip() != "" and str(pm_raw).lower() != "none" else None
         reports_to_val = str(reports_to_raw).strip() if reports_to_raw and str(reports_to_raw).strip() != "" and str(reports_to_raw).lower() != "none" else None
 
-        if reports_to_val and ";" in reports_to_val:
-            reports_to_val = None
-            
+        if reports_to_val:
+            reports_to_val = "; ".join([part.strip() for part in reports_to_val.split(";") if part.strip()])
+
         if pm_val and reports_to_val and pm_val.lower() == reports_to_val.lower():
             reports_to_val = None
 
