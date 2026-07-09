@@ -1,0 +1,305 @@
+{
+  "departments": [
+    {
+      "name": "Accounts"
+    },
+    {
+      "name": "HR & Admin"
+    },
+    {
+      "name": "Information Data Technology (IDT)"
+    },
+    {
+      "name": "Operation"
+    },
+    {
+      "name": "Real-World Evidence (RWE)"
+    },
+    {
+      "name": "Sales & Marketing"
+    },
+    {
+      "name": "Staff Augmentation"
+    },
+    {
+      "name": "Strategy Consulting"
+    }
+  ],
+  "designations": [
+    {
+      "department": "Accounts",
+      "name": "Senior Account Executive",
+      "level": 2
+    },
+    {
+      "department": "Accounts",
+      "name": "Senior Finance Executive",
+      "level": 2
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Admin Executive",
+      "level": 1
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Executive",
+      "level": 1
+    },
+    {
+      "department": "HR & Admin",
+      "name": "HR Executive",
+      "level": 1
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Manager",
+      "level": 3
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Manager - HRBP.",
+      "level": 3
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Senior HR Executive",
+      "level": 2
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Senior Talent Acquisition Executive",
+      "level": 2
+    },
+    {
+      "department": "HR & Admin",
+      "name": "Talent Acquisition Executive",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Associate Data Analyst",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Associate Data Engineer",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Associate Data Scientist",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Associate Director",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Associate Software Developer",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Business Analyst",
+      "level": 2
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Consultant",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Data Engineer",
+      "level": 2
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Data Scientist",
+      "level": 2
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Lead Data Engineer",
+      "level": 4
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Lead Data Scientist",
+      "level": 4
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Regulatory Affairs Specialist",
+      "level": 1
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Senior Business Analyst",
+      "level": 3
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Senior Data Analyst",
+      "level": 3
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Senior Data Engineer",
+      "level": 3
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Senior Data Scientist",
+      "level": 3
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Senior Software Engineer",
+      "level": 3
+    },
+    {
+      "department": "Information Data Technology (IDT)",
+      "name": "Software Developer",
+      "level": 3
+    },
+    {
+      "department": "Operation",
+      "name": "IT Support Executive",
+      "level": 1
+    },
+    {
+      "department": "Operation",
+      "name": "System Administrator",
+      "level": 1
+    },
+    {
+      "department": "Real-World Evidence (RWE)",
+      "name": "Associate Director",
+      "level": 5
+    },
+    {
+      "department": "Real-World Evidence (RWE)",
+      "name": "Consultant",
+      "level": 1
+    },
+    {
+      "department": "Real-World Evidence (RWE)",
+      "name": "Principal GRC Consultant",
+      "level": 5
+    },
+    {
+      "department": "Real-World Evidence (RWE)",
+      "name": "Project Manager",
+      "level": 3
+    },
+    {
+      "department": "Real-World Evidence (RWE)",
+      "name": "Senior Consultant",
+      "level": 2
+    },
+    {
+      "department": "Real-World Evidence (RWE)",
+      "name": "Senior Data Analyst",
+      "level": 3
+    },
+    {
+      "department": "Sales & Marketing",
+      "name": "Graphic Designer",
+      "level": 1
+    },
+    {
+      "department": "Sales & Marketing",
+      "name": "Marketing Associate",
+      "level": 1
+    },
+    {
+      "department": "Sales & Marketing",
+      "name": "Marketing Lead",
+      "level": 4
+    },
+    {
+      "department": "Sales & Marketing",
+      "name": "Senior Graphic Designer",
+      "level": 2
+    },
+    {
+      "department": "Sales & Marketing",
+      "name": "Senior Marketing Associate",
+      "level": 2
+    },
+    {
+      "department": "Sales & Marketing",
+      "name": "Senior SEO Associate",
+      "level": 2
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Lead Data Scientist",
+      "level": 4
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Senior Business Analyst",
+      "level": 3
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Senior Data Scientist",
+      "level": 3
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Senior Software Developer",
+      "level": 3
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Senior Test Engineer",
+      "level": 3
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Test Automation Lead",
+      "level": 4
+    },
+    {
+      "department": "Staff Augmentation",
+      "name": "Test Engineer",
+      "level": 2
+    },
+    {
+      "department": "Strategy Consulting",
+      "name": "Associate Director",
+      "level": 5
+    },
+    {
+      "department": "Strategy Consulting",
+      "name": "Consultant",
+      "level": 1
+    },
+    {
+      "department": "Strategy Consulting",
+      "name": "Engagement Manager",
+      "level": 4
+    },
+    {
+      "department": "Strategy Consulting",
+      "name": "Manager",
+      "level": 3
+    },
+    {
+      "department": "Strategy Consulting",
+      "name": "Partner",
+      "level": 6
+    },
+    {
+      "department": "Strategy Consulting",
+      "name": "Senior Consultant",
+      "level": 2
+    }
+  ]
+}
