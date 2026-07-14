@@ -15,7 +15,6 @@ import {
   Briefcase,
   BadgeCheck,
   Users,
-  Calendar,
   Mail,
   Phone,
 } from "lucide-react";
@@ -85,10 +84,6 @@ export function ProfileInfoCard({ profile, isLoading }: ProfileInfoCardProps) {
     .join("")
     .toUpperCase();
 
-  const joinDate = new Date(profile.created_at).toLocaleDateString("en-IN", {
-    year: "numeric",
-    month: "long",
-  });
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
@@ -138,7 +133,6 @@ export function ProfileInfoCard({ profile, isLoading }: ProfileInfoCardProps) {
           value={profile.designation}
         />
         <InfoRow icon={Users} label="Mentor" value={profile.mentor_name} />
-        <InfoRow icon={Calendar} label="Joined" value={joinDate} />
       </div>
 
       {/* Footer note */}
