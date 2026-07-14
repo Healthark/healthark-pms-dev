@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.core.config import settings
 from app.core.cycle_utils import parse_cycle
-from app.models.project_models import ProjectAssignment
+from app.models.project_models import Project, ProjectAssignment
 from app.models.user_models import User
 
 # ── Anonymity ────────────────────────────────────────────────────────
@@ -77,9 +77,9 @@ def did_work_together(
     target_id: int,
     org_id: int,
 ) -> bool:
-    """True iff the reviewer and target share at least one project
-    assignment in the same org. v1 ignores the cycle window — see the
-    module docstring's 'Worked-with v1' note."""
+    """True iff the reviewer and target share at least one review-eligible,
+    non-deleted project assignment in the same org. v1 ignores the cycle
+    window — see the module docstring's 'Worked-with v1' note."""
     SubA = aliased(ProjectAssignment)
     SubB = aliased(ProjectAssignment)
     return db.query(
@@ -92,6 +92,10 @@ def did_work_together(
                 SubB.org_id == org_id,
                 SubA.is_deleted == False,  # noqa: E712
                 SubB.is_deleted == False,  # noqa: E712
+                # Only count projects that are review-eligible and not deleted.
+                Project.id == SubA.project_id,
+                Project.review_eligible == True,  # noqa: E712
+                Project.is_deleted == False,  # noqa: E712
             )
         )
     ).scalar() or False
@@ -102,14 +106,16 @@ def shared_project_targets(
     reviewer_id: int,
     org_id: int,
 ) -> set[int]:
-    """Return the set of user_ids that share at least one project with
-    the reviewer. Used to compute the worked-with flag for every peer
-    in the Give Feedback list in a single query (avoids N+1)."""
+    """Return the set of user_ids that share at least one review-eligible,
+    non-deleted project with the reviewer. Used to compute the worked-with
+    flag for every peer in the Give Feedback list in a single query
+    (avoids N+1)."""
     SubA = aliased(ProjectAssignment)
     SubB = aliased(ProjectAssignment)
     rows = (
         db.query(SubB.user_id)
         .join(SubA, SubA.project_id == SubB.project_id)
+        .join(Project, Project.id == SubA.project_id)
         .filter(
             SubA.user_id == reviewer_id,
             SubA.org_id == org_id,
@@ -117,6 +123,9 @@ def shared_project_targets(
             SubB.user_id != reviewer_id,
             SubA.is_deleted == False,  # noqa: E712
             SubB.is_deleted == False,  # noqa: E712
+            # Only count projects that are review-eligible and not deleted.
+            Project.review_eligible == True,  # noqa: E712
+            Project.is_deleted == False,  # noqa: E712
         )
         .distinct()
         .all()
