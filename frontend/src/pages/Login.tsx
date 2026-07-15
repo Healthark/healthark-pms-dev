@@ -112,7 +112,7 @@ export function Login() {
       favicon.rel = "icon";
       document.head.appendChild(favicon);
     }
-    favicon.href = "/healtharklogo-small.png";
+    favicon.href = "/Icon_Blue.png";
     document.title = "Healthark PMS";
   }, [user]);
 
@@ -161,14 +161,14 @@ export function Login() {
           {/* Logo (light/dark variants) */}
           <div className="flex flex-col items-center justify-center mb-6 sm:mb-8 gap-3">
             <img
-              src="/healtharklogov2.png"
+              src="/PMS logo_Blue.png"
               alt="Healthark Performance Management System"
-              className="h-24 sm:h-40 w-auto max-w-full object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] block dark:hidden"
+              className="h-24 sm:h-40 w-auto max-w-[260px] object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] block dark:hidden"
             />
             <img
-              src="/healtharklogo.png"
+              src="/PMS logo_White.png"
               alt="Healthark Performance Management System"
-              className="h-24 sm:h-40 w-auto max-w-full object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] hidden dark:block"
+              className="h-24 sm:h-40 w-auto max-w-[260px] object-contain drop-shadow-sm animate-[fadeIn_0.8s_ease-in-out] hidden dark:block"
             />
             <style>{`
               @keyframes fadeIn {

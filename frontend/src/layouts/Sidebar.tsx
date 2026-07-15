@@ -36,10 +36,13 @@ interface NavItemData {
 // `logoLight` is shown in light mode; `logoDark` is the dark-mode variant.
 const ORG_ASSETS: Record<number, { logoLight: string; logoDark: string; logoSmallLight: string; logoSmallDark: string; displayName: string; logoClass: string }> = {
   1: {
-    logoLight: "/healtharklogov2.png",
-    logoDark: "/healtharklogo.png",
-    logoSmallLight: "/healtharklogo-small.png",
-    logoSmallDark: "/healthark.png",
+    logoLight: "/PMS logo_Blue.png",
+    logoDark: "/PMS logo_White.png",
+    // Collapsed sidebar shows a small square — use the square Icon (the wide
+    // PMS logos would shrink to an unreadable sliver), blue on light / white
+    // on dark for contrast.
+    logoSmallLight: "/Icon_Blue.png",
+    logoSmallDark: "/Icon_White.png",
     displayName: "Healthark Insights",
     logoClass: "max-w-[140px] max-h-10 w-auto h-auto object-contain shrink-0",
   },
@@ -163,12 +166,12 @@ export function Sidebar() {
             <img
               src={activeAssets.logoSmallLight}
               alt={activeAssets.displayName}
-              className="h-12 w-12 object-contain shrink-0 block dark:hidden"
+              className="h-7 w-7 object-contain shrink-0 block dark:hidden"
             />
             <img
               src={activeAssets.logoSmallDark}
               alt={activeAssets.displayName}
-              className="h-12 w-12 object-contain shrink-0 hidden dark:block"
+              className="h-7 w-7 object-contain shrink-0 hidden dark:block"
             />
           </>
         ) : (
