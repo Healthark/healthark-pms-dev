@@ -30,6 +30,7 @@ import {
   type ProjectQuery,
 } from "../../services/project.service";
 import { ClearFiltersButton } from "../common/ClearFiltersButton";
+import { StringCombobox } from "../common/StringCombobox";
 import { getErrorMessage } from "../../utils/errors";
 import { useUsers } from "../../queries/users";
 import {
@@ -81,6 +82,12 @@ type ProjectsSortKey =
 
 type StatusFilter = "active" | "completed" | "all";
 
+// The PM combobox's "Without PM" entry. It sits among the PM names as a special
+// option (the ⚠ + leading text keep it distinct from any real name). Selecting
+// it filters the list to projects with no active PM — the coverage-gap set the
+// amber rows highlight. Empty value ("") means "All PMs" (no filter).
+const NO_PM_OPTION = "⚠ Without PM";
+
 const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
@@ -106,7 +113,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [sort, setSort] = useState<SortState<ProjectsSortKey> | null>(null);
   const [yearFilter, setYearFilter] = useState<string>("all");
-  const [pmFilter, setPmFilter] = useState<string>("all");
+  // "" = All PMs; NO_PM_OPTION = projects without a PM; else an exact PM name.
+  const [pmFilter, setPmFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -141,7 +149,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     search: search || undefined,
     status: statusFilter,
     year: yearFilter !== "all" ? Number(yearFilter) : undefined,
-    pm: pmFilter !== "all" ? pmFilter : undefined,
+    pm: pmFilter && pmFilter !== NO_PM_OPTION ? pmFilter : undefined,
+    no_pm: pmFilter === NO_PM_OPTION ? true : undefined,
     sort_by: sort?.key,
     sort_dir: sort?.direction,
   };
@@ -160,7 +169,11 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   // Year + PM dropdown options (server-distinct, cached).
   const { data: filterOptions } = useProjectsFilterOptions();
   const availableYears = filterOptions?.years ?? [];
-  const availablePms = filterOptions?.pms ?? [];
+  // "Without PM" pinned first, then the searchable list of real PM names.
+  const pmOptions = useMemo(
+    () => [NO_PM_OPTION, ...(filterOptions?.pms ?? [])],
+    [filterOptions?.pms],
+  );
 
   // PM-less projects (PM was deactivated/demoted) — highlight their rows amber
   // so the admin can spot which projects need a PM. Mirrors the coverage banner.
@@ -258,14 +271,14 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
   const hasActiveFilters =
     !!search ||
     yearFilter !== "all" ||
-    pmFilter !== "all" ||
+    !!pmFilter ||
     statusFilter !== "all";
 
   const clearFilters = () => {
     setSearchInput("");
     setSearch("");
     setYearFilter("all");
-    setPmFilter("all");
+    setPmFilter("");
     setStatusFilter("all");
     setPage(1);
   };
@@ -313,19 +326,14 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
           <label htmlFor="project-pm-filter" className={FILTER_LABEL_CLS}>
             PM
           </label>
-          <select
+          <StringCombobox
             id="project-pm-filter"
+            options={pmOptions}
             value={pmFilter}
-            onChange={(e) => setPmFilter(e.target.value)}
-            className={`${FILTER_SELECT_CLS} min-w-[160px]`}
-          >
-            <option value="all">All PMs</option>
-            {availablePms.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+            onChange={setPmFilter}
+            placeholder="All PMs"
+            minWidth="180px"
+          />
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="project-status-filter" className={FILTER_LABEL_CLS}>

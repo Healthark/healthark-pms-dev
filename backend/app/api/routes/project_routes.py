@@ -280,6 +280,9 @@ def list_projects(
     ),
     year: Optional[int] = Query(None, description="Project start year"),
     pm: Optional[str] = Query(None, description="Exact PM (Primary evaluator) name"),
+    no_pm: Optional[bool] = Query(
+        None, description="Only projects with no active PM (matches the coverage banner)"
+    ),
     sort_by: Optional[str] = Query(None),
     sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
 ):
@@ -320,7 +323,16 @@ def list_projects(
         query = query.filter(
             Project.start_date >= start, Project.start_date < end
         )
-    if pm:
+    if no_pm:
+        # "Projects without a PM" — reuse the coverage-banner definition so the
+        # filter surfaces exactly the amber-highlighted rows (non-completed,
+        # single-PM projects whose active Primary is missing). A function-local
+        # import avoids any module-load cycle between the route packages.
+        from app.api.routes.admin_routes import _pm_less_projects
+
+        pm_less_ids = [p.id for p in _pm_less_projects(db, current_user.org_id)]
+        query = query.filter(Project.id.in_(pm_less_ids))
+    elif pm:
         query = query.filter(pm_name_sq == pm)
 
     total = query.with_entities(func.count(Project.id)).order_by(None).scalar() or 0

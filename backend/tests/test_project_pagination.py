@@ -117,7 +117,7 @@ def _assign(db, org, project, user, *, evaluator_type=None, is_deleted=False):
 
 
 def _list(db, admin, *, page=1, per_page=25, search=None, status=None,
-          year=None, pm=None, sort_by=None, sort_dir="asc"):
+          year=None, pm=None, no_pm=None, sort_by=None, sort_dir="asc"):
     """Thin wrapper so tests don't repeat the long positional signature."""
     return list_projects(
         db,
@@ -127,6 +127,7 @@ def _list(db, admin, *, page=1, per_page=25, search=None, status=None,
         status_filter=status,
         year=year,
         pm=pm,
+        no_pm=no_pm,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
@@ -216,6 +217,51 @@ def test_pm_filter(db):
     assert res.total == 1
     assert res.items[0].id == proj_a.id
     assert res.items[0].pm_name == "PM Alice"
+
+
+def test_no_pm_filter_matches_coverage_definition(db):
+    """`no_pm=true` surfaces exactly the coverage-banner set: single-PM,
+    non-completed projects with no active Primary. Projects with a PM, completed
+    projects, and multi-PM projects are all excluded."""
+    org, admin = _setup(db)
+    # Active PM → excluded.
+    with_pm = _project(db, org, name="Has PM")
+    _assign(db, org, with_pm, _user(db, org.id, name="PM X"), evaluator_type="Primary")
+    # No Primary at all → included.
+    _project(db, org, name="No PM")
+    # Soft-deleted (removed) Primary → still without an active PM → included.
+    ghost = _project(db, org, name="Ghost PM")
+    _assign(
+        db, org, ghost, _user(db, org.id, name="Ghost"),
+        evaluator_type="Primary", is_deleted=True,
+    )
+    # Completed project with no PM → excluded (completed projects need no PM).
+    _project(db, org, name="Done", status=PROJECT_STATUS_COMPLETED)
+    # Multi-PM project with no top-level Primary → excluded by design.
+    multi = Project(
+        org_id=org.id, project_code="M-1", name="Multi",
+        status=PROJECT_STATUS_ACTIVE, multi_pm_enabled=True,
+    )
+    db.add(multi)
+    db.flush()
+    db.commit()
+
+    res = _list(db, admin, no_pm=True)
+    assert {p.name for p in res.items} == {"No PM", "Ghost PM"}
+    assert res.total == 2
+
+
+def test_no_pm_filter_empty_when_all_covered(db):
+    """When every project has a PM the pm-less set is empty; the filter must
+    yield zero rows cleanly (guards the `id IN ()` path)."""
+    org, admin = _setup(db)
+    proj = _project(db, org, name="Covered")
+    _assign(db, org, proj, _user(db, org.id, name="PM"), evaluator_type="Primary")
+    db.commit()
+
+    res = _list(db, admin, no_pm=True)
+    assert res.total == 0
+    assert res.items == []
 
 
 # ── Sorting ──────────────────────────────────────────────────────────

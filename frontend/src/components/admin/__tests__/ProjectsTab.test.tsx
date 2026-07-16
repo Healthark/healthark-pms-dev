@@ -121,15 +121,18 @@ describe("ProjectsTab — server-side pagination", () => {
     expect(screen.getByText("P-0001")).toBeInTheDocument();
   });
 
-  it("fills the Year and PM dropdowns from filter-options", () => {
+  it("fills the Year select and PM combobox from filter-options", async () => {
+    const user = userEvent.setup();
     render(<ProjectsTab />);
     const yearSelect = screen.getByLabelText(/start year/i);
     expect(within(yearSelect).getByRole("option", { name: "2026" })).toBeInTheDocument();
     expect(within(yearSelect).getByRole("option", { name: "2025" })).toBeInTheDocument();
 
-    const pmSelect = screen.getByLabelText("PM");
-    expect(within(pmSelect).getByRole("option", { name: "Alice" })).toBeInTheDocument();
-    expect(within(pmSelect).getByRole("option", { name: "Bob" })).toBeInTheDocument();
+    // PM is a searchable combobox — its options render once it's opened.
+    await user.click(screen.getByLabelText("PM"));
+    expect(screen.getByRole("option", { name: "Alice" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Bob" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Without PM/ })).toBeInTheDocument();
   });
 
   it("drives the pagination bar off the server total, not the page length", () => {
@@ -206,5 +209,35 @@ describe("ProjectsTab — server-side pagination", () => {
     expect(note).toBeInTheDocument();
     expect(note.className).toMatch(/italic/);
     expect(within(borealisRow).queryByText("Ignored")).not.toBeInTheDocument();
+  });
+
+  it("filters to projects without a PM via the combobox 'Without PM' option", async () => {
+    const user = userEvent.setup();
+    render(<ProjectsTab />);
+
+    await user.click(screen.getByLabelText("PM"));
+    await user.click(screen.getByRole("option", { name: /Without PM/ }));
+
+    await waitFor(() =>
+      expect(useAdminProjectsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ no_pm: true, pm: undefined }),
+      ),
+    );
+  });
+
+  it("searches PM names and pushes the picked name into the query", async () => {
+    const user = userEvent.setup();
+    render(<ProjectsTab />);
+
+    const pm = screen.getByLabelText("PM");
+    await user.click(pm);
+    await user.type(pm, "ali"); // type-to-filter narrows to Alice
+    await user.click(screen.getByRole("option", { name: "Alice" }));
+
+    await waitFor(() =>
+      expect(useAdminProjectsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ pm: "Alice", no_pm: undefined }),
+      ),
+    );
   });
 });
