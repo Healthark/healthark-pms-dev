@@ -24,6 +24,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased, joinedload
 
 from app.api.dependencies import CurrentUser, DbSession
@@ -78,7 +79,14 @@ from app.schemas.admin_schemas import (
     CycleSetRequest,
     CycleStatusResponse,
     DepartmentBrief,
+    DepartmentCreate,
+    DepartmentUpdate,
     DesignationBrief,
+    DesignationCreate,
+    DesignationUpdate,
+    OrgDepartment,
+    OrgDesignation,
+    OrgStructureResponse,
     ReviewEligibilityProject,
     ReviewEligibilityUpdate,
     ReviewEligibilityUpdateResult,
@@ -806,6 +814,327 @@ def list_designations(
         return [DesignationBrief.model_validate(r, from_attributes=True) for r in rows]
 
     return designations_cache.get_or_compute(current_user.org_id, _query)
+
+
+# =====================================================================
+# ORGANIZATION STRUCTURE MANAGEMENT (Departments & Roles admin tab)
+# =====================================================================
+# Admin-only CRUD over departments + designations so org structure no longer
+# has to be seeded by hand. Deletes are SOFT (is_active=False) — hard deletes
+# are impossible/unsafe (no ON DELETE cascade; role_expectations FKs are NOT
+# NULL; historical reviews/exports resolve names by id). Every write invalidates
+# the departments/designations caches. Designation LEVEL is NOT settable here —
+# the Competency Framework tab remains its single ongoing writer; new roles are
+# born at the default level and re-levelled there.
+
+def _get_department_or_404(db: DbSession, org_id: int, department_id: int) -> Department:
+    dept = (
+        db.query(Department)
+        .filter(Department.id == department_id, Department.org_id == org_id)
+        .first()
+    )
+    if not dept:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found.")
+    return dept
+
+
+def _get_designation_or_404(db: DbSession, org_id: int, designation_id: int) -> Designation:
+    d = (
+        db.query(Designation)
+        .filter(Designation.id == designation_id, Designation.org_id == org_id)
+        .first()
+    )
+    if not d:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
+    return d
+
+
+def _clean_name(raw: str) -> str:
+    name = (raw or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name cannot be blank."
+        )
+    return name
+
+
+def _dept_name_conflict(db, org_id, name, exclude_id=None):
+    """A department in this org with the same name (case-insensitive), active or
+    not — the unique constraint is (org_id, name) regardless of is_active."""
+    q = db.query(Department).filter(
+        Department.org_id == org_id, func.lower(Department.name) == name.lower()
+    )
+    if exclude_id is not None:
+        q = q.filter(Department.id != exclude_id)
+    return q.first()
+
+
+def _desig_name_conflict(db, org_id, department_id, name, exclude_id=None):
+    q = db.query(Designation).filter(
+        Designation.org_id == org_id,
+        Designation.department_id == department_id,
+        func.lower(Designation.name) == name.lower(),
+    )
+    if exclude_id is not None:
+        q = q.filter(Designation.id != exclude_id)
+    return q.first()
+
+
+def _raise_name_conflict(existing, kind: str) -> None:
+    if existing.is_active:
+        detail = f"A {kind} named '{existing.name}' already exists."
+    else:
+        detail = (
+            f"An inactive {kind} named '{existing.name}' already exists — "
+            "reactivate it instead of creating a new one."
+        )
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+
+@router.get("/organization", response_model=OrgStructureResponse)
+def get_org_structure(db: DbSession, current_user: CurrentUser):
+    """Every department (INCLUDING inactive) with its roles + active-user counts,
+    for the Organization admin tab. Not cache-served — the tab must see inactive
+    rows the dropdown lists hide."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+
+    depts = (
+        db.query(Department)
+        .filter(Department.org_id == org_id)
+        .order_by(Department.name)
+        .all()
+    )
+    desigs = (
+        db.query(Designation)
+        .filter(Designation.org_id == org_id)
+        .order_by(Designation.level, Designation.name)
+        .all()
+    )
+    # Active-user counts, grouped once each (no per-row N+1).
+    dept_counts = dict(
+        db.query(Department.id, func.count(User.id))
+        .select_from(Department)
+        .outerjoin(
+            User,
+            (User.department_id == Department.id)
+            & (User.org_id == org_id)
+            & (User.is_deleted == False),  # noqa: E712
+        )
+        .filter(Department.org_id == org_id)
+        .group_by(Department.id)
+        .all()
+    )
+    desig_counts = dict(
+        db.query(User.designation_id, func.count(User.id))
+        .filter(
+            User.org_id == org_id,
+            User.is_deleted == False,  # noqa: E712
+            User.designation_id.isnot(None),
+        )
+        .group_by(User.designation_id)
+        .all()
+    )
+
+    def _to_desig(d: Designation) -> OrgDesignation:
+        return OrgDesignation(
+            id=d.id, name=d.name, level=d.level, department_id=d.department_id,
+            is_active=bool(d.is_active), active_user_count=desig_counts.get(d.id, 0),
+        )
+
+    by_dept: dict[int, list[OrgDesignation]] = {}
+    unscoped: list[OrgDesignation] = []
+    for d in desigs:
+        if d.department_id is None:
+            unscoped.append(_to_desig(d))
+        else:
+            by_dept.setdefault(d.department_id, []).append(_to_desig(d))
+
+    departments = [
+        OrgDepartment(
+            id=dep.id, name=dep.name, is_active=bool(dep.is_active),
+            active_user_count=dept_counts.get(dep.id, 0),
+            designations=by_dept.get(dep.id, []),
+        )
+        for dep in depts
+    ]
+    return OrgStructureResponse(departments=departments, unscoped_designations=unscoped)
+
+
+@router.post("/departments", response_model=DepartmentBrief, status_code=status.HTTP_201_CREATED)
+def create_department(payload: DepartmentCreate, db: DbSession, current_user: CurrentUser):
+    """Create a department. 409 if the name already exists (active or inactive)."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    name = _clean_name(payload.name)
+    conflict = _dept_name_conflict(db, org_id, name)
+    if conflict:
+        _raise_name_conflict(conflict, "department")
+    dept = Department(org_id=org_id, name=name, is_active=True)
+    db.add(dept)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Department name already exists.")
+    db.refresh(dept)
+    departments_cache.invalidate(org_id)
+    return DepartmentBrief.model_validate(dept, from_attributes=True)
+
+
+@router.patch("/departments/{department_id}", response_model=DepartmentBrief)
+def rename_department(
+    department_id: int, payload: DepartmentUpdate, db: DbSession, current_user: CurrentUser
+):
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    dept = _get_department_or_404(db, org_id, department_id)
+    name = _clean_name(payload.name)
+    conflict = _dept_name_conflict(db, org_id, name, exclude_id=dept.id)
+    if conflict:
+        _raise_name_conflict(conflict, "department")
+    dept.name = name
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Department name already exists.")
+    db.refresh(dept)
+    departments_cache.invalidate(org_id)
+    return DepartmentBrief.model_validate(dept, from_attributes=True)
+
+
+@router.post("/departments/{department_id}/deactivate", response_model=DepartmentBrief)
+def deactivate_department(department_id: int, db: DbSession, current_user: CurrentUser):
+    """Soft-deactivate a department AND cascade-deactivate its roles, so no role
+    is left active-but-parentless. Existing user assignments keep their (now
+    hidden) id. Reversible via reactivate."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    dept = _get_department_or_404(db, org_id, department_id)
+    dept.is_active = False
+    db.query(Designation).filter(
+        Designation.org_id == org_id,
+        Designation.department_id == dept.id,
+        Designation.is_active == True,  # noqa: E712
+    ).update({Designation.is_active: False})
+    db.commit()
+    db.refresh(dept)
+    departments_cache.invalidate(org_id)
+    designations_cache.invalidate(org_id)
+    return DepartmentBrief.model_validate(dept, from_attributes=True)
+
+
+@router.post("/departments/{department_id}/reactivate", response_model=DepartmentBrief)
+def reactivate_department(department_id: int, db: DbSession, current_user: CurrentUser):
+    """Reactivate a department. Its roles are NOT auto-reactivated — reactivate
+    them individually (surfaced in the UI)."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    dept = _get_department_or_404(db, org_id, department_id)
+    dept.is_active = True
+    db.commit()
+    db.refresh(dept)
+    departments_cache.invalidate(org_id)
+    return DepartmentBrief.model_validate(dept, from_attributes=True)
+
+
+@router.post("/designations", response_model=DesignationBrief, status_code=status.HTTP_201_CREATED)
+def create_designation(payload: DesignationCreate, db: DbSession, current_user: CurrentUser):
+    """Create a role under a department. Requires a real (non-null) department so
+    we never mint legacy unscoped rows. 409 on a duplicate name in that dept."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    name = _clean_name(payload.name)
+    dept = _get_department_or_404(db, org_id, payload.department_id)
+    if not dept.is_active:
+        # Guard the same invariant reactivate_designation enforces: never leave
+        # a role active-but-parentless under a deactivated department.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Reactivate the department '{dept.name}' before adding roles to it.",
+        )
+    conflict = _desig_name_conflict(db, org_id, dept.id, name)
+    if conflict:
+        _raise_name_conflict(conflict, "role")
+    # Level is owned by the Competency Framework tab — new roles start at the
+    # default level regardless of any client-supplied value.
+    d = Designation(
+        org_id=org_id, department_id=dept.id, name=name,
+        level=1, is_active=True,
+    )
+    db.add(d)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role name already exists in this department.")
+    db.refresh(d)
+    designations_cache.invalidate(org_id)
+    return DesignationBrief.model_validate(d, from_attributes=True)
+
+
+@router.patch("/designations/{designation_id}", response_model=DesignationBrief)
+def rename_designation(
+    designation_id: int, payload: DesignationUpdate, db: DbSession, current_user: CurrentUser
+):
+    """Rename a role. Level (Competency Framework tab) and department (reparent)
+    are intentionally not editable here."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    d = _get_designation_or_404(db, org_id, designation_id)
+    name = _clean_name(payload.name)
+    conflict = _desig_name_conflict(db, org_id, d.department_id, name, exclude_id=d.id)
+    if conflict:
+        _raise_name_conflict(conflict, "role")
+    d.name = name
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role name already exists in this department.")
+    db.refresh(d)
+    designations_cache.invalidate(org_id)
+    return DesignationBrief.model_validate(d, from_attributes=True)
+
+
+@router.post("/designations/{designation_id}/deactivate", response_model=DesignationBrief)
+def deactivate_designation(designation_id: int, db: DbSession, current_user: CurrentUser):
+    """Soft-deactivate a role. Existing user assignments keep their (now hidden)
+    id; the UI surfaces the affected-user count before confirming."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    d = _get_designation_or_404(db, org_id, designation_id)
+    d.is_active = False
+    db.commit()
+    db.refresh(d)
+    designations_cache.invalidate(org_id)
+    return DesignationBrief.model_validate(d, from_attributes=True)
+
+
+@router.post("/designations/{designation_id}/reactivate", response_model=DesignationBrief)
+def reactivate_designation(designation_id: int, db: DbSession, current_user: CurrentUser):
+    """Reactivate a role. Blocked while its department is inactive — reactivate
+    the department first so the role isn't stranded active-but-parentless."""
+    _require_admin(current_user)
+    org_id = current_user.org_id
+    d = _get_designation_or_404(db, org_id, designation_id)
+    if d.department_id is not None:
+        parent = (
+            db.query(Department)
+            .filter(Department.id == d.department_id, Department.org_id == org_id)
+            .first()
+        )
+        if parent and not parent.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Reactivate the department '{parent.name}' first.",
+            )
+    d.is_active = True
+    db.commit()
+    db.refresh(d)
+    designations_cache.invalidate(org_id)
+    return DesignationBrief.model_validate(d, from_attributes=True)
 
 
 # =====================================================================

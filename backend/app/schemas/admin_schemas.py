@@ -469,3 +469,57 @@ class FrameworkBulkSave(BaseModel):
     department_id: Optional[int] = None
     competencies: list[FrameworkBulkCompetency] = Field(default_factory=list)
     designations: list[FrameworkBulkDesignation] = Field(default_factory=list)
+
+
+# ── Organization structure (admin "Departments & Roles" tab) ────────────
+# Department + designation CRUD. Soft-delete via is_active; designation LEVEL
+# is intentionally NOT settable here (the Competency Framework tab owns it);
+# re-parenting a role to another department is out of scope for v1.
+
+class DepartmentCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class DepartmentUpdate(BaseModel):
+    """Rename a department."""
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class DesignationCreate(BaseModel):
+    """Create a role under a department. `level` is intentionally NOT accepted:
+    new roles are born at the default level and re-levelled in the Competency
+    Framework tab, which remains level's single writer."""
+    name: str = Field(..., min_length=1, max_length=120)
+    department_id: int
+
+
+class DesignationUpdate(BaseModel):
+    """Rename a role. Level is owned by the Competency Framework tab, and
+    re-parenting to another department is out of scope for v1."""
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class OrgDesignation(BaseModel):
+    """A role row for the Organization tab — includes is_active + how many
+    active users still reference it (blast-radius surfacing on deactivate)."""
+    id: int
+    name: str
+    level: Optional[int] = None
+    department_id: Optional[int] = None
+    is_active: bool
+    active_user_count: int = 0
+
+
+class OrgDepartment(BaseModel):
+    id: int
+    name: str
+    is_active: bool
+    active_user_count: int = 0
+    designations: list[OrgDesignation] = Field(default_factory=list)
+
+
+class OrgStructureResponse(BaseModel):
+    """Full org structure for the admin tab: every department (incl. inactive)
+    with its roles, plus any legacy roles not scoped to a department."""
+    departments: list[OrgDepartment] = Field(default_factory=list)
+    unscoped_designations: list[OrgDesignation] = Field(default_factory=list)
