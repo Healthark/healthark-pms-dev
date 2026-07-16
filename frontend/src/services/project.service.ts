@@ -96,6 +96,8 @@ export interface ProjectQuery extends PageQuery {
   status?: "all" | "active" | "completed";
   year?: number;
   pm?: string;
+  /** Only projects with no active PM (mutually exclusive with `pm`). */
+  no_pm?: boolean;
 }
 
 /** Year + PM dropdown options for the Projects tab filters. */
@@ -146,6 +148,7 @@ export const projectService = {
           params.status && params.status !== "all" ? params.status : undefined,
         year: params.year ?? undefined,
         pm: params.pm || undefined,
+        no_pm: params.no_pm || undefined,
         sort_by: params.sort_by || undefined,
         sort_dir: params.sort_by ? params.sort_dir : undefined,
       },

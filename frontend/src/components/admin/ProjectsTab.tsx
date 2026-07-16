@@ -81,6 +81,11 @@ type ProjectsSortKey =
 
 type StatusFilter = "active" | "completed" | "all";
 
+// Sentinel value for the PM dropdown's "Without PM" option — distinct from any
+// real PM name and from the "all" default. Selecting it filters the list to
+// projects with no active PM (the coverage-gap set the amber rows highlight).
+const NO_PM = "__no_pm__";
+
 const FILTER_LABEL_CLS =
   "text-[11px] font-bold uppercase tracking-wider text-text-muted";
 const FILTER_SELECT_CLS =
@@ -141,7 +146,8 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
     search: search || undefined,
     status: statusFilter,
     year: yearFilter !== "all" ? Number(yearFilter) : undefined,
-    pm: pmFilter !== "all" ? pmFilter : undefined,
+    pm: pmFilter !== "all" && pmFilter !== NO_PM ? pmFilter : undefined,
+    no_pm: pmFilter === NO_PM ? true : undefined,
     sort_by: sort?.key,
     sort_dir: sort?.direction,
   };
@@ -320,6 +326,7 @@ export function ProjectsTab({ ref }: ProjectsTabProps = {}) {
             className={`${FILTER_SELECT_CLS} min-w-[160px]`}
           >
             <option value="all">All PMs</option>
+            <option value={NO_PM}>⚠ Without PM</option>
             {availablePms.map((name) => (
               <option key={name} value={name}>
                 {name}

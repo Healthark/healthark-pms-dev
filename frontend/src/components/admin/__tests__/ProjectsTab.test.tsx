@@ -207,4 +207,22 @@ describe("ProjectsTab — server-side pagination", () => {
     expect(note.className).toMatch(/italic/);
     expect(within(borealisRow).queryByText("Ignored")).not.toBeInTheDocument();
   });
+
+  it("offers a 'Without PM' option that pushes no_pm into the query", async () => {
+    const user = userEvent.setup();
+    render(<ProjectsTab />);
+
+    const pmSelect = screen.getByLabelText("PM");
+    expect(
+      within(pmSelect).getByRole("option", { name: /Without PM/ }),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(pmSelect, "__no_pm__");
+
+    await waitFor(() =>
+      expect(useAdminProjectsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ no_pm: true, pm: undefined }),
+      ),
+    );
+  });
 });
