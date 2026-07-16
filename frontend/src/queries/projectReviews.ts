@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryKey,
 } from "@tanstack/react-query";
 import {
   projectReviewService,
@@ -223,14 +224,16 @@ export function useUpdateReview() {
   });
 }
 
+type DeleteReviewContext = { backups: Array<[QueryKey, unknown]> };
+
 export function useDeleteProjectReview() {
   const qc = useQueryClient();
-  return useMutation<void, Error, number>({
+  return useMutation<void, Error, number, DeleteReviewContext>({
     mutationFn: (reviewId: number) => projectReviewService.deleteReview(reviewId),
     onMutate: async (reviewId: number) => {
       await qc.cancelQueries({ queryKey: allProjectReviewsQueryKey });
       const prev = qc.getQueriesData({ queryKey: allProjectReviewsQueryKey });
-      const backups: Array<[any, unknown]> = [];
+      const backups: Array<[QueryKey, unknown]> = [];
       for (const [qKey, data] of prev) {
         backups.push([qKey, data]);
         if (!data) continue;
@@ -265,7 +268,7 @@ export function useDeleteProjectReview() {
       }
       return { backups };
     },
-    onError: (_err, _variables, context: any) => {
+    onError: (_err, _variables, context) => {
       // rollback
       if (context?.backups) {
         for (const [qKey, data] of context.backups) {

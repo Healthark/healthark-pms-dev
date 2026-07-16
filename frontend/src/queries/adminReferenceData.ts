@@ -12,8 +12,9 @@ import {
  * tab has the data, no further network call within the session unless
  * an explicit invalidation happens.
  *
- * No mutation hooks here — the backend doesn't expose CRUD for these
- * endpoints from the frontend yet.
+ * Read hooks only. Department/designation CRUD lives in queries/orgStructure.ts
+ * (the admin Organization tab); its mutations invalidate the query keys exported
+ * below so these shared dropdowns refresh after any structural change.
  */
 const REFERENCE_STALE_TIME = 15 * 60_000;
 
